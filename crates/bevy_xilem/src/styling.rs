@@ -29,13 +29,15 @@ use serde::{
     },
 };
 use xilem::{Color, style::Style as _};
-use xilem_masonry::masonry::parley::{FontFamily, GenericFamily, style::FontStack};
+use xilem_masonry::masonry::parley::{
+    Alignment as ParleyTextAlign, FontFamily, GenericFamily, style::FontStack,
+};
 use xilem_masonry::masonry::properties::{
     Background, BorderColor, BorderWidth, BoxShadow, CornerRadius, LineBreaking, Padding,
 };
 use xilem_masonry::{
     WidgetView,
-    view::{Label, TextInput, sized_box},
+    view::{CrossAxisAlignment, Flex, Label, MainAxisAlignment, TextInput, sized_box, transformed},
 };
 
 use crate::UiEventQueue;
@@ -55,6 +57,9 @@ pub struct LayoutStyle {
     pub gap: Option<f64>,
     pub corner_radius: Option<f64>,
     pub border_width: Option<f64>,
+    pub justify_content: Option<JustifyContent>,
+    pub align_items: Option<AlignItems>,
+    pub scale: Option<f64>,
 }
 
 /// Inline color style that can be attached to entities.
@@ -75,6 +80,36 @@ pub struct ColorStyle {
 #[derive(Component, Debug, Clone, Copy, Default, PartialEq, Deserialize)]
 pub struct TextStyle {
     pub size: Option<f32>,
+    pub text_align: Option<TextAlign>,
+}
+
+/// Main-axis content distribution for flex layouts.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+pub enum JustifyContent {
+    #[default]
+    Start,
+    Center,
+    End,
+    SpaceBetween,
+}
+
+/// Cross-axis alignment for flex layouts.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+pub enum AlignItems {
+    #[default]
+    Start,
+    Center,
+    End,
+    Stretch,
+}
+
+/// Text alignment for label-like controls.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+pub enum TextAlign {
+    #[default]
+    Start,
+    Center,
+    End,
 }
 
 /// Marker for hover pseudo-class state.
@@ -104,19 +139,43 @@ pub struct ComputedStyle {
 }
 
 /// Interpolated color state currently rendered by projectors.
-#[derive(Component, Debug, Clone, Copy, Default, PartialEq)]
+#[derive(Component, Debug, Clone, Copy, PartialEq)]
 pub struct CurrentColorStyle {
     pub bg: Option<Color>,
     pub text: Option<Color>,
     pub border: Option<Color>,
+    pub scale: f64,
 }
 
 /// Target color state derived from classes + inline style + pseudo state.
-#[derive(Component, Debug, Clone, Copy, Default, PartialEq)]
+#[derive(Component, Debug, Clone, Copy, PartialEq)]
 pub struct TargetColorStyle {
     pub bg: Option<Color>,
     pub text: Option<Color>,
     pub border: Option<Color>,
+    pub scale: f64,
+}
+
+impl Default for CurrentColorStyle {
+    fn default() -> Self {
+        Self {
+            bg: None,
+            text: None,
+            border: None,
+            scale: 1.0,
+        }
+    }
+}
+
+impl Default for TargetColorStyle {
+    fn default() -> Self {
+        Self {
+            bg: None,
+            text: None,
+            border: None,
+            scale: 1.0,
+        }
+    }
 }
 
 /// Marker identifying a [`TweenAnim`] created by the style transition pipeline.
@@ -240,6 +299,9 @@ pub struct LayoutStyleValue {
     pub gap: Option<StyleValue<f64>>,
     pub corner_radius: Option<StyleValue<f64>>,
     pub border_width: Option<StyleValue<f64>>,
+    pub justify_content: Option<StyleValue<JustifyContent>>,
+    pub align_items: Option<StyleValue<AlignItems>>,
+    pub scale: Option<StyleValue<f64>>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -258,6 +320,7 @@ pub struct ColorStyleValue {
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct TextStyleValue {
     pub size: Option<StyleValue<f32>>,
+    pub text_align: Option<StyleValue<TextAlign>>,
 }
 
 /// Token-aware style payload attached to stylesheet rules.
@@ -288,6 +351,9 @@ impl From<LayoutStyle> for LayoutStyleValue {
             gap: value.gap.map(StyleValue::value),
             corner_radius: value.corner_radius.map(StyleValue::value),
             border_width: value.border_width.map(StyleValue::value),
+            justify_content: value.justify_content.map(StyleValue::value),
+            align_items: value.align_items.map(StyleValue::value),
+            scale: value.scale.map(StyleValue::value),
         }
     }
 }
@@ -312,6 +378,7 @@ impl From<TextStyle> for TextStyleValue {
     fn from(value: TextStyle) -> Self {
         Self {
             size: value.size.map(StyleValue::value),
+            text_align: value.text_align.map(StyleValue::value),
         }
     }
 }
@@ -733,6 +800,9 @@ pub struct ResolvedLayoutStyle {
     pub gap: f64,
     pub corner_radius: f64,
     pub border_width: f64,
+    pub justify_content: JustifyContent,
+    pub align_items: AlignItems,
+    pub scale: f64,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
@@ -745,12 +815,14 @@ pub struct ResolvedColorStyle {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ResolvedTextStyle {
     pub size: f32,
+    pub text_align: TextAlign,
 }
 
 impl Default for ResolvedTextStyle {
     fn default() -> Self {
         Self {
             size: theme::TEXT_SIZE_NORMAL,
+            text_align: TextAlign::Start,
         }
     }
 }
@@ -786,6 +858,15 @@ fn merge_layout_values(dst: &mut LayoutStyleValue, src: &LayoutStyleValue) {
     }
     if src.border_width.is_some() {
         dst.border_width = src.border_width.clone();
+    }
+    if src.justify_content.is_some() {
+        dst.justify_content = src.justify_content.clone();
+    }
+    if src.align_items.is_some() {
+        dst.align_items = src.align_items.clone();
+    }
+    if src.scale.is_some() {
+        dst.scale = src.scale.clone();
     }
 }
 
@@ -823,6 +904,9 @@ fn merge_text_values(dst: &mut TextStyleValue, src: &TextStyleValue) {
     if src.size.is_some() {
         dst.size = src.size.clone();
     }
+    if src.text_align.is_some() {
+        dst.text_align = src.text_align.clone();
+    }
 }
 
 fn merge_value_setter(dst: &mut StyleSetterValue, setter: &StyleSetterValue) {
@@ -852,6 +936,15 @@ fn merge_inline_layout_values(dst: &mut LayoutStyleValue, src: &LayoutStyle) {
     }
     if let Some(border_width) = src.border_width {
         dst.border_width = Some(StyleValue::value(border_width));
+    }
+    if let Some(justify_content) = src.justify_content {
+        dst.justify_content = Some(StyleValue::value(justify_content));
+    }
+    if let Some(align_items) = src.align_items {
+        dst.align_items = Some(StyleValue::value(align_items));
+    }
+    if let Some(scale) = src.scale {
+        dst.scale = Some(StyleValue::value(scale));
     }
 }
 
@@ -888,6 +981,9 @@ fn merge_inline_color_values(dst: &mut ColorStyleValue, src: &ColorStyle) {
 fn merge_inline_text_values(dst: &mut TextStyleValue, src: &TextStyle) {
     if let Some(size) = src.size {
         dst.size = Some(StyleValue::value(size));
+    }
+    if let Some(text_align) = src.text_align {
+        dst.text_align = Some(StyleValue::value(text_align));
     }
 }
 
@@ -1070,12 +1166,16 @@ fn to_resolved_layout(layout: &LayoutStyle) -> ResolvedLayoutStyle {
         gap: layout.gap.unwrap_or(0.0),
         corner_radius: layout.corner_radius.unwrap_or(0.0),
         border_width: layout.border_width.unwrap_or(0.0),
+        justify_content: layout.justify_content.unwrap_or_default(),
+        align_items: layout.align_items.unwrap_or_default(),
+        scale: layout.scale.unwrap_or(1.0),
     }
 }
 
 fn to_resolved_text(text: &TextStyle) -> ResolvedTextStyle {
     ResolvedTextStyle {
         size: text.size.unwrap_or(theme::TEXT_SIZE_NORMAL),
+        text_align: text.text_align.unwrap_or_default(),
     }
 }
 
@@ -1193,6 +1293,23 @@ fn resolve_transition_value(
     }
 }
 
+fn resolve_enum_value<T: Copy + Default>(
+    _tokens: &HashMap<String, TokenValue>,
+    value: &StyleValue<T>,
+    _field: &str,
+) -> T {
+    match value {
+        StyleValue::Value(value) => *value,
+        StyleValue::Var(_token) => {
+            tracing::warn!(
+                field = _field,
+                "style enum values currently only support literal values; token reference ignored"
+            );
+            T::default()
+        }
+    }
+}
+
 fn resolve_layout_style(
     layout: &LayoutStyleValue,
     tokens: &HashMap<String, TokenValue>,
@@ -1214,6 +1331,18 @@ fn resolve_layout_style(
             .border_width
             .as_ref()
             .map(|value| resolve_f64_value(tokens, value, "layout.border_width")),
+        justify_content: layout
+            .justify_content
+            .as_ref()
+            .map(|value| resolve_enum_value(tokens, value, "layout.justify_content")),
+        align_items: layout
+            .align_items
+            .as_ref()
+            .map(|value| resolve_enum_value(tokens, value, "layout.align_items")),
+        scale: layout
+            .scale
+            .as_ref()
+            .map(|value| resolve_f64_value(tokens, value, "layout.scale")),
     }
 }
 
@@ -1267,6 +1396,10 @@ fn resolve_text_style(text: &TextStyleValue, tokens: &HashMap<String, TokenValue
             .size
             .as_ref()
             .map(|value| resolve_f32_value(tokens, value, "text.size")),
+        text_align: text
+            .text_align
+            .as_ref()
+            .map(|value| resolve_enum_value(tokens, value, "text.text_align")),
     }
 }
 
@@ -1324,8 +1457,13 @@ fn resolved_from_merged(
         }
     }
 
+    let mut layout = to_resolved_layout(&merged.layout);
+    if include_current_override && let Some(current) = world.get::<CurrentColorStyle>(entity) {
+        layout.scale = current.scale;
+    }
+
     ResolvedStyle {
-        layout: to_resolved_layout(&merged.layout),
+        layout,
         colors,
         text: to_resolved_text(&merged.text),
         font_family: merged.font_family.clone(),
@@ -1378,6 +1516,7 @@ pub fn resolve_style(world: &World, entity: Entity) -> ResolvedStyle {
             if current.border.is_some() {
                 style.colors.border = current.border;
             }
+            style.layout.scale = current.scale;
         }
 
         return style;
@@ -1433,20 +1572,73 @@ pub fn resolve_style_for_entity_classes<'a>(
     resolved_from_merged(world, entity, &merged, tokens, false)
 }
 
+/// Map style-level justify-content to Masonry flex main-axis alignment.
+#[must_use]
+pub fn map_main_axis_alignment(justify_content: JustifyContent) -> MainAxisAlignment {
+    match justify_content {
+        JustifyContent::Start => MainAxisAlignment::Start,
+        JustifyContent::Center => MainAxisAlignment::Center,
+        JustifyContent::End => MainAxisAlignment::End,
+        JustifyContent::SpaceBetween => MainAxisAlignment::SpaceBetween,
+    }
+}
+
+/// Map style-level align-items to Masonry flex cross-axis alignment.
+#[must_use]
+pub fn map_cross_axis_alignment(align_items: AlignItems) -> CrossAxisAlignment {
+    match align_items {
+        AlignItems::Start => CrossAxisAlignment::Start,
+        AlignItems::Center => CrossAxisAlignment::Center,
+        AlignItems::End => CrossAxisAlignment::End,
+        AlignItems::Stretch => CrossAxisAlignment::Stretch,
+    }
+}
+
+fn map_text_alignment(text_align: TextAlign) -> ParleyTextAlign {
+    match text_align {
+        TextAlign::Start => ParleyTextAlign::Start,
+        TextAlign::Center => ParleyTextAlign::Center,
+        TextAlign::End => ParleyTextAlign::End,
+    }
+}
+
+pub trait StyleFlexAlignmentExt {
+    fn with_style_alignment(self, style: &ResolvedStyle) -> Self;
+}
+
+impl<Seq, State, Action> StyleFlexAlignmentExt for Flex<Seq, State, Action> {
+    fn with_style_alignment(self, style: &ResolvedStyle) -> Self {
+        self.main_axis_alignment(map_main_axis_alignment(style.layout.justify_content))
+            .cross_axis_alignment(map_cross_axis_alignment(style.layout.align_items))
+    }
+}
+
+/// Apply style-derived flex axis alignment on a flex view.
+pub fn apply_flex_alignment<V>(view: V, style: &ResolvedStyle) -> V
+where
+    V: StyleFlexAlignmentExt,
+{
+    view.with_style_alignment(style)
+}
+
 /// Apply box/layout styling on any widget view.
 pub fn apply_widget_style<V>(view: V, style: &ResolvedStyle) -> impl WidgetView<(), ()>
 where
     V: WidgetView<(), ()>,
 {
-    sized_box(view)
-        .padding(style.layout.padding)
-        .corner_radius(style.layout.corner_radius)
-        .border(
-            style.colors.border.unwrap_or(Color::TRANSPARENT),
-            style.layout.border_width,
-        )
-        .background_color(style.colors.bg.unwrap_or(Color::TRANSPARENT))
-        .box_shadow(style.box_shadow.unwrap_or_default())
+    let scale = style.layout.scale.max(0.01);
+    transformed(
+        sized_box(view)
+            .padding(style.layout.padding)
+            .corner_radius(style.layout.corner_radius)
+            .border(
+                style.colors.border.unwrap_or(Color::TRANSPARENT),
+                style.layout.border_width,
+            )
+            .background_color(style.colors.bg.unwrap_or(Color::TRANSPARENT))
+            .box_shadow(style.box_shadow.unwrap_or_default()),
+    )
+    .scale(scale)
 }
 
 /// Apply style directly on the target widget.
@@ -1464,21 +1656,26 @@ where
         + HasProperty<Background>
         + HasProperty<BoxShadow>,
 {
-    view.padding(style.layout.padding)
-        .corner_radius(style.layout.corner_radius)
-        .border(
-            style.colors.border.unwrap_or(Color::TRANSPARENT),
-            style.layout.border_width,
-        )
-        .background_color(style.colors.bg.unwrap_or(Color::TRANSPARENT))
-        .box_shadow(style.box_shadow.unwrap_or_default())
+    let scale = style.layout.scale.max(0.01);
+    transformed(
+        view.padding(style.layout.padding)
+            .corner_radius(style.layout.corner_radius)
+            .border(
+                style.colors.border.unwrap_or(Color::TRANSPARENT),
+                style.layout.border_width,
+            )
+            .background_color(style.colors.bg.unwrap_or(Color::TRANSPARENT))
+            .box_shadow(style.box_shadow.unwrap_or_default()),
+    )
+    .scale(scale)
 }
 
-fn to_target_component(colors: ResolvedColorStyle) -> TargetColorStyle {
+fn to_target_component(style: &ResolvedStyle) -> TargetColorStyle {
     TargetColorStyle {
-        bg: colors.bg,
-        text: colors.text,
-        border: colors.border,
+        bg: style.colors.bg,
+        text: style.colors.text,
+        border: style.colors.border,
+        scale: style.layout.scale,
     }
 }
 
@@ -1487,6 +1684,7 @@ fn to_current_component(colors: TargetColorStyle) -> CurrentColorStyle {
         bg: colors.bg,
         text: colors.text,
         border: colors.border,
+        scale: colors.scale,
     }
 }
 
@@ -1696,7 +1894,7 @@ pub fn sync_style_targets(world: &mut World) {
                     });
                 }
 
-                let target = to_target_component(resolved.colors);
+                let target = to_target_component(&resolved);
                 match resolved.transition {
                     Some(transition) => {
                         if let Some(mut target_component) =
@@ -1860,6 +2058,17 @@ impl Lens<ComputedStyle> for ComputedStyleLens {
             self.end.layout.border_width,
             t,
         );
+        target.layout.scale = lerp_f64(self.start.layout.scale, self.end.layout.scale, t);
+        target.layout.justify_content = if t < 1.0 {
+            self.start.layout.justify_content
+        } else {
+            self.end.layout.justify_content
+        };
+        target.layout.align_items = if t < 1.0 {
+            self.start.layout.align_items
+        } else {
+            self.end.layout.align_items
+        };
 
         target.colors.bg = lerp_optional_color(self.start.colors.bg, self.end.colors.bg, t);
         target.colors.text = lerp_optional_color(self.start.colors.text, self.end.colors.text, t);
@@ -1867,6 +2076,11 @@ impl Lens<ComputedStyle> for ComputedStyleLens {
             lerp_optional_color(self.start.colors.border, self.end.colors.border, t);
 
         target.text.size = lerp_f32(self.start.text.size, self.end.text.size, t);
+        target.text.text_align = if t < 1.0 {
+            self.start.text.text_align
+        } else {
+            self.end.text.text_align
+        };
         target.transition = if t < 1.0 {
             self.start.transition
         } else {
@@ -1894,6 +2108,7 @@ impl Lens<CurrentColorStyle> for ColorStyleLens {
         target.bg = lerp_optional_color(self.start.bg, self.end.bg, ratio);
         target.text = lerp_optional_color(self.start.text, self.end.text, ratio);
         target.border = lerp_optional_color(self.start.border, self.end.border, ratio);
+        target.scale = lerp_f64(self.start.scale, self.end.scale, ratio);
     }
 }
 
@@ -1907,7 +2122,9 @@ pub fn animate_style_transitions(world: &mut World) {
 
 /// Apply text + box styling to a label view.
 pub fn apply_label_style(view: Label, style: &ResolvedStyle) -> impl WidgetView<(), ()> {
-    let mut styled = view.text_size(style.text.size);
+    let mut styled = view
+        .text_size(style.text.size)
+        .text_alignment(map_text_alignment(style.text.text_align));
     if let Some(font_stack) = font_stack_from_style(style) {
         styled = styled.font(font_stack);
     }
@@ -1922,7 +2139,9 @@ pub fn apply_text_input_style(
     view: TextInput<(), ()>,
     style: &ResolvedStyle,
 ) -> impl WidgetView<(), ()> {
-    let mut styled = view.text_size(style.text.size);
+    let mut styled = view
+        .text_size(style.text.size)
+        .text_alignment(map_text_alignment(style.text.text_align));
     if let Some(font_stack) = font_stack_from_style(style) {
         styled = styled.font(font_stack);
     }
@@ -1992,6 +2211,33 @@ struct StyleSetterDef {
     transition: OptionalStyleValueDef<StyleTransition>,
 }
 
+#[derive(Debug, Clone)]
+struct OptionalLiteralValueDef<T>(Option<T>);
+
+impl<T> Default for OptionalLiteralValueDef<T> {
+    fn default() -> Self {
+        Self(None)
+    }
+}
+
+impl<'de, T> Deserialize<'de> for OptionalLiteralValueDef<T>
+where
+    T: Deserialize<'de>,
+{
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        Ok(Self(Some(T::deserialize(deserializer)?)))
+    }
+}
+
+impl<T> OptionalLiteralValueDef<T> {
+    fn into_option(self) -> Option<T> {
+        self.0
+    }
+}
+
 #[derive(Debug, Default, Deserialize)]
 struct LayoutStyleDef {
     #[serde(default)]
@@ -2002,6 +2248,12 @@ struct LayoutStyleDef {
     corner_radius: OptionalStyleValueDef<f64>,
     #[serde(default)]
     border_width: OptionalStyleValueDef<f64>,
+    #[serde(default)]
+    justify_content: OptionalLiteralValueDef<JustifyContent>,
+    #[serde(default)]
+    align_items: OptionalLiteralValueDef<AlignItems>,
+    #[serde(default)]
+    scale: OptionalStyleValueDef<f64>,
 }
 
 impl LayoutStyleDef {
@@ -2011,6 +2263,9 @@ impl LayoutStyleDef {
             gap: into_style_value(self.gap.into_option(), Ok)?,
             corner_radius: into_style_value(self.corner_radius.into_option(), Ok)?,
             border_width: into_style_value(self.border_width.into_option(), Ok)?,
+            justify_content: self.justify_content.into_option().map(StyleValue::Value),
+            align_items: self.align_items.into_option().map(StyleValue::Value),
+            scale: into_style_value(self.scale.into_option(), Ok)?,
         })
     }
 }
@@ -2019,12 +2274,15 @@ impl LayoutStyleDef {
 struct TextStyleDef {
     #[serde(default)]
     size: OptionalStyleValueDef<f32>,
+    #[serde(default)]
+    text_align: OptionalLiteralValueDef<TextAlign>,
 }
 
 impl TextStyleDef {
     fn into_text_values(self) -> io::Result<TextStyleValue> {
         Ok(TextStyleValue {
             size: into_style_value(self.size.into_option(), Ok)?,
+            text_align: self.text_align.into_option().map(StyleValue::Value),
         })
     }
 }

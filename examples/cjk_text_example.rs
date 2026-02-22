@@ -89,6 +89,7 @@ fn setup_cjk_styles(mut style_sheet: ResMut<StyleSheet>) {
                 gap: Some(10.0),
                 corner_radius: Some(12.0),
                 border_width: Some(1.0),
+                ..Default::default()
             },
             colors: ColorStyle {
                 bg: Some(Color::from_rgb8(0x16, 0x1B, 0x28)),
@@ -102,7 +103,10 @@ fn setup_cjk_styles(mut style_sheet: ResMut<StyleSheet>) {
     style_sheet.set_class(
         "cjk.title",
         StyleSetter {
-            text: TextStyle { size: Some(22.0) },
+            text: TextStyle {
+                size: Some(22.0),
+                ..Default::default()
+            },
             colors: ColorStyle {
                 text: Some(Color::from_rgb8(0xE3, 0xED, 0xFF)),
                 ..ColorStyle::default()
@@ -114,7 +118,10 @@ fn setup_cjk_styles(mut style_sheet: ResMut<StyleSheet>) {
     style_sheet.set_class(
         "cjk-text",
         StyleSetter {
-            text: TextStyle { size: Some(26.0) },
+            text: TextStyle {
+                size: Some(26.0),
+                ..Default::default()
+            },
             colors: ColorStyle {
                 text: Some(Color::from_rgb8(0xF3, 0xF7, 0xFF)),
                 ..ColorStyle::default()

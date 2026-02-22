@@ -206,33 +206,55 @@ impl MasonryRuntime {
                 return None;
             }
 
+            if let Some(debug) = widget.get_debug_text()
+                && let Some((bits, is_opaque_hitbox)) = parse_entity_debug_binding(&debug)
+                && bits == entity_bits
+                && (!prefer_opaque_hitbox || is_opaque_hitbox)
+            {
+                return Some(widget.id());
+            }
+
             for child in widget.children() {
                 if let Some(id) = walk(child, entity_bits, prefer_opaque_hitbox) {
                     return Some(id);
                 }
             }
 
-            let Some(debug) = widget.get_debug_text() else {
-                return None;
-            };
-
-            let Some((bits, is_opaque_hitbox)) = parse_entity_debug_binding(&debug) else {
-                return None;
-            };
-
-            if bits != entity_bits {
-                return None;
-            }
-
-            if prefer_opaque_hitbox && !is_opaque_hitbox {
-                return None;
-            }
-
-            Some(widget.id())
+            None
         }
 
         let root = self.render_root.get_layer_root(0);
         walk(root, entity_bits, prefer_opaque_hitbox)
+    }
+
+    #[must_use]
+    pub fn find_widget_ids_for_entity_bits(&self, entity_bits: u64) -> Vec<WidgetId> {
+        fn walk(widget: WidgetRef<'_, dyn Widget>, entity_bits: u64, matches: &mut Vec<WidgetId>) {
+            if widget.ctx().is_stashed() {
+                return;
+            }
+
+            for child in widget.children() {
+                walk(child, entity_bits, matches);
+            }
+
+            let Some(debug) = widget.get_debug_text() else {
+                return;
+            };
+
+            let Some((bits, _is_opaque_hitbox)) = parse_entity_debug_binding(&debug) else {
+                return;
+            };
+
+            if bits == entity_bits {
+                matches.push(widget.id());
+            }
+        }
+
+        let root = self.render_root.get_layer_root(0);
+        let mut matches = Vec::new();
+        walk(root, entity_bits, &mut matches);
+        matches
     }
 
     /// Returns `(bevy_window_scale_factor, masonry_global_scale_factor)` for diagnostics.

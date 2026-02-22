@@ -1,7 +1,7 @@
 //! Bevy + Xilem/Masonry integration with ECS-driven UI projection.
 //!
 //! `bevy_xilem` lets you:
-//! - register projector functions from ECS components to UI views,
+//! - register ECS UI controls through [`UiControlTemplate`],
 //! - collect typed UI actions through [`UiEventQueue`],
 //! - synthesize and rebuild a retained Masonry tree every frame.
 //!
@@ -11,7 +11,8 @@
 //! use std::sync::Arc;
 //!
 //! use bevy_xilem::{
-//!     AppBevyXilemExt, BevyXilemPlugin, ProjectionCtx, UiEventQueue, UiRoot, UiView,
+//!     AppBevyXilemExt, BevyXilemPlugin, ProjectionCtx, UiControlTemplate, UiEventQueue, UiRoot,
+//!     UiView,
 //!     bevy_app::{App, PreUpdate, Startup},
 //!     bevy_ecs::prelude::*,
 //!     text_button,
@@ -25,8 +26,10 @@
 //!     Clicked,
 //! }
 //!
-//! fn project_root(_: &Root, ctx: ProjectionCtx<'_>) -> UiView {
-//!     Arc::new(text_button(ctx.entity, Action::Clicked, "Click"))
+//! impl UiControlTemplate for Root {
+//!     fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
+//!         Arc::new(text_button(ctx.entity, Action::Clicked, "Click"))
+//!     }
 //! }
 //!
 //! fn setup(mut commands: Commands) {
@@ -39,7 +42,7 @@
 //!
 //! let mut app = App::new();
 //! app.add_plugins(BevyXilemPlugin)
-//!     .register_projector::<Root>(project_root)
+//!     .register_ui_control::<Root>()
 //!     .add_systems(Startup, setup)
 //!     .add_systems(PreUpdate, drain);
 //! ```

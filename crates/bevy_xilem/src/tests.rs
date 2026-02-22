@@ -43,10 +43,13 @@ fn project_test_root(_: &TestRoot, ctx: ProjectionCtx<'_>) -> UiView {
     Arc::new(ecs_button(ctx.entity, TestAction::Clicked, "Click"))
 }
 
-fn project_toast_probe(_: &ToastProbe, _ctx: ProjectionCtx<'_>) -> UiView {
+fn project_toast_probe(_: &ToastProbe, ctx: ProjectionCtx<'_>) -> UiView {
     Arc::new(
-        crate::xilem::view::transformed(crate::xilem::view::label("Toast"))
-            .translate((620.0, 48.0)),
+        crate::xilem::view::transformed(crate::views::opaque_hitbox_for_entity(
+            ctx.entity,
+            crate::xilem::view::label("Toast"),
+        ))
+        .translate((620.0, 48.0)),
     )
 }
 
@@ -594,11 +597,13 @@ fn sync_style_targets_restarts_tween_when_current_differs_but_target_unchanged()
         bg: Some(mid),
         text: None,
         border: None,
+        scale: 1.0,
     });
     world.entity_mut(entity).insert(crate::TargetColorStyle {
         bg: Some(base),
         text: None,
         border: None,
+        scale: 1.0,
     });
     world.entity_mut(entity).insert(crate::StyleDirty);
 
@@ -642,11 +647,13 @@ fn sync_style_targets_keeps_unmanaged_tween_anim() {
                 bg: Some(crate::xilem::Color::from_rgb8(0x10, 0x20, 0x30)),
                 text: None,
                 border: None,
+                scale: 1.0,
             },
             end: crate::CurrentColorStyle {
                 bg: Some(crate::xilem::Color::from_rgb8(0x40, 0x50, 0x60)),
                 text: None,
                 border: None,
+                scale: 1.0,
             },
         },
     );
@@ -1787,7 +1794,14 @@ fn stylesheet_ron_parser_supports_tokens_and_var_values() {
     (
       selector: Class("demo.button"),
       setter: (
-                layout: (padding: 10.0, corner_radius: Var("radius")),
+                                layout: (
+                                        padding: 10.0,
+                                        corner_radius: Var("radius"),
+                                        justify_content: Start,
+                                        align_items: Center,
+                                        scale: 0.97,
+                                ),
+                                text: (text_align: Center),
                                 colors: (bg: Var("demo-bg"), text: Hex("#f0f0f0")),
       ),
     ),
@@ -1811,6 +1825,10 @@ fn stylesheet_ron_parser_supports_tokens_and_var_values() {
     ));
     assert!(sheet.rules[0].setter.layout.padding.is_some());
     assert!(sheet.rules[0].setter.colors.bg.is_some());
+    assert!(sheet.rules[0].setter.layout.justify_content.is_some());
+    assert!(sheet.rules[0].setter.layout.align_items.is_some());
+    assert!(sheet.rules[0].setter.layout.scale.is_some());
+    assert!(sheet.rules[0].setter.text.text_align.is_some());
 
     assert!(matches!(&sheet.rules[1].selector, crate::Selector::And(parts) if !parts.is_empty()));
 }
@@ -1844,6 +1862,49 @@ fn stylesheet_var_missing_token_falls_back_to_transparent_or_zero() {
     let resolved = crate::resolve_style(&world, entity);
     assert_eq!(resolved.layout.padding, 0.0);
     assert_eq!(resolved.colors.bg, Some(crate::xilem::Color::TRANSPARENT));
+}
+
+#[test]
+fn stylesheet_box_shadow_token_parses_and_resolves() {
+    let ron = r##"(
+    tokens: {
+        "flyout-shadow": BoxShadow((
+            color: Rgba(0.0, 0.0, 0.0, 0.35),
+            offset_x: 0.0,
+            offset_y: 12.0,
+            blur: 24.0,
+        )),
+    },
+    rules: [
+        (
+            selector: Class("shadowed"),
+            setter: (
+                box_shadow: Var("flyout-shadow"),
+            ),
+        ),
+    ],
+)"##;
+
+    let sheet =
+        crate::styling::parse_stylesheet_ron_for_tests(ron).expect("stylesheet ron should parse");
+
+    let mut world = World::new();
+    world.insert_resource(sheet);
+    let entity = world
+        .spawn((crate::StyleClass(vec!["shadowed".to_string()]),))
+        .id();
+
+    crate::mark_style_dirty(&mut world);
+    crate::sync_style_targets(&mut world);
+
+    let resolved = crate::resolve_style(&world, entity);
+    let expected = crate::xilem::style::BoxShadow::new(
+        crate::xilem::Color::from_rgba8(0, 0, 0, 89),
+        (0.0, 12.0),
+    )
+    .blur(24.0);
+
+    assert_eq!(resolved.box_shadow, Some(expected));
 }
 
 #[test]

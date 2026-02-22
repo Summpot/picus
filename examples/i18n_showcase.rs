@@ -275,6 +275,7 @@ fn setup_i18n_styles(mut style_sheet: ResMut<StyleSheet>) {
                 gap: Some(14.0),
                 corner_radius: Some(12.0),
                 border_width: Some(1.0),
+                ..Default::default()
             },
             colors: ColorStyle {
                 bg: Some(Color::from_rgb8(0x14, 0x18, 0x22)),
@@ -288,7 +289,10 @@ fn setup_i18n_styles(mut style_sheet: ResMut<StyleSheet>) {
     style_sheet.set_class(
         "i18n.title",
         StyleSetter {
-            text: TextStyle { size: Some(28.0) },
+            text: TextStyle {
+                size: Some(28.0),
+                ..Default::default()
+            },
             colors: ColorStyle {
                 text: Some(Color::from_rgb8(0xE8, 0xF0, 0xFF)),
                 ..ColorStyle::default()
@@ -300,7 +304,10 @@ fn setup_i18n_styles(mut style_sheet: ResMut<StyleSheet>) {
     style_sheet.set_class(
         "i18n.han",
         StyleSetter {
-            text: TextStyle { size: Some(44.0) },
+            text: TextStyle {
+                size: Some(44.0),
+                ..Default::default()
+            },
             colors: ColorStyle {
                 text: Some(Color::from_rgb8(0xFF, 0xFF, 0xFF)),
                 ..ColorStyle::default()
@@ -312,7 +319,10 @@ fn setup_i18n_styles(mut style_sheet: ResMut<StyleSheet>) {
     style_sheet.set_class(
         "i18n.badge",
         StyleSetter {
-            text: TextStyle { size: Some(16.0) },
+            text: TextStyle {
+                size: Some(16.0),
+                ..Default::default()
+            },
             layout: LayoutStyle {
                 padding: Some(8.0),
                 corner_radius: Some(8.0),
@@ -332,7 +342,10 @@ fn setup_i18n_styles(mut style_sheet: ResMut<StyleSheet>) {
     style_sheet.set_class(
         "i18n.edge-button",
         StyleSetter {
-            text: TextStyle { size: Some(20.0) },
+            text: TextStyle {
+                size: Some(20.0),
+                ..Default::default()
+            },
             layout: LayoutStyle {
                 padding: Some(26.0),
                 corner_radius: Some(16.0),
@@ -354,7 +367,10 @@ fn setup_i18n_styles(mut style_sheet: ResMut<StyleSheet>) {
     style_sheet.set_class(
         "i18n.combo",
         StyleSetter {
-            text: TextStyle { size: Some(16.0) },
+            text: TextStyle {
+                size: Some(16.0),
+                ..Default::default()
+            },
             layout: LayoutStyle {
                 padding: Some(12.0),
                 corner_radius: Some(10.0),
@@ -396,7 +412,10 @@ fn setup_i18n_styles(mut style_sheet: ResMut<StyleSheet>) {
     style_sheet.set_class(
         "i18n.status",
         StyleSetter {
-            text: TextStyle { size: Some(15.0) },
+            text: TextStyle {
+                size: Some(15.0),
+                ..Default::default()
+            },
             layout: LayoutStyle {
                 padding: Some(10.0),
                 corner_radius: Some(8.0),
@@ -429,7 +448,10 @@ fn setup_i18n_styles(mut style_sheet: ResMut<StyleSheet>) {
     style_sheet.set_class(
         "overlay.dialog.title",
         StyleSetter {
-            text: TextStyle { size: Some(24.0) },
+            text: TextStyle {
+                size: Some(24.0),
+                ..Default::default()
+            },
             colors: ColorStyle {
                 text: Some(Color::from_rgb8(0xF2, 0xF6, 0xFF)),
                 ..ColorStyle::default()
@@ -441,7 +463,10 @@ fn setup_i18n_styles(mut style_sheet: ResMut<StyleSheet>) {
     style_sheet.set_class(
         "overlay.dialog.body",
         StyleSetter {
-            text: TextStyle { size: Some(16.0) },
+            text: TextStyle {
+                size: Some(16.0),
+                ..Default::default()
+            },
             colors: ColorStyle {
                 text: Some(Color::from_rgb8(0xC6, 0xD3, 0xF0)),
                 ..ColorStyle::default()
@@ -453,7 +478,10 @@ fn setup_i18n_styles(mut style_sheet: ResMut<StyleSheet>) {
     style_sheet.set_class(
         "overlay.dialog.dismiss",
         StyleSetter {
-            text: TextStyle { size: Some(15.0) },
+            text: TextStyle {
+                size: Some(15.0),
+                ..Default::default()
+            },
             layout: LayoutStyle {
                 padding: Some(10.0),
                 corner_radius: Some(8.0),
@@ -588,6 +616,14 @@ fn drain_i18n_events(world: &mut World) {
     }
 }
 
+bevy_xilem::impl_ui_control_template!(LocaleBadge, project_locale_badge);
+bevy_xilem::impl_ui_control_template!(ShowcaseStatus, project_showcase_status);
+bevy_xilem::impl_ui_control_template!(ShowcaseEdgeButton, project_showcase_edge_button);
+bevy_xilem::impl_ui_control_template!(
+    ShowcaseOpenDialogButton,
+    project_showcase_open_dialog_button
+);
+
 fn build_i18n_app() -> App {
     init_logging();
 
@@ -626,10 +662,10 @@ fn build_i18n_app() -> App {
         SyncTextSource::FilePath("assets/locales/ja-JP/main.ftl"),
         ja_cjk_fallback_font_stack(),
     )
-    .register_projector::<LocaleBadge>(project_locale_badge)
-    .register_projector::<ShowcaseStatus>(project_showcase_status)
-    .register_projector::<ShowcaseEdgeButton>(project_showcase_edge_button)
-    .register_projector::<ShowcaseOpenDialogButton>(project_showcase_open_dialog_button)
+    .register_ui_control::<LocaleBadge>()
+    .register_ui_control::<ShowcaseStatus>()
+    .register_ui_control::<ShowcaseEdgeButton>()
+    .register_ui_control::<ShowcaseOpenDialogButton>()
     .add_systems(Startup, (setup_i18n_styles, setup_i18n_world))
     .add_systems(PreUpdate, drain_i18n_events);
 

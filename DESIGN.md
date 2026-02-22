@@ -110,10 +110,14 @@ with no per-button channel sender/closure wiring by end users.
 
 `bevy_xilem` exposes `AppBevyXilemExt` so users can register projectors directly on Bevy apps:
 
-- `.register_projector::<MyComponent>(project_my_component)`
-- `.register_raw_projector(my_projector_impl)`
+- `.register_ui_control::<T: UiControlTemplate>()`
 
-This removes direct `UiProjectorRegistry` mutation from most app setup code.
+Architectural strictness policy:
+
+- End-user apps/examples must define ECS controls through `UiControlTemplate`.
+- Example/application registration uses `register_ui_control::<T>()` only.
+- Legacy low-level projector registration APIs remain hidden compatibility surfaces
+  for framework/internal scenarios and tests.
 
 ### 5) Typed action queue
 
@@ -147,8 +151,22 @@ The runtime now supports a data-driven style pipeline with four phases:
 - **Smooth transitions:**
   `TargetColorStyle` + `CurrentColorStyle` driven by
   `bevy_tweening::TweenAnim` tween instances targeting
-  `CurrentColorStyle`
+  `CurrentColorStyle` (color + transform scale)
   (`EaseFunction::QuadraticInOut` by default for interaction transitions)
+
+Style primitive surface now includes:
+
+- `layout.justify_content` (`Start|Center|End|SpaceBetween`)
+- `layout.align_items` (`Start|Center|End|Stretch`)
+- `text.text_align` (`Start|Center|End`)
+- `layout.scale` (for micro-interaction transforms, e.g. press-down)
+
+Projection wiring guarantees these are not metadata-only:
+
+- Flex containers map `justify_content`/`align_items` to Masonry
+  `MainAxisAlignment`/`CrossAxisAlignment`.
+- Text-bearing controls map `text_align` to Parley text alignment.
+- Styled widgets apply `layout.scale` via transform wrappers and transitions.
 
 Style resolution helpers (`resolve_style`, `resolve_style_for_classes`) and application helpers
 (`apply_widget_style`, `apply_label_style`, `apply_text_input_style`) are provided for projectors.
@@ -179,6 +197,8 @@ Style surface details:
 - Widget application helpers apply resolved border/background/corner/padding and box-shadow
   on the target surface, allowing overlay/dialog/dropdown surfaces to express depth without
   coupling shadows to backdrop layers.
+- Fluent elevation presets are encoded in the embedded theme via `BoxShadow` tokens,
+  including subtle control elevation and deeper flyout/dialog elevation.
 
 Hit-testing invariant:
 
@@ -584,6 +604,7 @@ Examples were rewritten to demonstrate this architecture with:
 - typed action handling via `UiEventQueue` (ECS queue path only)
 - stylesheet-driven styling (class rules + cascade) instead of hardcoded projector styles
 - pseudo-class interaction styling and transition-capable style resolution
+- control registration through `UiControlTemplate` + `register_ui_control::<T>()`
 - virtualized task scrolling in `todo_list` using `xilem_masonry::view::virtual_scroll`
 - no `xilem::Xilem::new_simple` usage
 - no `xilem::Xilem::new` event-loop ownership

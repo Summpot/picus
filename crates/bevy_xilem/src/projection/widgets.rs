@@ -18,8 +18,8 @@ use crate::{
     },
     overlay::OverlayUiAction,
     styling::{
-        ResolvedStyle, apply_direct_widget_style, apply_label_style, apply_widget_style,
-        resolve_style, resolve_style_for_classes,
+        ResolvedStyle, apply_direct_widget_style, apply_flex_alignment, apply_label_style,
+        apply_widget_style, resolve_style, resolve_style_for_classes,
     },
     views::{ecs_button, ecs_button_with_child},
     widget_actions::WidgetUiAction,
@@ -170,7 +170,7 @@ pub(crate) fn project_radio_group(radio_group: &UiRadioGroup, ctx: ProjectionCtx
         .collect::<Vec<_>>();
 
     Arc::new(apply_widget_style(
-        flex_col(items).gap(Length::px(style.layout.gap.max(4.0))),
+        apply_flex_alignment(flex_col(items), &style).gap(Length::px(style.layout.gap.max(4.0))),
         &style,
     ))
 }
@@ -227,7 +227,8 @@ pub(crate) fn project_tab_bar(tab_bar: &UiTabBar, ctx: ProjectionCtx<'_>) -> UiV
         .unwrap_or_else(|| Arc::new(label("")));
 
     Arc::new(apply_widget_style(
-        flex_col(vec![header_row, content.into_any_flex()]).gap(Length::px(0.0)),
+        apply_flex_alignment(flex_col(vec![header_row, content.into_any_flex()]), &style)
+            .gap(Length::px(0.0)),
         &style,
     ))
 }
@@ -278,15 +279,18 @@ pub(crate) fn project_tree_node(tree_node: &UiTreeNode, ctx: ProjectionCtx<'_>) 
             .map(|c| c.into_any_flex())
             .collect::<Vec<_>>();
         Arc::new(apply_widget_style(
-            flex_col(vec![
-                header_row.into_any_flex(),
-                flex_col(children).into_any_flex(),
-            ]),
+            apply_flex_alignment(
+                flex_col(vec![
+                    header_row.into_any_flex(),
+                    apply_flex_alignment(flex_col(children), &style).into_any_flex(),
+                ]),
+                &style,
+            ),
             &style,
         ))
     } else {
         Arc::new(apply_widget_style(
-            flex_col(vec![header_row.into_any_flex()]),
+            apply_flex_alignment(flex_col(vec![header_row.into_any_flex()]), &style),
             &style,
         ))
     }
@@ -355,7 +359,7 @@ pub(crate) fn project_table(table: &UiTable, ctx: ProjectionCtx<'_>) -> UiView {
     all_rows.extend(data_rows);
 
     Arc::new(apply_widget_style(
-        flex_col(all_rows).gap(Length::px(style.layout.gap.max(1.0))),
+        apply_flex_alignment(flex_col(all_rows), &style).gap(Length::px(style.layout.gap.max(1.0))),
         &style,
     ))
 }
@@ -372,7 +376,7 @@ pub(crate) fn project_menu_bar(_: &UiMenuBar, ctx: ProjectionCtx<'_>) -> UiView 
         .map(|c| c.into_any_flex())
         .collect::<Vec<_>>();
     Arc::new(apply_widget_style(
-        flex_row(children).gap(Length::px(style.layout.gap.max(0.0))),
+        apply_flex_alignment(flex_row(children), &style).gap(Length::px(style.layout.gap.max(0.0))),
         &style,
     ))
 }
@@ -491,13 +495,16 @@ pub(crate) fn project_spinner(sp: &UiSpinner, ctx: ProjectionCtx<'_>) -> UiView 
     if let Some(lbl) = &sp.label {
         let label_view = apply_label_style(label(lbl.clone()), &style);
         Arc::new(apply_widget_style(
-            flex_row(vec![spin_view.into_any_flex(), label_view.into_any_flex()])
-                .gap(Length::px(8.0)),
+            apply_flex_alignment(
+                flex_row(vec![spin_view.into_any_flex(), label_view.into_any_flex()]),
+                &style,
+            )
+            .gap(Length::px(8.0)),
             &style,
         ))
     } else {
         Arc::new(apply_widget_style(
-            flex_row(vec![spin_view.into_any_flex()]),
+            apply_flex_alignment(flex_row(vec![spin_view.into_any_flex()]), &style),
             &style,
         ))
     }
@@ -655,7 +662,8 @@ pub(crate) fn project_group_box(group_box: &UiGroupBox, ctx: ProjectionCtx<'_>) 
     content_items.extend(ctx.children.into_iter().map(|c| c.into_any_flex()));
 
     Arc::new(apply_widget_style(
-        flex_col(content_items).gap(Length::px(style.layout.gap.max(6.0))),
+        apply_flex_alignment(flex_col(content_items), &style)
+            .gap(Length::px(style.layout.gap.max(6.0))),
         &style,
     ))
 }
@@ -721,7 +729,11 @@ pub(crate) fn project_toast(toast: &UiToast, ctx: ProjectionCtx<'_>) -> UiView {
     let dismiss = ecs_button(ctx.entity, OverlayUiAction::DismissToast, "✕".to_string());
 
     Arc::new(apply_widget_style(
-        flex_row(vec![msg.flex(1.0).into_any_flex(), dismiss.into_any_flex()]).gap(Length::px(8.0)),
+        apply_flex_alignment(
+            flex_row(vec![msg.flex(1.0).into_any_flex(), dismiss.into_any_flex()]),
+            &style,
+        )
+        .gap(Length::px(8.0)),
         &style,
     ))
 }

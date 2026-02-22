@@ -27,6 +27,8 @@ fn project_ui_toast(toast: &UiToast, _ctx: ProjectionCtx<'_>) -> UiView {
     Arc::new(transformed(label(toast.message.clone())).translate((520.0, 40.0)))
 }
 
+bevy_xilem::impl_ui_control_template!(UiToast, project_ui_toast);
+
 fn setup_overlay_hit_routing_world(mut commands: Commands) {
     let root = commands.spawn((UiRoot, UiFlexColumn)).id();
 
@@ -96,7 +98,7 @@ fn build_overlay_hit_routing_app() -> App {
 
     let mut app = App::new();
     app.add_plugins(BevyXilemPlugin)
-        .register_projector::<UiToast>(project_ui_toast)
+        .register_ui_control::<UiToast>()
         .add_systems(Startup, setup_overlay_hit_routing_world)
         .add_systems(PreUpdate, drain_overlay_hit_routing_events);
 

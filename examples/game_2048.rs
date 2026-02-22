@@ -1167,6 +1167,7 @@ fn setup_game_styles(mut style_sheet: ResMut<StyleSheet>) {
                 gap: Some(12.0),
                 corner_radius: Some(16.0),
                 border_width: Some(1.0),
+                ..Default::default()
             },
             colors: ColorStyle {
                 bg: Some(Color::from_rgb8(0x19, 0x1A, 0x1E)),
@@ -1191,7 +1192,10 @@ fn setup_game_styles(mut style_sheet: ResMut<StyleSheet>) {
     style_sheet.set_class(
         "g2048.title",
         StyleSetter {
-            text: TextStyle { size: Some(58.0) },
+            text: TextStyle {
+                size: Some(58.0),
+                ..Default::default()
+            },
             colors: ColorStyle {
                 text: Some(Color::from_rgb8(0xF5, 0xB4, 0x5B)),
                 ..ColorStyle::default()
@@ -1203,7 +1207,10 @@ fn setup_game_styles(mut style_sheet: ResMut<StyleSheet>) {
     style_sheet.set_class(
         "g2048.subtitle",
         StyleSetter {
-            text: TextStyle { size: Some(15.0) },
+            text: TextStyle {
+                size: Some(15.0),
+                ..Default::default()
+            },
             colors: ColorStyle {
                 text: Some(Color::from_rgb8(0xCF, 0xD6, 0xE4)),
                 ..ColorStyle::default()
@@ -1266,7 +1273,10 @@ fn setup_game_styles(mut style_sheet: ResMut<StyleSheet>) {
     style_sheet.set_class(
         "g2048.score-caption",
         StyleSetter {
-            text: TextStyle { size: Some(12.0) },
+            text: TextStyle {
+                size: Some(12.0),
+                ..Default::default()
+            },
             colors: ColorStyle {
                 text: Some(Color::from_rgb8(0xB7, 0xC1, 0xD4)),
                 ..ColorStyle::default()
@@ -1278,7 +1288,10 @@ fn setup_game_styles(mut style_sheet: ResMut<StyleSheet>) {
     style_sheet.set_class(
         "g2048.score-value",
         StyleSetter {
-            text: TextStyle { size: Some(24.0) },
+            text: TextStyle {
+                size: Some(24.0),
+                ..Default::default()
+            },
             colors: ColorStyle {
                 text: Some(Color::from_rgb8(0xF8, 0xFA, 0xFF)),
                 ..ColorStyle::default()
@@ -1296,7 +1309,10 @@ fn setup_game_styles(mut style_sheet: ResMut<StyleSheet>) {
                 border_width: Some(1.0),
                 ..LayoutStyle::default()
             },
-            text: TextStyle { size: Some(14.0) },
+            text: TextStyle {
+                size: Some(14.0),
+                ..Default::default()
+            },
             ..StyleSetter::default()
         },
     );
@@ -1379,7 +1395,10 @@ fn setup_game_styles(mut style_sheet: ResMut<StyleSheet>) {
                 border_width: Some(1.0),
                 ..LayoutStyle::default()
             },
-            text: TextStyle { size: Some(28.0) },
+            text: TextStyle {
+                size: Some(28.0),
+                ..Default::default()
+            },
             ..StyleSetter::default()
         },
     );
@@ -1477,7 +1496,10 @@ fn setup_game_styles(mut style_sheet: ResMut<StyleSheet>) {
     style_sheet.set_class(
         "g2048.tile.v128",
         StyleSetter {
-            text: TextStyle { size: Some(24.0) },
+            text: TextStyle {
+                size: Some(24.0),
+                ..Default::default()
+            },
             colors: ColorStyle {
                 bg: Some(Color::from_rgb8(0xED, 0xCF, 0x72)),
                 border: Some(Color::from_rgb8(0xCF, 0xB4, 0x5A)),
@@ -1491,7 +1513,10 @@ fn setup_game_styles(mut style_sheet: ResMut<StyleSheet>) {
     style_sheet.set_class(
         "g2048.tile.v256",
         StyleSetter {
-            text: TextStyle { size: Some(24.0) },
+            text: TextStyle {
+                size: Some(24.0),
+                ..Default::default()
+            },
             colors: ColorStyle {
                 bg: Some(Color::from_rgb8(0xED, 0xCC, 0x61)),
                 border: Some(Color::from_rgb8(0xCD, 0xAF, 0x4A)),
@@ -1505,7 +1530,10 @@ fn setup_game_styles(mut style_sheet: ResMut<StyleSheet>) {
     style_sheet.set_class(
         "g2048.tile.v512",
         StyleSetter {
-            text: TextStyle { size: Some(24.0) },
+            text: TextStyle {
+                size: Some(24.0),
+                ..Default::default()
+            },
             colors: ColorStyle {
                 bg: Some(Color::from_rgb8(0xED, 0xC8, 0x50)),
                 border: Some(Color::from_rgb8(0xCB, 0xAA, 0x37)),
@@ -1519,7 +1547,10 @@ fn setup_game_styles(mut style_sheet: ResMut<StyleSheet>) {
     style_sheet.set_class(
         "g2048.tile.v1024",
         StyleSetter {
-            text: TextStyle { size: Some(20.0) },
+            text: TextStyle {
+                size: Some(20.0),
+                ..Default::default()
+            },
             colors: ColorStyle {
                 bg: Some(Color::from_rgb8(0xED, 0xC5, 0x3F)),
                 border: Some(Color::from_rgb8(0xC7, 0xA2, 0x2A)),
@@ -1533,7 +1564,10 @@ fn setup_game_styles(mut style_sheet: ResMut<StyleSheet>) {
     style_sheet.set_class(
         "g2048.tile.v2048",
         StyleSetter {
-            text: TextStyle { size: Some(20.0) },
+            text: TextStyle {
+                size: Some(20.0),
+                ..Default::default()
+            },
             colors: ColorStyle {
                 bg: Some(Color::from_rgb8(0xED, 0xC2, 0x2E)),
                 border: Some(Color::from_rgb8(0xC8, 0x9C, 0x13)),
@@ -1547,7 +1581,10 @@ fn setup_game_styles(mut style_sheet: ResMut<StyleSheet>) {
     style_sheet.set_class(
         "g2048.tile.super",
         StyleSetter {
-            text: TextStyle { size: Some(18.0) },
+            text: TextStyle {
+                size: Some(18.0),
+                ..Default::default()
+            },
             colors: ColorStyle {
                 bg: Some(Color::from_rgb8(0x62, 0x41, 0xF2)),
                 border: Some(Color::from_rgb8(0x88, 0x69, 0xFF)),
@@ -1589,7 +1626,10 @@ fn setup_game_styles(mut style_sheet: ResMut<StyleSheet>) {
                 border_width: Some(1.0),
                 ..LayoutStyle::default()
             },
-            text: TextStyle { size: Some(16.0) },
+            text: TextStyle {
+                size: Some(16.0),
+                ..Default::default()
+            },
             transition: Some(StyleTransition { duration: 0.12 }),
             ..StyleSetter::default()
         },
@@ -1727,7 +1767,10 @@ fn setup_game_styles(mut style_sheet: ResMut<StyleSheet>) {
     style_sheet.set_class(
         "g2048.hint",
         StyleSetter {
-            text: TextStyle { size: Some(13.0) },
+            text: TextStyle {
+                size: Some(13.0),
+                ..Default::default()
+            },
             colors: ColorStyle {
                 text: Some(Color::from_rgb8(0xAB, 0xB5, 0xC7)),
                 ..ColorStyle::default()
@@ -1832,6 +1875,21 @@ fn apply_keyboard_game_input(world: &mut World) {
     }
 }
 
+bevy_xilem::impl_ui_control_template!(GameRoot, project_game_root);
+bevy_xilem::impl_ui_control_template!(HeaderBlock, project_header_block);
+bevy_xilem::impl_ui_control_template!(ScoreStrip, project_score_strip);
+bevy_xilem::impl_ui_control_template!(ScoreCard, project_score_card);
+bevy_xilem::impl_ui_control_template!(StatusLine, project_status_line);
+bevy_xilem::impl_ui_control_template!(GameFlowRow, project_game_flow_row);
+bevy_xilem::impl_ui_control_template!(BoardContainer, project_board_container);
+bevy_xilem::impl_ui_control_template!(BoardRow, project_board_row);
+bevy_xilem::impl_ui_control_template!(TileCell, project_tile_cell);
+bevy_xilem::impl_ui_control_template!(SidePanel, project_side_panel);
+bevy_xilem::impl_ui_control_template!(ControlsPad, project_controls_pad);
+bevy_xilem::impl_ui_control_template!(ControlsRow, project_controls_row);
+bevy_xilem::impl_ui_control_template!(ControlButton, project_control_button);
+bevy_xilem::impl_ui_control_template!(HintLine, project_hint_line);
+
 fn build_2048_app() -> App {
     init_logging();
 
@@ -1840,20 +1898,20 @@ fn build_2048_app() -> App {
         .insert_resource(ButtonInput::<KeyCode>::default())
         .insert_resource(GameViewport::default())
         .insert_resource(Game2048State::default())
-        .register_projector::<GameRoot>(project_game_root)
-        .register_projector::<HeaderBlock>(project_header_block)
-        .register_projector::<ScoreStrip>(project_score_strip)
-        .register_projector::<ScoreCard>(project_score_card)
-        .register_projector::<StatusLine>(project_status_line)
-        .register_projector::<GameFlowRow>(project_game_flow_row)
-        .register_projector::<BoardContainer>(project_board_container)
-        .register_projector::<BoardRow>(project_board_row)
-        .register_projector::<TileCell>(project_tile_cell)
-        .register_projector::<SidePanel>(project_side_panel)
-        .register_projector::<ControlsPad>(project_controls_pad)
-        .register_projector::<ControlsRow>(project_controls_row)
-        .register_projector::<ControlButton>(project_control_button)
-        .register_projector::<HintLine>(project_hint_line)
+        .register_ui_control::<GameRoot>()
+        .register_ui_control::<HeaderBlock>()
+        .register_ui_control::<ScoreStrip>()
+        .register_ui_control::<ScoreCard>()
+        .register_ui_control::<StatusLine>()
+        .register_ui_control::<GameFlowRow>()
+        .register_ui_control::<BoardContainer>()
+        .register_ui_control::<BoardRow>()
+        .register_ui_control::<TileCell>()
+        .register_ui_control::<SidePanel>()
+        .register_ui_control::<ControlsPad>()
+        .register_ui_control::<ControlsRow>()
+        .register_ui_control::<ControlButton>()
+        .register_ui_control::<HintLine>()
         .add_systems(Startup, (setup_game_styles, setup_game_world))
         .add_systems(PreUpdate, track_game_viewport)
         .add_systems(

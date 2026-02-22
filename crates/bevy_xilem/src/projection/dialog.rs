@@ -12,8 +12,8 @@ use crate::{
     },
     overlay::OverlayUiAction,
     styling::{
-        apply_direct_widget_style, apply_label_style, apply_widget_style, resolve_style,
-        resolve_style_for_classes,
+        apply_direct_widget_style, apply_flex_alignment, apply_label_style, apply_widget_style,
+        resolve_style, resolve_style_for_classes,
     },
     views::{ecs_button, opaque_hitbox_for_entity},
 };
@@ -215,9 +215,11 @@ pub(crate) fn project_dialog(dialog: &UiDialog, ctx: ProjectionCtx<'_>) -> UiVie
     dialog_children.push(dismiss_button);
 
     let dialog_surface = xilem_masonry::view::sized_box(apply_widget_style(
-        flex_col(dialog_children)
-            .cross_axis_alignment(CrossAxisAlignment::Stretch)
-            .gap(Length::px(dialog_gap)),
+        apply_flex_alignment(
+            flex_col(dialog_children).cross_axis_alignment(CrossAxisAlignment::Stretch),
+            &dialog_style,
+        )
+        .gap(Length::px(dialog_gap)),
         &dialog_style,
     ))
     .fixed_width(Length::px(dialog_surface_width))

@@ -5,8 +5,8 @@ use crate::{
     },
     overlay::OverlayUiAction,
     styling::{
-        apply_direct_widget_style, apply_label_style, apply_widget_style, resolve_style,
-        resolve_style_for_classes,
+        apply_direct_widget_style, apply_flex_alignment, apply_label_style, apply_widget_style,
+        resolve_style, resolve_style_for_classes,
     },
     views::{ecs_button, ecs_button_with_child, opaque_hitbox_for_entity},
 };
@@ -505,10 +505,12 @@ pub(crate) fn project_dropdown_menu(_: &UiDropdownMenu, ctx: ProjectionCtx<'_>) 
         .collect::<Vec<_>>();
 
     let scrollable_menu = portal(
-        flex_col(items)
-            .cross_axis_alignment(CrossAxisAlignment::Stretch)
-            .width(Dim::Stretch)
-            .gap(Length::px(item_gap)),
+        apply_flex_alignment(
+            flex_col(items).cross_axis_alignment(CrossAxisAlignment::Stretch),
+            &menu_style,
+        )
+        .width(Dim::Stretch)
+        .gap(Length::px(item_gap)),
     )
     .dims((Length::px(dropdown_width), Length::px(dropdown_height)));
 

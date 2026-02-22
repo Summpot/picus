@@ -352,7 +352,10 @@ fn setup_todo_styles(mut style_sheet: ResMut<StyleSheet>) {
     style_sheet.set_class(
         "todo.header",
         StyleSetter {
-            text: TextStyle { size: Some(80.0) },
+            text: TextStyle {
+                size: Some(80.0),
+                ..Default::default()
+            },
             colors: ColorStyle {
                 text: Some(Color::from_rgb8(0xE5, 0xE7, 0xEB)),
                 ..ColorStyle::default()
@@ -375,7 +378,10 @@ fn setup_todo_styles(mut style_sheet: ResMut<StyleSheet>) {
     style_sheet.set_class(
         "todo.input",
         StyleSetter {
-            text: TextStyle { size: Some(16.0) },
+            text: TextStyle {
+                size: Some(16.0),
+                ..Default::default()
+            },
             layout: LayoutStyle {
                 padding: Some(6.0),
                 corner_radius: Some(8.0),
@@ -415,7 +421,10 @@ fn setup_todo_styles(mut style_sheet: ResMut<StyleSheet>) {
     style_sheet.set_class(
         "todo.add-label",
         StyleSetter {
-            text: TextStyle { size: Some(16.0) },
+            text: TextStyle {
+                size: Some(16.0),
+                ..Default::default()
+            },
             colors: ColorStyle {
                 text: Some(Color::from_rgb8(0xFF, 0xFF, 0xFF)),
                 ..ColorStyle::default()
@@ -481,7 +490,10 @@ fn setup_todo_styles(mut style_sheet: ResMut<StyleSheet>) {
     style_sheet.set_class(
         "todo.item-checkbox",
         StyleSetter {
-            text: TextStyle { size: Some(16.0) },
+            text: TextStyle {
+                size: Some(16.0),
+                ..Default::default()
+            },
             colors: ColorStyle {
                 text: Some(Color::from_rgb8(0xE4, 0xE4, 0xE7)),
                 hover_text: Some(Color::from_rgb8(0xFF, 0xFF, 0xFF)),
@@ -515,7 +527,10 @@ fn setup_todo_styles(mut style_sheet: ResMut<StyleSheet>) {
     style_sheet.set_class(
         "todo.delete-label",
         StyleSetter {
-            text: TextStyle { size: Some(14.0) },
+            text: TextStyle {
+                size: Some(14.0),
+                ..Default::default()
+            },
             colors: ColorStyle {
                 text: Some(Color::from_rgb8(0xFA, 0xFA, 0xFA)),
                 ..ColorStyle::default()
@@ -538,7 +553,10 @@ fn setup_todo_styles(mut style_sheet: ResMut<StyleSheet>) {
     style_sheet.set_class(
         "todo.filter-toggle",
         StyleSetter {
-            text: TextStyle { size: Some(14.0) },
+            text: TextStyle {
+                size: Some(14.0),
+                ..Default::default()
+            },
             layout: LayoutStyle {
                 padding: Some(4.0),
                 corner_radius: Some(6.0),
@@ -600,6 +618,14 @@ fn drain_todo_events_and_mutate_world(world: &mut World) {
     }
 }
 
+bevy_xilem::impl_ui_control_template!(TodoRootView, project_todo_root);
+bevy_xilem::impl_ui_control_template!(TodoHeader, project_todo_header);
+bevy_xilem::impl_ui_control_template!(TodoInputArea, project_todo_input_area);
+bevy_xilem::impl_ui_control_template!(TodoListContainer, project_todo_list_container);
+bevy_xilem::impl_ui_control_template!(TodoItem, project_todo_item);
+bevy_xilem::impl_ui_control_template!(TodoFilterBar, project_filter_bar);
+bevy_xilem::impl_ui_control_template!(FilterToggle, project_filter_toggle);
+
 fn build_bevy_todo_app() -> App {
     init_logging();
 
@@ -607,13 +633,13 @@ fn build_bevy_todo_app() -> App {
     app.add_plugins(BevyXilemPlugin)
         .insert_resource(ActiveFilter(FilterType::All))
         .insert_resource(DraftTodo("My Next Task".to_string()))
-        .register_projector::<TodoRootView>(project_todo_root)
-        .register_projector::<TodoHeader>(project_todo_header)
-        .register_projector::<TodoInputArea>(project_todo_input_area)
-        .register_projector::<TodoListContainer>(project_todo_list_container)
-        .register_projector::<TodoItem>(project_todo_item)
-        .register_projector::<TodoFilterBar>(project_filter_bar)
-        .register_projector::<FilterToggle>(project_filter_toggle)
+        .register_ui_control::<TodoRootView>()
+        .register_ui_control::<TodoHeader>()
+        .register_ui_control::<TodoInputArea>()
+        .register_ui_control::<TodoListContainer>()
+        .register_ui_control::<TodoItem>()
+        .register_ui_control::<TodoFilterBar>()
+        .register_ui_control::<FilterToggle>()
         .add_systems(Startup, (setup_todo_styles, setup_todo_world));
 
     app.add_systems(PreUpdate, drain_todo_events_and_mutate_world);

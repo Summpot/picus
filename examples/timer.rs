@@ -392,6 +392,7 @@ fn setup_timer_styles(mut style_sheet: ResMut<StyleSheet>) {
                 gap: Some(10.0),
                 corner_radius: Some(12.0),
                 border_width: Some(1.0),
+                ..Default::default()
             },
             colors: ColorStyle {
                 bg: Some(bevy_xilem::xilem::Color::from_rgb8(0x20, 0x20, 0x20)),
@@ -405,7 +406,10 @@ fn setup_timer_styles(mut style_sheet: ResMut<StyleSheet>) {
     style_sheet.set_class(
         "timer.title",
         StyleSetter {
-            text: TextStyle { size: Some(24.0) },
+            text: TextStyle {
+                size: Some(24.0),
+                ..Default::default()
+            },
             colors: ColorStyle {
                 text: Some(bevy_xilem::xilem::palette::css::WHITE),
                 ..ColorStyle::default()
@@ -444,7 +448,10 @@ fn setup_timer_styles(mut style_sheet: ResMut<StyleSheet>) {
     style_sheet.set_class(
         "timer.body-text",
         StyleSetter {
-            text: TextStyle { size: Some(16.0) },
+            text: TextStyle {
+                size: Some(16.0),
+                ..Default::default()
+            },
             layout: LayoutStyle {
                 padding: Some(4.0),
                 ..LayoutStyle::default()
@@ -496,7 +503,10 @@ fn setup_timer_styles(mut style_sheet: ResMut<StyleSheet>) {
     style_sheet.set_class(
         "timer.reset-label",
         StyleSetter {
-            text: TextStyle { size: Some(16.0) },
+            text: TextStyle {
+                size: Some(16.0),
+                ..Default::default()
+            },
             colors: ColorStyle {
                 text: Some(bevy_xilem::xilem::palette::css::WHITE),
                 ..ColorStyle::default()
@@ -520,19 +530,27 @@ fn drain_timer_events_and_tick(world: &mut World) {
     }
 }
 
+bevy_xilem::impl_ui_control_template!(TimerRootView, project_timer_root);
+bevy_xilem::impl_ui_control_template!(TimerTitle, project_timer_title);
+bevy_xilem::impl_ui_control_template!(TimerDialView, project_timer_dial);
+bevy_xilem::impl_ui_control_template!(TimerElapsedRow, project_timer_elapsed_row);
+bevy_xilem::impl_ui_control_template!(TimerProgressRow, project_timer_progress_row);
+bevy_xilem::impl_ui_control_template!(TimerDurationRow, project_timer_duration_row);
+bevy_xilem::impl_ui_control_template!(TimerControlsRow, project_timer_controls_row);
+
 fn build_bevy_timer_app() -> App {
     init_logging();
 
     let mut app = App::new();
     app.add_plugins(BevyXilemPlugin)
         .insert_resource(TimerState::default())
-        .register_projector::<TimerRootView>(project_timer_root)
-        .register_projector::<TimerTitle>(project_timer_title)
-        .register_projector::<TimerDialView>(project_timer_dial)
-        .register_projector::<TimerElapsedRow>(project_timer_elapsed_row)
-        .register_projector::<TimerProgressRow>(project_timer_progress_row)
-        .register_projector::<TimerDurationRow>(project_timer_duration_row)
-        .register_projector::<TimerControlsRow>(project_timer_controls_row)
+        .register_ui_control::<TimerRootView>()
+        .register_ui_control::<TimerTitle>()
+        .register_ui_control::<TimerDialView>()
+        .register_ui_control::<TimerElapsedRow>()
+        .register_ui_control::<TimerProgressRow>()
+        .register_ui_control::<TimerDurationRow>()
+        .register_ui_control::<TimerControlsRow>()
         .add_systems(Startup, (setup_timer_styles, setup_timer_world));
 
     app.add_systems(PreUpdate, drain_timer_events_and_tick);

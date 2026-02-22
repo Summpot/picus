@@ -1595,18 +1595,19 @@ pub fn handle_global_overlay_clicks(world: &mut World) {
         return;
     };
 
-    let anchor_widget_id = world
+    let anchor_entity = world
         .get::<OverlayState>(top_overlay_entity)
-        .and_then(|state| state.anchor)
-        .and_then(|anchor| {
-            world
-                .get_non_send_resource::<MasonryRuntime>()
-                .and_then(|runtime| {
-                    runtime
-                        .find_widget_id_for_entity_bits(anchor.to_bits(), true)
-                        .or_else(|| runtime.find_widget_id_for_entity_bits(anchor.to_bits(), false))
-                })
-        });
+        .and_then(|state| state.anchor);
+
+    let anchor_widget_id = anchor_entity.and_then(|anchor| {
+        world
+            .get_non_send_resource::<MasonryRuntime>()
+            .and_then(|runtime| {
+                runtime
+                    .find_widget_id_for_entity_bits(anchor.to_bits(), true)
+                    .or_else(|| runtime.find_widget_id_for_entity_bits(anchor.to_bits(), false))
+            })
+    });
 
     let hit_path = {
         let Some(mut runtime) = world.get_non_send_resource_mut::<MasonryRuntime>() else {
@@ -1671,7 +1672,26 @@ pub fn handle_global_overlay_clicks(world: &mut World) {
         );
     }
 
-    let clicked_anchor = anchor_widget_id.is_some_and(|widget_id| hit_path.contains(&widget_id));
+    let clicked_anchor_by_widget =
+        anchor_widget_id.is_some_and(|widget_id| hit_path.contains(&widget_id));
+
+    let clicked_anchor_by_rect = anchor_widget_id
+        .and_then(|widget_id| {
+            world
+                .get_non_send_resource::<MasonryRuntime>()
+                .and_then(|runtime| runtime.get_widget_bounding_box(widget_id))
+        })
+        .is_some_and(|bounds| {
+            let cursor_x = cursor_pos.x as f64;
+            let cursor_y = cursor_pos.y as f64;
+
+            cursor_x >= bounds.x0
+                && cursor_x <= bounds.x1
+                && cursor_y >= bounds.y0
+                && cursor_y <= bounds.y1
+        });
+
+    let clicked_anchor = clicked_anchor_by_widget || clicked_anchor_by_rect;
 
     if world.get::<UiDropdownMenu>(top_overlay_entity).is_some() {
         close_dropdown(world, top_overlay_entity);

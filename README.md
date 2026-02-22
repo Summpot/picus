@@ -37,7 +37,8 @@ If you are using this repository workspace layout, keep path dependencies from t
 use std::sync::Arc;
 
 use bevy_xilem::{
-    AppBevyXilemExt, BevyXilemPlugin, ProjectionCtx, UiEventQueue, UiRoot, UiView,
+    AppBevyXilemExt, BevyXilemPlugin, ProjectionCtx, UiControlTemplate, UiEventQueue, UiRoot,
+    UiView,
     bevy_app::{App, PreUpdate, Startup},
     bevy_ecs::prelude::*,
     run_app_with_window_options, text_button,
@@ -55,8 +56,10 @@ enum CounterEvent {
     Increment,
 }
 
-fn project_counter_root(_: &CounterRoot, ctx: ProjectionCtx<'_>) -> UiView {
-    Arc::new(text_button(ctx.entity, CounterEvent::Increment, "Increment"))
+impl UiControlTemplate for CounterRoot {
+    fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
+        Arc::new(text_button(ctx.entity, CounterEvent::Increment, "Increment"))
+    }
 }
 
 fn setup(mut commands: Commands) {
@@ -82,7 +85,7 @@ fn build_app() -> App {
     let mut app = App::new();
     app.add_plugins(BevyXilemPlugin)
         .insert_resource(Counter::default())
-        .register_projector::<CounterRoot>(project_counter_root)
+        .register_ui_control::<CounterRoot>()
         .add_systems(Startup, setup)
         .add_systems(PreUpdate, drain_events);
     app

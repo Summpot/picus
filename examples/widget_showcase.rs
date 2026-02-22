@@ -333,7 +333,10 @@ fn setup_showcase_styles(mut style_sheet: ResMut<StyleSheet>) {
     style_sheet.set_class(
         "showcase.title",
         StyleSetter {
-            text: TextStyle { size: Some(26.0) },
+            text: TextStyle {
+                size: Some(26.0),
+                ..Default::default()
+            },
             colors: ColorStyle {
                 text: Some(Color::from_rgb8(0xE2, 0xE8, 0xF0)),
                 ..ColorStyle::default()
@@ -363,7 +366,10 @@ fn setup_showcase_styles(mut style_sheet: ResMut<StyleSheet>) {
     style_sheet.set_class(
         "showcase.status.text",
         StyleSetter {
-            text: TextStyle { size: Some(13.0) },
+            text: TextStyle {
+                size: Some(13.0),
+                ..Default::default()
+            },
             colors: ColorStyle {
                 text: Some(Color::from_rgb8(0x94, 0xA3, 0xB8)),
                 ..ColorStyle::default()
@@ -506,6 +512,9 @@ fn update_status(world: &mut World, _label_entity: Entity, text: String) {
     }
 }
 
+bevy_xilem::impl_ui_control_template!(ShowcaseRoot, project_showcase_root);
+bevy_xilem::impl_ui_control_template!(StatusDisplay, project_status_display);
+
 // ---------------------------------------------------------------------------
 // App builder + main
 // ---------------------------------------------------------------------------
@@ -516,8 +525,8 @@ fn build_showcase_app() -> App {
     let mut app = App::new();
     app.add_plugins(BevyXilemPlugin)
         .insert_resource(ShowcaseState::default())
-        .register_projector::<ShowcaseRoot>(project_showcase_root)
-        .register_projector::<StatusDisplay>(project_status_display)
+        .register_ui_control::<ShowcaseRoot>()
+        .register_ui_control::<StatusDisplay>()
         .add_systems(Startup, (setup_showcase_styles, setup_showcase))
         .add_systems(PreUpdate, drain_showcase_events);
     app

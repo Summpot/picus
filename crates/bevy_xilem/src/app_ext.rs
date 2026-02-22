@@ -57,7 +57,7 @@ fn flush_pending_font_registrations(app: &mut App) {
 /// use std::sync::Arc;
 ///
 /// use bevy_xilem::{
-///     AppBevyXilemExt, BevyXilemPlugin, ProjectionCtx, UiRoot, UiView,
+///     AppBevyXilemExt, BevyXilemPlugin, ProjectionCtx, UiControlTemplate, UiRoot, UiView,
 ///     bevy_app::{App, Startup},
 ///     bevy_ecs::prelude::*,
 ///     text_button,
@@ -71,8 +71,10 @@ fn flush_pending_font_registrations(app: &mut App) {
 ///     Clicked,
 /// }
 ///
-/// fn project_root(_: &Root, ctx: ProjectionCtx<'_>) -> UiView {
-///     Arc::new(text_button(ctx.entity, Action::Clicked, "Click"))
+/// impl UiControlTemplate for Root {
+///     fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
+///         Arc::new(text_button(ctx.entity, Action::Clicked, "Click"))
+///     }
 /// }
 ///
 /// fn setup(mut commands: Commands) {
@@ -81,13 +83,17 @@ fn flush_pending_font_registrations(app: &mut App) {
 ///
 /// let mut app = App::new();
 /// app.add_plugins(BevyXilemPlugin)
-///     .register_projector::<Root>(project_root)
+///     .register_ui_control::<Root>()
 ///     .add_systems(Startup, setup);
 /// ```
 pub trait AppBevyXilemExt {
     /// Register a typed projector for a specific component.
     ///
     /// Last registered projector has precedence during projection.
+    ///
+    /// Legacy low-level API kept for compatibility; prefer
+    /// [`Self::register_ui_control`] for application code.
+    #[doc(hidden)]
     fn register_projector<C: Component>(
         &mut self,
         projector: fn(&C, ProjectionCtx<'_>) -> UiView,
@@ -101,7 +107,9 @@ pub trait AppBevyXilemExt {
 
     /// Register a raw projector implementation.
     ///
-    /// Use this when component-based registration is insufficient.
+    /// Legacy low-level API kept for compatibility; prefer
+    /// [`Self::register_ui_control`] for application code.
+    #[doc(hidden)]
     fn register_raw_projector<P: UiProjector>(&mut self, projector: P) -> &mut Self;
 
     /// Load a RON stylesheet asset and bind it as the active runtime style source.

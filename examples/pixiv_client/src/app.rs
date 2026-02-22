@@ -797,7 +797,10 @@ fn setup_styles(mut sheet: ResMut<StyleSheet>, i18n: Option<Res<AppI18n>>) {
                 border_width: Some(1.0),
                 ..LayoutStyle::default()
             },
-            text: TextStyle { size: Some(14.0) },
+            text: TextStyle {
+                size: Some(14.0),
+                ..Default::default()
+            },
             font_family: default_fonts.clone(),
             transition: Some(StyleTransition { duration: 0.14 }),
             ..StyleSetter::default()
@@ -903,7 +906,10 @@ fn setup_styles(mut sheet: ResMut<StyleSheet>, i18n: Option<Res<AppI18n>>) {
                 hover_bg: Some(Color::from_rgb8(0x2A, 0x2A, 0x2A)),
                 ..ColorStyle::default()
             },
-            text: TextStyle { size: Some(14.0) },
+            text: TextStyle {
+                size: Some(14.0),
+                ..Default::default()
+            },
             font_family: default_fonts.clone(),
             ..StyleSetter::default()
         },
@@ -2278,6 +2284,18 @@ fn apply_image_results(world: &mut World) {
     }
 }
 
+bevy_xilem::impl_ui_control_template!(PixivRoot, project_root);
+bevy_xilem::impl_ui_control_template!(PixivSidebar, project_sidebar);
+bevy_xilem::impl_ui_control_template!(PixivMainColumn, project_main_column);
+bevy_xilem::impl_ui_control_template!(PixivAuthPanel, project_auth_panel);
+bevy_xilem::impl_ui_control_template!(PixivResponsePanel, project_response_panel);
+bevy_xilem::impl_ui_control_template!(PixivSearchPanel, project_search_panel);
+bevy_xilem::impl_ui_control_template!(PixivHomeFeed, project_home_feed);
+bevy_xilem::impl_ui_control_template!(PixivIllustCard, project_illust_card);
+bevy_xilem::impl_ui_control_template!(PixivDetailOverlay, project_detail_overlay);
+bevy_xilem::impl_ui_control_template!(PixivOverlayTags, project_overlay_tags);
+bevy_xilem::impl_ui_control_template!(OverlayTag, project_overlay_tag);
+
 fn build_app() -> App {
     ensure_task_pool_initialized();
 
@@ -2329,17 +2347,17 @@ fn build_app() -> App {
             "sans-serif",
         ],
     )
-    .register_projector::<PixivRoot>(project_root)
-    .register_projector::<PixivSidebar>(project_sidebar)
-    .register_projector::<PixivMainColumn>(project_main_column)
-    .register_projector::<PixivAuthPanel>(project_auth_panel)
-    .register_projector::<PixivResponsePanel>(project_response_panel)
-    .register_projector::<PixivSearchPanel>(project_search_panel)
-    .register_projector::<PixivHomeFeed>(project_home_feed)
-    .register_projector::<PixivIllustCard>(project_illust_card)
-    .register_projector::<PixivDetailOverlay>(project_detail_overlay)
-    .register_projector::<PixivOverlayTags>(project_overlay_tags)
-    .register_projector::<OverlayTag>(project_overlay_tag)
+    .register_ui_control::<PixivRoot>()
+    .register_ui_control::<PixivSidebar>()
+    .register_ui_control::<PixivMainColumn>()
+    .register_ui_control::<PixivAuthPanel>()
+    .register_ui_control::<PixivResponsePanel>()
+    .register_ui_control::<PixivSearchPanel>()
+    .register_ui_control::<PixivHomeFeed>()
+    .register_ui_control::<PixivIllustCard>()
+    .register_ui_control::<PixivDetailOverlay>()
+    .register_ui_control::<PixivOverlayTags>()
+    .register_ui_control::<OverlayTag>()
     .add_systems(Startup, (setup_styles, setup))
     .add_systems(PreUpdate, drain_ui_actions_and_dispatch)
     .add_systems(

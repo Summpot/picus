@@ -511,7 +511,10 @@ fn setup_calculator_styles(mut style_sheet: ResMut<StyleSheet>) {
     style_sheet.set_class(
         "calc.display.text",
         StyleSetter {
-            text: TextStyle { size: Some(30.0) },
+            text: TextStyle {
+                size: Some(30.0),
+                ..Default::default()
+            },
             ..StyleSetter::default()
         },
     );
@@ -590,7 +593,10 @@ fn setup_calculator_styles(mut style_sheet: ResMut<StyleSheet>) {
     style_sheet.set_class(
         "calc.button.label.default",
         StyleSetter {
-            text: TextStyle { size: Some(18.0) },
+            text: TextStyle {
+                size: Some(18.0),
+                ..Default::default()
+            },
             colors: ColorStyle {
                 text: Some(bevy_xilem::xilem::palette::css::WHITE),
                 ..ColorStyle::default()
@@ -602,7 +608,10 @@ fn setup_calculator_styles(mut style_sheet: ResMut<StyleSheet>) {
     style_sheet.set_class(
         "calc.button.label.clear",
         StyleSetter {
-            text: TextStyle { size: Some(18.0) },
+            text: TextStyle {
+                size: Some(18.0),
+                ..Default::default()
+            },
             colors: ColorStyle {
                 text: Some(bevy_xilem::xilem::palette::css::MEDIUM_VIOLET_RED),
                 ..ColorStyle::default()
@@ -626,17 +635,23 @@ fn drain_calc_events(world: &mut World) {
     }
 }
 
+bevy_xilem::impl_ui_control_template!(CalcRoot, project_calc_root);
+bevy_xilem::impl_ui_control_template!(CalcDisplayPanel, project_calc_display);
+bevy_xilem::impl_ui_control_template!(CalcKeypad, project_calc_keypad);
+bevy_xilem::impl_ui_control_template!(CalcButtonRow, project_calc_row);
+bevy_xilem::impl_ui_control_template!(CalcButtonSpec, project_calc_button_component);
+
 fn build_bevy_calculator_app() -> App {
     init_logging();
 
     let mut app = App::new();
     app.add_plugins(BevyXilemPlugin)
         .insert_resource(CalculatorEngine::default())
-        .register_projector::<CalcRoot>(project_calc_root)
-        .register_projector::<CalcDisplayPanel>(project_calc_display)
-        .register_projector::<CalcKeypad>(project_calc_keypad)
-        .register_projector::<CalcButtonRow>(project_calc_row)
-        .register_projector::<CalcButtonSpec>(project_calc_button_component)
+        .register_ui_control::<CalcRoot>()
+        .register_ui_control::<CalcDisplayPanel>()
+        .register_ui_control::<CalcKeypad>()
+        .register_ui_control::<CalcButtonRow>()
+        .register_ui_control::<CalcButtonSpec>()
         .add_systems(Startup, (setup_calculator_styles, setup_calculator_world));
 
     app.add_systems(PreUpdate, drain_calc_events);

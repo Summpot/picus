@@ -446,6 +446,7 @@ fn setup_download_styles(mut style_sheet: ResMut<StyleSheet>) {
                 gap: Some(8.0),
                 corner_radius: Some(10.0),
                 border_width: Some(1.0),
+                ..Default::default()
             },
             colors: ColorStyle {
                 bg: Some(bevy_xilem::xilem::Color::from_rgb8(0x1F, 0x1F, 0x24)),
@@ -459,7 +460,10 @@ fn setup_download_styles(mut style_sheet: ResMut<StyleSheet>) {
     style_sheet.set_class(
         "download.title",
         StyleSetter {
-            text: TextStyle { size: Some(22.0) },
+            text: TextStyle {
+                size: Some(22.0),
+                ..Default::default()
+            },
             colors: ColorStyle {
                 text: Some(bevy_xilem::xilem::Color::from_rgb8(0xF5, 0xF5, 0xFA)),
                 ..ColorStyle::default()
@@ -482,7 +486,10 @@ fn setup_download_styles(mut style_sheet: ResMut<StyleSheet>) {
     style_sheet.set_class(
         "download.url-input",
         StyleSetter {
-            text: TextStyle { size: Some(14.0) },
+            text: TextStyle {
+                size: Some(14.0),
+                ..Default::default()
+            },
             layout: LayoutStyle {
                 padding: Some(6.0),
                 border_width: Some(1.0),
@@ -522,7 +529,10 @@ fn setup_download_styles(mut style_sheet: ResMut<StyleSheet>) {
     style_sheet.set_class(
         "download.status",
         StyleSetter {
-            text: TextStyle { size: Some(13.0) },
+            text: TextStyle {
+                size: Some(13.0),
+                ..Default::default()
+            },
             colors: ColorStyle {
                 text: Some(bevy_xilem::xilem::Color::from_rgb8(0xD6, 0xD6, 0xDD)),
                 ..ColorStyle::default()
@@ -553,7 +563,10 @@ fn setup_download_styles(mut style_sheet: ResMut<StyleSheet>) {
     style_sheet.set_class(
         "overlay.dialog.dismiss",
         StyleSetter {
-            text: TextStyle { size: Some(14.0) },
+            text: TextStyle {
+                size: Some(14.0),
+                ..Default::default()
+            },
             layout: LayoutStyle {
                 padding: Some(8.0),
                 corner_radius: Some(6.0),
@@ -683,18 +696,25 @@ fn drain_download_events(world: &mut World) {
     }
 }
 
+bevy_xilem::impl_ui_control_template!(DownloadRootView, project_download_root);
+bevy_xilem::impl_ui_control_template!(DownloadTitle, project_download_title);
+bevy_xilem::impl_ui_control_template!(DownloadUrlRow, project_download_url_row);
+bevy_xilem::impl_ui_control_template!(DownloadActionRow, project_download_action_row);
+bevy_xilem::impl_ui_control_template!(DownloadDialogModeRow, project_download_dialog_mode_row);
+bevy_xilem::impl_ui_control_template!(DownloadProgressPanel, project_download_progress_panel);
+
 fn build_download_app() -> App {
     init_logging();
 
     let mut app = App::new();
     app.add_plugins(BevyXilemPlugin)
         .insert_resource(DownloadState::default())
-        .register_projector::<DownloadRootView>(project_download_root)
-        .register_projector::<DownloadTitle>(project_download_title)
-        .register_projector::<DownloadUrlRow>(project_download_url_row)
-        .register_projector::<DownloadActionRow>(project_download_action_row)
-        .register_projector::<DownloadDialogModeRow>(project_download_dialog_mode_row)
-        .register_projector::<DownloadProgressPanel>(project_download_progress_panel)
+        .register_ui_control::<DownloadRootView>()
+        .register_ui_control::<DownloadTitle>()
+        .register_ui_control::<DownloadUrlRow>()
+        .register_ui_control::<DownloadActionRow>()
+        .register_ui_control::<DownloadDialogModeRow>()
+        .register_ui_control::<DownloadProgressPanel>()
         .add_systems(Startup, (setup_download_styles, setup_download_world))
         .add_systems(PreUpdate, drain_download_events);
 

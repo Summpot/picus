@@ -245,6 +245,7 @@ fn setup_temperature_styles(mut style_sheet: ResMut<StyleSheet>) {
                 gap: Some(8.0),
                 corner_radius: Some(12.0),
                 border_width: Some(1.0),
+                ..Default::default()
             },
             colors: ColorStyle {
                 bg: Some(bevy_xilem::xilem::Color::from_rgb8(0x20, 0x20, 0x20)),
@@ -258,7 +259,10 @@ fn setup_temperature_styles(mut style_sheet: ResMut<StyleSheet>) {
     style_sheet.set_class(
         "temp.title",
         StyleSetter {
-            text: TextStyle { size: Some(24.0) },
+            text: TextStyle {
+                size: Some(24.0),
+                ..Default::default()
+            },
             colors: ColorStyle {
                 text: Some(bevy_xilem::xilem::palette::css::WHITE),
                 ..ColorStyle::default()
@@ -281,7 +285,10 @@ fn setup_temperature_styles(mut style_sheet: ResMut<StyleSheet>) {
     style_sheet.set_class(
         "temp.unit-label",
         StyleSetter {
-            text: TextStyle { size: Some(16.0) },
+            text: TextStyle {
+                size: Some(16.0),
+                ..Default::default()
+            },
             layout: LayoutStyle {
                 padding: Some(8.0),
                 ..LayoutStyle::default()
@@ -293,7 +300,10 @@ fn setup_temperature_styles(mut style_sheet: ResMut<StyleSheet>) {
     style_sheet.set_class(
         "temp.input",
         StyleSetter {
-            text: TextStyle { size: Some(16.0) },
+            text: TextStyle {
+                size: Some(16.0),
+                ..Default::default()
+            },
             ..StyleSetter::default()
         },
     );
@@ -301,7 +311,10 @@ fn setup_temperature_styles(mut style_sheet: ResMut<StyleSheet>) {
     style_sheet.set_class(
         "temp.hint",
         StyleSetter {
-            text: TextStyle { size: Some(12.0) },
+            text: TextStyle {
+                size: Some(12.0),
+                ..Default::default()
+            },
             colors: ColorStyle {
                 text: Some(bevy_xilem::xilem::Color::from_rgb8(0xb0, 0xb0, 0xb0)),
                 ..ColorStyle::default()
@@ -329,16 +342,21 @@ fn drain_temperature_events(world: &mut World) {
     }
 }
 
+bevy_xilem::impl_ui_control_template!(TemperatureRootView, project_temperature_root);
+bevy_xilem::impl_ui_control_template!(TemperatureTitle, project_temperature_title);
+bevy_xilem::impl_ui_control_template!(TemperatureInputRow, project_temperature_input_row);
+bevy_xilem::impl_ui_control_template!(TemperatureHint, project_temperature_hint);
+
 fn build_bevy_temperature_app() -> App {
     init_logging();
 
     let mut app = App::new();
     app.add_plugins(BevyXilemPlugin)
         .insert_resource(TemperatureState::default())
-        .register_projector::<TemperatureRootView>(project_temperature_root)
-        .register_projector::<TemperatureTitle>(project_temperature_title)
-        .register_projector::<TemperatureInputRow>(project_temperature_input_row)
-        .register_projector::<TemperatureHint>(project_temperature_hint)
+        .register_ui_control::<TemperatureRootView>()
+        .register_ui_control::<TemperatureTitle>()
+        .register_ui_control::<TemperatureInputRow>()
+        .register_ui_control::<TemperatureHint>()
         .add_systems(Startup, (setup_temperature_styles, setup_temperature_world));
 
     app.add_systems(PreUpdate, drain_temperature_events);

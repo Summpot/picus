@@ -1,7 +1,7 @@
 use super::core::{ProjectionCtx, UiView};
 use crate::{
     ecs::{UiFlexColumn, UiFlexRow},
-    styling::{apply_widget_style, resolve_style},
+    styling::{apply_flex_alignment, apply_widget_style, resolve_style},
 };
 use masonry::layout::Length;
 use std::sync::Arc;
@@ -17,7 +17,7 @@ pub(crate) fn project_flex_column(_: &UiFlexColumn, ctx: ProjectionCtx<'_>) -> U
         .collect::<Vec<_>>();
 
     Arc::new(apply_widget_style(
-        flex_col(children).gap(Length::px(style.layout.gap)),
+        apply_flex_alignment(flex_col(children), &style).gap(Length::px(style.layout.gap)),
         &style,
     ))
 }
@@ -31,7 +31,7 @@ pub(crate) fn project_flex_row(_: &UiFlexRow, ctx: ProjectionCtx<'_>) -> UiView 
         .collect::<Vec<_>>();
 
     Arc::new(apply_widget_style(
-        flex_row(children).gap(Length::px(style.layout.gap)),
+        apply_flex_alignment(flex_row(children), &style).gap(Length::px(style.layout.gap)),
         &style,
     ))
 }

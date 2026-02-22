@@ -653,6 +653,7 @@ fn setup_chess_styles(mut style_sheet: ResMut<StyleSheet>) {
                 padding: Some(6.0),
                 corner_radius: Some(8.0),
                 border_width: Some(1.0),
+                ..Default::default()
             },
             colors: ColorStyle {
                 bg: Some(Color::from_rgb8(0x24, 0x24, 0x24)),
@@ -666,7 +667,10 @@ fn setup_chess_styles(mut style_sheet: ResMut<StyleSheet>) {
     style_sheet.set_class(
         "chess.status",
         StyleSetter {
-            text: TextStyle { size: Some(16.0) },
+            text: TextStyle {
+                size: Some(16.0),
+                ..Default::default()
+            },
             colors: ColorStyle {
                 text: Some(Color::from_rgb8(0xE4, 0xE4, 0xE7)),
                 ..ColorStyle::default()
@@ -678,7 +682,10 @@ fn setup_chess_styles(mut style_sheet: ResMut<StyleSheet>) {
     style_sheet.set_class(
         "chess.clock",
         StyleSetter {
-            text: TextStyle { size: Some(14.0) },
+            text: TextStyle {
+                size: Some(14.0),
+                ..Default::default()
+            },
             colors: ColorStyle {
                 text: Some(Color::from_rgb8(0xD4, 0xD4, 0xD8)),
                 ..ColorStyle::default()
@@ -690,7 +697,10 @@ fn setup_chess_styles(mut style_sheet: ResMut<StyleSheet>) {
     style_sheet.set_class(
         "chess.time-per-move",
         StyleSetter {
-            text: TextStyle { size: Some(14.0) },
+            text: TextStyle {
+                size: Some(14.0),
+                ..Default::default()
+            },
             colors: ColorStyle {
                 text: Some(Color::from_rgb8(0xA1, 0xA1, 0xAA)),
                 ..ColorStyle::default()
@@ -702,7 +712,10 @@ fn setup_chess_styles(mut style_sheet: ResMut<StyleSheet>) {
     style_sheet.set_class(
         "chess.toggle",
         StyleSetter {
-            text: TextStyle { size: Some(14.0) },
+            text: TextStyle {
+                size: Some(14.0),
+                ..Default::default()
+            },
             layout: LayoutStyle {
                 padding: Some(2.0),
                 ..LayoutStyle::default()
@@ -741,7 +754,10 @@ fn setup_chess_styles(mut style_sheet: ResMut<StyleSheet>) {
     style_sheet.set_class(
         "chess.action-label",
         StyleSetter {
-            text: TextStyle { size: Some(14.0) },
+            text: TextStyle {
+                size: Some(14.0),
+                ..Default::default()
+            },
             colors: ColorStyle {
                 text: Some(Color::from_rgb8(0xFA, 0xFA, 0xFA)),
                 ..ColorStyle::default()
@@ -823,7 +839,10 @@ fn setup_chess_styles(mut style_sheet: ResMut<StyleSheet>) {
     style_sheet.set_class(
         "chess.cell-piece",
         StyleSetter {
-            text: TextStyle { size: Some(48.0) },
+            text: TextStyle {
+                size: Some(48.0),
+                ..Default::default()
+            },
             colors: ColorStyle {
                 text: Some(Color::BLACK),
                 ..ColorStyle::default()
@@ -846,6 +865,10 @@ fn drain_events_and_tick(world: &mut World) {
     });
 }
 
+bevy_xilem::impl_ui_control_template!(ChessRootView, project_chess_root);
+bevy_xilem::impl_ui_control_template!(ChessControlsPanel, project_chess_controls_panel);
+bevy_xilem::impl_ui_control_template!(ChessBoardPanel, project_chess_board_panel);
+
 fn build_bevy_chess_app() -> App {
     init_logging();
 
@@ -857,9 +880,9 @@ fn build_bevy_chess_app() -> App {
         .insert_resource(ChessGameResource::new(game))
         .insert_resource(ui)
         .insert_resource(ChessFlowResource::default())
-        .register_projector::<ChessRootView>(project_chess_root)
-        .register_projector::<ChessControlsPanel>(project_chess_controls_panel)
-        .register_projector::<ChessBoardPanel>(project_chess_board_panel)
+        .register_ui_control::<ChessRootView>()
+        .register_ui_control::<ChessControlsPanel>()
+        .register_ui_control::<ChessBoardPanel>()
         .add_systems(Startup, (setup_chess_styles, setup_chess_world));
 
     app.add_systems(PreUpdate, drain_events_and_tick);

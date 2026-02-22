@@ -488,6 +488,7 @@ fn setup_gallery_styles(mut style_sheet: ResMut<StyleSheet>) {
                 gap: Some(12.0),
                 corner_radius: Some(14.0),
                 border_width: Some(1.0),
+                ..Default::default()
             },
             transition: Some(StyleTransition { duration: 0.22 }),
             ..StyleSetter::default()
@@ -532,6 +533,7 @@ fn setup_gallery_styles(mut style_sheet: ResMut<StyleSheet>) {
                 gap: Some(8.0),
                 corner_radius: Some(10.0),
                 border_width: Some(1.0),
+                ..Default::default()
             },
             transition: Some(StyleTransition { duration: 0.22 }),
             ..StyleSetter::default()
@@ -571,7 +573,10 @@ fn setup_gallery_styles(mut style_sheet: ResMut<StyleSheet>) {
     style_sheet.set_class(
         "gallery.caption",
         StyleSetter {
-            text: TextStyle { size: Some(16.0) },
+            text: TextStyle {
+                size: Some(16.0),
+                ..Default::default()
+            },
             transition: Some(StyleTransition { duration: 0.22 }),
             ..StyleSetter::default()
         },
@@ -580,7 +585,10 @@ fn setup_gallery_styles(mut style_sheet: ResMut<StyleSheet>) {
     style_sheet.set_class(
         "gallery.hint",
         StyleSetter {
-            text: TextStyle { size: Some(13.0) },
+            text: TextStyle {
+                size: Some(13.0),
+                ..Default::default()
+            },
             transition: Some(StyleTransition { duration: 0.22 }),
             ..StyleSetter::default()
         },
@@ -819,7 +827,10 @@ fn setup_gallery_styles(mut style_sheet: ResMut<StyleSheet>) {
                 border_width: Some(1.0),
                 ..LayoutStyle::default()
             },
-            text: TextStyle { size: Some(14.0) },
+            text: TextStyle {
+                size: Some(14.0),
+                ..Default::default()
+            },
             transition: Some(StyleTransition { duration: 0.16 }),
             ..StyleSetter::default()
         },
@@ -885,6 +896,7 @@ fn setup_gallery_styles(mut style_sheet: ResMut<StyleSheet>) {
                 gap: Some(8.0),
                 corner_radius: Some(10.0),
                 border_width: Some(1.0),
+                ..Default::default()
             },
             transition: Some(StyleTransition { duration: 0.22 }),
             ..StyleSetter::default()
@@ -929,6 +941,7 @@ fn setup_gallery_styles(mut style_sheet: ResMut<StyleSheet>) {
                 gap: Some(6.0),
                 corner_radius: Some(8.0),
                 border_width: Some(1.0),
+                ..Default::default()
             },
             transition: Some(StyleTransition { duration: 0.22 }),
             ..StyleSetter::default()
@@ -1011,7 +1024,10 @@ fn setup_gallery_styles(mut style_sheet: ResMut<StyleSheet>) {
     style_sheet.set_class(
         "gallery.nested-title",
         StyleSetter {
-            text: TextStyle { size: Some(16.0) },
+            text: TextStyle {
+                size: Some(16.0),
+                ..Default::default()
+            },
             ..StyleSetter::default()
         },
     );
@@ -1019,7 +1035,10 @@ fn setup_gallery_styles(mut style_sheet: ResMut<StyleSheet>) {
     style_sheet.set_class(
         "gallery.nested-note",
         StyleSetter {
-            text: TextStyle { size: Some(13.0) },
+            text: TextStyle {
+                size: Some(13.0),
+                ..Default::default()
+            },
             ..StyleSetter::default()
         },
     );
@@ -1032,6 +1051,7 @@ fn setup_gallery_styles(mut style_sheet: ResMut<StyleSheet>) {
                 gap: Some(8.0),
                 corner_radius: Some(10.0),
                 border_width: Some(1.0),
+                ..Default::default()
             },
             colors: ColorStyle {
                 bg: Some(Color::from_rgb8(0x17, 0x1F, 0x31)),
@@ -1045,7 +1065,10 @@ fn setup_gallery_styles(mut style_sheet: ResMut<StyleSheet>) {
     style_sheet.set_class(
         "gallery.edge-hint",
         StyleSetter {
-            text: TextStyle { size: Some(13.0) },
+            text: TextStyle {
+                size: Some(13.0),
+                ..Default::default()
+            },
             colors: ColorStyle {
                 text: Some(Color::from_rgb8(0xC5, 0xD3, 0xF3)),
                 ..ColorStyle::default()
@@ -1057,7 +1080,10 @@ fn setup_gallery_styles(mut style_sheet: ResMut<StyleSheet>) {
     style_sheet.set_class(
         "gallery.edge-combo",
         StyleSetter {
-            text: TextStyle { size: Some(15.0) },
+            text: TextStyle {
+                size: Some(15.0),
+                ..Default::default()
+            },
             layout: LayoutStyle {
                 padding: Some(10.0),
                 corner_radius: Some(8.0),
@@ -1079,7 +1105,10 @@ fn setup_gallery_styles(mut style_sheet: ResMut<StyleSheet>) {
     style_sheet.set_class(
         "gallery.overlay-button",
         StyleSetter {
-            text: TextStyle { size: Some(14.0) },
+            text: TextStyle {
+                size: Some(14.0),
+                ..Default::default()
+            },
             layout: LayoutStyle {
                 padding: Some(10.0),
                 corner_radius: Some(8.0),
@@ -1182,6 +1211,17 @@ fn drain_gallery_events(world: &mut World) {
     }
 }
 
+bevy_xilem::impl_ui_control_template!(GalleryRoot, project_gallery_root);
+bevy_xilem::impl_ui_control_template!(GalleryHeader, project_gallery_header);
+bevy_xilem::impl_ui_control_template!(GalleryButtonRow, project_gallery_button_row);
+bevy_xilem::impl_ui_control_template!(GalleryButton, project_gallery_button);
+bevy_xilem::impl_ui_control_template!(ActionBadge, project_action_badge);
+bevy_xilem::impl_ui_control_template!(NestedShell, project_nested_shell);
+bevy_xilem::impl_ui_control_template!(NestedStack, project_nested_stack);
+bevy_xilem::impl_ui_control_template!(NestedTitle, project_nested_title);
+bevy_xilem::impl_ui_control_template!(NestedNote, project_nested_note);
+bevy_xilem::impl_ui_control_template!(BottomEdgeDemo, project_bottom_edge_demo);
+
 fn build_theme_gallery_app() -> App {
     init_logging();
 
@@ -1191,16 +1231,16 @@ fn build_theme_gallery_app() -> App {
     let mut app = App::new();
     app.add_plugins(BevyXilemPlugin)
         .insert_resource(GalleryState::default())
-        .register_projector::<GalleryRoot>(project_gallery_root)
-        .register_projector::<GalleryHeader>(project_gallery_header)
-        .register_projector::<GalleryButtonRow>(project_gallery_button_row)
-        .register_projector::<GalleryButton>(project_gallery_button)
-        .register_projector::<ActionBadge>(project_action_badge)
-        .register_projector::<NestedShell>(project_nested_shell)
-        .register_projector::<NestedStack>(project_nested_stack)
-        .register_projector::<NestedTitle>(project_nested_title)
-        .register_projector::<NestedNote>(project_nested_note)
-        .register_projector::<BottomEdgeDemo>(project_bottom_edge_demo)
+        .register_ui_control::<GalleryRoot>()
+        .register_ui_control::<GalleryHeader>()
+        .register_ui_control::<GalleryButtonRow>()
+        .register_ui_control::<GalleryButton>()
+        .register_ui_control::<ActionBadge>()
+        .register_ui_control::<NestedShell>()
+        .register_ui_control::<NestedStack>()
+        .register_ui_control::<NestedTitle>()
+        .register_ui_control::<NestedNote>()
+        .register_ui_control::<BottomEdgeDemo>()
         .add_systems(Startup, (setup_gallery_styles, setup_gallery_world))
         .add_systems(PreUpdate, drain_gallery_events);
     app
