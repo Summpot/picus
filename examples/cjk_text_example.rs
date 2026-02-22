@@ -148,7 +148,6 @@ fn build_cjk_app() -> App {
         TextPlugin::default(),
         BevyXilemPlugin,
     ))
-    .load_style_sheet(bevy_xilem::DEFAULT_STYLE_SHEET_ASSET_PATH)
     .init_resource::<DemoFontHandles>()
     .add_systems(
         Startup,

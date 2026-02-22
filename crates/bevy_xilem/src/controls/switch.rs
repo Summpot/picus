@@ -75,41 +75,4 @@ impl UiControlTemplate for UiSwitch {
     fn project(component: &Self, ctx: ProjectionCtx<'_>) -> UiView {
         crate::projection::elements::project_switch(component, ctx)
     }
-
-    fn default_style_ron() -> &'static str {
-        r##"(
-  rules: [
-    (
-      selector: Type("UiSwitch"),
-      setter: (
-        layout: (
-          padding: 6.0,
-          corner_radius: 999.0,
-          border_width: 1.0,
-          gap: 8.0,
-        ),
-        colors: (
-          bg: Hex("#2D2D2D"),
-          hover_bg: Hex("#383838"),
-          pressed_bg: Hex("#242424"),
-          border: Hex("#3F3F3F"),
-          text: Hex("#F3F3F3"),
-        ),
-        transition: (
-          duration: 0.10,
-        ),
-      ),
-    ),
-    (
-      selector: Class("template.switch.thumb"),
-      setter: (
-        colors: (
-          text: Hex("#0078D4"),
-        ),
-      ),
-    ),
-  ],
-)
-"##
-    }
 }

@@ -49,8 +49,7 @@ pub use tree_node::*;
 ///
 /// A control owns:
 /// - one-time ECS expansion into template parts (`expand`),
-/// - projection from ECS state into a retained Masonry view (`project`),
-/// - baseline fallback style rules (`default_style_ron`).
+/// - projection from ECS state into a retained Masonry view (`project`).
 pub trait UiControlTemplate: Component + Sized {
     /// Expand a newly-spawned logical control entity into child template parts.
     fn expand(_world: &mut World, _entity: Entity) {}
@@ -58,12 +57,7 @@ pub trait UiControlTemplate: Component + Sized {
     /// Project this control into a Masonry view.
     fn project(component: &Self, ctx: ProjectionCtx<'_>) -> UiView;
 
-    /// Component-local fallback style rules in stylesheet RON form.
-    fn default_style_ron() -> &'static str {
-        ""
-    }
-
-    /// Register selector type aliases used by this control's fallback style.
+    /// Register selector type aliases used by this control.
     fn register_style_types(registry: &mut StyleTypeRegistry) {
         registry.register_type_aliases::<Self>();
     }

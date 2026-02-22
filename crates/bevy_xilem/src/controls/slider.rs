@@ -106,49 +106,4 @@ impl UiControlTemplate for UiSlider {
     fn project(component: &Self, ctx: ProjectionCtx<'_>) -> UiView {
         crate::projection::elements::project_slider(component, ctx)
     }
-
-    fn default_style_ron() -> &'static str {
-        r##"(
-  rules: [
-    (
-      selector: Type("UiSlider"),
-      setter: (
-        layout: (
-          padding: 6.0,
-          corner_radius: 6.0,
-          border_width: 1.0,
-          gap: 8.0,
-        ),
-        colors: (
-                    bg: Hex("#272727"),
-                    hover_bg: Hex("#323232"),
-                    pressed_bg: Hex("#1F1F1F"),
-                    border: Hex("#3F3F3F"),
-                    text: Hex("#F3F3F3"),
-                ),
-                transition: (
-                    duration: 0.10,
-        ),
-      ),
-    ),
-    (
-      selector: Class("template.slider.track"),
-      setter: (
-        colors: (
-                    text: Hex("#D0D0D0"),
-        ),
-      ),
-    ),
-    (
-      selector: Class("template.slider.thumb"),
-      setter: (
-        colors: (
-                    text: Hex("#0078D4"),
-        ),
-      ),
-    ),
-  ],
-)
-"##
-    }
 }

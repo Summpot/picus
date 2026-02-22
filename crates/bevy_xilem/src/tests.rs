@@ -7,9 +7,9 @@ use std::{
 };
 
 use crate::{
-    AppBevyXilemExt, AppI18n, BevyXilemPlugin, ColorStyle, DEFAULT_STYLE_SHEET_ASSET_PATH, Hovered,
-    Pressed, ProjectionCtx, Selector, StyleRule, StyleSetter, StyleSheet, SyncTextSource,
-    UiEventQueue, UiProjectorRegistry, UiRoot, UiView, bubble_ui_pointer_events, ecs_button,
+    AppBevyXilemExt, AppI18n, BevyXilemPlugin, ColorStyle, Hovered, Pressed, ProjectionCtx,
+    Selector, StyleRule, StyleSetter, StyleSheet, SyncTextSource, UiEventQueue,
+    UiProjectorRegistry, UiRoot, UiView, bubble_ui_pointer_events, ecs_button,
     ensure_overlay_defaults, ensure_overlay_root, ensure_overlay_root_entity,
     handle_overlay_actions, register_builtin_projectors, reparent_overlay_entities, resolve_style,
     resolve_style_for_entity_classes, spawn_in_overlay_root, synthesize_roots_with_stats,
@@ -91,12 +91,16 @@ fn plugin_auto_registers_builtin_controls_without_manual_setup() {
 }
 
 #[test]
-fn plugin_sets_default_stylesheet_asset_path() {
+fn plugin_boots_with_embedded_default_theme_and_no_asset_path() {
     let mut app = App::new();
     app.add_plugins(BevyXilemPlugin);
 
     let active = app.world().resource::<crate::ActiveStyleSheetAsset>();
-    assert_eq!(active.path.as_deref(), Some(DEFAULT_STYLE_SHEET_ASSET_PATH));
+    assert!(active.path.is_none());
+
+    let sheet = app.world().resource::<crate::StyleSheet>();
+    assert!(!sheet.rules.is_empty());
+    assert!(sheet.tokens.contains_key("surface-bg"));
 }
 
 #[test]
@@ -1773,14 +1777,18 @@ fn projector_registry_last_registered_component_projector_wins() {
 }
 
 #[test]
-fn stylesheet_ron_parser_supports_selectors_and_colors() {
+fn stylesheet_ron_parser_supports_tokens_and_var_values() {
     let ron = r##"(
+    tokens: {
+        "demo-bg": Color(Hex("#112233")),
+        "radius": Float(6.0),
+    },
   rules: [
     (
       selector: Class("demo.button"),
       setter: (
-        layout: (padding: 10.0, corner_radius: 6.0),
-                colors: (bg: Hex("#112233"), text: Hex("#f0f0f0")),
+                layout: (padding: 10.0, corner_radius: Var("radius")),
+                                colors: (bg: Var("demo-bg"), text: Hex("#f0f0f0")),
       ),
     ),
     (
@@ -1795,6 +1803,7 @@ fn stylesheet_ron_parser_supports_selectors_and_colors() {
     let sheet =
         crate::styling::parse_stylesheet_ron_for_tests(ron).expect("stylesheet ron should parse");
     assert_eq!(sheet.rules.len(), 2);
+    assert_eq!(sheet.tokens.len(), 2);
 
     assert!(matches!(
         &sheet.rules[0].selector,
@@ -1804,6 +1813,37 @@ fn stylesheet_ron_parser_supports_selectors_and_colors() {
     assert!(sheet.rules[0].setter.colors.bg.is_some());
 
     assert!(matches!(&sheet.rules[1].selector, crate::Selector::And(parts) if !parts.is_empty()));
+}
+
+#[test]
+fn stylesheet_var_missing_token_falls_back_to_transparent_or_zero() {
+    let ron = r##"(
+    rules: [
+        (
+            selector: Class("demo.button"),
+            setter: (
+                layout: (padding: Var("missing-padding")),
+                colors: (bg: Var("missing-bg")),
+            ),
+        ),
+    ],
+)"##;
+
+    let sheet =
+        crate::styling::parse_stylesheet_ron_for_tests(ron).expect("stylesheet ron should parse");
+
+    let mut world = World::new();
+    world.insert_resource(sheet);
+
+    let entity = world
+        .spawn((crate::StyleClass(vec!["demo.button".to_string()]),))
+        .id();
+    crate::mark_style_dirty(&mut world);
+    crate::sync_style_targets(&mut world);
+
+    let resolved = crate::resolve_style(&world, entity);
+    assert_eq!(resolved.layout.padding, 0.0);
+    assert_eq!(resolved.colors.bg, Some(crate::xilem::Color::TRANSPARENT));
 }
 
 #[test]
@@ -1885,22 +1925,6 @@ fn third_party_ui_control_can_register_via_trait_api() {
 
         fn project(_: &Self, _ctx: crate::ProjectionCtx<'_>) -> crate::UiView {
             Arc::new(crate::xilem::view::label("knob"))
-        }
-
-        fn default_style_ron() -> &'static str {
-            r##"(
-  rules: [
-    (
-      selector: Type("UiKnob"),
-      setter: (
-        colors: (
-          text: Hex("#F8FAFC"),
-        ),
-      ),
-    ),
-  ],
-)
-"##
         }
     }
 

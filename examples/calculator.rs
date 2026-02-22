@@ -631,7 +631,6 @@ fn build_bevy_calculator_app() -> App {
 
     let mut app = App::new();
     app.add_plugins(BevyXilemPlugin)
-        .load_style_sheet(bevy_xilem::DEFAULT_STYLE_SHEET_ASSET_PATH)
         .insert_resource(CalculatorEngine::default())
         .register_projector::<CalcRoot>(project_calc_root)
         .register_projector::<CalcDisplayPanel>(project_calc_display)

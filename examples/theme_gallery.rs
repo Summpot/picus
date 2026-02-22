@@ -1185,14 +1185,11 @@ fn drain_gallery_events(world: &mut World) {
 fn build_theme_gallery_app() -> App {
     init_logging();
 
-    // Hot reload demo:
-    // while this example is running, edit `assets/themes/default_theme.ron`
-    // (for example `overlay.dialog.dismiss` or `gallery.button.primary`) and save.
-    // The style asset is reloaded automatically and transitions animate to new values.
+    // This example now uses the embedded built-in theme by default.
+    // Gallery-specific styles are added in `setup_gallery_styles`.
 
     let mut app = App::new();
     app.add_plugins(BevyXilemPlugin)
-        .load_style_sheet(bevy_xilem::DEFAULT_STYLE_SHEET_ASSET_PATH)
         .insert_resource(GalleryState::default())
         .register_projector::<GalleryRoot>(project_gallery_root)
         .register_projector::<GalleryHeader>(project_gallery_header)

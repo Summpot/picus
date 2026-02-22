@@ -515,7 +515,6 @@ fn build_showcase_app() -> App {
 
     let mut app = App::new();
     app.add_plugins(BevyXilemPlugin)
-        .load_style_sheet(bevy_xilem::DEFAULT_STYLE_SHEET_ASSET_PATH)
         .insert_resource(ShowcaseState::default())
         .register_projector::<ShowcaseRoot>(project_showcase_root)
         .register_projector::<StatusDisplay>(project_status_display)

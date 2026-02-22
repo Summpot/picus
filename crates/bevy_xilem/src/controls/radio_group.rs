@@ -38,45 +38,4 @@ impl UiControlTemplate for UiRadioGroup {
     fn project(component: &Self, ctx: ProjectionCtx<'_>) -> UiView {
         crate::projection::widgets::project_radio_group(component, ctx)
     }
-
-    fn default_style_ron() -> &'static str {
-        r##"(
-  rules: [
-    (
-      selector: Type("UiRadioGroup"),
-      setter: (
-        layout: (
-          padding: 6.0,
-          corner_radius: 6.0,
-          border_width: 1.0,
-          gap: 6.0,
-        ),
-        colors: (
-          bg: Hex("#272727"),
-          border: Hex("#3F3F3F"),
-          text: Hex("#F3F3F3"),
-        ),
-      ),
-    ),
-    (
-      selector: Class("widget.radio.item"),
-      setter: (
-        layout: (
-          padding: 6.0,
-          corner_radius: 4.0,
-        ),
-        colors: (
-          hover_bg: Hex("#323232"),
-          pressed_bg: Hex("#1F1F1F"),
-          text: Hex("#F3F3F3"),
-        ),
-        transition: (
-          duration: 0.10,
-        ),
-      ),
-    ),
-  ],
-)
-"##
-    }
 }

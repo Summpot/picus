@@ -50,8 +50,9 @@ All style primitives live in `crates/bevy_xilem/src/styling.rs`.
 - `StyleClass(pub Vec<String>)` (component on entities)
 - `Selector::{Type, Class, PseudoClass, And, Descendant}`
 - `StyleSetter { layout, colors, text, font_family, transition }`
+- `StyleValue::{Value(T), Var(String)}` for token-aware rule values
 - `StyleRule { selector, setter }`
-- `StyleSheet { rules: Vec<StyleRule> }` (resource)
+- `StyleSheet { tokens: HashMap<String, TokenValue>, rules: Vec<StyleRule> }` (resource)
 
 Convenience APIs still exist for class-only rules:
 
@@ -104,6 +105,7 @@ In short: class + inline define intent, pseudo state chooses target, animator pr
 `BevyXilemPlugin` automatically wires the style stack:
 
 - initializes `StyleSheet`
+- installs embedded baseline theme (`src/theme/fluent_dark.ron`) into `BaseStyleSheet`
 - `PreUpdate`: `collect_bevy_font_assets -> sync_fonts_to_xilem -> sync_ui_interaction_markers`
 - `Update`: `mark_style_dirty -> sync_style_targets -> animate_style_transitions`
 - registers `TweeningPlugin` (from crates.io `bevy_tweening`)
@@ -260,4 +262,4 @@ To make a control animate on interaction:
 
 ---
 
-If you plan to extend this system (for example `:disabled`, theme variables/tokens, inherited style contexts, or layout tweening), extend `StyleRule` first, then wire `resolve + sync + animation`, and finally update docs/examples together.
+If you plan to extend this system (for example `:disabled`, inherited style contexts, or layout tweening), extend `StyleRule` first, then wire `resolve + sync + animation`, and finally update docs/examples together.

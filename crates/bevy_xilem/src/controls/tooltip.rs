@@ -29,27 +29,4 @@ impl UiControlTemplate for UiTooltip {
     fn project(component: &Self, ctx: ProjectionCtx<'_>) -> UiView {
         crate::projection::widgets::project_tooltip(component, ctx)
     }
-
-    fn default_style_ron() -> &'static str {
-        r##"(
-  rules: [
-    (
-      selector: Class("overlay.tooltip"),
-      setter: (
-        layout: (
-          padding: 6.0,
-          corner_radius: 4.0,
-          border_width: 1.0,
-        ),
-        colors: (
-          bg: Hex("#2B2B2B"),
-          border: Hex("#3F3F3F"),
-          text: Hex("#F3F3F3"),
-        ),
-      ),
-    ),
-  ],
-)
-"##
-    }
 }

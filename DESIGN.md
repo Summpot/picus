@@ -133,8 +133,10 @@ The runtime now supports a data-driven style pipeline with four phases:
 - **Inline style components:**
   `LayoutStyle`, `ColorStyle`, `TextStyle`, `StyleTransition`
 - **Selector-based stylesheet + cascading:**
-  `StyleSheet { rules: Vec<StyleRule> }` with selector AST:
+  `StyleSheet { tokens: HashMap<String, TokenValue>, rules: Vec<StyleRule> }` with selector AST:
   `Selector::{Type, Class, PseudoClass, And, Descendant}` and payload `StyleSetter`
+  plus token-aware rule payloads (`StyleSetterValue`) using
+  `StyleValue::{Value(T), Var(String)}`.
 - **Pseudo classes from structural interaction events:**
   `Hovered` / `Pressed` marker components synchronized from interaction events
 - **Computed-style cache + incremental invalidation:**
@@ -161,8 +163,9 @@ Asset-driven stylesheet details:
   asset content into the global `StyleSheet` resource.
 - Resource updates reuse the existing invalidation path (`mark_style_dirty`), so transition and
   cascade behavior remains unchanged while enabling hot-reload.
-- Default runtime stylesheet path is `themes/default_theme.ron`
-  (resolved relative to Bevy `AssetServer` root, typically `assets/`).
+- The built-in fallback theme is embedded with `include_str!("theme/fluent_dark.ron")`
+  and merged into `BaseStyleSheet` at plugin startup (zero filesystem configuration).
+- `AssetServer` loading is now opt-in (via `.load_style_sheet(...)`) for user-provided themes.
 
 Label text wrapping policy:
 
@@ -355,7 +358,7 @@ Built-in logical controls are organized under:
 - `crates/bevy_xilem/src/controls/*.rs`
 
 Each control module owns its logical component shape, template-part policy,
-fallback style RON, and the trait contract used for registration.
+and the trait contract used for registration.
 
 The unifying trait is:
 
@@ -364,8 +367,7 @@ The unifying trait is:
 Trait responsibilities:
 
 - `expand(world, entity)` for one-time logical→template expansion,
-- `project(&T, ProjectionCtx) -> UiView` for ECS→Masonry projection,
-- `default_style_ron() -> &'static str` for control-local baseline styles.
+- `project(&T, ProjectionCtx) -> UiView` for ECS→Masonry projection.
 
 Logical tree vs template parts:
 
@@ -389,8 +391,7 @@ One call performs:
 
 - projector registration,
 - `Added<T>` expansion system hookup,
-- selector type alias registration,
-- fallback style parsing + base-style merge.
+- selector type alias registration.
 
 Duplicate registration of the same control type is deduplicated by
 `RegisteredUiControlTypes`.
@@ -399,7 +400,7 @@ Duplicate registration of the same control type is deduplicated by
 
 Runtime styling distinguishes two explicit tiers:
 
-- `BaseStyleSheet` (control fallback styles),
+- `BaseStyleSheet` (embedded built-in Fluent-style baseline),
 - `ActiveStyleSheet` (user-provided stylesheet asset).
 
 Effective cascade order keeps active rules overriding base rules by selector.
@@ -495,6 +496,7 @@ regular UI content.
 - `BaseStyleSheet`
 - `ActiveStyleSheet`
 - `ActiveStyleSheetAsset`
+- `ActiveStyleSheetTokenNames`
 - `StyleAssetEventCursor`
 - `XilemFontBridge`
 - `AppI18n`

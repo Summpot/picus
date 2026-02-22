@@ -688,7 +688,6 @@ fn build_download_app() -> App {
 
     let mut app = App::new();
     app.add_plugins(BevyXilemPlugin)
-        .load_style_sheet(bevy_xilem::DEFAULT_STYLE_SHEET_ASSET_PATH)
         .insert_resource(DownloadState::default())
         .register_projector::<DownloadRootView>(project_download_root)
         .register_projector::<DownloadTitle>(project_download_title)

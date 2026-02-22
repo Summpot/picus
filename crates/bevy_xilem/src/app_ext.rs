@@ -10,7 +10,7 @@ use crate::{
     ActiveStyleSheetAsset, AppI18n, MasonryRuntime, ProjectionCtx, StyleSheet, StyleTypeRegistry,
     UiEventQueue, UiProjector, UiProjectorRegistry, UiView, XilemFontBridge,
     controls::{RegisteredUiControlTypes, UiControlTemplate, expand_added_ui_control_templates},
-    merge_base_stylesheet_ron, set_active_stylesheet_asset_path,
+    set_active_stylesheet_asset_path,
 };
 
 /// Synchronous source for binary assets (fonts).
@@ -96,7 +96,7 @@ pub trait AppBevyXilemExt {
     /// Register an ECS-native UI control template.
     ///
     /// This single call wires projector registration, one-time expansion for `Added<T>`,
-    /// selector type aliases, and control-local fallback RON styles.
+    /// and selector type aliases.
     fn register_ui_control<T: UiControlTemplate>(&mut self) -> &mut Self;
 
     /// Register a raw projector implementation.
@@ -171,16 +171,6 @@ impl AppBevyXilemExt for App {
 
         self.init_resource::<StyleTypeRegistry>();
         T::register_style_types(&mut self.world_mut().resource_mut::<StyleTypeRegistry>());
-
-        let default_style = T::default_style_ron().trim();
-        if !default_style.is_empty() {
-            merge_base_stylesheet_ron(self.world_mut(), default_style).unwrap_or_else(|error| {
-                panic!(
-                    "failed to parse default style RON for control `{}`: {error}",
-                    std::any::type_name::<T>()
-                )
-            });
-        }
 
         self.add_systems(Update, expand_added_ui_control_templates::<T>);
 

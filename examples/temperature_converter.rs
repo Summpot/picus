@@ -334,7 +334,6 @@ fn build_bevy_temperature_app() -> App {
 
     let mut app = App::new();
     app.add_plugins(BevyXilemPlugin)
-        .load_style_sheet(bevy_xilem::DEFAULT_STYLE_SHEET_ASSET_PATH)
         .insert_resource(TemperatureState::default())
         .register_projector::<TemperatureRootView>(project_temperature_root)
         .register_projector::<TemperatureTitle>(project_temperature_title)

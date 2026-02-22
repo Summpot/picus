@@ -110,7 +110,7 @@ fn sync_font_stack_for_locale(sheet: &mut StyleSheet, stack: Option<&[String]>) 
         "pixiv.tag",
         "pixiv.overlay",
     ] {
-        if let Some(existing) = sheet.get_class(class_name).cloned() {
+        if let Some(existing) = sheet.get_class(class_name) {
             let mut updated = existing;
             updated.font_family = stack.map(|stack| stack.to_vec());
             sheet.set_class(class_name, updated);
@@ -2292,7 +2292,6 @@ fn build_app() -> App {
         TextPlugin::default(),
         BevyXilemPlugin,
     ))
-    .load_style_sheet(bevy_xilem::DEFAULT_STYLE_SHEET_ASSET_PATH)
     .insert_resource(AppI18n::new(parse_locale("en-US")))
     .register_i18n_bundle(
         "en-US",

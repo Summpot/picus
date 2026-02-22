@@ -21,7 +21,13 @@ use bevy_reflect::TypePath;
 use bevy_tweening::{EaseMethod, Lens, Tween, TweenAnim};
 use masonry::core::HasProperty;
 use masonry::theme;
-use serde::Deserialize;
+use serde::{
+    Deserialize,
+    de::{
+        self, EnumAccess, IntoDeserializer, VariantAccess, Visitor,
+        value::{MapAccessDeserializer, SeqAccessDeserializer},
+    },
+};
 use xilem::{Color, style::Style as _};
 use xilem_masonry::masonry::parley::{FontFamily, GenericFamily, style::FontStack};
 use xilem_masonry::masonry::properties::{
@@ -209,16 +215,138 @@ pub struct StyleSetter {
     pub transition: Option<StyleTransition>,
 }
 
+/// Style payload value that can be either an explicit value or a token reference.
+#[derive(Debug, Clone, PartialEq)]
+pub enum StyleValue<T> {
+    Value(T),
+    Var(String),
+}
+
+impl<T> StyleValue<T> {
+    #[must_use]
+    pub fn value(value: T) -> Self {
+        Self::Value(value)
+    }
+
+    #[must_use]
+    pub fn var(name: impl Into<String>) -> Self {
+        Self::Var(name.into())
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct LayoutStyleValue {
+    pub padding: Option<StyleValue<f64>>,
+    pub gap: Option<StyleValue<f64>>,
+    pub corner_radius: Option<StyleValue<f64>>,
+    pub border_width: Option<StyleValue<f64>>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct ColorStyleValue {
+    pub bg: Option<StyleValue<Color>>,
+    pub text: Option<StyleValue<Color>>,
+    pub border: Option<StyleValue<Color>>,
+    pub hover_bg: Option<StyleValue<Color>>,
+    pub hover_text: Option<StyleValue<Color>>,
+    pub hover_border: Option<StyleValue<Color>>,
+    pub pressed_bg: Option<StyleValue<Color>>,
+    pub pressed_text: Option<StyleValue<Color>>,
+    pub pressed_border: Option<StyleValue<Color>>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct TextStyleValue {
+    pub size: Option<StyleValue<f32>>,
+}
+
+/// Token-aware style payload attached to stylesheet rules.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct StyleSetterValue {
+    pub layout: LayoutStyleValue,
+    pub colors: ColorStyleValue,
+    pub text: TextStyleValue,
+    pub font_family: Option<StyleValue<Vec<String>>>,
+    pub box_shadow: Option<StyleValue<BoxShadow>>,
+    pub transition: Option<StyleValue<StyleTransition>>,
+}
+
+/// Token value stored in [`StyleSheet::tokens`].
+#[derive(Debug, Clone, PartialEq)]
+pub enum TokenValue {
+    Color(Color),
+    Float(f64),
+    FontFamily(Vec<String>),
+    BoxShadow(BoxShadow),
+    Transition(StyleTransition),
+}
+
+impl From<LayoutStyle> for LayoutStyleValue {
+    fn from(value: LayoutStyle) -> Self {
+        Self {
+            padding: value.padding.map(StyleValue::value),
+            gap: value.gap.map(StyleValue::value),
+            corner_radius: value.corner_radius.map(StyleValue::value),
+            border_width: value.border_width.map(StyleValue::value),
+        }
+    }
+}
+
+impl From<ColorStyle> for ColorStyleValue {
+    fn from(value: ColorStyle) -> Self {
+        Self {
+            bg: value.bg.map(StyleValue::value),
+            text: value.text.map(StyleValue::value),
+            border: value.border.map(StyleValue::value),
+            hover_bg: value.hover_bg.map(StyleValue::value),
+            hover_text: value.hover_text.map(StyleValue::value),
+            hover_border: value.hover_border.map(StyleValue::value),
+            pressed_bg: value.pressed_bg.map(StyleValue::value),
+            pressed_text: value.pressed_text.map(StyleValue::value),
+            pressed_border: value.pressed_border.map(StyleValue::value),
+        }
+    }
+}
+
+impl From<TextStyle> for TextStyleValue {
+    fn from(value: TextStyle) -> Self {
+        Self {
+            size: value.size.map(StyleValue::value),
+        }
+    }
+}
+
+impl From<StyleSetter> for StyleSetterValue {
+    fn from(value: StyleSetter) -> Self {
+        Self {
+            layout: value.layout.into(),
+            colors: value.colors.into(),
+            text: value.text.into(),
+            font_family: value.font_family.map(StyleValue::value),
+            box_shadow: value.box_shadow.map(StyleValue::value),
+            transition: value.transition.map(StyleValue::value),
+        }
+    }
+}
+
 /// Selector + style payload.
 #[derive(Debug, Clone, PartialEq)]
 pub struct StyleRule {
     pub selector: Selector,
-    pub setter: StyleSetter,
+    pub setter: StyleSetterValue,
 }
 
 impl StyleRule {
     #[must_use]
     pub fn new(selector: Selector, setter: StyleSetter) -> Self {
+        Self {
+            selector,
+            setter: setter.into(),
+        }
+    }
+
+    #[must_use]
+    pub fn new_with_values(selector: Selector, setter: StyleSetterValue) -> Self {
         Self { selector, setter }
     }
 
@@ -231,10 +359,11 @@ impl StyleRule {
 /// Global class-based style table.
 #[derive(Resource, Asset, TypePath, Debug, Clone, Default)]
 pub struct StyleSheet {
+    pub tokens: HashMap<String, TokenValue>,
     pub rules: Vec<StyleRule>,
 }
 
-/// Baseline stylesheet tier populated from built-in control defaults.
+/// Baseline stylesheet tier populated from the embedded built-in theme.
 #[derive(Resource, Debug, Clone, Default)]
 pub struct BaseStyleSheet(pub StyleSheet);
 
@@ -256,6 +385,10 @@ pub struct StyleAssetEventCursor(pub MessageCursor<AssetEvent<StyleSheet>>);
 /// Selector set currently owned by the active stylesheet asset.
 #[derive(Resource, Debug, Clone, Default)]
 pub struct ActiveStyleSheetSelectors(pub HashSet<Selector>);
+
+/// Token names currently owned by the active stylesheet asset.
+#[derive(Resource, Debug, Clone, Default)]
+pub struct ActiveStyleSheetTokenNames(pub HashSet<String>);
 
 /// Name-to-component-type map used by selector type tags loaded from RON assets.
 #[derive(Resource, Debug, Clone, Default)]
@@ -304,7 +437,7 @@ impl StyleSheet {
         if let Some(existing) = self.rules.iter_mut().find(|rule| {
             matches!(&rule.selector, Selector::Class(existing_name) if existing_name == &class_name)
         }) {
-            existing.setter = setter;
+            existing.setter = setter.into();
             return;
         }
 
@@ -312,7 +445,13 @@ impl StyleSheet {
     }
 
     #[must_use]
-    pub fn get_class(&self, class_name: &str) -> Option<&StyleSetter> {
+    pub fn get_class(&self, class_name: &str) -> Option<StyleSetter> {
+        self.get_class_values(class_name)
+            .map(|setter| resolve_setter_values(setter, &self.tokens))
+    }
+
+    #[must_use]
+    pub fn get_class_values(&self, class_name: &str) -> Option<&StyleSetterValue> {
         self.rules.iter().find_map(|rule| {
             if matches!(&rule.selector, Selector::Class(name) if name == class_name) {
                 Some(&rule.setter)
@@ -353,8 +492,11 @@ fn upsert_rules_by_selector(sheet: &mut StyleSheet, incoming: Vec<StyleRule>) {
     }
 }
 
-/// Default stylesheet asset path loaded by [`crate::BevyXilemPlugin`].
+/// Optional stylesheet asset path for apps that still prefer filesystem themes.
 pub const DEFAULT_STYLE_SHEET_ASSET_PATH: &str = "themes/default_theme.ron";
+
+/// Embedded baseline Fluent-inspired dark theme used with zero filesystem configuration.
+pub const BUILTIN_FLUENT_DARK_THEME_RON: &str = include_str!("theme/fluent_dark.ron");
 
 /// Register built-in ECS component type aliases usable from RON selectors.
 pub fn register_builtin_style_type_aliases(world: &mut World) {
@@ -416,25 +558,40 @@ pub fn parse_stylesheet_ron(ron_text: &str) -> io::Result<StyleSheet> {
     stylesheet_from_ron_bytes(ron_text.as_bytes())
 }
 
-/// Merge a control-local default stylesheet RON into the base + runtime tiers.
+/// Install the embedded Fluent-inspired dark baseline stylesheet.
+pub fn install_embedded_fluent_dark_theme(world: &mut World) -> io::Result<()> {
+    merge_base_stylesheet_ron(world, BUILTIN_FLUENT_DARK_THEME_RON)
+}
+
+/// Merge a baseline stylesheet RON into the base + runtime tiers.
 ///
 /// Runtime insertion preserves active stylesheet precedence by skipping selectors
-/// currently owned by [`ActiveStyleSheetSelectors`].
+/// and tokens currently owned by the active stylesheet asset.
 pub fn merge_base_stylesheet_ron(world: &mut World, ron_text: &str) -> io::Result<()> {
     let parsed = parse_stylesheet_ron(ron_text)?;
 
     world.init_resource::<BaseStyleSheet>();
     world.init_resource::<StyleSheet>();
+    world.init_resource::<ActiveStyleSheetTokenNames>();
 
+    let incoming_tokens = parsed.tokens;
     let incoming_rules = parsed.rules;
-    upsert_rules_by_selector(
-        &mut world.resource_mut::<BaseStyleSheet>().0,
-        incoming_rules.clone(),
-    );
+
+    {
+        let mut base_sheet = world.resource_mut::<BaseStyleSheet>();
+        for (name, token) in &incoming_tokens {
+            base_sheet.0.tokens.insert(name.clone(), token.clone());
+        }
+        upsert_rules_by_selector(&mut base_sheet.0, incoming_rules.clone());
+    }
 
     let active_selectors = world
         .get_resource::<ActiveStyleSheetSelectors>()
         .map(|selectors| selectors.0.clone())
+        .unwrap_or_default();
+    let active_tokens = world
+        .get_resource::<ActiveStyleSheetTokenNames>()
+        .map(|names| names.0.clone())
         .unwrap_or_default();
 
     let filtered = incoming_rules
@@ -442,7 +599,15 @@ pub fn merge_base_stylesheet_ron(world: &mut World, ron_text: &str) -> io::Resul
         .filter(|rule| !active_selectors.contains(&rule.selector))
         .collect::<Vec<_>>();
 
-    upsert_rules_by_selector(&mut world.resource_mut::<StyleSheet>(), filtered);
+    {
+        let mut runtime_sheet = world.resource_mut::<StyleSheet>();
+        for (name, token) in incoming_tokens {
+            if !active_tokens.contains(name.as_str()) {
+                runtime_sheet.tokens.insert(name, token);
+            }
+        }
+        upsert_rules_by_selector(&mut runtime_sheet, filtered);
+    }
 
     Ok(())
 }
@@ -525,6 +690,7 @@ pub fn sync_stylesheet_asset_events(world: &mut World) {
 
     world.init_resource::<ActiveStyleSheet>();
     world.init_resource::<ActiveStyleSheetSelectors>();
+    world.init_resource::<ActiveStyleSheetTokenNames>();
     world.resource_mut::<ActiveStyleSheet>().0 = loaded_stylesheet.clone();
 
     let incoming_selectors = loaded_stylesheet
@@ -532,19 +698,33 @@ pub fn sync_stylesheet_asset_events(world: &mut World) {
         .iter()
         .map(|rule| rule.selector.clone())
         .collect::<HashSet<_>>();
+    let incoming_token_names = loaded_stylesheet
+        .tokens
+        .keys()
+        .cloned()
+        .collect::<HashSet<_>>();
 
     let previous_asset_selectors = world
         .get_resource::<ActiveStyleSheetSelectors>()
         .map(|selectors| selectors.0.clone())
+        .unwrap_or_default();
+    let previous_asset_token_names = world
+        .get_resource::<ActiveStyleSheetTokenNames>()
+        .map(|names| names.0.clone())
         .unwrap_or_default();
 
     let mut runtime_sheet = world.resource_mut::<StyleSheet>();
     runtime_sheet
         .rules
         .retain(|rule| !previous_asset_selectors.contains(&rule.selector));
+    runtime_sheet
+        .tokens
+        .retain(|name, _| !previous_asset_token_names.contains(name));
     runtime_sheet.rules.extend(loaded_stylesheet.rules);
+    runtime_sheet.tokens.extend(loaded_stylesheet.tokens);
 
     world.resource_mut::<ActiveStyleSheetSelectors>().0 = incoming_selectors;
+    world.resource_mut::<ActiveStyleSheetTokenNames>().0 = incoming_token_names;
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
@@ -594,69 +774,120 @@ pub enum UiInteractionEvent {
     PointerReleased,
 }
 
-fn merge_layout(dst: &mut LayoutStyle, src: &LayoutStyle) {
+fn merge_layout_values(dst: &mut LayoutStyleValue, src: &LayoutStyleValue) {
     if src.padding.is_some() {
-        dst.padding = src.padding;
+        dst.padding = src.padding.clone();
     }
     if src.gap.is_some() {
-        dst.gap = src.gap;
+        dst.gap = src.gap.clone();
     }
     if src.corner_radius.is_some() {
-        dst.corner_radius = src.corner_radius;
+        dst.corner_radius = src.corner_radius.clone();
     }
     if src.border_width.is_some() {
-        dst.border_width = src.border_width;
+        dst.border_width = src.border_width.clone();
     }
 }
 
-fn merge_colors(dst: &mut ColorStyle, src: &ColorStyle) {
+fn merge_colors_values(dst: &mut ColorStyleValue, src: &ColorStyleValue) {
     if src.bg.is_some() {
-        dst.bg = src.bg;
+        dst.bg = src.bg.clone();
     }
     if src.text.is_some() {
-        dst.text = src.text;
+        dst.text = src.text.clone();
     }
     if src.border.is_some() {
-        dst.border = src.border;
+        dst.border = src.border.clone();
     }
     if src.hover_bg.is_some() {
-        dst.hover_bg = src.hover_bg;
+        dst.hover_bg = src.hover_bg.clone();
     }
     if src.hover_text.is_some() {
-        dst.hover_text = src.hover_text;
+        dst.hover_text = src.hover_text.clone();
     }
     if src.hover_border.is_some() {
-        dst.hover_border = src.hover_border;
+        dst.hover_border = src.hover_border.clone();
     }
     if src.pressed_bg.is_some() {
-        dst.pressed_bg = src.pressed_bg;
+        dst.pressed_bg = src.pressed_bg.clone();
     }
     if src.pressed_text.is_some() {
-        dst.pressed_text = src.pressed_text;
+        dst.pressed_text = src.pressed_text.clone();
     }
     if src.pressed_border.is_some() {
-        dst.pressed_border = src.pressed_border;
+        dst.pressed_border = src.pressed_border.clone();
     }
 }
 
-fn merge_text(dst: &mut TextStyle, src: &TextStyle) {
+fn merge_text_values(dst: &mut TextStyleValue, src: &TextStyleValue) {
     if src.size.is_some() {
-        dst.size = src.size;
+        dst.size = src.size.clone();
     }
 }
 
-fn merge_setter(dst: &mut StyleSetter, setter: &StyleSetter) {
-    merge_layout(&mut dst.layout, &setter.layout);
-    merge_colors(&mut dst.colors, &setter.colors);
-    merge_text(&mut dst.text, &setter.text);
+fn merge_value_setter(dst: &mut StyleSetterValue, setter: &StyleSetterValue) {
+    merge_layout_values(&mut dst.layout, &setter.layout);
+    merge_colors_values(&mut dst.colors, &setter.colors);
+    merge_text_values(&mut dst.text, &setter.text);
     if setter.font_family.is_some() {
         dst.font_family = setter.font_family.clone();
     }
     if setter.box_shadow.is_some() {
-        dst.box_shadow = setter.box_shadow;
+        dst.box_shadow = setter.box_shadow.clone();
     }
     if setter.transition.is_some() {
-        dst.transition = setter.transition;
+        dst.transition = setter.transition.clone();
+    }
+}
+
+fn merge_inline_layout_values(dst: &mut LayoutStyleValue, src: &LayoutStyle) {
+    if let Some(padding) = src.padding {
+        dst.padding = Some(StyleValue::value(padding));
+    }
+    if let Some(gap) = src.gap {
+        dst.gap = Some(StyleValue::value(gap));
+    }
+    if let Some(corner_radius) = src.corner_radius {
+        dst.corner_radius = Some(StyleValue::value(corner_radius));
+    }
+    if let Some(border_width) = src.border_width {
+        dst.border_width = Some(StyleValue::value(border_width));
+    }
+}
+
+fn merge_inline_color_values(dst: &mut ColorStyleValue, src: &ColorStyle) {
+    if let Some(bg) = src.bg {
+        dst.bg = Some(StyleValue::value(bg));
+    }
+    if let Some(text) = src.text {
+        dst.text = Some(StyleValue::value(text));
+    }
+    if let Some(border) = src.border {
+        dst.border = Some(StyleValue::value(border));
+    }
+    if let Some(hover_bg) = src.hover_bg {
+        dst.hover_bg = Some(StyleValue::value(hover_bg));
+    }
+    if let Some(hover_text) = src.hover_text {
+        dst.hover_text = Some(StyleValue::value(hover_text));
+    }
+    if let Some(hover_border) = src.hover_border {
+        dst.hover_border = Some(StyleValue::value(hover_border));
+    }
+    if let Some(pressed_bg) = src.pressed_bg {
+        dst.pressed_bg = Some(StyleValue::value(pressed_bg));
+    }
+    if let Some(pressed_text) = src.pressed_text {
+        dst.pressed_text = Some(StyleValue::value(pressed_text));
+    }
+    if let Some(pressed_border) = src.pressed_border {
+        dst.pressed_border = Some(StyleValue::value(pressed_border));
+    }
+}
+
+fn merge_inline_text_values(dst: &mut TextStyleValue, src: &TextStyle) {
+    if let Some(size) = src.size {
+        dst.size = Some(StyleValue::value(size));
     }
 }
 
@@ -749,8 +980,8 @@ fn merged_from_class_names<'a>(
     world: &World,
     entity: Option<Entity>,
     class_names: impl IntoIterator<Item = &'a str>,
-) -> StyleSetter {
-    let mut merged = StyleSetter::default();
+) -> StyleSetterValue {
+    let mut merged = StyleSetterValue::default();
     let Some(sheet) = world.get_resource::<StyleSheet>() else {
         return merged;
     };
@@ -760,37 +991,37 @@ fn merged_from_class_names<'a>(
 
     for rule in &sheet.rules {
         if selector_matches_class_context(world, entity, &rule.selector, &has_class) {
-            merge_setter(&mut merged, &rule.setter);
+            merge_value_setter(&mut merged, &rule.setter);
         }
     }
 
     merged
 }
 
-fn merged_for_entity(world: &World, entity: Entity) -> (StyleSetter, bool) {
-    let mut merged = StyleSetter::default();
+fn merged_for_entity(world: &World, entity: Entity) -> (StyleSetterValue, bool) {
+    let mut merged = StyleSetterValue::default();
     let mut matched_rule = false;
 
     if let Some(sheet) = world.get_resource::<StyleSheet>() {
         for rule in &sheet.rules {
             if selector_matches_entity(world, entity, &rule.selector) {
-                merge_setter(&mut merged, &rule.setter);
+                merge_value_setter(&mut merged, &rule.setter);
                 matched_rule = true;
             }
         }
     }
 
     if let Some(layout) = world.get::<LayoutStyle>(entity) {
-        merge_layout(&mut merged.layout, layout);
+        merge_inline_layout_values(&mut merged.layout, layout);
     }
     if let Some(colors) = world.get::<ColorStyle>(entity) {
-        merge_colors(&mut merged.colors, colors);
+        merge_inline_color_values(&mut merged.colors, colors);
     }
     if let Some(text) = world.get::<TextStyle>(entity) {
-        merge_text(&mut merged.text, text);
+        merge_inline_text_values(&mut merged.text, text);
     }
     if let Some(transition) = world.get::<StyleTransition>(entity) {
-        merged.transition = Some(*transition);
+        merged.transition = Some(StyleValue::value(*transition));
     }
 
     (merged, matched_rule)
@@ -848,6 +1079,220 @@ fn to_resolved_text(text: &TextStyle) -> ResolvedTextStyle {
     }
 }
 
+fn warn_missing_or_invalid_token(token: &str, field: &str, expected: &str) {
+    tracing::warn!(
+        token,
+        field,
+        expected,
+        "style token missing or has incompatible type; applying fallback"
+    );
+}
+
+fn resolve_f64_value(
+    tokens: &HashMap<String, TokenValue>,
+    value: &StyleValue<f64>,
+    field: &str,
+) -> f64 {
+    match value {
+        StyleValue::Value(value) => *value,
+        StyleValue::Var(token) => match tokens.get(token) {
+            Some(TokenValue::Float(value)) => *value,
+            _ => {
+                warn_missing_or_invalid_token(token, field, "Float");
+                0.0
+            }
+        },
+    }
+}
+
+fn resolve_f32_value(
+    tokens: &HashMap<String, TokenValue>,
+    value: &StyleValue<f32>,
+    field: &str,
+) -> f32 {
+    match value {
+        StyleValue::Value(value) => *value,
+        StyleValue::Var(token) => match tokens.get(token) {
+            Some(TokenValue::Float(value)) => *value as f32,
+            _ => {
+                warn_missing_or_invalid_token(token, field, "Float");
+                0.0
+            }
+        },
+    }
+}
+
+fn resolve_color_value(
+    tokens: &HashMap<String, TokenValue>,
+    value: &StyleValue<Color>,
+    field: &str,
+) -> Color {
+    match value {
+        StyleValue::Value(value) => *value,
+        StyleValue::Var(token) => match tokens.get(token) {
+            Some(TokenValue::Color(value)) => *value,
+            _ => {
+                warn_missing_or_invalid_token(token, field, "Color");
+                Color::TRANSPARENT
+            }
+        },
+    }
+}
+
+fn resolve_font_family_value(
+    tokens: &HashMap<String, TokenValue>,
+    value: &StyleValue<Vec<String>>,
+    field: &str,
+) -> Option<Vec<String>> {
+    match value {
+        StyleValue::Value(value) => Some(value.clone()),
+        StyleValue::Var(token) => match tokens.get(token) {
+            Some(TokenValue::FontFamily(value)) => Some(value.clone()),
+            _ => {
+                warn_missing_or_invalid_token(token, field, "FontFamily");
+                None
+            }
+        },
+    }
+}
+
+fn resolve_box_shadow_value(
+    tokens: &HashMap<String, TokenValue>,
+    value: &StyleValue<BoxShadow>,
+    field: &str,
+) -> BoxShadow {
+    match value {
+        StyleValue::Value(value) => *value,
+        StyleValue::Var(token) => match tokens.get(token) {
+            Some(TokenValue::BoxShadow(value)) => *value,
+            _ => {
+                warn_missing_or_invalid_token(token, field, "BoxShadow");
+                BoxShadow::default()
+            }
+        },
+    }
+}
+
+fn resolve_transition_value(
+    tokens: &HashMap<String, TokenValue>,
+    value: &StyleValue<StyleTransition>,
+    field: &str,
+) -> StyleTransition {
+    match value {
+        StyleValue::Value(value) => *value,
+        StyleValue::Var(token) => match tokens.get(token) {
+            Some(TokenValue::Transition(value)) => *value,
+            Some(TokenValue::Float(value)) => StyleTransition {
+                duration: *value as f32,
+            },
+            _ => {
+                warn_missing_or_invalid_token(token, field, "Transition|Float");
+                StyleTransition { duration: 0.0 }
+            }
+        },
+    }
+}
+
+fn resolve_layout_style(
+    layout: &LayoutStyleValue,
+    tokens: &HashMap<String, TokenValue>,
+) -> LayoutStyle {
+    LayoutStyle {
+        padding: layout
+            .padding
+            .as_ref()
+            .map(|value| resolve_f64_value(tokens, value, "layout.padding")),
+        gap: layout
+            .gap
+            .as_ref()
+            .map(|value| resolve_f64_value(tokens, value, "layout.gap")),
+        corner_radius: layout
+            .corner_radius
+            .as_ref()
+            .map(|value| resolve_f64_value(tokens, value, "layout.corner_radius")),
+        border_width: layout
+            .border_width
+            .as_ref()
+            .map(|value| resolve_f64_value(tokens, value, "layout.border_width")),
+    }
+}
+
+fn resolve_color_style(
+    colors: &ColorStyleValue,
+    tokens: &HashMap<String, TokenValue>,
+) -> ColorStyle {
+    ColorStyle {
+        bg: colors
+            .bg
+            .as_ref()
+            .map(|value| resolve_color_value(tokens, value, "colors.bg")),
+        text: colors
+            .text
+            .as_ref()
+            .map(|value| resolve_color_value(tokens, value, "colors.text")),
+        border: colors
+            .border
+            .as_ref()
+            .map(|value| resolve_color_value(tokens, value, "colors.border")),
+        hover_bg: colors
+            .hover_bg
+            .as_ref()
+            .map(|value| resolve_color_value(tokens, value, "colors.hover_bg")),
+        hover_text: colors
+            .hover_text
+            .as_ref()
+            .map(|value| resolve_color_value(tokens, value, "colors.hover_text")),
+        hover_border: colors
+            .hover_border
+            .as_ref()
+            .map(|value| resolve_color_value(tokens, value, "colors.hover_border")),
+        pressed_bg: colors
+            .pressed_bg
+            .as_ref()
+            .map(|value| resolve_color_value(tokens, value, "colors.pressed_bg")),
+        pressed_text: colors
+            .pressed_text
+            .as_ref()
+            .map(|value| resolve_color_value(tokens, value, "colors.pressed_text")),
+        pressed_border: colors
+            .pressed_border
+            .as_ref()
+            .map(|value| resolve_color_value(tokens, value, "colors.pressed_border")),
+    }
+}
+
+fn resolve_text_style(text: &TextStyleValue, tokens: &HashMap<String, TokenValue>) -> TextStyle {
+    TextStyle {
+        size: text
+            .size
+            .as_ref()
+            .map(|value| resolve_f32_value(tokens, value, "text.size")),
+    }
+}
+
+fn resolve_setter_values(
+    setter: &StyleSetterValue,
+    tokens: &HashMap<String, TokenValue>,
+) -> StyleSetter {
+    StyleSetter {
+        layout: resolve_layout_style(&setter.layout, tokens),
+        colors: resolve_color_style(&setter.colors, tokens),
+        text: resolve_text_style(&setter.text, tokens),
+        font_family: setter
+            .font_family
+            .as_ref()
+            .and_then(|value| resolve_font_family_value(tokens, value, "font_family")),
+        box_shadow: setter
+            .box_shadow
+            .as_ref()
+            .map(|value| resolve_box_shadow_value(tokens, value, "box_shadow")),
+        transition: setter
+            .transition
+            .as_ref()
+            .map(|value| resolve_transition_value(tokens, value, "transition")),
+    }
+}
+
 fn has_any_style_source(world: &World, entity: Entity, matched_rule: bool) -> bool {
     matched_rule
         || world.get::<StyleClass>(entity).is_some()
@@ -860,9 +1305,11 @@ fn has_any_style_source(world: &World, entity: Entity, matched_rule: bool) -> bo
 fn resolved_from_merged(
     world: &World,
     entity: Entity,
-    merged: &StyleSetter,
+    merged: &StyleSetterValue,
+    tokens: &HashMap<String, TokenValue>,
     include_current_override: bool,
 ) -> ResolvedStyle {
+    let merged = resolve_setter_values(merged, tokens);
     let mut colors = target_colors(world, entity, &merged.colors);
 
     if include_current_override && let Some(current) = world.get::<CurrentColorStyle>(entity) {
@@ -893,7 +1340,13 @@ fn compute_resolved_style(world: &World, entity: Entity) -> Option<ResolvedStyle
         return None;
     }
 
-    Some(resolved_from_merged(world, entity, &merged, false))
+    let empty_tokens = HashMap::new();
+    let tokens = world
+        .get_resource::<StyleSheet>()
+        .map(|sheet| &sheet.tokens)
+        .unwrap_or(&empty_tokens);
+
+    Some(resolved_from_merged(world, entity, &merged, tokens, false))
 }
 
 /// Resolve final style for an entity.
@@ -940,6 +1393,12 @@ pub fn resolve_style_for_classes<'a>(
     class_names: impl IntoIterator<Item = &'a str>,
 ) -> ResolvedStyle {
     let merged = merged_from_class_names(world, None, class_names);
+    let empty_tokens = HashMap::new();
+    let tokens = world
+        .get_resource::<StyleSheet>()
+        .map(|sheet| &sheet.tokens)
+        .unwrap_or(&empty_tokens);
+    let merged = resolve_setter_values(&merged, tokens);
 
     ResolvedStyle {
         layout: to_resolved_layout(&merged.layout),
@@ -966,7 +1425,12 @@ pub fn resolve_style_for_entity_classes<'a>(
     class_names: impl IntoIterator<Item = &'a str>,
 ) -> ResolvedStyle {
     let merged = merged_from_class_names(world, Some(entity), class_names);
-    resolved_from_merged(world, entity, &merged, false)
+    let empty_tokens = HashMap::new();
+    let tokens = world
+        .get_resource::<StyleSheet>()
+        .map(|sheet| &sheet.tokens)
+        .unwrap_or(&empty_tokens);
+    resolved_from_merged(world, entity, &merged, tokens, false)
 }
 
 /// Apply box/layout styling on any widget view.
@@ -1471,6 +1935,8 @@ pub fn apply_text_input_style(
 #[derive(Debug, Deserialize)]
 struct StyleSheetDef {
     #[serde(default)]
+    tokens: HashMap<String, TokenDef>,
+    #[serde(default)]
     rules: Vec<StyleRuleDef>,
 }
 
@@ -1519,124 +1985,457 @@ struct StyleSetterDef {
     #[serde(default)]
     text: TextStyleDef,
     #[serde(default)]
-    font_family: OptionalValue<Vec<String>>,
+    font_family: OptionalStyleValueDef<Vec<String>>,
     #[serde(default)]
-    box_shadow: OptionalValue<BoxShadowDef>,
+    box_shadow: OptionalStyleValueDef<BoxShadowDef>,
     #[serde(default)]
-    transition: OptionalValue<StyleTransition>,
+    transition: OptionalStyleValueDef<StyleTransition>,
 }
 
 #[derive(Debug, Default, Deserialize)]
 struct LayoutStyleDef {
     #[serde(default)]
-    padding: OptionalValue<f64>,
+    padding: OptionalStyleValueDef<f64>,
     #[serde(default)]
-    gap: OptionalValue<f64>,
+    gap: OptionalStyleValueDef<f64>,
     #[serde(default)]
-    corner_radius: OptionalValue<f64>,
+    corner_radius: OptionalStyleValueDef<f64>,
     #[serde(default)]
-    border_width: OptionalValue<f64>,
+    border_width: OptionalStyleValueDef<f64>,
 }
 
 impl LayoutStyleDef {
-    fn into_layout(self) -> LayoutStyle {
-        LayoutStyle {
-            padding: self.padding.into_option(),
-            gap: self.gap.into_option(),
-            corner_radius: self.corner_radius.into_option(),
-            border_width: self.border_width.into_option(),
-        }
+    fn into_layout_values(self) -> io::Result<LayoutStyleValue> {
+        Ok(LayoutStyleValue {
+            padding: into_style_value(self.padding.into_option(), Ok)?,
+            gap: into_style_value(self.gap.into_option(), Ok)?,
+            corner_radius: into_style_value(self.corner_radius.into_option(), Ok)?,
+            border_width: into_style_value(self.border_width.into_option(), Ok)?,
+        })
     }
 }
 
 #[derive(Debug, Default, Deserialize)]
 struct TextStyleDef {
     #[serde(default)]
-    size: OptionalValue<f32>,
+    size: OptionalStyleValueDef<f32>,
 }
 
 impl TextStyleDef {
-    fn into_text(self) -> TextStyle {
-        TextStyle {
-            size: self.size.into_option(),
-        }
+    fn into_text_values(self) -> io::Result<TextStyleValue> {
+        Ok(TextStyleValue {
+            size: into_style_value(self.size.into_option(), Ok)?,
+        })
     }
 }
 
 #[derive(Debug, Default, Deserialize)]
 struct ColorStyleDef {
     #[serde(default)]
-    bg: OptionalColorDef,
+    bg: OptionalStyleValueDef<ColorDef>,
     #[serde(default, rename = "text")]
-    text_color: OptionalColorDef,
+    text_color: OptionalStyleValueDef<ColorDef>,
     #[serde(default)]
-    border: OptionalColorDef,
+    border: OptionalStyleValueDef<ColorDef>,
     #[serde(default)]
-    hover_bg: OptionalColorDef,
+    hover_bg: OptionalStyleValueDef<ColorDef>,
     #[serde(default)]
-    hover_text: OptionalColorDef,
+    hover_text: OptionalStyleValueDef<ColorDef>,
     #[serde(default)]
-    hover_border: OptionalColorDef,
+    hover_border: OptionalStyleValueDef<ColorDef>,
     #[serde(default)]
-    pressed_bg: OptionalColorDef,
+    pressed_bg: OptionalStyleValueDef<ColorDef>,
     #[serde(default)]
-    pressed_text: OptionalColorDef,
+    pressed_text: OptionalStyleValueDef<ColorDef>,
     #[serde(default)]
-    pressed_border: OptionalColorDef,
+    pressed_border: OptionalStyleValueDef<ColorDef>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
 enum ColorDef {
+    Rgb(f32, f32, f32),
+    Rgba(f32, f32, f32, f32),
     Rgb8(u8, u8, u8),
     Rgba8(u8, u8, u8, u8),
     Hex(String),
-}
-
-#[derive(Debug, Clone, Deserialize, Default)]
-enum OptionalColorDef {
-    #[default]
-    None,
-    Rgb8(u8, u8, u8),
-    Rgba8(u8, u8, u8, u8),
-    Hex(String),
-}
-
-impl OptionalColorDef {
-    fn into_color(self) -> io::Result<Option<Color>> {
-        match self {
-            Self::None => Ok(None),
-            Self::Rgb8(r, g, b) => Ok(Some(Color::from_rgb8(r, g, b))),
-            Self::Rgba8(r, g, b, a) => Ok(Some(Color::from_rgba8(r, g, b, a))),
-            Self::Hex(hex) => parse_hex_color(&hex).map(Some),
-        }
-    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
-#[serde(untagged)]
-enum OptionalValue<T> {
-    Value(T),
-    Optional(Option<T>),
+enum TokenDef {
+    Color(ColorDef),
+    Float(f64),
+    FontFamily(Vec<String>),
+    BoxShadow(BoxShadowDef),
+    Transition(StyleTransition),
 }
 
-impl<T> Default for OptionalValue<T> {
-    fn default() -> Self {
-        Self::Optional(None)
+impl TokenDef {
+    fn into_token_value(self) -> io::Result<TokenValue> {
+        match self {
+            Self::Color(color) => Ok(TokenValue::Color(color.into_color()?)),
+            Self::Float(value) => Ok(TokenValue::Float(value)),
+            Self::FontFamily(value) => Ok(TokenValue::FontFamily(value)),
+            Self::BoxShadow(value) => Ok(TokenValue::BoxShadow(value.into_box_shadow()?)),
+            Self::Transition(value) => Ok(TokenValue::Transition(value)),
+        }
     }
 }
 
-impl<T> OptionalValue<T> {
-    fn into_option(self) -> Option<T> {
-        match self {
-            Self::Value(value) => Some(value),
-            Self::Optional(value) => value,
+#[derive(Debug, Clone)]
+enum StyleValueDef<T> {
+    Value(T),
+    Var(String),
+}
+
+impl<'de, T> Deserialize<'de> for StyleValueDef<T>
+where
+    T: Deserialize<'de>,
+{
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        fn literal_to_style_value<'de, T, U, E>(value: U) -> Result<StyleValueDef<T>, E>
+        where
+            T: Deserialize<'de>,
+            U: IntoDeserializer<'de, de::value::Error>,
+            E: de::Error,
+        {
+            T::deserialize(value.into_deserializer())
+                .map(StyleValueDef::Value)
+                .map_err(de::Error::custom)
         }
+
+        struct StyleValueVisitor<T>(std::marker::PhantomData<T>);
+
+        impl<'de, T> Visitor<'de> for StyleValueVisitor<T>
+        where
+            T: Deserialize<'de>,
+        {
+            type Value = StyleValueDef<T>;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("a style literal value or Var(\"token-name\") reference")
+            }
+
+            fn visit_bool<E>(self, value: bool) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                literal_to_style_value::<T, _, E>(value)
+            }
+
+            fn visit_i64<E>(self, value: i64) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                literal_to_style_value::<T, _, E>(value)
+            }
+
+            fn visit_u64<E>(self, value: u64) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                literal_to_style_value::<T, _, E>(value)
+            }
+
+            fn visit_f64<E>(self, value: f64) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                literal_to_style_value::<T, _, E>(value)
+            }
+
+            fn visit_char<E>(self, value: char) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                literal_to_style_value::<T, _, E>(value)
+            }
+
+            fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                literal_to_style_value::<T, _, E>(value)
+            }
+
+            fn visit_string<E>(self, value: String) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                literal_to_style_value::<T, _, E>(value)
+            }
+
+            fn visit_seq<A>(self, seq: A) -> Result<Self::Value, A::Error>
+            where
+                A: serde::de::SeqAccess<'de>,
+            {
+                let de = SeqAccessDeserializer::new(seq);
+                let values = Vec::<ron::Value>::deserialize(de).map_err(de::Error::custom)?;
+
+                if let Ok(value) = T::deserialize(ron::Value::Seq(values.clone())) {
+                    return Ok(StyleValueDef::Value(value));
+                }
+
+                if let [ron::Value::String(token)] = values.as_slice() {
+                    return Ok(StyleValueDef::Var(token.clone()));
+                }
+
+                if let [ron::Value::String(tag), ron::Value::String(token)] = values.as_slice()
+                    && tag == "Var"
+                {
+                    return Ok(StyleValueDef::Var(token.clone()));
+                }
+
+                Err(de::Error::custom(
+                    "invalid style value sequence; expected literal sequence value or Var(\"token\")",
+                ))
+            }
+
+            fn visit_map<A>(self, map: A) -> Result<Self::Value, A::Error>
+            where
+                A: serde::de::MapAccess<'de>,
+            {
+                let de = MapAccessDeserializer::new(map);
+                let raw = ron::Value::deserialize(de).map_err(de::Error::custom)?;
+
+                if let Ok(value) = T::deserialize(raw.clone()) {
+                    return Ok(StyleValueDef::Value(value));
+                }
+
+                if let ron::Value::Map(entries) = &raw
+                    && entries.len() == 1
+                    && let Some((ron::Value::String(tag), value)) = entries.iter().next()
+                    && tag == "Var"
+                    && let ron::Value::String(token) = value
+                {
+                    return Ok(StyleValueDef::Var(token.clone()));
+                }
+
+                Err(de::Error::custom(
+                    "invalid style value map; expected literal map value or Var(\"token\")",
+                ))
+            }
+
+            fn visit_enum<A>(self, data: A) -> Result<Self::Value, A::Error>
+            where
+                A: EnumAccess<'de>,
+            {
+                let (variant, variant_access) = data.variant::<String>()?;
+                match variant.as_str() {
+                    "Var" => Ok(StyleValueDef::Var(
+                        variant_access.newtype_variant::<String>()?,
+                    )),
+                    "Value" => Ok(StyleValueDef::Value(variant_access.newtype_variant::<T>()?)),
+                    _ => Err(de::Error::unknown_variant(&variant, &["Var", "Value"])),
+                }
+            }
+        }
+
+        deserializer.deserialize_any(StyleValueVisitor(std::marker::PhantomData))
+    }
+}
+
+#[derive(Debug, Clone)]
+enum OptionalStyleValueDef<T> {
+    Style(StyleValueDef<T>),
+    None,
+}
+
+impl<T> Default for OptionalStyleValueDef<T> {
+    fn default() -> Self {
+        Self::None
+    }
+}
+
+impl<'de, T> Deserialize<'de> for OptionalStyleValueDef<T>
+where
+    T: Deserialize<'de>,
+{
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        fn literal_to_optional_style<'de, T, U, E>(value: U) -> Result<OptionalStyleValueDef<T>, E>
+        where
+            T: Deserialize<'de>,
+            U: IntoDeserializer<'de, de::value::Error>,
+            E: de::Error,
+        {
+            T::deserialize(value.into_deserializer())
+                .map(StyleValueDef::Value)
+                .map(OptionalStyleValueDef::Style)
+                .map_err(de::Error::custom)
+        }
+
+        struct OptionalStyleValueVisitor<T>(std::marker::PhantomData<T>);
+
+        impl<'de, T> Visitor<'de> for OptionalStyleValueVisitor<T>
+        where
+            T: Deserialize<'de>,
+        {
+            type Value = OptionalStyleValueDef<T>;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("an optional style value literal, Var(\"token-name\"), or None")
+            }
+
+            fn visit_none<E>(self) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                Ok(OptionalStyleValueDef::None)
+            }
+
+            fn visit_unit<E>(self) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                Ok(OptionalStyleValueDef::None)
+            }
+
+            fn visit_some<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                StyleValueDef::<T>::deserialize(deserializer).map(OptionalStyleValueDef::Style)
+            }
+
+            fn visit_bool<E>(self, value: bool) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                literal_to_optional_style::<T, _, E>(value)
+            }
+
+            fn visit_i64<E>(self, value: i64) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                literal_to_optional_style::<T, _, E>(value)
+            }
+
+            fn visit_u64<E>(self, value: u64) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                literal_to_optional_style::<T, _, E>(value)
+            }
+
+            fn visit_f64<E>(self, value: f64) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                literal_to_optional_style::<T, _, E>(value)
+            }
+
+            fn visit_char<E>(self, value: char) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                literal_to_optional_style::<T, _, E>(value)
+            }
+
+            fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                literal_to_optional_style::<T, _, E>(value)
+            }
+
+            fn visit_string<E>(self, value: String) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                literal_to_optional_style::<T, _, E>(value)
+            }
+
+            fn visit_seq<A>(self, seq: A) -> Result<Self::Value, A::Error>
+            where
+                A: serde::de::SeqAccess<'de>,
+            {
+                let de = SeqAccessDeserializer::new(seq);
+                StyleValueDef::<T>::deserialize(de)
+                    .map(OptionalStyleValueDef::Style)
+                    .map_err(de::Error::custom)
+            }
+
+            fn visit_map<A>(self, map: A) -> Result<Self::Value, A::Error>
+            where
+                A: serde::de::MapAccess<'de>,
+            {
+                let de = MapAccessDeserializer::new(map);
+                StyleValueDef::<T>::deserialize(de)
+                    .map(OptionalStyleValueDef::Style)
+                    .map_err(de::Error::custom)
+            }
+
+            fn visit_enum<A>(self, data: A) -> Result<Self::Value, A::Error>
+            where
+                A: EnumAccess<'de>,
+            {
+                let (variant, variant_access) = data.variant::<String>()?;
+                match variant.as_str() {
+                    "None" => {
+                        variant_access.unit_variant()?;
+                        Ok(OptionalStyleValueDef::None)
+                    }
+                    "Some" => Ok(OptionalStyleValueDef::Style(
+                        variant_access.newtype_variant::<StyleValueDef<T>>()?,
+                    )),
+                    "Var" => Ok(OptionalStyleValueDef::Style(StyleValueDef::Var(
+                        variant_access.newtype_variant::<String>()?,
+                    ))),
+                    "Value" => Ok(OptionalStyleValueDef::Style(StyleValueDef::Value(
+                        variant_access.newtype_variant::<T>()?,
+                    ))),
+                    _ => Err(de::Error::unknown_variant(
+                        &variant,
+                        &["None", "Some", "Var", "Value"],
+                    )),
+                }
+            }
+        }
+
+        deserializer.deserialize_any(OptionalStyleValueVisitor(std::marker::PhantomData))
+    }
+}
+
+impl<T> OptionalStyleValueDef<T> {
+    fn into_option(self) -> Option<StyleValueDef<T>> {
+        match self {
+            Self::Style(value) => Some(value),
+            Self::None => None,
+        }
+    }
+}
+
+fn into_style_value<T, U>(
+    value: Option<StyleValueDef<T>>,
+    map: impl FnOnce(T) -> io::Result<U>,
+) -> io::Result<Option<StyleValue<U>>> {
+    match value {
+        None => Ok(None),
+        Some(StyleValueDef::Value(value)) => Ok(Some(StyleValue::Value(map(value)?))),
+        Some(StyleValueDef::Var(name)) => Ok(Some(StyleValue::Var(name))),
     }
 }
 
 impl ColorDef {
     fn into_color(self) -> io::Result<Color> {
         match self {
+            Self::Rgb(r, g, b) => Ok(Color::from_rgb8(
+                float_color_component_to_u8(r),
+                float_color_component_to_u8(g),
+                float_color_component_to_u8(b),
+            )),
+            Self::Rgba(r, g, b, a) => Ok(Color::from_rgba8(
+                float_color_component_to_u8(r),
+                float_color_component_to_u8(g),
+                float_color_component_to_u8(b),
+                float_color_component_to_u8(a),
+            )),
             Self::Rgb8(r, g, b) => Ok(Color::from_rgb8(r, g, b)),
             Self::Rgba8(r, g, b, a) => Ok(Color::from_rgba8(r, g, b, a)),
             Self::Hex(hex) => parse_hex_color(&hex),
@@ -1665,40 +2464,42 @@ impl BoxShadowDef {
 }
 
 impl StyleSetterDef {
-    fn into_setter(self) -> io::Result<StyleSetter> {
-        Ok(StyleSetter {
-            layout: self.layout.into_layout(),
-            colors: self.colors.into_color_style()?,
-            text: self.text.into_text(),
-            font_family: self.font_family.into_option(),
-            box_shadow: self
-                .box_shadow
-                .into_option()
-                .map(BoxShadowDef::into_box_shadow)
-                .transpose()?,
-            transition: self.transition.into_option(),
+    fn into_setter(self) -> io::Result<StyleSetterValue> {
+        Ok(StyleSetterValue {
+            layout: self.layout.into_layout_values()?,
+            colors: self.colors.into_color_style_values()?,
+            text: self.text.into_text_values()?,
+            font_family: into_style_value(self.font_family.into_option(), Ok)?,
+            box_shadow: into_style_value(
+                self.box_shadow.into_option(),
+                BoxShadowDef::into_box_shadow,
+            )?,
+            transition: into_style_value(self.transition.into_option(), Ok)?,
         })
     }
 }
 
 impl ColorStyleDef {
-    fn into_color_style(self) -> io::Result<ColorStyle> {
-        fn map_color(value: OptionalColorDef) -> io::Result<Option<Color>> {
-            value.into_color()
-        }
-
-        Ok(ColorStyle {
-            bg: map_color(self.bg)?,
-            text: map_color(self.text_color)?,
-            border: map_color(self.border)?,
-            hover_bg: map_color(self.hover_bg)?,
-            hover_text: map_color(self.hover_text)?,
-            hover_border: map_color(self.hover_border)?,
-            pressed_bg: map_color(self.pressed_bg)?,
-            pressed_text: map_color(self.pressed_text)?,
-            pressed_border: map_color(self.pressed_border)?,
+    fn into_color_style_values(self) -> io::Result<ColorStyleValue> {
+        Ok(ColorStyleValue {
+            bg: into_style_value(self.bg.into_option(), ColorDef::into_color)?,
+            text: into_style_value(self.text_color.into_option(), ColorDef::into_color)?,
+            border: into_style_value(self.border.into_option(), ColorDef::into_color)?,
+            hover_bg: into_style_value(self.hover_bg.into_option(), ColorDef::into_color)?,
+            hover_text: into_style_value(self.hover_text.into_option(), ColorDef::into_color)?,
+            hover_border: into_style_value(self.hover_border.into_option(), ColorDef::into_color)?,
+            pressed_bg: into_style_value(self.pressed_bg.into_option(), ColorDef::into_color)?,
+            pressed_text: into_style_value(self.pressed_text.into_option(), ColorDef::into_color)?,
+            pressed_border: into_style_value(
+                self.pressed_border.into_option(),
+                ColorDef::into_color,
+            )?,
         })
     }
+}
+
+fn float_color_component_to_u8(value: f32) -> u8 {
+    (value.clamp(0.0, 1.0) * 255.0).round() as u8
 }
 
 fn parse_hex_color(hex: &str) -> io::Result<Color> {
@@ -1739,11 +2540,15 @@ fn stylesheet_from_ron_bytes(bytes: &[u8]) -> io::Result<StyleSheet> {
     })?;
 
     let mut sheet = StyleSheet::default();
+    for (name, token) in parsed.tokens {
+        sheet.tokens.insert(name, token.into_token_value()?);
+    }
+
     for rule in parsed.rules {
-        sheet.add_rule(StyleRule {
-            selector: rule.selector.into(),
-            setter: rule.setter.into_setter()?,
-        });
+        sheet.add_rule(StyleRule::new_with_values(
+            rule.selector.into(),
+            rule.setter.into_setter()?,
+        ));
     }
 
     Ok(sheet)

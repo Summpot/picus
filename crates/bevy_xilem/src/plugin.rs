@@ -24,11 +24,11 @@ use crate::{
         inject_bevy_input_into_masonry, paint_masonry_ui, rebuild_masonry_runtime,
     },
     styling::{
-        ActiveStyleSheet, ActiveStyleSheetAsset, ActiveStyleSheetSelectors, BaseStyleSheet,
-        DEFAULT_STYLE_SHEET_ASSET_PATH, StyleAssetEventCursor, StyleSheet, StyleSheetRonLoader,
-        animate_style_transitions, ensure_active_stylesheet_asset_handle, mark_style_dirty,
-        register_builtin_style_type_aliases, set_active_stylesheet_asset_path, sync_style_targets,
-        sync_stylesheet_asset_events, sync_ui_interaction_markers,
+        ActiveStyleSheet, ActiveStyleSheetAsset, ActiveStyleSheetSelectors,
+        ActiveStyleSheetTokenNames, BaseStyleSheet, StyleAssetEventCursor, StyleSheet,
+        StyleSheetRonLoader, animate_style_transitions, ensure_active_stylesheet_asset_handle,
+        install_embedded_fluent_dark_theme, mark_style_dirty, register_builtin_style_type_aliases,
+        sync_style_targets, sync_stylesheet_asset_events, sync_ui_interaction_markers,
     },
     synthesize::{SynthesizedUiViews, UiSynthesisStats, synthesize_ui},
     widget_actions::{handle_tooltip_hovers, handle_widget_actions, tick_toasts},
@@ -72,6 +72,7 @@ impl Plugin for BevyXilemPlugin {
             .init_resource::<ActiveStyleSheet>()
             .init_resource::<ActiveStyleSheetAsset>()
             .init_resource::<ActiveStyleSheetSelectors>()
+            .init_resource::<ActiveStyleSheetTokenNames>()
             .init_resource::<StyleAssetEventCursor>()
             .init_resource::<XilemFontBridge>()
             .init_resource::<AppI18n>()
@@ -132,8 +133,9 @@ impl Plugin for BevyXilemPlugin {
 
         app.add_systems(Last, paint_masonry_ui);
 
-        set_active_stylesheet_asset_path(app.world_mut(), DEFAULT_STYLE_SHEET_ASSET_PATH);
         register_builtin_style_type_aliases(app.world_mut());
+        install_embedded_fluent_dark_theme(app.world_mut())
+            .unwrap_or_else(|error| panic!("failed to parse embedded Fluent dark theme: {error}"));
 
         {
             let mut registry = app.world_mut().resource_mut::<UiProjectorRegistry>();
