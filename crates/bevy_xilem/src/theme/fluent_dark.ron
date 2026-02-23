@@ -276,6 +276,20 @@
     ),
 
     (
+      selector: Type("UiScrollView"),
+      setter: (
+        layout: (
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          bg: Var("surface-panel"),
+          border: Var("border-default"),
+        ),
+      ),
+    ),
+
+    (
       selector: Type("UiComboBox"),
       setter: (
         layout: (
@@ -1105,6 +1119,103 @@
       setter: (
         colors: (
           text: Var("accent-primary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("template.scroll_view.viewport"),
+      setter: (
+        layout: (
+          corner_radius: Var("radius-sm"),
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          bg: Var("surface-elevated"),
+          border: Var("border-muted"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("template.scroll_view.scrollbar.vertical"),
+      setter: (
+        layout: (
+          corner_radius: Var("radius-pill"),
+        ),
+        colors: (
+          bg: Hex("#FFFFFF14"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("template.scroll_view.scrollbar.horizontal"),
+      setter: (
+        layout: (
+          corner_radius: Var("radius-pill"),
+        ),
+        colors: (
+          bg: Hex("#FFFFFF14"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("template.scroll_view.thumb.vertical"),
+      setter: (
+        layout: (
+          corner_radius: Var("radius-pill"),
+        ),
+        colors: (
+          bg: Hex("#FFFFFF5C"),
+        ),
+        transition: Var("duration-fast"),
+      ),
+    ),
+    (
+      selector: Class("template.scroll_view.thumb.horizontal"),
+      setter: (
+        layout: (
+          corner_radius: Var("radius-pill"),
+        ),
+        colors: (
+          bg: Hex("#FFFFFF5C"),
+        ),
+        transition: Var("duration-fast"),
+      ),
+    ),
+    (
+      selector: And([Class("template.scroll_view.thumb.vertical"), PseudoClass(Hovered)]),
+      setter: (
+        colors: (
+          bg: Hex("#FFFFFF8C"),
+        ),
+      ),
+    ),
+    (
+      selector: And([Class("template.scroll_view.thumb.horizontal"), PseudoClass(Hovered)]),
+      setter: (
+        colors: (
+          bg: Hex("#FFFFFF8C"),
+        ),
+      ),
+    ),
+    (
+      selector: And([Class("template.scroll_view.thumb.vertical"), PseudoClass(Pressed)]),
+      setter: (
+        layout: (
+          scale: 0.98,
+        ),
+        colors: (
+          bg: Hex("#FFFFFFB8"),
+        ),
+      ),
+    ),
+    (
+      selector: And([Class("template.scroll_view.thumb.horizontal"), PseudoClass(Pressed)]),
+      setter: (
+        layout: (
+          scale: 0.98,
+        ),
+        colors: (
+          bg: Hex("#FFFFFFB8"),
         ),
       ),
     ),

@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 readme = "../../README.md"
+autoexamples = false
 
 [dependencies]
 bevy_a11y.workspace = true
@@ -42,44 +43,52 @@ tracing-subscriber.workspace = true
 
 [[example]]
 name = "calculator"
-path = "../../examples/calculator.rs"
+path = "../../examples/calculator/main.rs"
 
 [[example]]
 name = "todo_list"
-path = "../../examples/todo_list.rs"
+path = "../../examples/todo_list/main.rs"
 
 [[example]]
 name = "chess"
-path = "../../examples/chess.rs"
+path = "../../examples/chess/main.rs"
+
+[[example]]
+name = "chess_engine"
+path = "../../examples/chess_engine/main.rs"
 
 [[example]]
 name = "temperature_converter"
-path = "../../examples/temperature_converter.rs"
+path = "../../examples/temperature_converter/main.rs"
 
 [[example]]
 name = "timer"
-path = "../../examples/timer.rs"
+path = "../../examples/timer/main.rs"
 
 [[example]]
 name = "download_with_progress"
-path = "../../examples/download_with_progress.rs"
+path = "../../examples/download_with_progress/main.rs"
 
 [[example]]
 name = "theme_gallery"
-path = "../../examples/theme_gallery.rs"
+path = "../../examples/theme_gallery/main.rs"
 
 [[example]]
 name = "game_2048"
-path = "../../examples/game_2048.rs"
+path = "../../examples/game_2048/main.rs"
 
 [[example]]
 name = "cjk_text_example"
-path = "../../examples/cjk_text_example.rs"
+path = "../../examples/cjk_text_example/main.rs"
 
 [[example]]
 name = "i18n_showcase"
-path = "../../examples/i18n_showcase.rs"
+path = "../../examples/i18n_showcase/main.rs"
+
+[[example]]
+name = "overlay_hit_routing"
+path = "../../examples/overlay_hit_routing/main.rs"
 
 [[example]]
 name = "widget_showcase"
-path = "../../examples/widget_showcase.rs"
+path = "../../examples/widget_showcase/main.rs"

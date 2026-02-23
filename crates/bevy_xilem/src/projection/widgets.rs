@@ -1,27 +1,32 @@
 use std::sync::Arc;
 
-use bevy_ecs::hierarchy::ChildOf;
-use masonry::kurbo::Axis;
+use bevy_ecs::{
+    entity::Entity,
+    hierarchy::{ChildOf, Children},
+    prelude::Component,
+};
+use masonry::kurbo::{Axis, Point};
 use masonry::layout::{Dim, Length};
 use xilem::Color;
 use xilem::style::Style as _;
 use xilem_masonry::view::{
-    FlexExt as _, flex_col, flex_row, label, sized_box, spinner, split, transformed,
+    FlexExt as _, flex_col, flex_row, label, sized_box, spinner, split, transformed, zstack,
 };
 
 use crate::{
     ecs::{
-        AnchoredTo, OverlayComputedPosition, SplitDirection, ToastKind, UiColorPicker,
-        UiColorPickerPanel, UiDatePicker, UiDatePickerPanel, UiGroupBox, UiMenuBar, UiMenuBarItem,
-        UiMenuItemPanel, UiRadioGroup, UiSpinner, UiSplitPane, UiTabBar, UiTable, UiToast,
-        UiTooltip, UiTreeNode,
+        AnchoredTo, OverlayComputedPosition, PartScrollBarHorizontal, PartScrollBarVertical,
+        PartScrollThumbHorizontal, PartScrollThumbVertical, PartScrollViewport, ScrollAxis,
+        SplitDirection, ToastKind, UiColorPicker, UiColorPickerPanel, UiDatePicker,
+        UiDatePickerPanel, UiGroupBox, UiMenuBar, UiMenuBarItem, UiMenuItemPanel, UiRadioGroup,
+        UiScrollView, UiSpinner, UiSplitPane, UiTabBar, UiTable, UiToast, UiTooltip, UiTreeNode,
     },
     overlay::OverlayUiAction,
     styling::{
         ResolvedStyle, apply_direct_widget_style, apply_flex_alignment, apply_label_style,
         apply_widget_style, resolve_style, resolve_style_for_classes,
     },
-    views::{ecs_button, ecs_button_with_child},
+    views::{ecs_button, ecs_button_with_child, ecs_drag_thumb, scroll_portal},
     widget_actions::WidgetUiAction,
 };
 
@@ -133,6 +138,233 @@ fn hidden_placeholder() -> UiView {
             .width(Dim::Fixed(Length::px(0.0)))
             .height(Dim::Fixed(Length::px(0.0))),
     )
+}
+
+fn child_entity_views(ctx: &ProjectionCtx<'_>) -> Vec<(Entity, UiView)> {
+    let child_entities = ctx
+        .world
+        .get::<Children>(ctx.entity)
+        .map(|children| children.iter().copied().collect::<Vec<_>>())
+        .unwrap_or_default();
+
+    child_entities
+        .into_iter()
+        .zip(ctx.children.iter().cloned())
+        .collect::<Vec<_>>()
+}
+
+fn first_part_entity<P: Component>(
+    ctx: &ProjectionCtx<'_>,
+    pairs: &[(Entity, UiView)],
+) -> Option<Entity> {
+    pairs
+        .iter()
+        .find_map(|(entity, _)| ctx.world.get::<P>(*entity).map(|_| *entity))
+}
+
+const SCROLLBAR_THICKNESS: f64 = 12.0;
+const SCROLLBAR_MIN_THUMB: f64 = 24.0;
+
+fn thumb_length(viewport: f64, content: f64) -> f64 {
+    if content <= 0.0 {
+        return viewport.max(0.0);
+    }
+    let ratio = (viewport / content).clamp(0.0, 1.0);
+    (viewport * ratio).clamp(SCROLLBAR_MIN_THUMB.min(viewport), viewport)
+}
+
+fn thumb_offset(current_offset: f64, max_offset: f64, track_len: f64, thumb_len: f64) -> f64 {
+    let travel = (track_len - thumb_len).max(0.0);
+    if max_offset <= f64::EPSILON {
+        0.0
+    } else {
+        (current_offset / max_offset).clamp(0.0, 1.0) * travel
+    }
+}
+
+pub(crate) fn project_scroll_view(scroll_view: &UiScrollView, ctx: ProjectionCtx<'_>) -> UiView {
+    let style = resolve_style(ctx.world, ctx.entity);
+    let pairs = child_entity_views(&ctx);
+
+    let viewport_part = first_part_entity::<PartScrollViewport>(&ctx, &pairs);
+    let vertical_track_part = first_part_entity::<PartScrollBarVertical>(&ctx, &pairs);
+    let vertical_thumb_part = first_part_entity::<PartScrollThumbVertical>(&ctx, &pairs);
+    let horizontal_track_part = first_part_entity::<PartScrollBarHorizontal>(&ctx, &pairs);
+    let horizontal_thumb_part = first_part_entity::<PartScrollThumbHorizontal>(&ctx, &pairs);
+
+    let mut scroll_state = *scroll_view;
+    scroll_state.clamp_scroll_offset();
+
+    let viewport_w = (scroll_state.viewport_size.x as f64).max(32.0);
+    let viewport_h = (scroll_state.viewport_size.y as f64).max(32.0);
+    let content_w = (scroll_state.content_size.x as f64).max(viewport_w);
+    let content_h = (scroll_state.content_size.y as f64).max(viewport_h);
+
+    let content_views = pairs
+        .iter()
+        .filter_map(|(entity, view)| {
+            let is_template_part = ctx.world.get::<PartScrollViewport>(*entity).is_some()
+                || ctx.world.get::<PartScrollBarVertical>(*entity).is_some()
+                || ctx.world.get::<PartScrollThumbVertical>(*entity).is_some()
+                || ctx.world.get::<PartScrollBarHorizontal>(*entity).is_some()
+                || ctx
+                    .world
+                    .get::<PartScrollThumbHorizontal>(*entity)
+                    .is_some();
+            (!is_template_part).then_some(view.clone().into_any_flex())
+        })
+        .collect::<Vec<_>>();
+
+    let content_view = if content_views.is_empty() {
+        flex_col(vec![label("").into_any_flex()])
+    } else {
+        flex_col(content_views)
+    };
+
+    let portal = scroll_portal(
+        content_view,
+        Point::new(
+            scroll_state.scroll_offset.x as f64,
+            scroll_state.scroll_offset.y as f64,
+        ),
+    )
+    .constrain_horizontal(false)
+    .constrain_vertical(false)
+    .content_must_fill(true);
+
+    let viewport_style = viewport_part
+        .map(|entity| resolve_style(ctx.world, entity))
+        .unwrap_or_else(|| resolve_style_for_classes(ctx.world, ["template.scroll_view.viewport"]));
+
+    let viewport_surface = apply_widget_style(
+        sized_box(portal)
+            .width(Dim::Fixed(Length::px(viewport_w)))
+            .height(Dim::Fixed(Length::px(viewport_h))),
+        &viewport_style,
+    );
+
+    let max_x = (content_w - viewport_w).max(0.0);
+    let max_y = (content_h - viewport_h).max(0.0);
+
+    let show_vertical = scroll_state.show_vertical_scrollbar && max_y > f64::EPSILON;
+    let show_horizontal = scroll_state.show_horizontal_scrollbar && max_x > f64::EPSILON;
+
+    let vertical_bar_view = if show_vertical {
+        let track_style = vertical_track_part
+            .map(|entity| resolve_style(ctx.world, entity))
+            .unwrap_or_else(|| {
+                resolve_style_for_classes(ctx.world, ["template.scroll_view.scrollbar.vertical"])
+            });
+        let thumb_style = vertical_thumb_part
+            .map(|entity| resolve_style(ctx.world, entity))
+            .unwrap_or_else(|| {
+                resolve_style_for_classes(ctx.world, ["template.scroll_view.thumb.vertical"])
+            });
+
+        let track_len = viewport_h;
+        let thumb_len = thumb_length(viewport_h, content_h);
+        let thumb_y = thumb_offset(
+            scroll_state.scroll_offset.y as f64,
+            max_y,
+            track_len,
+            thumb_len,
+        );
+
+        let track = apply_widget_style(
+            sized_box(label(""))
+                .width(Dim::Fixed(Length::px(SCROLLBAR_THICKNESS)))
+                .height(Dim::Fixed(Length::px(track_len))),
+            &track_style,
+        );
+
+        let thumb_body = if let Some(thumb_entity) = vertical_thumb_part {
+            ecs_drag_thumb(thumb_entity, ScrollAxis::Vertical, "")
+        } else {
+            ecs_drag_thumb(ctx.entity, ScrollAxis::Vertical, "")
+        };
+
+        let thumb = apply_widget_style(
+            sized_box(thumb_body)
+                .width(Dim::Fixed(Length::px(SCROLLBAR_THICKNESS)))
+                .height(Dim::Fixed(Length::px(thumb_len))),
+            &thumb_style,
+        );
+
+        Some(zstack((track, transformed(thumb).translate((0.0, thumb_y)))).into_any_flex())
+    } else {
+        None
+    };
+
+    let horizontal_bar_view = if show_horizontal {
+        let track_style = horizontal_track_part
+            .map(|entity| resolve_style(ctx.world, entity))
+            .unwrap_or_else(|| {
+                resolve_style_for_classes(ctx.world, ["template.scroll_view.scrollbar.horizontal"])
+            });
+        let thumb_style = horizontal_thumb_part
+            .map(|entity| resolve_style(ctx.world, entity))
+            .unwrap_or_else(|| {
+                resolve_style_for_classes(ctx.world, ["template.scroll_view.thumb.horizontal"])
+            });
+
+        let track_len = viewport_w;
+        let thumb_len = thumb_length(viewport_w, content_w);
+        let thumb_x = thumb_offset(
+            scroll_state.scroll_offset.x as f64,
+            max_x,
+            track_len,
+            thumb_len,
+        );
+
+        let track = apply_widget_style(
+            sized_box(label(""))
+                .width(Dim::Fixed(Length::px(track_len)))
+                .height(Dim::Fixed(Length::px(SCROLLBAR_THICKNESS))),
+            &track_style,
+        );
+
+        let thumb_body = if let Some(thumb_entity) = horizontal_thumb_part {
+            ecs_drag_thumb(thumb_entity, ScrollAxis::Horizontal, "")
+        } else {
+            ecs_drag_thumb(ctx.entity, ScrollAxis::Horizontal, "")
+        };
+
+        let thumb = apply_widget_style(
+            sized_box(thumb_body)
+                .width(Dim::Fixed(Length::px(thumb_len)))
+                .height(Dim::Fixed(Length::px(SCROLLBAR_THICKNESS))),
+            &thumb_style,
+        );
+
+        Some(zstack((track, transformed(thumb).translate((thumb_x, 0.0)))).into_any_flex())
+    } else {
+        None
+    };
+
+    let mut top_row = vec![viewport_surface.into_any_flex()];
+    if let Some(vertical_bar) = vertical_bar_view {
+        top_row.push(vertical_bar);
+    }
+
+    let mut rows = vec![flex_row(top_row).gap(Length::px(0.0)).into_any_flex()];
+
+    if let Some(horizontal_bar) = horizontal_bar_view {
+        let mut bottom_row = vec![horizontal_bar];
+        if show_vertical {
+            bottom_row.push(
+                sized_box(label(""))
+                    .width(Dim::Fixed(Length::px(SCROLLBAR_THICKNESS)))
+                    .height(Dim::Fixed(Length::px(SCROLLBAR_THICKNESS)))
+                    .into_any_flex(),
+            );
+        }
+        rows.push(flex_row(bottom_row).gap(Length::px(0.0)).into_any_flex());
+    }
+
+    Arc::new(apply_widget_style(
+        apply_flex_alignment(flex_col(rows), &style).gap(Length::px(0.0)),
+        &style,
+    ))
 }
 
 // ---------------------------------------------------------------------------

@@ -6,7 +6,7 @@ use bevy_ecs::{
 
 use crate::{
     controls::expand_all_ui_control_templates,
-    ecs::{UiCheckbox, UiComboBox, UiDialog, UiSlider, UiSwitch, UiTextInput},
+    ecs::{UiCheckbox, UiComboBox, UiDialog, UiScrollView, UiSlider, UiSwitch, UiTextInput},
 };
 
 /// Find the first child template part entity for `parent` tagged with marker `P`.
@@ -53,4 +53,5 @@ pub fn expand_builtin_control_templates(world: &mut World) {
     expand_all_ui_control_templates::<UiTextInput>(world);
     expand_all_ui_control_templates::<UiDialog>(world);
     expand_all_ui_control_templates::<UiComboBox>(world);
+    expand_all_ui_control_templates::<UiScrollView>(world);
 }

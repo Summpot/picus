@@ -14,6 +14,7 @@ mod dialog;
 mod group_box;
 mod menu;
 mod radio_group;
+mod scroll_view;
 mod slider;
 mod spinner;
 mod split_pane;
@@ -34,6 +35,7 @@ pub use dialog::*;
 pub use group_box::*;
 pub use menu::*;
 pub use radio_group::*;
+pub use scroll_view::*;
 pub use slider::*;
 pub use spinner::*;
 pub use split_pane::*;
@@ -131,6 +133,7 @@ pub fn register_builtin_ui_controls(app: &mut App) {
         .register_ui_control::<combo_box::UiComboBox>()
         .register_ui_control::<combo_box::UiDropdownMenu>()
         .register_ui_control::<radio_group::UiRadioGroup>()
+        .register_ui_control::<scroll_view::UiScrollView>()
         .register_ui_control::<tab_bar::UiTabBar>()
         .register_ui_control::<tree_node::UiTreeNode>()
         .register_ui_control::<table::UiTable>()

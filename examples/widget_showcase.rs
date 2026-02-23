@@ -7,11 +7,13 @@ use bevy_xilem::{
     ProjectionCtx, StyleClass, StyleSetter, StyleSheet, TextStyle, ToastKind, UiButton,
     UiColorPicker, UiColorPickerChanged, UiDatePicker, UiDatePickerChanged, UiEventQueue,
     UiFlexColumn, UiFlexRow, UiGroupBox, UiLabel, UiMenuBar, UiMenuBarItem, UiMenuItem,
-    UiMenuItemSelected, UiRadioGroup, UiRadioGroupChanged, UiRoot, UiSpinner, UiSplitPane,
-    UiTabBar, UiTabChanged, UiTable, UiToast, UiTreeNode, UiTreeNodeToggled, UiView,
+    UiMenuItemSelected, UiRadioGroup, UiRadioGroupChanged, UiRoot, UiScrollView,
+    UiScrollViewChanged, UiSpinner, UiSplitPane, UiTabBar, UiTabChanged, UiTable, UiToast,
+    UiTreeNode, UiTreeNodeToggled, UiView,
     apply_label_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
     bevy_ecs::{hierarchy::ChildOf, prelude::*},
+    bevy_math::Vec2,
     resolve_style, resolve_style_for_classes, run_app_with_window_options, spawn_in_overlay_root,
     xilem::{
         Color,
@@ -270,6 +272,28 @@ fn setup_showcase(mut commands: Commands) {
         ChildOf(split_pane),
     ));
 
+    // --- Scroll View ---
+    let scroll_section = commands
+        .spawn((UiGroupBox::new("Scroll View (Portal + ECS Scrollbars)"), ChildOf(root)))
+        .id();
+    let scroll_view = commands
+        .spawn((
+            UiScrollView::new(Vec2::new(520.0, 220.0), Vec2::new(520.0, 1600.0))
+                .with_vertical_scrollbar(true)
+                .with_horizontal_scrollbar(false),
+            ChildOf(scroll_section),
+        ))
+        .id();
+
+    for i in 1..=60 {
+        commands.spawn((
+            UiLabel::new(format!(
+                "Scrollable row #{i:02}  •  Drag the thumb or use mouse wheel"
+            )),
+            ChildOf(scroll_view),
+        ));
+    }
+
     // --- Toast ---
     let toast_section = commands
         .spawn((UiGroupBox::new("Toast Notifications"), ChildOf(root)))
@@ -501,6 +525,17 @@ fn drain_showcase_events(world: &mut World) {
         let msg = format!(
             "Date Picker: {:04}-{:02}-{:02}",
             event.action.year, event.action.month, event.action.day
+        );
+        update_status(world, rt.status_label, msg);
+    }
+
+    let scroll_events = world
+        .resource_mut::<UiEventQueue>()
+        .drain_actions::<UiScrollViewChanged>();
+    for event in scroll_events {
+        let msg = format!(
+            "Scroll View {:?}: offset=({:.1}, {:.1})",
+            event.action.scroll_view, event.action.scroll_offset.x, event.action.scroll_offset.y
         );
         update_status(world, rt.status_label, msg);
     }

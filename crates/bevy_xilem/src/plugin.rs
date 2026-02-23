@@ -31,7 +31,9 @@ use crate::{
         sync_style_targets, sync_stylesheet_asset_events, sync_ui_interaction_markers,
     },
     synthesize::{SynthesizedUiViews, UiSynthesisStats, synthesize_ui},
-    widget_actions::{handle_tooltip_hovers, handle_widget_actions, tick_toasts},
+    widget_actions::{
+        handle_scroll_view_wheel, handle_tooltip_hovers, handle_widget_actions, tick_toasts,
+    },
 };
 
 /// Bevy plugin for headless Masonry runtime + ECS projection synthesis.
@@ -94,6 +96,7 @@ impl Plugin for BevyXilemPlugin {
                     initialize_masonry_runtime_from_primary_window,
                     bubble_ui_pointer_events,
                     handle_global_overlay_clicks,
+                    handle_scroll_view_wheel,
                     inject_bevy_input_into_masonry,
                     sync_ui_interaction_markers,
                 )

@@ -585,6 +585,7 @@ pub fn register_builtin_style_type_aliases(world: &mut World) {
     registry.register_type_aliases::<UiComboBox>();
     registry.register_type_aliases::<UiDropdownMenu>();
     registry.register_type_aliases::<UiRadioGroup>();
+    registry.register_type_aliases::<UiScrollView>();
     registry.register_type_aliases::<UiTabBar>();
     registry.register_type_aliases::<UiTreeNode>();
     registry.register_type_aliases::<UiTable>();

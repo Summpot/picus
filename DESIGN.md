@@ -443,12 +443,42 @@ Additional ECS-native logical controls and typed events:
 - `UiSlider` / `UiSliderChanged`
 - `UiSwitch` / `UiSwitchChanged`
 - `UiTextInput` / `UiTextInputChanged`
+- `UiScrollView` / `UiScrollViewChanged`
+
+### 6.4) Portal-based `UiScrollView` control
+
+`UiScrollView` is implemented as a logical ECS control projected through a Masonry portal view,
+with explicit scroll state and optional external scrollbar parts.
+
+Logical state includes:
+
+- `scroll_offset` (logical x/y),
+- `content_size` (measured content extent),
+- `viewport_size` (visible extent),
+- `show_vertical_scrollbar` / `show_horizontal_scrollbar`.
+
+Template-part expansion for scroll views includes:
+
+- `PartScrollViewport`
+- `PartScrollBarVertical` / `PartScrollBarHorizontal`
+- `PartScrollThumbVertical` / `PartScrollThumbHorizontal`
+
+Interaction model:
+
+- wheel deltas are routed to the nearest ancestor `UiScrollView` in `PreUpdate`,
+- draggable thumb widgets emit typed drag actions, translated into scroll offsets,
+- offset changes emit `UiScrollViewChanged` for ECS observers.
+
+This model keeps scrolling behavior ECS-first while preserving virtualization-friendly portal
+composition in the projector layer.
 
 Template-part expansion model:
 
 - Built-in controls can be expanded into child entities tagged with marker components
   (`PartDialogTitle`, `PartDialogDismiss`, `PartComboBoxDisplay`,
-  `PartCheckboxIndicator`, `PartSliderTrack`, etc.).
+  `PartCheckboxIndicator`, `PartSliderTrack`, `PartScrollViewport`,
+  `PartScrollBarVertical`, `PartScrollBarHorizontal`,
+  `PartScrollThumbVertical`, `PartScrollThumbHorizontal`, etc.).
 - `register_ui_control::<T>()` installs `Added<T>` expansion hooks by default.
 - `expand_builtin_control_templates` remains as a compatibility helper.
 - Projectors assemble visuals using `ctx.children` and marker lookups.
@@ -534,7 +564,7 @@ It ensures Bevy asset runtime support is available and registers:
 
 and registers systems:
 
-- `PreUpdate`: `collect_bevy_font_assets -> sync_fonts_to_xilem -> initialize_masonry_runtime_from_primary_window -> bubble_ui_pointer_events -> handle_global_overlay_clicks -> inject_bevy_input_into_masonry -> sync_ui_interaction_markers`
+- `PreUpdate`: `collect_bevy_font_assets -> sync_fonts_to_xilem -> initialize_masonry_runtime_from_primary_window -> bubble_ui_pointer_events -> handle_global_overlay_clicks -> handle_scroll_view_wheel -> inject_bevy_input_into_masonry -> sync_ui_interaction_markers`
 - `Update`: `ensure_overlay_root -> reparent_overlay_entities -> ensure_overlay_defaults -> handle_overlay_actions -> ... -> ensure_active_stylesheet_asset_handle -> sync_stylesheet_asset_events -> mark_style_dirty -> sync_style_targets -> animate_style_transitions`
 - `PostUpdate`: `synthesize_ui -> rebuild_masonry_runtime -> sync_overlay_positions`
 - `Last`: `paint_masonry_ui` (explicit Masonry/Vello render + present pass)
@@ -605,6 +635,8 @@ Examples were rewritten to demonstrate this architecture with:
 - stylesheet-driven styling (class rules + cascade) instead of hardcoded projector styles
 - pseudo-class interaction styling and transition-capable style resolution
 - control registration through `UiControlTemplate` + `register_ui_control::<T>()`
+- crate-like example layout (`examples/<name>/main.rs`, `ui.rs`, `systems.rs`)
+- `widget_showcase` demonstration of `UiScrollView` (overflow content + wheel/drag updates)
 - virtualized task scrolling in `todo_list` using `xilem_masonry::view::virtual_scroll`
 - no `xilem::Xilem::new_simple` usage
 - no `xilem::Xilem::new` event-loop ownership

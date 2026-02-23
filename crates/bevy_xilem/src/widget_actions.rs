@@ -1,12 +1,14 @@
-use bevy_ecs::{hierarchy::ChildOf, prelude::*};
+use bevy_ecs::{entity::Entity, hierarchy::ChildOf, message::MessageReader, prelude::*};
+use bevy_input::mouse::{MouseScrollUnit, MouseWheel};
 use bevy_time::Time;
+use bevy_window::{PrimaryWindow, Window};
 
 use crate::{
-    AnchoredTo, HasTooltip, Hovered, OverlayAnchorRect, OverlayComputedPosition, OverlayConfig,
-    OverlayPlacement, OverlayState, UiCheckbox, UiCheckboxChanged, UiOverlayRoot, UiRadioGroup,
-    UiRadioGroupChanged, UiSlider, UiSliderChanged, UiSwitch, UiSwitchChanged, UiTabBar,
-    UiTabChanged, UiTextInput, UiTextInputChanged, UiToast, UiTooltip, UiTreeNode,
-    UiTreeNodeToggled, events::UiEventQueue,
+    AnchoredTo, HasTooltip, Hovered, MasonryRuntime, OverlayAnchorRect, OverlayComputedPosition,
+    OverlayConfig, OverlayPlacement, OverlayState, ScrollAxis, UiCheckbox, UiCheckboxChanged,
+    UiOverlayRoot, UiRadioGroup, UiRadioGroupChanged, UiScrollView, UiScrollViewChanged, UiSlider,
+    UiSliderChanged, UiSwitch, UiSwitchChanged, UiTabBar, UiTabChanged, UiTextInput,
+    UiTextInputChanged, UiToast, UiTooltip, UiTreeNode, UiTreeNodeToggled, events::UiEventQueue,
 };
 
 /// Internal action enum for non-overlay widget interactions.
@@ -29,6 +31,111 @@ pub enum WidgetUiAction {
     ToggleSwitch { switch: Entity },
     /// Update text input contents.
     SetTextInput { input: Entity, value: String },
+    /// Drag an ECS scroll-thumb by a physical pixel delta.
+    DragScrollThumb {
+        thumb: Entity,
+        axis: ScrollAxis,
+        delta_pixels: f64,
+    },
+}
+
+const SCROLLBAR_MIN_THUMB: f64 = 24.0;
+
+fn thumb_length(viewport: f64, content: f64) -> f64 {
+    if content <= 0.0 {
+        return viewport.max(0.0);
+    }
+    let ratio = (viewport / content).clamp(0.0, 1.0);
+    (viewport * ratio).clamp(SCROLLBAR_MIN_THUMB.min(viewport), viewport)
+}
+
+fn scroll_delta_from_thumb_drag(
+    scroll_view: UiScrollView,
+    axis: ScrollAxis,
+    delta_pixels: f64,
+) -> f64 {
+    let (viewport, content) = match axis {
+        ScrollAxis::Horizontal => (
+            scroll_view.viewport_size.x as f64,
+            scroll_view.content_size.x as f64,
+        ),
+        ScrollAxis::Vertical => (
+            scroll_view.viewport_size.y as f64,
+            scroll_view.content_size.y as f64,
+        ),
+    };
+
+    let max_scroll = (content - viewport).max(0.0);
+    if max_scroll <= f64::EPSILON {
+        return 0.0;
+    }
+
+    let track_len = viewport.max(1.0);
+    let thumb_len = thumb_length(viewport, content);
+    let travel = (track_len - thumb_len).max(1.0);
+
+    delta_pixels * (max_scroll / travel)
+}
+
+fn find_ancestor_scroll_view(world: &World, mut entity: Entity) -> Option<Entity> {
+    loop {
+        if world.get::<UiScrollView>(entity).is_some() {
+            return Some(entity);
+        }
+
+        let parent = world
+            .get::<ChildOf>(entity)
+            .map(|child_of| child_of.parent())?;
+        entity = parent;
+    }
+}
+
+fn parse_entity_bits_from_debug(debug: &str) -> Option<u64> {
+    if let Some(bits) = debug.strip_prefix("opaque_hitbox_entity=") {
+        return bits.parse::<u64>().ok();
+    }
+    if let Some(bits) = debug.strip_prefix("entity_scope=") {
+        return bits.parse::<u64>().ok();
+    }
+    if let Some(bits) = debug.strip_prefix("entity=") {
+        return bits.parse::<u64>().ok();
+    }
+    None
+}
+
+fn resolve_scroll_view_target_from_hit_path(
+    runtime: &MasonryRuntime,
+    hit_path: &[masonry::core::WidgetId],
+    parents: &Query<&ChildOf>,
+    scroll_markers: &Query<(), With<UiScrollView>>,
+) -> Option<Entity> {
+    for widget_id in hit_path.iter().rev().copied() {
+        let Some(entity_bits) = runtime
+            .render_root
+            .get_widget(widget_id)
+            .and_then(|widget| widget.get_debug_text())
+            .and_then(|debug| parse_entity_bits_from_debug(&debug))
+        else {
+            continue;
+        };
+
+        let Some(mut entity) = Entity::try_from_bits(entity_bits) else {
+            continue;
+        };
+
+        loop {
+            if scroll_markers.get(entity).is_ok() {
+                return Some(entity);
+            }
+
+            let Ok(parent) = parents.get(entity) else {
+                break;
+            };
+            entity = parent.parent();
+        }
+    }
+
+    None
 }
 
 /// Consume [`WidgetUiAction`] entries from [`UiEventQueue`] and apply the
@@ -165,6 +272,123 @@ pub fn handle_widget_actions(world: &mut World) {
                         .push_typed(input, UiTextInputChanged { input, value });
                 }
             }
+
+            WidgetUiAction::DragScrollThumb {
+                thumb,
+                axis,
+                delta_pixels,
+            } => {
+                if world.get_entity(thumb).is_err() {
+                    continue;
+                }
+
+                let Some(scroll_entity) = find_ancestor_scroll_view(world, thumb) else {
+                    continue;
+                };
+
+                if let Some(mut scroll_view) = world.get_mut::<UiScrollView>(scroll_entity) {
+                    let before = scroll_view.scroll_offset;
+                    let delta =
+                        scroll_delta_from_thumb_drag(*scroll_view, axis, delta_pixels) as f32;
+
+                    match axis {
+                        ScrollAxis::Horizontal => {
+                            scroll_view.scroll_offset.x += delta;
+                        }
+                        ScrollAxis::Vertical => {
+                            scroll_view.scroll_offset.y += delta;
+                        }
+                    }
+
+                    scroll_view.clamp_scroll_offset();
+                    let after = scroll_view.scroll_offset;
+                    drop(scroll_view);
+
+                    if after != before {
+                        world.resource::<UiEventQueue>().push_typed(
+                            scroll_entity,
+                            UiScrollViewChanged {
+                                scroll_view: scroll_entity,
+                                scroll_offset: after,
+                            },
+                        );
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Route mouse-wheel input to the nearest hit-tested [`UiScrollView`] entity.
+///
+/// This keeps ECS `scroll_offset` synchronized with pointer-wheel interactions
+/// while the portal primitive handles clipping/composition.
+pub fn handle_scroll_view_wheel(
+    runtime: Option<NonSendMut<MasonryRuntime>>,
+    mut wheel_events: MessageReader<MouseWheel>,
+    primary_window_query: Query<(Entity, &Window), With<PrimaryWindow>>,
+    mut scroll_views: Query<&mut UiScrollView>,
+    scroll_markers: Query<(), With<UiScrollView>>,
+    parents: Query<&ChildOf>,
+    ui_events: Res<UiEventQueue>,
+) {
+    let Some(runtime) = runtime else {
+        return;
+    };
+
+    let Some((primary_window_entity, primary_window)) = primary_window_query.iter().next() else {
+        return;
+    };
+
+    let Some(cursor_pos) = primary_window.physical_cursor_position() else {
+        return;
+    };
+
+    for wheel in wheel_events.read() {
+        if wheel.window != primary_window_entity {
+            continue;
+        }
+
+        let hit_path = runtime.get_hit_path((cursor_pos.x as f64, cursor_pos.y as f64).into());
+
+        let Some(scroll_entity) = resolve_scroll_view_target_from_hit_path(
+            &runtime,
+            &hit_path,
+            &parents,
+            &scroll_markers,
+        ) else {
+            continue;
+        };
+
+        let Ok(mut scroll_view) = scroll_views.get_mut(scroll_entity) else {
+            continue;
+        };
+
+        let factor = if wheel.unit == MouseScrollUnit::Line {
+            MouseScrollUnit::SCROLL_UNIT_CONVERSION_FACTOR
+        } else {
+            1.0
+        } as f32;
+
+        let before = scroll_view.scroll_offset;
+
+        if scroll_view.show_horizontal_scrollbar {
+            scroll_view.scroll_offset.x -= wheel.x * factor;
+        }
+        if scroll_view.show_vertical_scrollbar {
+            scroll_view.scroll_offset.y -= wheel.y * factor;
+        }
+        scroll_view.clamp_scroll_offset();
+
+        let after = scroll_view.scroll_offset;
+        if after != before {
+            ui_events.push_typed(
+                scroll_entity,
+                UiScrollViewChanged {
+                    scroll_view: scroll_entity,
+                    scroll_offset: after,
+                },
+            );
         }
     }
 }

@@ -22,8 +22,10 @@
 //! ```
 mod ecs_button_view;
 mod ecs_control_views;
+mod ecs_drag_thumb_view;
 mod entity_scope_view;
 mod opaque_hitbox_view;
+mod scroll_portal_view;
 
 pub use ecs_button_view::ecs_button as button;
 pub use ecs_button_view::{EcsButtonView, ecs_button};
@@ -36,8 +38,10 @@ pub use ecs_control_views::ecs_text_input as text_input;
 pub use ecs_control_views::{
     ecs_button_with_child, ecs_checkbox, ecs_slider, ecs_switch, ecs_text_button, ecs_text_input,
 };
+pub use ecs_drag_thumb_view::{EcsDragThumbView, ecs_drag_thumb};
 pub use entity_scope_view::entity_scope;
 pub use opaque_hitbox_view::{OpaqueHitboxView, opaque_hitbox, opaque_hitbox_for_entity};
+pub use scroll_portal_view::{ScrollPortalView, scroll_portal};
 pub use xilem_masonry::view::{
     button as xilem_button, button_any_pointer as xilem_button_any_pointer,
     checkbox as xilem_checkbox, slider as xilem_slider, switch as xilem_switch,

@@ -12,8 +12,9 @@ pub use core::*;
 use crate::ecs::{
     UiButton, UiCheckbox, UiColorPicker, UiColorPickerPanel, UiComboBox, UiDatePicker,
     UiDatePickerPanel, UiDialog, UiDropdownMenu, UiFlexColumn, UiFlexRow, UiGroupBox, UiLabel,
-    UiMenuBar, UiMenuBarItem, UiMenuItemPanel, UiOverlayRoot, UiRadioGroup, UiSlider, UiSpinner,
-    UiSplitPane, UiSwitch, UiTabBar, UiTable, UiTextInput, UiToast, UiTooltip, UiTreeNode,
+    UiMenuBar, UiMenuBarItem, UiMenuItemPanel, UiOverlayRoot, UiRadioGroup, UiScrollView, UiSlider,
+    UiSpinner, UiSplitPane, UiSwitch, UiTabBar, UiTable, UiTextInput, UiToast, UiTooltip,
+    UiTreeNode,
 };
 
 /// Register non-control foundational projectors.
@@ -42,6 +43,7 @@ pub fn register_builtin_projectors(registry: &mut UiProjectorRegistry) {
         .register_component::<UiComboBox>(dropdown::project_combo_box)
         .register_component::<UiDropdownMenu>(dropdown::project_dropdown_menu)
         .register_component::<UiRadioGroup>(widgets::project_radio_group)
+        .register_component::<UiScrollView>(widgets::project_scroll_view)
         .register_component::<UiTabBar>(widgets::project_tab_bar)
         .register_component::<UiTreeNode>(widgets::project_tree_node)
         .register_component::<UiTable>(widgets::project_table)

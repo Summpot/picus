@@ -2005,3 +2005,70 @@ fn third_party_ui_control_can_register_via_trait_api() {
 
     assert!(crate::find_template_part::<PartKnobIndicator>(app.world(), knob).is_some());
 }
+
+#[test]
+fn scroll_view_template_expands_required_parts() {
+    let mut world = World::new();
+
+    let scroll_view = world.spawn((crate::UiScrollView::default(),)).id();
+    crate::expand_builtin_control_templates(&mut world);
+
+    assert!(crate::find_template_part::<crate::PartScrollViewport>(&world, scroll_view).is_some());
+    assert!(
+        crate::find_template_part::<crate::PartScrollBarVertical>(&world, scroll_view).is_some()
+    );
+    assert!(
+        crate::find_template_part::<crate::PartScrollThumbVertical>(&world, scroll_view).is_some()
+    );
+    assert!(
+        crate::find_template_part::<crate::PartScrollBarHorizontal>(&world, scroll_view).is_some()
+    );
+    assert!(
+        crate::find_template_part::<crate::PartScrollThumbHorizontal>(&world, scroll_view)
+            .is_some()
+    );
+}
+
+#[test]
+fn drag_scroll_thumb_action_updates_scroll_view_offset() {
+    let mut world = World::new();
+    world.insert_resource(UiEventQueue::default());
+
+    let scroll_view = world
+        .spawn((crate::UiScrollView {
+            scroll_offset: bevy_math::Vec2::ZERO,
+            content_size: bevy_math::Vec2::new(400.0, 1200.0),
+            viewport_size: bevy_math::Vec2::new(300.0, 200.0),
+            show_horizontal_scrollbar: false,
+            show_vertical_scrollbar: true,
+        },))
+        .id();
+
+    crate::expand_builtin_control_templates(&mut world);
+
+    let thumb = crate::find_template_part::<crate::PartScrollThumbVertical>(&world, scroll_view)
+        .expect("vertical thumb part should exist");
+
+    world.resource::<UiEventQueue>().push_typed(
+        thumb,
+        crate::WidgetUiAction::DragScrollThumb {
+            thumb,
+            axis: crate::ScrollAxis::Vertical,
+            delta_pixels: 18.0,
+        },
+    );
+
+    crate::handle_widget_actions(&mut world);
+
+    let offset = world
+        .get::<crate::UiScrollView>(scroll_view)
+        .expect("scroll view should exist")
+        .scroll_offset;
+    assert!(offset.y > 0.0);
+
+    let changed = world
+        .resource_mut::<UiEventQueue>()
+        .drain_actions::<crate::UiScrollViewChanged>();
+    assert_eq!(changed.len(), 1);
+    assert_eq!(changed[0].entity, scroll_view);
+}
