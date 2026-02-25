@@ -8,7 +8,7 @@ use bevy_window::{PrimaryWindow, Window};
 use masonry::core::{Widget, WidgetRef};
 
 use crate::{
-    AnchoredTo, AutoDismiss, HasTooltip, Hovered, MasonryRuntime, OverlayAnchorRect,
+    AnchoredTo, AutoDismiss, HasTooltip, InteractionState, MasonryRuntime, OverlayAnchorRect,
     OverlayComputedPosition, OverlayConfig, OverlayPlacement, OverlayState, ScrollAxis, UiCheckbox,
     UiCheckboxChanged, UiOverlayRoot, UiRadioGroup, UiRadioGroupChanged, UiScrollView,
     UiScrollViewChanged, UiSlider, UiSliderChanged, UiSwitch, UiSwitchChanged, UiTabBar,
@@ -523,56 +523,65 @@ pub fn tick_toasts(
 
 /// Spawn or despawn tooltip overlay entities in response to hover state changes.
 ///
-/// When an entity that carries [`HasTooltip`] gains the [`Hovered`] marker a
+/// When an entity that carries [`HasTooltip`] becomes hovered (`InteractionState.hovered = true`) a
 /// [`UiTooltip`] overlay is spawned under [`UiOverlayRoot`] anchored to that
-/// entity.  When the entity loses the [`Hovered`] marker all tooltip overlays
+/// entity. When the entity is no longer hovered, all tooltip overlays
 /// anchored to it are despawned.
 pub fn handle_tooltip_hovers(
     mut commands: Commands,
     overlay_root: Query<Entity, With<UiOverlayRoot>>,
-    just_hovered: Query<(Entity, &HasTooltip), Added<Hovered>>,
+    tooltip_sources: Query<(Entity, &HasTooltip, Option<&InteractionState>)>,
     existing_tooltips: Query<(Entity, &UiTooltip)>,
-    mut removed_hover: RemovedComponents<Hovered>,
 ) {
-    // Spawn new tooltips for freshly hovered entities.
-    if let Ok(root) = overlay_root.single() {
-        for (entity, has_tooltip) in &just_hovered {
-            let already_spawned = existing_tooltips
-                .iter()
-                .any(|(_, tooltip)| tooltip.anchor == entity);
-            if already_spawned {
-                continue;
-            }
+    let Ok(root) = overlay_root.single() else {
+        return;
+    };
 
-            commands.spawn((
-                UiTooltip {
-                    text: has_tooltip.text.clone(),
-                    anchor: entity,
-                },
-                AnchoredTo(entity),
-                OverlayAnchorRect::default(),
-                OverlayConfig {
-                    placement: OverlayPlacement::Top,
-                    anchor: Some(entity),
-                    auto_flip: true,
-                },
-                OverlayState {
-                    is_modal: false,
-                    anchor: Some(entity),
-                },
-                OverlayComputedPosition::default(),
-                ChildOf(root),
-            ));
+    let mut hovered_sources = HashSet::new();
+    for (entity, _has_tooltip, state) in &tooltip_sources {
+        if state.is_some_and(|state| state.hovered) {
+            hovered_sources.insert(entity);
         }
     }
 
-    // Despawn tooltips whose source entity is no longer hovered.
-    let unhovered: Vec<Entity> = removed_hover.read().collect();
-    for source in unhovered {
-        for (tooltip_entity, tooltip) in &existing_tooltips {
-            if tooltip.anchor == source {
-                commands.entity(tooltip_entity).despawn();
-            }
+    // Spawn missing tooltips for hovered sources.
+    for (entity, has_tooltip, state) in &tooltip_sources {
+        if !state.is_some_and(|state| state.hovered) {
+            continue;
+        }
+
+        let already_spawned = existing_tooltips
+            .iter()
+            .any(|(_, tooltip)| tooltip.anchor == entity);
+        if already_spawned {
+            continue;
+        }
+
+        commands.spawn((
+            UiTooltip {
+                text: has_tooltip.text.clone(),
+                anchor: entity,
+            },
+            AnchoredTo(entity),
+            OverlayAnchorRect::default(),
+            OverlayConfig {
+                placement: OverlayPlacement::Top,
+                anchor: Some(entity),
+                auto_flip: true,
+            },
+            OverlayState {
+                is_modal: false,
+                anchor: Some(entity),
+            },
+            OverlayComputedPosition::default(),
+            ChildOf(root),
+        ));
+    }
+
+    // Despawn tooltips whose source is no longer hovered (or no longer exists / has tooltip).
+    for (tooltip_entity, tooltip) in &existing_tooltips {
+        if !hovered_sources.contains(&tooltip.anchor) {
+            commands.entity(tooltip_entity).despawn();
         }
     }
 }

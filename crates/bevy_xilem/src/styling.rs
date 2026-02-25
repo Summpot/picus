@@ -48,7 +48,30 @@ pub struct StyleClass(pub Vec<String>);
 
 /// Marker component for entities whose style cache needs recomputation.
 #[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[component(storage = "SparseSet")]
 pub struct StyleDirty;
+
+/// Transient interaction state used for pseudo-class styling.
+///
+/// This replaces frequently inserted/removed marker components like `Hovered`/`Pressed`.
+/// Keeping state in a stable component avoids archetype churn when the pointer moves.
+#[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct InteractionState {
+    pub hovered: bool,
+    pub pressed: bool,
+}
+
+/// Consolidated inline style overrides.
+///
+/// This is a "mega-component" that reduces archetype fragmentation vs inserting a
+/// handful of smaller optional style components.
+#[derive(Component, Debug, Clone, Copy, Default, PartialEq)]
+pub struct InlineStyle {
+    pub layout: LayoutStyle,
+    pub colors: ColorStyle,
+    pub text: TextStyle,
+    pub transition: Option<StyleTransition>,
+}
 
 /// Inline layout style that can be attached to entities.
 #[derive(Component, Debug, Clone, Copy, Default, PartialEq, Deserialize)]
@@ -111,14 +134,6 @@ pub enum TextAlign {
     Center,
     End,
 }
-
-/// Marker for hover pseudo-class state.
-#[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct Hovered;
-
-/// Marker for pressed pseudo-class state.
-#[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct Pressed;
 
 /// Transition settings for style animation.
 #[derive(Component, Debug, Clone, Copy, Default, PartialEq, Deserialize)]
@@ -1026,8 +1041,12 @@ fn selector_matches_entity(world: &World, entity: Entity, selector: &Selector) -
         Selector::Class(name) => world
             .get::<StyleClass>(entity)
             .is_some_and(|style_class| style_class.0.iter().any(|class| class == name)),
-        Selector::PseudoClass(PseudoClass::Hovered) => world.get::<Hovered>(entity).is_some(),
-        Selector::PseudoClass(PseudoClass::Pressed) => world.get::<Pressed>(entity).is_some(),
+        Selector::PseudoClass(PseudoClass::Hovered) => world
+            .get::<InteractionState>(entity)
+            .is_some_and(|state| state.hovered),
+        Selector::PseudoClass(PseudoClass::Pressed) => world
+            .get::<InteractionState>(entity)
+            .is_some_and(|state| state.pressed),
         Selector::And(selectors) => selectors
             .iter()
             .all(|selector| selector_matches_entity(world, entity, selector)),
@@ -1050,12 +1069,12 @@ fn selector_matches_class_context(
     match selector {
         Selector::Type(_) | Selector::TypeName(_) => false,
         Selector::Class(name) => has_class(name),
-        Selector::PseudoClass(PseudoClass::Hovered) => {
-            entity.is_some_and(|entity| world.get::<Hovered>(entity).is_some())
-        }
-        Selector::PseudoClass(PseudoClass::Pressed) => {
-            entity.is_some_and(|entity| world.get::<Pressed>(entity).is_some())
-        }
+        Selector::PseudoClass(PseudoClass::Hovered) => entity
+            .and_then(|entity| world.get::<InteractionState>(entity))
+            .is_some_and(|state| state.hovered),
+        Selector::PseudoClass(PseudoClass::Pressed) => entity
+            .and_then(|entity| world.get::<InteractionState>(entity))
+            .is_some_and(|state| state.pressed),
         Selector::And(selectors) => selectors
             .iter()
             .all(|selector| selector_matches_class_context(world, entity, selector, has_class)),
@@ -1121,12 +1140,24 @@ fn merged_for_entity(world: &World, entity: Entity) -> (StyleSetterValue, bool) 
         merged.transition = Some(StyleValue::value(*transition));
     }
 
+    // Consolidated inline overrides (preferred).
+    if let Some(inline) = world.get::<InlineStyle>(entity) {
+        merge_inline_layout_values(&mut merged.layout, &inline.layout);
+        merge_inline_color_values(&mut merged.colors, &inline.colors);
+        merge_inline_text_values(&mut merged.text, &inline.text);
+        if let Some(transition) = inline.transition {
+            merged.transition = Some(StyleValue::value(transition));
+        }
+    }
+
     (merged, matched_rule)
 }
 
 fn target_colors(world: &World, entity: Entity, colors: &ColorStyle) -> ResolvedColorStyle {
-    let hovered = world.get::<Hovered>(entity).is_some();
-    let pressed = world.get::<Pressed>(entity).is_some();
+    let (hovered, pressed) = world
+        .get::<InteractionState>(entity)
+        .map(|state| (state.hovered, state.pressed))
+        .unwrap_or((false, false));
 
     let mut resolved = ResolvedColorStyle {
         bg: colors.bg,
@@ -1430,6 +1461,7 @@ fn resolve_setter_values(
 fn has_any_style_source(world: &World, entity: Entity, matched_rule: bool) -> bool {
     matched_rule
         || world.get::<StyleClass>(entity).is_some()
+        || world.get::<InlineStyle>(entity).is_some()
         || world.get::<LayoutStyle>(entity).is_some()
         || world.get::<ColorStyle>(entity).is_some()
         || world.get::<TextStyle>(entity).is_some()
@@ -1492,8 +1524,8 @@ fn compute_resolved_style(world: &World, entity: Entity) -> Option<ResolvedStyle
 ///
 /// Cascading order:
 /// 1. class styles from [`StyleSheet`] and [`StyleClass`]
-/// 2. inline components [`LayoutStyle`], [`ColorStyle`], [`TextStyle`]
-/// 3. pseudo classes [`Hovered`] / [`Pressed`]
+/// 2. inline overrides from [`InlineStyle`] (or legacy inline components)
+/// 3. pseudo classes from [`InteractionState`]
 /// 4. animated override from [`CurrentColorStyle`] when present
 #[must_use]
 pub fn resolve_style(world: &World, entity: Entity) -> ResolvedStyle {
@@ -1557,7 +1589,7 @@ pub fn resolve_style_for_classes<'a>(
 /// Resolve style from class names while applying pseudo-state from a specific entity.
 ///
 /// This is useful when a UI component's visual style is class-driven, but hover/pressed
-/// state is tracked on an ECS entity via [`Hovered`] / [`Pressed`].
+/// state is tracked on an ECS entity via [`InteractionState`].
 #[must_use]
 pub fn resolve_style_for_entity_classes<'a>(
     world: &World,
@@ -1731,7 +1763,7 @@ fn clear_style_managed_tween(world: &mut World, entity: Entity) {
     }
 }
 
-/// Consume interaction events and synchronize [`Hovered`] / [`Pressed`] marker components.
+/// Consume interaction events and synchronize [`InteractionState`].
 pub fn sync_ui_interaction_markers(world: &mut World) {
     let events = world
         .resource_mut::<UiEventQueue>()
@@ -1742,31 +1774,22 @@ pub fn sync_ui_interaction_markers(world: &mut World) {
             continue;
         }
 
+        let before = world
+            .get::<InteractionState>(event.entity)
+            .copied()
+            .unwrap_or_default();
+
+        let mut after = before;
         match event.action {
-            UiInteractionEvent::PointerEntered => {
-                if world.get::<Hovered>(event.entity).is_none() {
-                    world.entity_mut(event.entity).insert(Hovered);
-                    world.entity_mut(event.entity).insert(StyleDirty);
-                }
-            }
-            UiInteractionEvent::PointerLeft => {
-                if world.get::<Hovered>(event.entity).is_some() {
-                    world.entity_mut(event.entity).remove::<Hovered>();
-                    world.entity_mut(event.entity).insert(StyleDirty);
-                }
-            }
-            UiInteractionEvent::PointerPressed => {
-                if world.get::<Pressed>(event.entity).is_none() {
-                    world.entity_mut(event.entity).insert(Pressed);
-                    world.entity_mut(event.entity).insert(StyleDirty);
-                }
-            }
-            UiInteractionEvent::PointerReleased => {
-                if world.get::<Pressed>(event.entity).is_some() {
-                    world.entity_mut(event.entity).remove::<Pressed>();
-                    world.entity_mut(event.entity).insert(StyleDirty);
-                }
-            }
+            UiInteractionEvent::PointerEntered => after.hovered = true,
+            UiInteractionEvent::PointerLeft => after.hovered = false,
+            UiInteractionEvent::PointerPressed => after.pressed = true,
+            UiInteractionEvent::PointerReleased => after.pressed = false,
+        }
+
+        if after != before {
+            world.entity_mut(event.entity).insert(after);
+            world.entity_mut(event.entity).insert(StyleDirty);
         }
     }
 }
@@ -1779,12 +1802,12 @@ pub fn mark_style_dirty(world: &mut World) {
     let mut dirty = {
         let mut query = world.query_filtered::<Entity, Or<(
             Changed<StyleClass>,
+            Changed<InlineStyle>,
             Changed<LayoutStyle>,
             Changed<ColorStyle>,
             Changed<TextStyle>,
             Changed<StyleTransition>,
-            Changed<Hovered>,
-            Changed<Pressed>,
+            Changed<InteractionState>,
         )>>();
         query.iter(world).collect::<Vec<_>>()
     };
@@ -1803,6 +1826,7 @@ pub fn mark_style_dirty(world: &mut World) {
         } else {
             let mut candidates = world.query_filtered::<Entity, Or<(
                 With<StyleClass>,
+                With<InlineStyle>,
                 With<LayoutStyle>,
                 With<ColorStyle>,
                 With<TextStyle>,
@@ -1837,6 +1861,7 @@ pub fn mark_style_dirty(world: &mut World) {
                 .iter(world)
                 .filter(|entity| {
                     world.get::<StyleClass>(*entity).is_none()
+                        && world.get::<InlineStyle>(*entity).is_none()
                         && world.get::<LayoutStyle>(*entity).is_none()
                         && world.get::<ColorStyle>(*entity).is_none()
                         && world.get::<TextStyle>(*entity).is_none()

@@ -104,9 +104,9 @@ pub mod prelude {
     pub use crate::{
         AppBevyXilemExt, AppI18n, AutoDismiss, BevyWindowOptions, BevyXilemBuiltinsPlugin,
         BevyXilemPlugin, BuiltinUiAction, ColorStyle, ComputedStyle, CurrentColorStyle,
-        EcsButtonView, HasTooltip, Hovered, LayoutStyle, LocalizeText, MasonryRuntime,
-        OverlayComputedPosition, OverlayConfig, OverlayMouseButtonCursor, OverlayPlacement,
-        OverlayPointerRoutingState, OverlayStack, OverlayState, OverlayUiAction, Pressed,
+        EcsButtonView, HasTooltip, InlineStyle, InteractionState, LayoutStyle, LocalizeText,
+        MasonryRuntime, OverlayComputedPosition, OverlayConfig, OverlayMouseButtonCursor,
+        OverlayPlacement, OverlayPointerRoutingState, OverlayStack, OverlayState, OverlayUiAction,
         ProjectionCtx, PseudoClass, ScrollAxis, Selector, SplitDirection, StopUiPointerPropagation,
         StyleClass, StyleDirty, StyleRule, StyleSetter, StyleSheet, StyleTransition,
         SyncAssetSource, SyncTextSource, SynthesizedUiViews, TargetColorStyle, TextStyle,

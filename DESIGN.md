@@ -121,9 +121,9 @@ To remove user-facing closure boilerplate:
 
 The runtime supports a data-driven style pipeline with four phases:
 
-1. **Inline style components:** `LayoutStyle`, `ColorStyle`, `TextStyle`, `StyleTransition`.
+1. **Inline style overrides:** `InlineStyle` (preferred consolidated override), or legacy split components `LayoutStyle`, `ColorStyle`, `TextStyle`, `StyleTransition`.
 2. **Selector-based stylesheet & cascade:** `StyleSheet` resource mapped from `.ron` files.
-3. **Pseudo classes:** `Hovered` / `Pressed` synchronized from interaction events.
+3. **Pseudo classes:** `InteractionState { hovered, pressed }` synchronized from interaction events (mutated in-place to avoid archetype churn).
 4. **Computed-style cache & incremental invalidation:** Resolves final traits via `StyleDirty` / `ComputedStyle`.
 
 ### 6.1 Smooth transitions

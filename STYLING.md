@@ -21,7 +21,7 @@ The styling system is designed to be:
 
 1. **Data-driven**: styles are ECS components/resources, not ad-hoc widget chains.
 2. **Composable**: class styles (`StyleClass` + `StyleSheet`) plus inline overrides.
-3. **Interactive**: pseudo states (`Hovered`, `Pressed`) driven from UI interaction events.
+3. **Interactive**: pseudo states (`InteractionState.hovered`, `InteractionState.pressed`) driven from UI interaction events.
 4. **Animated**: smooth color transitions between interaction states via tweening.
 
 ---
@@ -31,6 +31,16 @@ The styling system is designed to be:
 All style primitives live in `crates/bevy_xilem/src/styling.rs`.
 
 ### 2.1 Inline style components
+
+Inline overrides can be represented either as a single consolidated component (`InlineStyle`) or as legacy split components.
+
+- `InlineStyle` (preferred)
+  - `layout: LayoutStyle`
+  - `colors: ColorStyle`
+  - `text: TextStyle`
+  - `transition: Option<StyleTransition>`
+
+Legacy split inline overrides (still supported):
 
 - `LayoutStyle`
   - `padding: Option<f64>`
@@ -59,10 +69,11 @@ Convenience APIs still exist for class-only rules:
 - `StyleSheet::set_class("name", setter)`
 - `StyleSheet::with_class("name", setter)`
 
-### 2.3 Pseudo-state markers
+### 2.3 Pseudo state
 
-- `Hovered`
-- `Pressed`
+Pseudo classes in selectors (`:hover`, `:pressed`) are backed by a stable ECS component:
+
+- `InteractionState { hovered: bool, pressed: bool }`
 
 ### 2.4 Cache + invalidation runtime state
 
@@ -89,7 +100,7 @@ their descendants so `A B`-style rules stay correct after ancestor class/pseudo 
 
 1. selector-matched rules from `StyleSheet` (`Type`/`Class`/`PseudoClass`/`And`)
   including descendant relations (`Descendant(ancestor, descendant)`)
-2. inline component overrides (`LayoutStyle`, `ColorStyle`, `TextStyle`, `StyleTransition`)
+2. inline component overrides (`InlineStyle`, or legacy `LayoutStyle`/`ColorStyle`/`TextStyle`/`StyleTransition`)
 3. compatibility pseudo color overrides (`hover_*`, `pressed_*`) from `ColorStyle`
 4. animated override from `CurrentColorStyle` if present
 
@@ -167,7 +178,9 @@ Interaction events are emitted by ECS-backed UI components (notably the custom E
 - `PointerPressed`
 - `PointerReleased`
 
-`sync_ui_interaction_markers` consumes these events and mutates `Hovered`/`Pressed` components.
+`sync_ui_interaction_markers` consumes these events and updates `InteractionState`.
+This is intentionally done by mutating a stable component in-place (rather than inserting/removing marker components)
+to avoid frequent archetype changes.
 
 That state then affects color target selection during style resolution.
 
@@ -233,7 +246,7 @@ To make a UI component animate on interaction:
 
 1. define base and hover/pressed colors in `ColorStyle`
 2. set `transition: Some(StyleTransition { duration: ... })`
-3. ensure UI component path emits interaction events (`Hovered`/`Pressed` updates) so entities become `StyleDirty`
+3. ensure UI component path emits interaction events (updating `InteractionState`) so entities become `StyleDirty`
 4. apply style with projector helpers
 
 ---

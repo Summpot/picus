@@ -1238,7 +1238,9 @@ fn build_showcase_app() -> App {
         BevyXilemPlugin,
     ))
     .insert_resource(AppI18n::new(parse_locale("en-US")))
-    .register_xilem_font(SyncAssetSource::FilePath("assets/fonts/Inter-Regular.otf"))
+    .register_xilem_font(SyncAssetSource::FilePath(
+        "assets/fonts/NotoSans-Regular.ttf",
+    ))
     .register_xilem_font(SyncAssetSource::FilePath(
         "assets/fonts/NotoSansCJKsc-Regular.otf",
     ))

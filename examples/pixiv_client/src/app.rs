@@ -409,7 +409,9 @@ fn ensure_task_pool_initialized() {
 }
 
 fn register_bridge_fonts(app: &mut App) {
-    app.register_xilem_font(SyncAssetSource::FilePath("assets/fonts/Inter-Regular.otf"));
+    app.register_xilem_font(SyncAssetSource::FilePath(
+        "assets/fonts/NotoSans-Regular.ttf",
+    ));
     app.register_xilem_font(SyncAssetSource::FilePath(
         "assets/fonts/NotoSansCJKsc-Regular.otf",
     ));
@@ -1903,14 +1905,19 @@ fn animate_card_hover(world: &mut World) {
     let entities = {
         let mut q = world.query::<(
             Entity,
-            Option<&bevy_xilem::Hovered>,
+            Option<&bevy_xilem::InteractionState>,
             &CardHoverFlag,
             &CardAnimState,
             &Illust,
         )>();
         q.iter(world)
             .map(|(entity, hovered, hover_flag, anim, _)| {
-                (entity, hovered.is_some(), hover_flag.0, *anim)
+                (
+                    entity,
+                    hovered.is_some_and(|state| state.hovered),
+                    hover_flag.0,
+                    *anim,
+                )
             })
             .collect::<Vec<_>>()
     };

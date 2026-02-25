@@ -7,7 +7,7 @@ use std::{
 };
 
 use crate::{
-    AppBevyXilemExt, AppI18n, BevyXilemPlugin, ColorStyle, Hovered, Pressed, ProjectionCtx,
+    AppBevyXilemExt, AppI18n, BevyXilemPlugin, ColorStyle, InteractionState, ProjectionCtx,
     Selector, StyleRule, StyleSetter, StyleSheet, SyncTextSource, UiEventQueue,
     UiProjectorRegistry, UiRoot, UiView, bubble_ui_pointer_events, ecs_button,
     ensure_overlay_defaults, ensure_overlay_root, ensure_overlay_root_entity,
@@ -407,7 +407,12 @@ fn resolve_style_for_entity_classes_applies_hover_pseudo_state() {
     );
     world.insert_resource(sheet);
 
-    let entity = world.spawn((Hovered,)).id();
+    let entity = world
+        .spawn((InteractionState {
+            hovered: true,
+            pressed: false,
+        },))
+        .id();
     let resolved = resolve_style_for_entity_classes(&world, entity, ["test.button"]);
 
     assert_eq!(resolved.colors.bg, Some(hover));
@@ -464,8 +469,10 @@ fn selector_and_rule_applies_hover_and_pressed_states() {
     let entity = world
         .spawn((
             crate::StyleClass(vec!["test.button".to_string()]),
-            Hovered,
-            Pressed,
+            InteractionState {
+                hovered: true,
+                pressed: true,
+            },
         ))
         .id();
 
@@ -623,7 +630,12 @@ fn pointer_left_does_not_clear_pressed_marker() {
     let mut world = World::new();
     world.insert_resource(UiEventQueue::default());
 
-    let entity = world.spawn((crate::Hovered, crate::Pressed)).id();
+    let entity = world
+        .spawn((crate::InteractionState {
+            hovered: true,
+            pressed: true,
+        },))
+        .id();
 
     world
         .resource::<UiEventQueue>()
@@ -631,8 +643,11 @@ fn pointer_left_does_not_clear_pressed_marker() {
 
     crate::sync_ui_interaction_markers(&mut world);
 
-    assert!(world.get::<crate::Hovered>(entity).is_none());
-    assert!(world.get::<crate::Pressed>(entity).is_some());
+    let state = world
+        .get::<crate::InteractionState>(entity)
+        .expect("interaction state should exist");
+    assert!(!state.hovered);
+    assert!(state.pressed);
 }
 
 #[test]
@@ -2184,7 +2199,10 @@ fn tooltip_hover_spawns_and_despawns_overlay_entity() {
         .spawn((
             crate::UiButton::new("Hover me"),
             crate::HasTooltip::new("Tooltip text"),
-            crate::Hovered,
+            crate::InteractionState {
+                hovered: true,
+                pressed: false,
+            },
             ChildOf(root),
         ))
         .id();
@@ -2212,7 +2230,10 @@ fn tooltip_hover_spawns_and_despawns_overlay_entity() {
 
     app.world_mut()
         .entity_mut(source)
-        .remove::<crate::Hovered>();
+        .insert(crate::InteractionState {
+            hovered: false,
+            pressed: false,
+        });
     app.update();
 
     let mut tooltip_query = app.world_mut().query::<&crate::UiTooltip>();
