@@ -2075,8 +2075,77 @@ fn stylesheet_ron_parser_supports_tokens_and_var_values() {
     assert!(sheet.rules[0].setter.layout.align_items.is_some());
     assert!(sheet.rules[0].setter.layout.scale.is_some());
     assert!(sheet.rules[0].setter.text.text_align.is_some());
+    assert!(matches!(
+        sheet.rules[0].setter.colors.bg.as_ref(),
+        Some(crate::StyleValue::Var(token)) if token == "demo-bg"
+    ));
+    assert!(matches!(
+        sheet.rules[0].setter.colors.text.as_ref(),
+        Some(crate::StyleValue::Value(color))
+            if *color == crate::xilem::Color::from_rgb8(0xF0, 0xF0, 0xF0)
+    ));
 
     assert!(matches!(&sheet.rules[1].selector, crate::Selector::And(parts) if !parts.is_empty()));
+    assert!(matches!(
+        sheet.rules[1].setter.colors.hover_bg.as_ref(),
+        Some(crate::StyleValue::Value(color))
+            if *color == crate::xilem::Color::from_rgba8(0x11, 0x22, 0x33, 0xFF)
+    ));
+}
+
+#[test]
+fn stylesheet_hex_literal_for_bg_is_not_treated_as_token_var() {
+    let ron = r##"(
+    rules: [
+        (
+            selector: Class("demo.hex"),
+            setter: (
+                colors: (bg: Hex("#FFFFFF14")),
+            ),
+        ),
+    ],
+)"##;
+
+    let sheet =
+        crate::styling::parse_stylesheet_ron_for_tests(ron).expect("stylesheet ron should parse");
+
+    assert!(matches!(
+        sheet.rules[0].setter.colors.bg.as_ref(),
+        Some(crate::StyleValue::Value(color))
+            if *color == crate::xilem::Color::from_rgba8(0xFF, 0xFF, 0xFF, 0x14)
+    ));
+}
+
+#[test]
+fn embedded_fluent_theme_color_fields_do_not_parse_hex_literals_as_var_tokens() {
+    let sheet = crate::styling::parse_stylesheet_ron_for_tests(
+        crate::styling::BUILTIN_FLUENT_DARK_THEME_RON,
+    )
+    .expect("embedded fluent theme should parse");
+
+    let assert_not_hex_var =
+        |value: &Option<crate::StyleValue<crate::xilem::Color>>, field: &str, selector: &str| {
+            if let Some(crate::StyleValue::Var(token)) = value {
+                assert!(
+                    !token.trim().starts_with('#'),
+                    "{selector} {field} parsed as Var token `{token}` but should be a literal color"
+                );
+            }
+        };
+
+    for rule in &sheet.rules {
+        let selector = format!("{:?}", rule.selector);
+        let colors = &rule.setter.colors;
+        assert_not_hex_var(&colors.bg, "bg", &selector);
+        assert_not_hex_var(&colors.text, "text", &selector);
+        assert_not_hex_var(&colors.border, "border", &selector);
+        assert_not_hex_var(&colors.hover_bg, "hover_bg", &selector);
+        assert_not_hex_var(&colors.hover_text, "hover_text", &selector);
+        assert_not_hex_var(&colors.hover_border, "hover_border", &selector);
+        assert_not_hex_var(&colors.pressed_bg, "pressed_bg", &selector);
+        assert_not_hex_var(&colors.pressed_text, "pressed_text", &selector);
+        assert_not_hex_var(&colors.pressed_border, "pressed_border", &selector);
+    }
 }
 
 #[test]

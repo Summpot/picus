@@ -2764,20 +2764,39 @@ impl StyleSetterDef {
 }
 
 impl ColorStyleDef {
+    fn into_color_style_value(
+        value: Option<StyleValueDef<ColorDef>>,
+    ) -> io::Result<Option<StyleValue<Color>>> {
+        match value {
+            None => Ok(None),
+            Some(StyleValueDef::Value(value)) => Ok(Some(StyleValue::Value(value.into_color()?))),
+            Some(StyleValueDef::Var(name)) => {
+                // `Hex("#RRGGBB[AA]")` may be deserialized as a bare string payload on some
+                // enum paths, which can be misclassified as `Var("#...")`. Recover by
+                // recognizing hex literals here and treating them as literal colors.
+                let trimmed = name.trim();
+                if trimmed.starts_with('#')
+                    && let Ok(color) = parse_hex_color(trimmed)
+                {
+                    return Ok(Some(StyleValue::Value(color)));
+                }
+
+                Ok(Some(StyleValue::Var(name)))
+            }
+        }
+    }
+
     fn into_color_style_values(self) -> io::Result<ColorStyleValue> {
         Ok(ColorStyleValue {
-            bg: into_style_value(self.bg.into_option(), ColorDef::into_color)?,
-            text: into_style_value(self.text_color.into_option(), ColorDef::into_color)?,
-            border: into_style_value(self.border.into_option(), ColorDef::into_color)?,
-            hover_bg: into_style_value(self.hover_bg.into_option(), ColorDef::into_color)?,
-            hover_text: into_style_value(self.hover_text.into_option(), ColorDef::into_color)?,
-            hover_border: into_style_value(self.hover_border.into_option(), ColorDef::into_color)?,
-            pressed_bg: into_style_value(self.pressed_bg.into_option(), ColorDef::into_color)?,
-            pressed_text: into_style_value(self.pressed_text.into_option(), ColorDef::into_color)?,
-            pressed_border: into_style_value(
-                self.pressed_border.into_option(),
-                ColorDef::into_color,
-            )?,
+            bg: Self::into_color_style_value(self.bg.into_option())?,
+            text: Self::into_color_style_value(self.text_color.into_option())?,
+            border: Self::into_color_style_value(self.border.into_option())?,
+            hover_bg: Self::into_color_style_value(self.hover_bg.into_option())?,
+            hover_text: Self::into_color_style_value(self.hover_text.into_option())?,
+            hover_border: Self::into_color_style_value(self.hover_border.into_option())?,
+            pressed_bg: Self::into_color_style_value(self.pressed_bg.into_option())?,
+            pressed_text: Self::into_color_style_value(self.pressed_text.into_option())?,
+            pressed_border: Self::into_color_style_value(self.pressed_border.into_option())?,
         })
     }
 }
