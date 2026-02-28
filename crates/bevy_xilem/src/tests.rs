@@ -236,6 +236,40 @@ fn active_style_variant_api_switches_between_dark_light_and_high_contrast() {
 }
 
 #[test]
+fn load_style_sheet_ron_applies_and_persists_across_variant_switches() {
+    let mut app = App::new();
+    app.add_plugins(BevyXilemPlugin).load_style_sheet_ron(
+        r##"(
+            rules: [
+                (
+                    selector: Class("demo.embedded"),
+                    setter: (
+                        colors: (
+                            bg: Hex("#123456"),
+                        ),
+                    ),
+                ),
+            ],
+        )"##,
+    );
+
+    let entity = app
+        .world_mut()
+        .spawn((crate::StyleClass(vec!["demo.embedded".to_string()]),))
+        .id();
+
+    app.update();
+
+    let expected = crate::xilem::Color::from_rgb8(0x12, 0x34, 0x56);
+    assert_eq!(resolve_style(app.world(), entity).colors.bg, Some(expected));
+
+    crate::set_active_style_variant_by_name(app.world_mut(), "light");
+    app.update();
+
+    assert_eq!(resolve_style(app.world(), entity).colors.bg, Some(expected));
+}
+
+#[test]
 fn parse_stylesheet_variants_merges_default_rules_and_variant_overrides() {
     let ron_text = r##"(
         default_variant: "dark",

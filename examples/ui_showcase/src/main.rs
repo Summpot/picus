@@ -1043,30 +1043,30 @@ fn build_showcase_app() -> App {
         TextPlugin::default(),
         BevyXilemPlugin,
     ))
-    .load_style_sheet("assets/themes/ui_showcase.ron")
+    .load_style_sheet_ron(include_str!("../assets/themes/ui_showcase.ron"))
     .insert_resource(AppI18n::new(parse_locale("en-US")))
-    .register_xilem_font(SyncAssetSource::FilePath(
-        "assets/fonts/NotoSans-Regular.ttf",
-    ))
-    .register_xilem_font(SyncAssetSource::FilePath(
-        "assets/fonts/NotoSansCJKsc-Regular.otf",
-    ))
-    .register_xilem_font(SyncAssetSource::FilePath(
-        "assets/fonts/NotoSansCJKjp-Regular.otf",
-    ))
+    .register_xilem_font(SyncAssetSource::Bytes(include_bytes!(
+        "../../../assets/fonts/NotoSans-Regular.ttf",
+    )))
+    .register_xilem_font(SyncAssetSource::Bytes(include_bytes!(
+        "../../../assets/fonts/NotoSansCJKsc-Regular.otf",
+    )))
+    .register_xilem_font(SyncAssetSource::Bytes(include_bytes!(
+        "../../../assets/fonts/NotoSansCJKjp-Regular.otf",
+    )))
     .register_i18n_bundle(
         "en-US",
-        SyncTextSource::FilePath("assets/locales/en-US/main.ftl"),
+        SyncTextSource::String(include_str!("../assets/locales/en-US/main.ftl")),
         cjk_fallback_font_stack(),
     )
     .register_i18n_bundle(
         "zh-CN",
-        SyncTextSource::FilePath("assets/locales/zh-CN/main.ftl"),
+        SyncTextSource::String(include_str!("../assets/locales/zh-CN/main.ftl")),
         zh_cjk_fallback_font_stack(),
     )
     .register_i18n_bundle(
         "ja-JP",
-        SyncTextSource::FilePath("assets/locales/ja-JP/main.ftl"),
+        SyncTextSource::String(include_str!("../assets/locales/ja-JP/main.ftl")),
         ja_cjk_fallback_font_stack(),
     )
     .insert_resource(ShowcaseState::default())
@@ -1085,4 +1085,32 @@ fn main() -> Result<(), EventLoopError> {
     run_app_with_window_options(build_showcase_app(), "UI Showcase", |options| {
         options.with_initial_inner_size(LogicalSize::new(1220.0, 780.0))
     })
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn embedded_showcase_theme_ron_parses() {
+        bevy_xilem::parse_stylesheet_ron(include_str!("../assets/themes/ui_showcase.ron"))
+            .expect("embedded ui_showcase stylesheet should parse");
+    }
+
+    #[test]
+    fn showcase_locale_ids_do_not_use_dot_namespace() {
+        let locales = [
+            ("en-US", include_str!("../assets/locales/en-US/main.ftl")),
+            ("zh-CN", include_str!("../assets/locales/zh-CN/main.ftl")),
+            ("ja-JP", include_str!("../assets/locales/ja-JP/main.ftl")),
+        ];
+
+        for (locale, content) in locales {
+            assert!(
+                !content
+                    .lines()
+                    .map(str::trim_start)
+                    .any(|line| line.starts_with("showcase.")),
+                "{locale} locale still contains dot-separated showcase message IDs"
+            );
+        }
+    }
 }

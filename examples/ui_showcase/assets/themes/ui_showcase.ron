@@ -176,11 +176,11 @@
       selector: Class("showcase.theme.button.danger"),
       setter: (
         colors: (
-          bg: Color(Hex("#D64545")),
-          hover_bg: Color(Hex("#E25A5A")),
-          pressed_bg: Color(Hex("#AF2F2F")),
-          border: Color(Hex("#D64545")),
-          text: Color(Hex("#FFF1F1")),
+          bg: Hex("#D64545"),
+          hover_bg: Hex("#E25A5A"),
+          pressed_bg: Hex("#AF2F2F"),
+          border: Hex("#D64545"),
+          text: Hex("#FFF1F1"),
         ),
       ),
     ),
@@ -188,9 +188,9 @@
       selector: Class("showcase.theme.button.outline"),
       setter: (
         colors: (
-          bg: Color(Hex("#00000000")),
-          hover_bg: Color(Hex("#4E66994D")),
-          pressed_bg: Color(Hex("#3E568566")),
+          bg: Hex("#00000000"),
+          hover_bg: Hex("#4E66994D"),
+          pressed_bg: Hex("#3E568566"),
           border: Var("border-default"),
           text: Var("text-primary"),
         ),

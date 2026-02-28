@@ -428,21 +428,21 @@ fn ensure_task_pool_initialized() {
 }
 
 fn register_bridge_fonts(app: &mut App) {
-    app.register_xilem_font(SyncAssetSource::FilePath(
-        "assets/fonts/NotoSans-Regular.ttf",
-    ));
-    app.register_xilem_font(SyncAssetSource::FilePath(
-        "assets/fonts/NotoSansCJKsc-Regular.otf",
-    ));
-    app.register_xilem_font(SyncAssetSource::FilePath(
-        "assets/fonts/NotoSansCJKjp-Regular.otf",
-    ));
-    app.register_xilem_font(SyncAssetSource::FilePath(
-        "assets/fonts/NotoSansCJKtc-Regular.otf",
-    ));
-    app.register_xilem_font(SyncAssetSource::FilePath(
-        "assets/fonts/NotoSansCJKkr-Regular.otf",
-    ));
+    app.register_xilem_font(SyncAssetSource::Bytes(include_bytes!(
+        "../../../assets/fonts/NotoSans-Regular.ttf",
+    )));
+    app.register_xilem_font(SyncAssetSource::Bytes(include_bytes!(
+        "../../../assets/fonts/NotoSansCJKsc-Regular.otf",
+    )));
+    app.register_xilem_font(SyncAssetSource::Bytes(include_bytes!(
+        "../../../assets/fonts/NotoSansCJKjp-Regular.otf",
+    )));
+    app.register_xilem_font(SyncAssetSource::Bytes(include_bytes!(
+        "../../../assets/fonts/NotoSansCJKtc-Regular.otf",
+    )));
+    app.register_xilem_font(SyncAssetSource::Bytes(include_bytes!(
+        "../../../assets/fonts/NotoSansCJKkr-Regular.otf",
+    )));
 }
 
 fn ease_elastic_out(t: f32) -> f32 {
@@ -2278,11 +2278,11 @@ fn build_app(mut activation_service: Option<ActivationService>) -> App {
         TextPlugin::default(),
         BevyXilemPlugin,
     ))
-    .load_style_sheet("assets/themes/pixiv_client.ron")
+    .load_style_sheet_ron(include_str!("../assets/themes/pixiv_client.ron"))
     .insert_resource(AppI18n::new(parse_locale("en-US")))
     .register_i18n_bundle(
         "en-US",
-        SyncTextSource::FilePath("assets/locales/en-US/main.ftl"),
+        SyncTextSource::String(include_str!("../assets/locales/en-US/main.ftl")),
         vec![
             "Inter",
             "Noto Sans CJK SC",
@@ -2294,7 +2294,7 @@ fn build_app(mut activation_service: Option<ActivationService>) -> App {
     )
     .register_i18n_bundle(
         "zh-CN",
-        SyncTextSource::FilePath("assets/locales/zh-CN/main.ftl"),
+        SyncTextSource::String(include_str!("../assets/locales/zh-CN/main.ftl")),
         vec![
             "Inter",
             "Noto Sans CJK SC",
@@ -2306,7 +2306,7 @@ fn build_app(mut activation_service: Option<ActivationService>) -> App {
     )
     .register_i18n_bundle(
         "ja-JP",
-        SyncTextSource::FilePath("assets/locales/ja-JP/main.ftl"),
+        SyncTextSource::String(include_str!("../assets/locales/ja-JP/main.ftl")),
         vec![
             "Inter",
             "Noto Sans CJK JP",
@@ -2535,18 +2535,9 @@ mod tests {
     #[test]
     fn pixiv_locale_ids_do_not_use_dot_namespace() {
         let locales = [
-            (
-                "en-US",
-                include_str!("../../../assets/locales/en-US/main.ftl"),
-            ),
-            (
-                "zh-CN",
-                include_str!("../../../assets/locales/zh-CN/main.ftl"),
-            ),
-            (
-                "ja-JP",
-                include_str!("../../../assets/locales/ja-JP/main.ftl"),
-            ),
+            ("en-US", include_str!("../assets/locales/en-US/main.ftl")),
+            ("zh-CN", include_str!("../assets/locales/zh-CN/main.ftl")),
+            ("ja-JP", include_str!("../assets/locales/ja-JP/main.ftl")),
         ];
 
         for (locale, content) in locales {
@@ -2558,5 +2549,11 @@ mod tests {
                 "{locale} locale still contains dot-separated pixiv message IDs"
             );
         }
+    }
+
+    #[test]
+    fn embedded_pixiv_theme_ron_parses() {
+        bevy_xilem::parse_stylesheet_ron(include_str!("../assets/themes/pixiv_client.ron"))
+            .expect("embedded pixiv_client stylesheet should parse");
     }
 }

@@ -47,7 +47,7 @@
           size: 58.0,
         ),
         colors: (
-          text: Color(Hex("#F5B45B")),
+          text: Hex("#F5B45B"),
         ),
       ),
     ),
@@ -136,9 +136,9 @@
       selector: Class("g2048.status.running"),
       setter: (
         colors: (
-          bg: Color(Hex("#203354")),
-          border: Color(Hex("#3C5B89")),
-          text: Color(Hex("#D8EAFF")),
+          bg: Hex("#203354"),
+          border: Hex("#3C5B89"),
+          text: Hex("#D8EAFF"),
         ),
       ),
     ),
@@ -146,9 +146,9 @@
       selector: Class("g2048.status.won"),
       setter: (
         colors: (
-          bg: Color(Hex("#3E2F06")),
-          border: Color(Hex("#B98B17")),
-          text: Color(Hex("#FFEEB5")),
+          bg: Hex("#3E2F06"),
+          border: Hex("#B98B17"),
+          text: Hex("#FFEEB5"),
         ),
       ),
     ),
@@ -156,9 +156,9 @@
       selector: Class("g2048.status.over"),
       setter: (
         colors: (
-          bg: Color(Hex("#4D2026")),
-          border: Color(Hex("#AA4B59")),
-          text: Color(Hex("#FFD5DB")),
+          bg: Hex("#4D2026"),
+          border: Hex("#AA4B59"),
+          text: Hex("#FFD5DB"),
         ),
       ),
     ),
@@ -203,8 +203,8 @@
       selector: Class("g2048.tile.empty"),
       setter: (
         colors: (
-          bg: Color(Hex("#313744")),
-          border: Color(Hex("#42495A")),
+          bg: Hex("#313744"),
+          border: Hex("#42495A"),
         ),
       ),
     ),
@@ -212,9 +212,9 @@
       selector: Class("g2048.tile.v2"),
       setter: (
         colors: (
-          bg: Color(Hex("#EEE4DA")),
-          border: Color(Hex("#D1C5B6")),
-          text: Color(Hex("#5B534B")),
+          bg: Hex("#EEE4DA"),
+          border: Hex("#D1C5B6"),
+          text: Hex("#5B534B"),
         ),
       ),
     ),
@@ -222,9 +222,9 @@
       selector: Class("g2048.tile.v4"),
       setter: (
         colors: (
-          bg: Color(Hex("#EDE0C8")),
-          border: Color(Hex("#CFC09E")),
-          text: Color(Hex("#5A5145")),
+          bg: Hex("#EDE0C8"),
+          border: Hex("#CFC09E"),
+          text: Hex("#5A5145"),
         ),
       ),
     ),
@@ -232,9 +232,9 @@
       selector: Class("g2048.tile.v8"),
       setter: (
         colors: (
-          bg: Color(Hex("#F2B179")),
-          border: Color(Hex("#D8915B")),
-          text: Color(Hex("#FFFAF2")),
+          bg: Hex("#F2B179"),
+          border: Hex("#D8915B"),
+          text: Hex("#FFFAF2"),
         ),
       ),
     ),
@@ -242,9 +242,9 @@
       selector: Class("g2048.tile.v16"),
       setter: (
         colors: (
-          bg: Color(Hex("#F59563")),
-          border: Color(Hex("#DA7648")),
-          text: Color(Hex("#FFF9EF")),
+          bg: Hex("#F59563"),
+          border: Hex("#DA7648"),
+          text: Hex("#FFF9EF"),
         ),
       ),
     ),
@@ -252,9 +252,9 @@
       selector: Class("g2048.tile.v32"),
       setter: (
         colors: (
-          bg: Color(Hex("#F67C5F")),
-          border: Color(Hex("#D0634A")),
-          text: Color(Hex("#FFF5EC")),
+          bg: Hex("#F67C5F"),
+          border: Hex("#D0634A"),
+          text: Hex("#FFF5EC"),
         ),
       ),
     ),
@@ -262,9 +262,9 @@
       selector: Class("g2048.tile.v64"),
       setter: (
         colors: (
-          bg: Color(Hex("#F65E3B")),
-          border: Color(Hex("#CB4A2A")),
-          text: Color(Hex("#FFF4ED")),
+          bg: Hex("#F65E3B"),
+          border: Hex("#CB4A2A"),
+          text: Hex("#FFF4ED"),
         ),
       ),
     ),
@@ -275,9 +275,9 @@
           size: 24.0,
         ),
         colors: (
-          bg: Color(Hex("#EDCF72")),
-          border: Color(Hex("#CFB45A")),
-          text: Color(Hex("#F9FAF8")),
+          bg: Hex("#EDCF72"),
+          border: Hex("#CFB45A"),
+          text: Hex("#F9FAF8"),
         ),
       ),
     ),
@@ -288,9 +288,9 @@
           size: 24.0,
         ),
         colors: (
-          bg: Color(Hex("#EDCC61")),
-          border: Color(Hex("#CDAF4A")),
-          text: Color(Hex("#F9FAF8")),
+          bg: Hex("#EDCC61"),
+          border: Hex("#CDAF4A"),
+          text: Hex("#F9FAF8"),
         ),
       ),
     ),
@@ -301,9 +301,9 @@
           size: 24.0,
         ),
         colors: (
-          bg: Color(Hex("#EDC850")),
-          border: Color(Hex("#CBAA37")),
-          text: Color(Hex("#F9FAF8")),
+          bg: Hex("#EDC850"),
+          border: Hex("#CBAA37"),
+          text: Hex("#F9FAF8"),
         ),
       ),
     ),
@@ -314,9 +314,9 @@
           size: 20.0,
         ),
         colors: (
-          bg: Color(Hex("#EDC53F")),
-          border: Color(Hex("#C7A22A")),
-          text: Color(Hex("#FEFAF1")),
+          bg: Hex("#EDC53F"),
+          border: Hex("#C7A22A"),
+          text: Hex("#FEFAF1"),
         ),
       ),
     ),
@@ -327,9 +327,9 @@
           size: 20.0,
         ),
         colors: (
-          bg: Color(Hex("#EDC22E")),
-          border: Color(Hex("#C89C13")),
-          text: Color(Hex("#FFFAF2")),
+          bg: Hex("#EDC22E"),
+          border: Hex("#C89C13"),
+          text: Hex("#FFFAF2"),
         ),
       ),
     ),
@@ -340,9 +340,9 @@
           size: 18.0,
         ),
         colors: (
-          bg: Color(Hex("#6241F2")),
-          border: Color(Hex("#8869FF")),
-          text: Color(Hex("#F3EEFF")),
+          bg: Hex("#6241F2"),
+          border: Hex("#8869FF"),
+          text: Hex("#F3EEFF"),
         ),
       ),
     ),
@@ -380,9 +380,9 @@
       selector: Class("g2048.ui-component.button.primary"),
       setter: (
         colors: (
-          bg: Color(Hex("#355385")),
-          border: Color(Hex("#5A7AB2")),
-          text: Color(Hex("#EAF0FF")),
+          bg: Hex("#355385"),
+          border: Hex("#5A7AB2"),
+          text: Hex("#EAF0FF"),
         ),
       ),
     ),
@@ -390,9 +390,9 @@
       selector: Class("g2048.ui-component.button.secondary"),
       setter: (
         colors: (
-          bg: Color(Hex("#4A4F5C")),
-          border: Color(Hex("#757B8D")),
-          text: Color(Hex("#EEF2FC")),
+          bg: Hex("#4A4F5C"),
+          border: Hex("#757B8D"),
+          text: Hex("#EEF2FC"),
         ),
       ),
     ),
@@ -400,9 +400,9 @@
       selector: Class("g2048.ui-component.button.danger"),
       setter: (
         colors: (
-          bg: Color(Hex("#7A2F3A")),
-          border: Color(Hex("#B54F5F")),
-          text: Color(Hex("#FFE8EC")),
+          bg: Hex("#7A2F3A"),
+          border: Hex("#B54F5F"),
+          text: Hex("#FFE8EC"),
         ),
       ),
     ),

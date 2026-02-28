@@ -9,6 +9,7 @@ use unic_langid::LanguageIdentifier;
 use crate::{
     ActiveStyleSheetAsset, AppI18n, MasonryRuntime, ProjectionCtx, StyleSheet, StyleTypeRegistry,
     UiEventQueue, UiProjector, UiProjectorRegistry, UiView, XilemFontBridge,
+    apply_active_stylesheet_ron,
     components::{
         RegisteredUiComponentTypes, UiComponentTemplate, expand_added_ui_component_templates,
     },
@@ -119,6 +120,12 @@ pub trait AppBevyXilemExt {
     /// The file is hot-reloaded through Bevy's asset pipeline.
     fn load_style_sheet(&mut self, asset_path: impl Into<String>) -> &mut Self;
 
+    /// Parse and load an active stylesheet directly from embedded RON text.
+    ///
+    /// This bypasses filesystem asset loading and applies the stylesheet as the
+    /// active tier with the same precedence as file-based active stylesheets.
+    fn load_style_sheet_ron(&mut self, ron_text: &str) -> &mut Self;
+
     /// Register a selector type alias usable by `Selector::Type("...")` in stylesheet RON.
     fn register_style_selector_type<T: Component>(
         &mut self,
@@ -211,6 +218,12 @@ impl AppBevyXilemExt for App {
                 .handle = Some(handle);
         }
 
+        self
+    }
+
+    fn load_style_sheet_ron(&mut self, ron_text: &str) -> &mut Self {
+        apply_active_stylesheet_ron(self.world_mut(), ron_text)
+            .unwrap_or_else(|error| panic!("failed to parse embedded stylesheet RON: {error}"));
         self
     }
 

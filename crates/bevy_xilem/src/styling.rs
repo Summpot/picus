@@ -714,6 +714,17 @@ pub fn parse_stylesheet_ron(ron_text: &str) -> io::Result<StyleSheet> {
     stylesheet_from_ron_bytes(ron_text.as_bytes())
 }
 
+/// Parse and apply an active stylesheet from embedded RON text.
+///
+/// This updates [`ActiveStyleSheet`] and overlays the parsed rules/tokens onto
+/// the runtime [`StyleSheet`] as the active tier (same precedence as file-based
+/// active stylesheets), without requiring filesystem asset loading.
+pub fn apply_active_stylesheet_ron(world: &mut World, ron_text: &str) -> io::Result<()> {
+    let sheet = parse_stylesheet_ron(ron_text)?;
+    apply_active_stylesheet(world, sheet);
+    Ok(())
+}
+
 /// Parse a multi-variant stylesheet bundle RON into registered variants.
 pub fn parse_stylesheet_variants_ron(ron_text: &str) -> io::Result<RegisteredStyleVariants> {
     stylesheet_variants_from_ron_bytes(ron_text.as_bytes())
@@ -898,6 +909,68 @@ pub fn ensure_active_stylesheet_asset_handle(world: &mut World) {
     world.resource_mut::<ActiveStyleSheetAsset>().handle = Some(handle);
 }
 
+/// Apply a fully parsed active stylesheet to the runtime style tiers.
+///
+/// This mirrors the active-tier merge behavior used by asset-based stylesheet
+/// loading and clears any active asset path/handle so future sync relies on this
+/// in-memory source until another active stylesheet source is selected.
+fn apply_active_stylesheet_impl(
+    world: &mut World,
+    loaded_stylesheet: StyleSheet,
+    clear_asset_binding: bool,
+) {
+    world.init_resource::<ActiveStyleSheet>();
+    world.init_resource::<ActiveStyleSheetSelectors>();
+    world.init_resource::<ActiveStyleSheetTokenNames>();
+    world.init_resource::<StyleSheet>();
+    world.init_resource::<ActiveStyleSheetAsset>();
+
+    world.resource_mut::<ActiveStyleSheet>().0 = loaded_stylesheet.clone();
+
+    let incoming_selectors = loaded_stylesheet
+        .rules
+        .iter()
+        .map(|rule| rule.selector.clone())
+        .collect::<HashSet<_>>();
+    let incoming_token_names = loaded_stylesheet
+        .tokens
+        .keys()
+        .cloned()
+        .collect::<HashSet<_>>();
+
+    let previous_asset_selectors = world
+        .get_resource::<ActiveStyleSheetSelectors>()
+        .map(|selectors| selectors.0.clone())
+        .unwrap_or_default();
+    let previous_asset_token_names = world
+        .get_resource::<ActiveStyleSheetTokenNames>()
+        .map(|names| names.0.clone())
+        .unwrap_or_default();
+
+    let mut runtime_sheet = world.resource_mut::<StyleSheet>();
+    runtime_sheet
+        .rules
+        .retain(|rule| !previous_asset_selectors.contains(&rule.selector));
+    runtime_sheet
+        .tokens
+        .retain(|name, _| !previous_asset_token_names.contains(name));
+    runtime_sheet.rules.extend(loaded_stylesheet.rules);
+    runtime_sheet.tokens.extend(loaded_stylesheet.tokens);
+
+    world.resource_mut::<ActiveStyleSheetSelectors>().0 = incoming_selectors;
+    world.resource_mut::<ActiveStyleSheetTokenNames>().0 = incoming_token_names;
+
+    if clear_asset_binding {
+        let mut active_asset = world.resource_mut::<ActiveStyleSheetAsset>();
+        active_asset.path = None;
+        active_asset.handle = None;
+    }
+}
+
+pub fn apply_active_stylesheet(world: &mut World, loaded_stylesheet: StyleSheet) {
+    apply_active_stylesheet_impl(world, loaded_stylesheet, true);
+}
+
 /// Apply loaded stylesheet asset updates to the live [`StyleSheet`] resource.
 pub fn sync_stylesheet_asset_events(world: &mut World) {
     let active_handle_id = world
@@ -949,43 +1022,7 @@ pub fn sync_stylesheet_asset_events(world: &mut World) {
         return;
     };
 
-    world.init_resource::<ActiveStyleSheet>();
-    world.init_resource::<ActiveStyleSheetSelectors>();
-    world.init_resource::<ActiveStyleSheetTokenNames>();
-    world.resource_mut::<ActiveStyleSheet>().0 = loaded_stylesheet.clone();
-
-    let incoming_selectors = loaded_stylesheet
-        .rules
-        .iter()
-        .map(|rule| rule.selector.clone())
-        .collect::<HashSet<_>>();
-    let incoming_token_names = loaded_stylesheet
-        .tokens
-        .keys()
-        .cloned()
-        .collect::<HashSet<_>>();
-
-    let previous_asset_selectors = world
-        .get_resource::<ActiveStyleSheetSelectors>()
-        .map(|selectors| selectors.0.clone())
-        .unwrap_or_default();
-    let previous_asset_token_names = world
-        .get_resource::<ActiveStyleSheetTokenNames>()
-        .map(|names| names.0.clone())
-        .unwrap_or_default();
-
-    let mut runtime_sheet = world.resource_mut::<StyleSheet>();
-    runtime_sheet
-        .rules
-        .retain(|rule| !previous_asset_selectors.contains(&rule.selector));
-    runtime_sheet
-        .tokens
-        .retain(|name, _| !previous_asset_token_names.contains(name));
-    runtime_sheet.rules.extend(loaded_stylesheet.rules);
-    runtime_sheet.tokens.extend(loaded_stylesheet.tokens);
-
-    world.resource_mut::<ActiveStyleSheetSelectors>().0 = incoming_selectors;
-    world.resource_mut::<ActiveStyleSheetTokenNames>().0 = incoming_token_names;
+    apply_active_stylesheet_impl(world, loaded_stylesheet, false);
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq)]

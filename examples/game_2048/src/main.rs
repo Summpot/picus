@@ -1272,7 +1272,7 @@ fn build_2048_app() -> App {
 
     let mut app = App::new();
     app.add_plugins(BevyXilemPlugin)
-        .load_style_sheet("assets/themes/game_2048.ron")
+        .load_style_sheet_ron(include_str!("../assets/themes/game_2048.ron"))
         .insert_resource(ButtonInput::<KeyCode>::default())
         .insert_resource(GameViewport::default())
         .insert_resource(Game2048State::default())
@@ -1466,5 +1466,11 @@ mod tests {
         assert!(small.ui_component_button_width <= large.ui_component_button_width);
         assert!(small.ui_component_button_height <= large.ui_component_button_height);
         assert!(small.tile_size >= 44.0);
+    }
+
+    #[test]
+    fn embedded_theme_ron_parses() {
+        bevy_xilem::parse_stylesheet_ron(include_str!("../assets/themes/game_2048.ron"))
+            .expect("embedded game_2048 stylesheet should parse");
     }
 }
