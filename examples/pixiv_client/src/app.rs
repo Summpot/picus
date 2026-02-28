@@ -549,17 +549,14 @@ fn process_activation_uri(world: &mut World, uri: &str) {
 }
 
 fn poll_activation_messages(world: &mut World) {
-    let pending_uris = {
-        let Some(mut activation) = world.get_resource_mut::<ActivationBridge>() else {
-            return;
-        };
-
-        let mut pending = std::mem::take(&mut activation.startup_uris);
-        if let Ok(mut service) = activation.service.lock() {
-            pending.extend(service.drain_uris());
-        }
-        pending
+    let Some(mut activation) = world.get_resource_mut::<ActivationBridge>() else {
+        return;
     };
+
+    let mut pending_uris = std::mem::take(&mut activation.startup_uris);
+    if let Ok(mut service) = activation.service.lock() {
+        pending_uris.extend(service.drain_uris());
+    }
 
     for uri in pending_uris {
         process_activation_uri(world, &uri);

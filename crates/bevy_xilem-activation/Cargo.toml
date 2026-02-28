@@ -12,3 +12,8 @@ path = "src/lib.rs"
 interprocess.workspace = true
 single-instance.workspace = true
 sysuri.workspace = true
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-core-services = { version = "0.3", features = ["AE", "AEDataModel", "objc2"] }
+objc2-foundation = { version = "0.3", features = ["NSAppleEventDescriptor", "NSAppleEventManager", "NSString", "objc2-core-services"] }

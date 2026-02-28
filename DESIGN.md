@@ -231,8 +231,10 @@ The workspace now includes a dedicated crate: `bevy_xilem-activation`.
 
 ### 12.1 Responsibilities
 
-- **Single-instance gate** (`single-instance`): only one primary process keeps the UI/runtime.
-- **Activation IPC bridge** (`interprocess` local socket): secondary launches forward URI payloads to the primary process, then exit.
+- **Single-instance gate** (`single-instance` + IPC bind conflict recovery): only one primary process keeps the UI/runtime. If the OS lock path is ambiguous (notably on macOS), activation listener bind conflicts (`AddrInUse` / `AlreadyExists`) first probe reachability of an active primary listener. Reachable listener => secondary forwards payloads and exits; unreachable listener => treat as stale IPC endpoint, clean it up, and recover as primary.
+- **macOS callback capture fallback on secondary launch:** when LaunchServices relaunches a secondary process with empty argv for protocol callbacks, activation bootstrap also probes current Apple Event URL payload (`kAEInternetSuite` / `kAEISGetURL`) and briefly retries before forwarding to the primary.
+- **Activation IPC bridge** (`interprocess` local socket): secondary launches forward URI payloads to the primary process with bounded retries, then waits for an explicit receipt (`ACK` / `NACK`) from the primary listener before exiting. Receipt is emitted after primary listener successfully enqueues the payload into activation service. If no receipt is obtained after retries, secondary still exits fail-closed for single-instance UI (prevents accidental dual-instance windows during callback relaunch races).
+- **macOS IPC transport policy:** activation keeps macOS on filesystem local sockets (still via `interprocess`) for deterministic stale-endpoint cleanup and stable reachability checks during single-instance conflict recovery.
 - **Custom URI protocol registration** (`sysuri`): app-managed registration for OS-level protocol handling.
 
 ### 12.2 Pixiv callback flow
@@ -241,7 +243,7 @@ The workspace now includes a dedicated crate: `bevy_xilem-activation`.
 
 1. User starts browser OAuth from running app.
 2. Browser callback opens `pixiv://account/login?code=...&via=login`.
-3. OS launches app entrypoint; secondary instance forwards URI to primary and exits.
+3. On macOS, `bevy_xilem-activation` (not the example app) installs native Apple Event URL handling (`kAEInternetSuite` / `kAEISGetURL` via `NSAppleEventManager`) in the primary process and enqueues callbacks into activation service drains; when OS relaunches a secondary process with empty argv, activation reads Apple Event payloads there and forwards URI payloads over activation IPC before exiting.
 4. Primary instance auto-extracts `code` and triggers token exchange (`authorization_code`) using current PKCE verifier.
 
 This removes the manual copy/paste requirement in normal desktop callback flow while preserving manual fallback input behavior.
