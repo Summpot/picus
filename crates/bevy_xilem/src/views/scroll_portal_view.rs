@@ -66,11 +66,7 @@ where
     type Element = Pod<widgets::Portal<Child::Widget>>;
     type ViewState = Child::ViewState;
 
-    fn build(
-        &self,
-        ctx: &mut ViewCtx,
-        app_state: &mut State,
-    ) -> (Self::Element, Self::ViewState) {
+    fn build(&self, ctx: &mut ViewCtx, app_state: &mut State) -> (Self::Element, Self::ViewState) {
         let (child, child_state) = self.child.build(ctx, app_state);
         let widget_pod = ctx.create_pod(
             widgets::Portal::new(child.new_widget)

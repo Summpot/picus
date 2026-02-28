@@ -14,8 +14,8 @@ use bevy_input::{
 use bevy_math::Vec2;
 use bevy_time::Time;
 use bevy_window::{
-    CursorLeft, CursorMoved, Ime as BevyIme, PrimaryWindow, Window, WindowFocused, WindowResized,
-    WindowScaleFactorChanged, RawHandleWrapper, WindowWrapper,
+    CursorLeft, CursorMoved, Ime as BevyIme, PrimaryWindow, RawHandleWrapper, Window,
+    WindowFocused, WindowResized, WindowScaleFactorChanged, WindowWrapper,
 };
 use masonry::layout::{Dim, UnitPoint};
 use masonry::{
@@ -106,8 +106,11 @@ impl FromWorld for MasonryRuntime {
         );
 
         let initial_view: UiView = Arc::new(label("bevy_xilem: waiting for synthesized root"));
-        let (initial_root_widget, view_state) =
-            <UiAnyView as View<(), (), ViewCtx>>::build(initial_view.as_ref(), &mut view_ctx, &mut ());
+        let (initial_root_widget, view_state) = <UiAnyView as View<(), (), ViewCtx>>::build(
+            initial_view.as_ref(),
+            &mut view_ctx,
+            &mut (),
+        );
 
         let options = RenderRootOptions {
             default_properties: Arc::new(default_property_set()),

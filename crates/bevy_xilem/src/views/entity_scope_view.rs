@@ -40,11 +40,7 @@ where
     type Element = Pod<EntityScopeWidget>;
     type ViewState = Child::ViewState;
 
-    fn build(
-        &self,
-        ctx: &mut ViewCtx,
-        app_state: &mut State,
-    ) -> (Self::Element, Self::ViewState) {
+    fn build(&self, ctx: &mut ViewCtx, app_state: &mut State) -> (Self::Element, Self::ViewState) {
         let (child, child_state) = self.child.build(ctx, app_state);
         (
             ctx.create_pod(EntityScopeWidget::new(self.entity, child.new_widget)),

@@ -2138,6 +2138,7 @@ dependencies = [
  "chrono",
  "crossbeam-channel",
  "image",
+ "lucide-icons",
  "md5",
  "reqwest",
  "serde",

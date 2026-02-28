@@ -53,11 +53,7 @@ where
     type Element = Pod<OpaqueHitboxWidget>;
     type ViewState = Child::ViewState;
 
-    fn build(
-        &self,
-        ctx: &mut ViewCtx,
-        app_state: &mut State,
-    ) -> (Self::Element, Self::ViewState) {
+    fn build(&self, ctx: &mut ViewCtx, app_state: &mut State) -> (Self::Element, Self::ViewState) {
         let (child, child_state) = self.child.build(ctx, app_state);
         let widget = match self.entity {
             Some(entity) => OpaqueHitboxWidget::new_for_entity(entity, child.new_widget),

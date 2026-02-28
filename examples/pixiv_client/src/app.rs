@@ -11,10 +11,11 @@ use bevy_embedded_assets::{EmbeddedAssetPlugin, PluginMode};
 use bevy_image::Image as BevyImage;
 use bevy_text::TextPlugin;
 use bevy_xilem::{
-    AppBevyXilemExt, AppI18n, BevyXilemPlugin, OverlayConfig, OverlayPlacement, OverlayState,
-    ProjectionCtx, ResolvedStyle, StyleClass, StyleSheet, StyleValue, SyncAssetSource,
-    SyncTextSource, UiComboBox, UiComboBoxChanged, UiComboOption, UiEventQueue, UiRoot, UiView,
-    apply_direct_widget_style, apply_label_style, apply_text_input_style, apply_widget_style,
+    AppBevyXilemExt, AppI18n, BevyXilemPlugin, LUCIDE_FONT_FAMILY, OverlayConfig, OverlayPlacement,
+    OverlayState, ProjectionCtx, ResolvedStyle, StyleClass, StyleSheet, StyleValue,
+    SyncAssetSource, SyncTextSource, UiComboBox, UiComboBoxChanged, UiComboOption, UiEventQueue,
+    UiRoot, UiView, apply_direct_widget_style, apply_label_style, apply_text_input_style,
+    apply_widget_style,
     bevy_app::{App, PreUpdate, Startup, Update},
     bevy_ecs::{hierarchy::ChildOf, prelude::*},
     bevy_tasks::{AsyncComputeTaskPool, IoTaskPool, TaskPool},
@@ -38,6 +39,7 @@ use bevy_xilem_activation::{
     ActivationConfig, ActivationService, BootstrapOutcome, ProtocolRegistration, bootstrap,
 };
 use crossbeam_channel::{Receiver, Sender, unbounded};
+use lucide_icons::Icon as LucideIcon;
 use pixiv_client::{
     AuthSession, DecodedImageRgba, IdpUrlResponse, Illust, PixivApiClient, PixivResponse,
     build_browser_login_url, generate_pkce_code_verifier, pkce_s256_challenge,
@@ -688,13 +690,30 @@ fn button_from_style(
     ))
 }
 
+fn lucide_icon(icon: LucideIcon, size_px: f64, color: Color) -> UiView {
+    let mut icon_style = ResolvedStyle::default();
+    icon_style.colors.text = Some(color);
+    icon_style.text.size = (size_px * 0.90) as f32;
+    icon_style.font_family = Some(vec![LUCIDE_FONT_FAMILY.to_string()]);
+
+    Arc::new(
+        sized_box(apply_label_style(
+            label(char::from(icon).to_string()),
+            &icon_style,
+        ))
+        .width(Dim::Fixed(Length::px(size_px)))
+        .height(Dim::Fixed(Length::px(size_px))),
+    )
+}
+
 fn action_button(
-    _world: &World,
+    world: &World,
     entity: Entity,
     action: AppAction,
     label_text: impl Into<String>,
 ) -> UiView {
-    Arc::new(button(entity, action, label_text.into()))
+    let style = resolve_style(world, entity);
+    button_from_style(entity, action, label_text, &style)
 }
 
 fn sidebar_button_view(
@@ -713,6 +732,46 @@ fn sidebar_button_view(
         resolve_style_for_classes(world, ["pixiv.sidebar.button"])
     };
     button_from_style(entity, action, label_text, &style)
+}
+
+fn sidebar_toggle_button_view(world: &World, entity: Entity, sidebar_collapsed: bool) -> UiView {
+    let style = resolve_style_for_classes(world, ["pixiv.sidebar.button"]);
+    let text_color = style.colors.text.unwrap_or(Color::WHITE);
+
+    let (toggle_text, toggle_icon, icon_first) = if sidebar_collapsed {
+        (
+            tr(world, "pixiv.sidebar.expand", "Expand"),
+            LucideIcon::ChevronRight,
+            false,
+        )
+    } else {
+        (
+            tr(world, "pixiv.sidebar.collapse", "Collapse"),
+            LucideIcon::ChevronLeft,
+            true,
+        )
+    };
+
+    let content = if icon_first {
+        flex_row((
+            lucide_icon(toggle_icon, 14.0, text_color).into_any_flex(),
+            apply_label_style(label(toggle_text), &style).into_any_flex(),
+        ))
+        .cross_axis_alignment(CrossAxisAlignment::Center)
+        .gap(Length::px(6.0))
+    } else {
+        flex_row((
+            apply_label_style(label(toggle_text), &style).into_any_flex(),
+            lucide_icon(toggle_icon, 14.0, text_color).into_any_flex(),
+        ))
+        .cross_axis_alignment(CrossAxisAlignment::Center)
+        .gap(Length::px(6.0))
+    };
+
+    Arc::new(apply_direct_widget_style(
+        button_with_child(entity, AppAction::ToggleSidebar, content),
+        &style,
+    ))
 }
 
 fn setup(mut commands: Commands, i18n: Res<AppI18n>) {
@@ -940,16 +999,10 @@ fn project_sidebar(_: &PixivSidebar, ctx: ProjectionCtx<'_>) -> UiView {
     );
 
     items.push(
-        sidebar_button_view(
+        sidebar_toggle_button_view(
             ctx.world,
             ui_components.toggle_sidebar,
-            AppAction::ToggleSidebar,
-            if ui.sidebar_collapsed {
-                format!("{} ▶", tr(ctx.world, "pixiv.sidebar.expand", "Expand"))
-            } else {
-                format!("◀ {}", tr(ctx.world, "pixiv.sidebar.collapse", "Collapse"))
-            },
-            false,
+            ui.sidebar_collapsed,
         )
         .into_any_flex(),
     );
@@ -1279,7 +1332,7 @@ fn illust_thumbnail_view(world: &World, visual: &IllustVisual) -> UiView {
     }
 }
 
-fn illust_avatar_view(visual: &IllustVisual) -> UiView {
+fn illust_avatar_view(visual: &IllustVisual, style: &ResolvedStyle) -> UiView {
     if let Some(image_data) = visual.avatar_ui.clone() {
         Arc::new(
             sized_box(image(image_data))
@@ -1287,7 +1340,11 @@ fn illust_avatar_view(visual: &IllustVisual) -> UiView {
                 .fixed_width(Length::px(28.0)),
         )
     } else {
-        Arc::new(label("👤"))
+        lucide_icon(
+            LucideIcon::User,
+            18.0,
+            style.colors.text.unwrap_or(Color::WHITE),
+        )
     }
 }
 
@@ -1299,13 +1356,17 @@ fn illust_author_row(author: &str, avatar: UiView, style: &ResolvedStyle) -> UiV
 }
 
 fn illust_stats_view(illust: &Illust, style: &ResolvedStyle) -> UiView {
-    Arc::new(apply_label_style(
-        label(format!(
-            "👁 {}   ❤ {}",
-            illust.total_view, illust.total_bookmarks
-        )),
-        style,
-    ))
+    let icon_color = style.colors.text.unwrap_or(Color::WHITE);
+    Arc::new(
+        flex_row((
+            lucide_icon(LucideIcon::Eye, 14.0, icon_color).into_any_flex(),
+            apply_label_style(label(illust.total_view.to_string()), style).into_any_flex(),
+            lucide_icon(LucideIcon::Heart, 14.0, icon_color).into_any_flex(),
+            apply_label_style(label(illust.total_bookmarks.to_string()), style).into_any_flex(),
+        ))
+        .cross_axis_alignment(CrossAxisAlignment::Center)
+        .gap(Length::px(6.0)),
+    )
 }
 
 fn project_illust_card(_: &PixivIllustCard, ctx: ProjectionCtx<'_>) -> UiView {
@@ -1354,15 +1415,22 @@ fn project_illust_card(_: &PixivIllustCard, ctx: ProjectionCtx<'_>) -> UiView {
         })
         .unwrap_or(0.58);
     let image_height = (card_width * image_ratio * anim.card_scale as f64).max(120.0);
-    let heart = if illust.is_bookmarked { "♥" } else { "♡" };
+    let heart_icon_color = subtle_button_style.colors.text.unwrap_or(Color::WHITE);
+    let heart_icon = if illust.is_bookmarked {
+        LucideIcon::Heart
+    } else {
+        LucideIcon::HeartOff
+    };
 
-    let heart_button = sized_box(button_from_style(
-        action_entities.bookmark,
-        AppAction::Bookmark(ctx.entity),
-        heart,
+    let heart_button = sized_box(Arc::new(apply_direct_widget_style(
+        button_with_child(
+            action_entities.bookmark,
+            AppAction::Bookmark(ctx.entity),
+            lucide_icon(heart_icon, 16.0 * anim.heart_scale as f64, heart_icon_color),
+        ),
         &subtle_button_style,
-    ))
-    .fixed_width(Length::px((46.0_f32 * anim.heart_scale) as f64));
+    )))
+    .fixed_width(Length::px(46.0));
 
     Arc::new(
         sized_box(apply_widget_style(
@@ -1378,8 +1446,12 @@ fn project_illust_card(_: &PixivIllustCard, ctx: ProjectionCtx<'_>) -> UiView {
                 .background_color(Color::TRANSPARENT)
                 .into_any_flex(),
                 apply_label_style(label(illust.title.clone()), &style).into_any_flex(),
-                illust_author_row(&illust.user.name, illust_avatar_view(&visual), &style)
-                    .into_any_flex(),
+                illust_author_row(
+                    &illust.user.name,
+                    illust_avatar_view(&visual, &style),
+                    &style,
+                )
+                .into_any_flex(),
                 illust_stats_view(illust, &style).into_any_flex(),
                 flex_row((heart_button.into_any_flex(),))
                     .main_axis_alignment(MainAxisAlignment::End)
@@ -2696,5 +2768,23 @@ mod tests {
             .expect("locale combo should select active locale");
 
         assert_eq!(combo.options[selected].value, "ja-JP");
+    }
+
+    #[test]
+    fn pixiv_ui_drops_legacy_unicode_icons() {
+        let source = include_str!("app.rs");
+        for codepoint in [0x25B6, 0x25C0, 0x1F464, 0x1F441, 0x2764, 0x2665, 0x2661] {
+            let legacy_icon = char::from_u32(codepoint)
+                .expect("valid unicode codepoint")
+                .to_string();
+            assert!(
+                !source.contains(&legacy_icon),
+                "legacy unicode icon `{legacy_icon}` should be replaced by lucide"
+            );
+        }
+        assert!(
+            source.contains("LucideIcon"),
+            "pixiv client should use lucide icons in app UI"
+        );
     }
 }

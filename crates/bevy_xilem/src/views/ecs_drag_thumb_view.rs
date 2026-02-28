@@ -35,11 +35,7 @@ impl View<(), (), ViewCtx> for EcsDragThumbView {
     type Element = Pod<EcsDragThumbWidget>;
     type ViewState = ();
 
-    fn build(
-        &self,
-        ctx: &mut ViewCtx,
-        _app_state: &mut (),
-    ) -> (Self::Element, Self::ViewState) {
+    fn build(&self, ctx: &mut ViewCtx, _app_state: &mut ()) -> (Self::Element, Self::ViewState) {
         (
             ctx.with_action_widget(|ctx| {
                 ctx.create_pod(EcsDragThumbWidget::new(
