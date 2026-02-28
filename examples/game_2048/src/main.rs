@@ -39,7 +39,7 @@ use masonry::{
     layout::LenReq,
     vello::Scene,
 };
-use shared_utils::init_logging;
+use shared_utils::{drain_fluent_theme_toggle_events, init_logging, setup_fluent_theme_toggle};
 
 const BOARD_SIDE: usize = 4;
 const BOARD_LEN: usize = BOARD_SIDE * BOARD_SIDE;
@@ -1912,8 +1912,18 @@ fn build_2048_app() -> App {
         .register_ui_component::<UiComponentsRow>()
         .register_ui_component::<UiComponentButton>()
         .register_ui_component::<HintLine>()
-        .add_systems(Startup, (setup_game_styles, setup_game_world))
-        .add_systems(PreUpdate, track_game_viewport)
+        .add_systems(
+            Startup,
+            (
+                setup_game_styles,
+                setup_game_world,
+                setup_fluent_theme_toggle,
+            ),
+        )
+        .add_systems(
+            PreUpdate,
+            (drain_fluent_theme_toggle_events, track_game_viewport),
+        )
         .add_systems(
             PreUpdate,
             (

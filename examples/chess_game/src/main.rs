@@ -23,7 +23,7 @@ use bevy_xilem::{
         winit::error::EventLoopError,
     },
 };
-use shared_utils::init_logging;
+use shared_utils::{drain_fluent_theme_toggle_events, init_logging, setup_fluent_theme_toggle};
 
 #[allow(unexpected_cfgs)]
 mod engine;
@@ -880,9 +880,19 @@ fn build_bevy_chess_app() -> App {
         .register_ui_component::<ChessRootView>()
         .register_ui_component::<ChessUiComponentsPanel>()
         .register_ui_component::<ChessBoardPanel>()
-        .add_systems(Startup, (setup_chess_styles, setup_chess_world));
+        .add_systems(
+            Startup,
+            (
+                setup_chess_styles,
+                setup_chess_world,
+                setup_fluent_theme_toggle,
+            ),
+        );
 
-    app.add_systems(PreUpdate, drain_events_and_tick);
+    app.add_systems(
+        PreUpdate,
+        (drain_fluent_theme_toggle_events, drain_events_and_tick),
+    );
 
     app
 }

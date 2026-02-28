@@ -6,3 +6,5 @@ license.workspace = true
 
 [dependencies]
 tracing-subscriber.workspace = true
+bevy_xilem = { path = "../../crates/bevy_xilem" }
+bevy_ecs.workspace = true

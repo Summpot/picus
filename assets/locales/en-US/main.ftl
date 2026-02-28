@@ -42,10 +42,12 @@ pixiv-feed-open = Open
 pixiv-feed-high-res-loading = High-res loading…
 
 pixiv-overlay-close = Close
+pixiv-overlay-title = Illustration details
 pixiv-overlay-author = Author:
 pixiv-overlay-views = Views
 pixiv-overlay-bookmarks = Bookmarks
 pixiv-overlay-comments = Comments
+pixiv-overlay-tags = Tags
 
 pixiv-status-sidebar-collapsed = Sidebar collapsed
 pixiv-status-sidebar-expanded = Sidebar expanded

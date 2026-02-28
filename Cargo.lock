@@ -2085,6 +2085,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "shared_utils",
  "unic-langid",
  "vello",
  "webbrowser",
@@ -5077,6 +5078,8 @@ dependencies = [
 name = "shared_utils"
 version = "0.1.0"
 dependencies = [
+ "bevy_ecs",
+ "bevy_xilem",
  "tracing-subscriber",
 ]
 

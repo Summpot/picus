@@ -12,7 +12,7 @@ use bevy_xilem::{
         winit::{dpi::LogicalSize, error::EventLoopError},
     },
 };
-use shared_utils::init_logging;
+use shared_utils::{drain_fluent_theme_toggle_events, init_logging, setup_fluent_theme_toggle};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum MathOperator {
@@ -650,9 +650,19 @@ fn build_bevy_calculator_app() -> App {
         .register_ui_component::<CalcKeypad>()
         .register_ui_component::<CalcButtonRow>()
         .register_ui_component::<CalcButtonSpec>()
-        .add_systems(Startup, (setup_calculator_styles, setup_calculator_world));
+        .add_systems(
+            Startup,
+            (
+                setup_calculator_styles,
+                setup_calculator_world,
+                setup_fluent_theme_toggle,
+            ),
+        );
 
-    app.add_systems(PreUpdate, drain_calc_events);
+    app.add_systems(
+        PreUpdate,
+        (drain_fluent_theme_toggle_events, drain_calc_events),
+    );
 
     app
 }

@@ -23,7 +23,7 @@ use bevy_xilem::{
         winit::{dpi::LogicalSize, error::EventLoopError},
     },
 };
-use shared_utils::init_logging;
+use shared_utils::{drain_fluent_theme_toggle_events, init_logging, setup_fluent_theme_toggle};
 
 const HEARTBEAT_MS: u64 = 60;
 const DEFAULT_URL: &str = "https://hil-speed.hetzner.com/100MB.bin";
@@ -713,8 +713,18 @@ fn build_async_downloader_app() -> App {
         .register_ui_component::<DownloadActionRow>()
         .register_ui_component::<DownloadDialogModeRow>()
         .register_ui_component::<DownloadProgressPanel>()
-        .add_systems(Startup, (setup_download_styles, setup_download_world))
-        .add_systems(PreUpdate, drain_download_events);
+        .add_systems(
+            Startup,
+            (
+                setup_download_styles,
+                setup_download_world,
+                setup_fluent_theme_toggle,
+            ),
+        )
+        .add_systems(
+            PreUpdate,
+            (drain_fluent_theme_toggle_events, drain_download_events),
+        );
 
     app
 }

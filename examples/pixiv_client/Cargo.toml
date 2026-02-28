@@ -30,3 +30,4 @@ sha2 = "0.10"
 unic-langid.workspace = true
 vello = "0.7"
 webbrowser = "1"
+shared_utils = { path = "../shared_utils" }

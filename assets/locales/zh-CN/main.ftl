@@ -42,10 +42,12 @@ pixiv-feed-open = 打开
 pixiv-feed-high-res-loading = 高清图加载中…
 
 pixiv-overlay-close = 关闭
+pixiv-overlay-title = 插画详情
 pixiv-overlay-author = 作者：
 pixiv-overlay-views = 浏览
 pixiv-overlay-bookmarks = 收藏
 pixiv-overlay-comments = 评论
+pixiv-overlay-tags = 标签
 
 pixiv-status-sidebar-collapsed = 侧栏已收起
 pixiv-status-sidebar-expanded = 侧栏已展开

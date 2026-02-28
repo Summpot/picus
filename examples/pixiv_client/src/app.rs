@@ -11,17 +11,18 @@ use bevy_embedded_assets::{EmbeddedAssetPlugin, PluginMode};
 use bevy_image::Image as BevyImage;
 use bevy_text::TextPlugin;
 use bevy_xilem::{
-    AppBevyXilemExt, AppI18n, BevyXilemPlugin, ColorStyle, LayoutStyle, ProjectionCtx,
-    ResolvedStyle, StyleClass, StyleSetter, StyleSheet, StyleTransition, SyncAssetSource,
-    SyncTextSource, TextStyle, UiComboBox, UiComboBoxChanged, UiComboOption, UiEventQueue, UiRoot,
-    UiView, apply_label_style, apply_text_input_style, apply_widget_style,
+    AppBevyXilemExt, AppI18n, BevyXilemPlugin, ColorStyle, LayoutStyle, OverlayConfig,
+    OverlayPlacement, OverlayState, ProjectionCtx, ResolvedStyle, StyleClass, StyleSetter,
+    StyleSheet, StyleTransition, SyncAssetSource, SyncTextSource, TextStyle, UiComboBox,
+    UiComboBoxChanged, UiComboOption, UiEventQueue, UiRoot, UiView, apply_label_style,
+    apply_text_input_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup, Update},
     bevy_ecs::{hierarchy::ChildOf, prelude::*},
     bevy_tasks::{AsyncComputeTaskPool, IoTaskPool, TaskPool},
     bevy_tweening::{EaseMethod, Lens, Tween, TweenAnim},
     bevy_window::WindowResized,
     button, resolve_style, resolve_style_for_classes, resolve_style_for_entity_classes,
-    run_app_with_window_options, text_input,
+    run_app_with_window_options, spawn_in_overlay_root, text_input,
     xilem::{
         Color,
         masonry::layout::{Dim, Length},
@@ -42,11 +43,11 @@ use pixiv_client::{
     build_browser_login_url, generate_pkce_code_verifier, pkce_s256_challenge,
 };
 use reqwest::Url;
+use shared_utils::{drain_fluent_theme_toggle_events, init_logging, setup_fluent_theme_toggle};
 use unic_langid::LanguageIdentifier;
 use vello::peniko::{Blob, ImageAlphaType, ImageData, ImageFormat};
 
 const CARD_BASE_WIDTH: f64 = 270.0;
-const CARD_BASE_HEIGHT: f64 = 310.0;
 const CARD_MIN_WIDTH: f64 = 260.0;
 const CARD_ROW_GAP: f64 = 10.0;
 const MAX_CARD_COLUMNS: usize = 6;
@@ -654,6 +655,31 @@ fn compute_feed_layout(viewport_width: f64, sidebar_collapsed: bool) -> (usize, 
     (columns, card_width)
 }
 
+fn estimate_illust_card_height(world: &World, card_entity: Entity, card_width: f64) -> f64 {
+    let fallback_ratio = 0.62;
+
+    let image_ratio = world
+        .get::<IllustVisual>(card_entity)
+        .and_then(|visual| visual.thumb_ui.as_ref())
+        .map(|thumb| {
+            if thumb.width == 0 {
+                fallback_ratio
+            } else {
+                (thumb.height as f64 / thumb.width as f64).clamp(0.45, 1.45)
+            }
+        })
+        .unwrap_or(fallback_ratio);
+
+    let image_height = (card_width * image_ratio).max(120.0);
+    let title_chars = world
+        .get::<Illust>(card_entity)
+        .map(|illust| illust.title.chars().count())
+        .unwrap_or(24);
+    let title_lines = (title_chars as f64 / 18.0).ceil().max(1.0);
+
+    image_height + 96.0 + title_lines * 18.0
+}
+
 fn button_from_style(
     entity: Entity,
     action: AppAction,
@@ -681,6 +707,24 @@ fn action_button(
     label_text: impl Into<String>,
 ) -> UiView {
     let style = resolve_style(world, entity);
+    button_from_style(entity, action, label_text, &style)
+}
+
+fn sidebar_button_view(
+    world: &World,
+    entity: Entity,
+    action: AppAction,
+    label_text: impl Into<String>,
+    active: bool,
+) -> UiView {
+    let style = if active {
+        resolve_style_for_classes(
+            world,
+            ["pixiv.sidebar.button", "pixiv.sidebar.button.active"],
+        )
+    } else {
+        resolve_style_for_classes(world, ["pixiv.sidebar.button"])
+    };
     button_from_style(entity, action, label_text, &style)
 }
 
@@ -807,20 +851,32 @@ fn setup(mut commands: Commands) {
 
     let home_feed = commands.spawn((PixivHomeFeed, ChildOf(main_column))).id();
 
-    let detail_overlay = commands
-        .spawn((
-            PixivDetailOverlay,
-            StyleClass(vec!["pixiv.overlay".to_string()]),
-            ChildOf(main_column),
-        ))
-        .id();
-    let overlay_tags = commands
-        .spawn((PixivOverlayTags, ChildOf(detail_overlay)))
-        .id();
+    commands.queue(move |world: &mut World| {
+        let detail_overlay = spawn_in_overlay_root(
+            world,
+            (
+                PixivDetailOverlay,
+                StyleClass(vec!["pixiv.overlay".to_string()]),
+                OverlayState {
+                    is_modal: false,
+                    anchor: None,
+                },
+                OverlayConfig {
+                    placement: OverlayPlacement::Center,
+                    anchor: None,
+                    auto_flip: false,
+                },
+            ),
+        );
 
-    commands.insert_resource(PixivUiTree {
-        home_feed,
-        overlay_tags,
+        let overlay_tags = world
+            .spawn((PixivOverlayTags, ChildOf(detail_overlay)))
+            .id();
+
+        world.insert_resource(PixivUiTree {
+            home_feed,
+            overlay_tags,
+        });
     });
 
     let _ = cmd_tx.send(NetworkCommand::DiscoverIdp);
@@ -854,15 +910,77 @@ fn setup_styles(mut sheet: ResMut<StyleSheet>, i18n: Option<Res<AppI18n>>) {
         "pixiv.sidebar",
         StyleSetter {
             layout: LayoutStyle {
-                padding: Some(8.0),
+                padding: Some(10.0),
                 gap: Some(8.0),
                 border_width: Some(1.0),
                 corner_radius: Some(8.0),
                 ..LayoutStyle::default()
             },
             colors: ColorStyle {
-                bg: Some(Color::from_rgb8(0x16, 0x16, 0x16)),
-                border: Some(Color::from_rgb8(0x2C, 0x2C, 0x2C)),
+                bg: Some(Color::from_rgba8(0xFF, 0xFF, 0xFF, 0x12)),
+                border: Some(Color::from_rgb8(0x44, 0x4E, 0x62)),
+                ..ColorStyle::default()
+            },
+            ..StyleSetter::default()
+        },
+    );
+
+    sheet.set_class(
+        "pixiv.sidebar.section",
+        StyleSetter {
+            layout: LayoutStyle {
+                padding: Some(2.0),
+                ..LayoutStyle::default()
+            },
+            ..StyleSetter::default()
+        },
+    );
+
+    sheet.set_class(
+        "pixiv.sidebar.title",
+        StyleSetter {
+            text: TextStyle {
+                size: Some(13.0),
+                ..Default::default()
+            },
+            colors: ColorStyle {
+                text: Some(Color::from_rgb8(0xB9, 0xC6, 0xDD)),
+                ..ColorStyle::default()
+            },
+            ..StyleSetter::default()
+        },
+    );
+
+    sheet.set_class(
+        "pixiv.sidebar.button",
+        StyleSetter {
+            layout: LayoutStyle {
+                padding: Some(8.0),
+                corner_radius: Some(7.0),
+                border_width: Some(1.0),
+                ..LayoutStyle::default()
+            },
+            colors: ColorStyle {
+                bg: Some(Color::from_rgba8(255, 255, 255, 18)),
+                hover_bg: Some(Color::from_rgba8(255, 255, 255, 34)),
+                pressed_bg: Some(Color::from_rgba8(255, 255, 255, 42)),
+                border: Some(Color::from_rgb8(0x55, 0x66, 0x8D)),
+                text: Some(Color::from_rgb8(0xE9, 0xF0, 0xFF)),
+                ..ColorStyle::default()
+            },
+            ..StyleSetter::default()
+        },
+    );
+
+    sheet.set_class(
+        "pixiv.sidebar.button.active",
+        StyleSetter {
+            colors: ColorStyle {
+                bg: Some(Color::from_rgb8(0x2F, 0x66, 0xE5)),
+                hover_bg: Some(Color::from_rgb8(0x3C, 0x73, 0xF1)),
+                pressed_bg: Some(Color::from_rgb8(0x25, 0x57, 0xC5)),
+                border: Some(Color::from_rgb8(0x2F, 0x66, 0xE5)),
+                text: Some(Color::from_rgb8(0xF8, 0xFB, 0xFF)),
                 ..ColorStyle::default()
             },
             ..StyleSetter::default()
@@ -1041,15 +1159,15 @@ fn setup_styles(mut sheet: ResMut<StyleSheet>, i18n: Option<Res<AppI18n>>) {
         "pixiv.overlay",
         StyleSetter {
             layout: LayoutStyle {
-                padding: Some(12.0),
-                gap: Some(8.0),
+                padding: Some(14.0),
+                gap: Some(10.0),
                 border_width: Some(1.0),
-                corner_radius: Some(10.0),
+                corner_radius: Some(12.0),
                 ..LayoutStyle::default()
             },
             colors: ColorStyle {
-                bg: Some(Color::from_rgb8(0x12, 0x12, 0x12)),
-                border: Some(Color::from_rgb8(0x3A, 0x3A, 0x3A)),
+                bg: Some(Color::from_rgb8(0x10, 0x14, 0x1F)),
+                border: Some(Color::from_rgb8(0x52, 0x63, 0x8D)),
                 ..ColorStyle::default()
             },
             font_family: default_fonts,
@@ -1093,12 +1211,22 @@ fn project_sidebar(_: &PixivSidebar, ctx: ProjectionCtx<'_>) -> UiView {
     let style = resolve_style(ctx.world, ctx.entity);
     let ui = ctx.world.resource::<UiState>();
     let ui_components = *ctx.world.resource::<PixivUiComponents>();
+    let section_style = resolve_style_for_classes(ctx.world, ["pixiv.sidebar.section"]);
+    let title_style = resolve_style_for_classes(ctx.world, ["pixiv.sidebar.title"]);
     let mut sidebar_children = ctx.children.into_iter();
     let locale_combo_view = sidebar_children.next().unwrap_or_else(empty_ui);
 
     let mut items = Vec::new();
     items.push(
-        action_button(
+        apply_widget_style(
+            apply_label_style(label("Navigation"), &title_style),
+            &section_style,
+        )
+        .into_any_flex(),
+    );
+
+    items.push(
+        sidebar_button_view(
             ctx.world,
             ui_components.toggle_sidebar,
             AppAction::ToggleSidebar,
@@ -1107,52 +1235,54 @@ fn project_sidebar(_: &PixivSidebar, ctx: ProjectionCtx<'_>) -> UiView {
             } else {
                 format!("◀ {}", tr(ctx.world, "pixiv.sidebar.collapse", "Collapse"))
             },
+            false,
         )
         .into_any_flex(),
     );
 
-    items.push(locale_combo_view.into_any_flex());
-
     if !ui.sidebar_collapsed {
         items.push(
-            action_button(
+            sidebar_button_view(
                 ctx.world,
                 ui_components.home_tab,
                 AppAction::SetTab(NavTab::Home),
-                if ui.active_tab == NavTab::Home {
-                    format!("● {}", tr(ctx.world, "pixiv.sidebar.home", "Home"))
-                } else {
-                    tr(ctx.world, "pixiv.sidebar.home", "Home")
-                },
+                tr(ctx.world, "pixiv.sidebar.home", "Home"),
+                ui.active_tab == NavTab::Home,
             )
             .into_any_flex(),
         );
         items.push(
-            action_button(
+            sidebar_button_view(
                 ctx.world,
                 ui_components.rankings_tab,
                 AppAction::SetTab(NavTab::Rankings),
-                if ui.active_tab == NavTab::Rankings {
-                    format!("● {}", tr(ctx.world, "pixiv.sidebar.rankings", "Rankings"))
-                } else {
-                    tr(ctx.world, "pixiv.sidebar.rankings", "Rankings")
-                },
+                tr(ctx.world, "pixiv.sidebar.rankings", "Rankings"),
+                ui.active_tab == NavTab::Rankings,
             )
             .into_any_flex(),
         );
         items.push(
-            action_button(
+            sidebar_button_view(
                 ctx.world,
                 ui_components.search_tab,
                 AppAction::SetTab(NavTab::Search),
-                if ui.active_tab == NavTab::Search {
-                    format!("● {}", tr(ctx.world, "pixiv.sidebar.search", "Search"))
-                } else {
-                    tr(ctx.world, "pixiv.sidebar.search", "Search")
-                },
+                tr(ctx.world, "pixiv.sidebar.search", "Search"),
+                ui.active_tab == NavTab::Search,
             )
             .into_any_flex(),
         );
+
+        items.push(
+            apply_widget_style(
+                apply_label_style(
+                    label(tr(ctx.world, "pixiv.sidebar.language", "Language")),
+                    &title_style,
+                ),
+                &section_style,
+            )
+            .into_any_flex(),
+        );
+        items.push(locale_combo_view.into_any_flex());
     }
 
     Arc::new(apply_widget_style(
@@ -1373,15 +1503,53 @@ fn project_home_feed(_: &PixivHomeFeed, ctx: ProjectionCtx<'_>) -> UiView {
         )));
     }
 
+    let ui = ctx.world.resource::<UiState>();
+    let viewport = ctx.world.resource::<ViewportMetrics>();
+    let (columns, _) = compute_feed_layout(viewport.width as f64, ui.sidebar_collapsed);
+    let columns = columns.max(1);
+
+    let child_entities = ctx
+        .world
+        .get::<Children>(ctx.entity)
+        .map(|children| children.iter().collect::<Vec<_>>())
+        .unwrap_or_default();
+
+    let mut column_heights = vec![0.0_f64; columns];
+    let mut column_views = vec![Vec::<UiView>::new(); columns];
+
+    for (entity, child_view) in child_entities.into_iter().zip(ctx.children.into_iter()) {
+        let estimated_height = estimate_illust_card_height(ctx.world, entity, CARD_BASE_WIDTH);
+        let target_column = column_heights
+            .iter()
+            .enumerate()
+            .min_by(|(_, a), (_, b)| a.total_cmp(b))
+            .map(|(index, _)| index)
+            .unwrap_or(0);
+
+        column_heights[target_column] += estimated_height + CARD_ROW_GAP;
+        column_views[target_column].push(child_view);
+    }
+
+    let columns_ui = column_views
+        .into_iter()
+        .map(|items| {
+            flex_col(
+                items
+                    .into_iter()
+                    .map(|item| item.into_any_flex())
+                    .collect::<Vec<_>>(),
+            )
+            .cross_axis_alignment(CrossAxisAlignment::Center)
+            .gap(Length::px(CARD_ROW_GAP))
+            .into_any_flex()
+        })
+        .collect::<Vec<_>>();
+
     Arc::new(
-        flex_col(
-            ctx.children
-                .into_iter()
-                .map(|child| child.into_any_flex())
-                .collect::<Vec<_>>(),
-        )
-        .cross_axis_alignment(CrossAxisAlignment::Stretch)
-        .width(Dim::Stretch),
+        flex_row(columns_ui)
+            .cross_axis_alignment(CrossAxisAlignment::Start)
+            .gap(Length::px(CARD_ROW_GAP))
+            .width(Dim::Stretch),
     )
 }
 
@@ -1457,7 +1625,18 @@ fn project_illust_card(_: &PixivIllustCard, ctx: ProjectionCtx<'_>) -> UiView {
     let viewport = ctx.world.resource::<ViewportMetrics>();
     let (_, card_width) = compute_feed_layout(viewport.width as f64, ui.sidebar_collapsed);
 
-    let image_height = (card_width * 0.58 * anim.card_scale as f64).max(120.0);
+    let image_ratio = visual
+        .thumb_ui
+        .as_ref()
+        .map(|thumb| {
+            if thumb.width == 0 {
+                0.58
+            } else {
+                (thumb.height as f64 / thumb.width as f64).clamp(0.45, 1.45)
+            }
+        })
+        .unwrap_or(0.58);
+    let image_height = (card_width * image_ratio * anim.card_scale as f64).max(120.0);
     let heart = if illust.is_bookmarked { "♥" } else { "♡" };
 
     let heart_button = sized_box(button_from_style(
@@ -1482,7 +1661,7 @@ fn project_illust_card(_: &PixivIllustCard, ctx: ProjectionCtx<'_>) -> UiView {
                     button_from_style(
                         ctx.entity,
                         AppAction::OpenIllust(ctx.entity),
-                        tr(ctx.world, "pixiv.feed.open", "Open"),
+                        tr(ctx.world, "pixiv.feed.open", "Details"),
                         &primary_button_style,
                     )
                     .into_any_flex(),
@@ -1493,11 +1672,7 @@ fn project_illust_card(_: &PixivIllustCard, ctx: ProjectionCtx<'_>) -> UiView {
             ]),
             &style,
         ))
-        .fixed_width(Length::px((card_width * anim.card_scale as f64).max(180.0)))
-        .fixed_height(Length::px(
-            ((CARD_BASE_HEIGHT * (card_width / CARD_BASE_WIDTH)) * anim.card_scale as f64)
-                .max(200.0),
-        )),
+        .fixed_width(Length::px((card_width * anim.card_scale as f64).max(180.0))),
     )
 }
 
@@ -1530,39 +1705,52 @@ fn project_detail_overlay(_: &PixivDetailOverlay, ctx: ProjectionCtx<'_>) -> UiV
 
     let tags = ctx.children.into_iter().next().unwrap_or_else(empty_ui);
 
-    Arc::new(apply_widget_style(
-        flex_col((
-            action_button(
-                ctx.world,
-                ui_components.close_overlay,
-                AppAction::CloseIllust,
-                tr(ctx.world, "pixiv.overlay.close", "Close"),
-            )
-            .into_any_flex(),
-            hero.into_any_flex(),
-            label(illust.title.clone()).into_any_flex(),
-            label(format!(
-                "{} {}",
-                tr(ctx.world, "pixiv.overlay.author", "Author:"),
-                illust.user.name
+    Arc::new(
+        sized_box(apply_widget_style(
+            flex_col((
+                flex_row((
+                    apply_label_style(
+                        label(tr(ctx.world, "pixiv.overlay.title", "Illustration Details")),
+                        &style,
+                    )
+                    .flex(1.0),
+                    action_button(
+                        ctx.world,
+                        ui_components.close_overlay,
+                        AppAction::CloseIllust,
+                        tr(ctx.world, "pixiv.overlay.close", "Close"),
+                    )
+                    .into_any_flex(),
+                ))
+                .into_any_flex(),
+                hero.into_any_flex(),
+                label(illust.title.clone()).into_any_flex(),
+                label(format!(
+                    "{} {}",
+                    tr(ctx.world, "pixiv.overlay.author", "Author:"),
+                    illust.user.name
+                ))
+                .into_any_flex(),
+                label(format!(
+                    "{} {}  {} {}  {} {}",
+                    tr(ctx.world, "pixiv.overlay.views", "Views"),
+                    illust.total_view,
+                    tr(ctx.world, "pixiv.overlay.bookmarks", "Bookmarks"),
+                    illust.total_bookmarks,
+                    tr(ctx.world, "pixiv.overlay.comments", "Comments"),
+                    illust.total_comments
+                ))
+                .into_any_flex(),
+                apply_label_style(label(tr(ctx.world, "pixiv.overlay.tags", "Tags")), &style)
+                    .into_any_flex(),
+                tags.into_any_flex(),
             ))
-            .into_any_flex(),
-            label(format!(
-                "{} {}  {} {}  {} {}",
-                tr(ctx.world, "pixiv.overlay.views", "Views"),
-                illust.total_view,
-                tr(ctx.world, "pixiv.overlay.bookmarks", "Bookmarks"),
-                illust.total_bookmarks,
-                tr(ctx.world, "pixiv.overlay.comments", "Comments"),
-                illust.total_comments
-            ))
-            .into_any_flex(),
-            tags.into_any_flex(),
+            .cross_axis_alignment(CrossAxisAlignment::Stretch)
+            .width(Dim::Stretch),
+            &style,
         ))
-        .cross_axis_alignment(CrossAxisAlignment::Stretch)
-        .width(Dim::Stretch),
-        &style,
-    ))
+        .fixed_width(Length::px(760.0)),
+    )
 }
 
 fn project_overlay_tags(_: &PixivOverlayTags, ctx: ProjectionCtx<'_>) -> UiView {
@@ -2403,6 +2591,7 @@ bevy_xilem::impl_ui_component_template!(OverlayTag, project_overlay_tag);
 
 fn build_app(mut activation_service: Option<ActivationService>) -> App {
     ensure_task_pool_initialized();
+    init_logging();
 
     let mut app = App::new();
     register_bridge_fonts(&mut app);
@@ -2471,10 +2660,14 @@ fn build_app(mut activation_service: Option<ActivationService>) -> App {
     .register_ui_component::<PixivDetailOverlay>()
     .register_ui_component::<PixivOverlayTags>()
     .register_ui_component::<OverlayTag>()
-    .add_systems(Startup, (setup_styles, setup))
+    .add_systems(Startup, (setup_styles, setup, setup_fluent_theme_toggle))
     .add_systems(
         PreUpdate,
-        (drain_ui_actions_and_dispatch, poll_activation_messages),
+        (
+            drain_fluent_theme_toggle_events,
+            drain_ui_actions_and_dispatch,
+            poll_activation_messages,
+        ),
     )
     .add_systems(
         Update,
@@ -2514,6 +2707,33 @@ mod tests {
     use super::*;
     use bevy_xilem::bevy_ecs::schedule::Schedule;
 
+    fn mock_illust(title: &str) -> Illust {
+        Illust {
+            id: 1,
+            title: title.to_string(),
+            image_urls: pixiv_client::ImageUrls {
+                medium: "https://example.com/m.jpg".to_string(),
+                large: "https://example.com/l.jpg".to_string(),
+                square_medium: "https://example.com/s.jpg".to_string(),
+            },
+            user: pixiv_client::User {
+                id: 9,
+                name: "artist".to_string(),
+                account: Some("artist_account".to_string()),
+                profile_image_urls: pixiv_client::ProfileImageUrls {
+                    medium: "https://example.com/avatar.jpg".to_string(),
+                },
+            },
+            tags: Vec::new(),
+            total_view: 0,
+            total_bookmarks: 0,
+            total_comments: 0,
+            is_bookmarked: false,
+            page_count: 1,
+            meta_single_page: None,
+        }
+    }
+
     #[test]
     fn feed_layout_scales_with_viewport_width() {
         let (narrow_columns, _) = compute_feed_layout(900.0, false);
@@ -2530,6 +2750,28 @@ mod tests {
 
         assert!(collapsed_columns >= expanded_columns);
         assert!(collapsed_card_width >= expanded_card_width);
+    }
+
+    #[test]
+    fn card_height_estimator_reflects_title_length() {
+        let mut world = World::new();
+
+        let short = world
+            .spawn((mock_illust("short"), IllustVisual::default()))
+            .id();
+        let long = world
+            .spawn((
+                mock_illust(
+                    "a very long illustration title that should wrap to multiple lines in cards",
+                ),
+                IllustVisual::default(),
+            ))
+            .id();
+
+        let short_h = estimate_illust_card_height(&world, short, 280.0);
+        let long_h = estimate_illust_card_height(&world, long, 280.0);
+
+        assert!(long_h > short_h);
     }
 
     #[test]

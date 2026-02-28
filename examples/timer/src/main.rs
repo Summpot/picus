@@ -30,7 +30,7 @@ use bevy_xilem::{
         winit::{dpi::LogicalSize, error::EventLoopError},
     },
 };
-use shared_utils::init_logging;
+use shared_utils::{drain_fluent_theme_toggle_events, init_logging, setup_fluent_theme_toggle};
 
 const DIAL_SIZE: f64 = 188.0;
 
@@ -549,9 +549,22 @@ fn build_bevy_timer_app() -> App {
         .register_ui_component::<TimerProgressRow>()
         .register_ui_component::<TimerDurationRow>()
         .register_ui_component::<TimerUiComponentsRow>()
-        .add_systems(Startup, (setup_timer_styles, setup_timer_world));
+        .add_systems(
+            Startup,
+            (
+                setup_timer_styles,
+                setup_timer_world,
+                setup_fluent_theme_toggle,
+            ),
+        );
 
-    app.add_systems(PreUpdate, drain_timer_events_and_tick);
+    app.add_systems(
+        PreUpdate,
+        (
+            drain_fluent_theme_toggle_events,
+            drain_timer_events_and_tick,
+        ),
+    );
 
     app
 }

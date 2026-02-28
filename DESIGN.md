@@ -249,4 +249,6 @@ This removes the manual copy/paste requirement in normal desktop callback flow w
 ## 13. Examples and Non-goals
 
 - **Examples:** Highlighted in crates evaluating architectures (`chess_game`, `ui_showcase`, `todo_list`).
+- **Shared Fluent variant toggle for examples:** non-showcase examples use a common floating theme toggle button (Dark / Light / High Contrast), implemented in `examples/shared_utils`, which updates `ActiveStyleVariant` through `set_active_style_variant_by_name(...)`.
+- **Pixiv example UX:** `example_pixiv_client` uses a showcase-like sidebar navigation state, centered dialog-style illustration detail panel, and a masonry-style multi-column feed layout for mixed-height cards.
 - **Non-goals:** Custom render-graph bridging out of scope; sticks to Masonry retained runtime ownership implicitly.

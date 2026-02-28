@@ -11,7 +11,7 @@ use bevy_xilem::{
         winit::{dpi::LogicalSize, error::EventLoopError},
     },
 };
-use shared_utils::init_logging;
+use shared_utils::{drain_fluent_theme_toggle_events, init_logging, setup_fluent_theme_toggle};
 
 #[derive(Component, Debug, Clone)]
 struct UiToast {
@@ -97,8 +97,18 @@ fn build_overlay_hit_routing_app() -> App {
     let mut app = App::new();
     app.add_plugins(BevyXilemPlugin)
         .register_ui_component::<UiToast>()
-        .add_systems(Startup, setup_overlay_hit_routing_world)
-        .add_systems(PreUpdate, drain_overlay_hit_routing_events);
+        .add_systems(
+            Startup,
+            (setup_overlay_hit_routing_world, setup_fluent_theme_toggle),
+        )
+        .add_systems(
+            PreUpdate,
+            (
+                drain_fluent_theme_toggle_events,
+                drain_overlay_hit_routing_events,
+            )
+                .chain(),
+        );
 
     app
 }
