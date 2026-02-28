@@ -13,8 +13,8 @@ use bevy_text::TextPlugin;
 use bevy_xilem::{
     AppBevyXilemExt, AppI18n, BevyXilemPlugin, OverlayConfig, OverlayPlacement, OverlayState,
     ProjectionCtx, ResolvedStyle, StyleClass, StyleSheet, SyncAssetSource, SyncTextSource,
-    UiComboBox, UiComboBoxChanged, UiComboOption, UiEventQueue, UiRoot, UiView, apply_label_style,
-    apply_text_input_style, apply_widget_style,
+    UiComboBox, UiComboBoxChanged, UiComboOption, UiEventQueue, UiRoot, UiView,
+    apply_direct_widget_style, apply_label_style, apply_text_input_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup, Update},
     bevy_ecs::{hierarchy::ChildOf, prelude::*},
     bevy_tasks::{AsyncComputeTaskPool, IoTaskPool, TaskPool},
@@ -682,27 +682,19 @@ fn button_from_style(
     style: &ResolvedStyle,
 ) -> UiView {
     let text_color = style.colors.text.unwrap_or(Color::WHITE);
-    Arc::new(
-        button(entity, action, label_text.into())
-            .padding(style.layout.padding)
-            .corner_radius(style.layout.corner_radius)
-            .border(
-                style.colors.border.unwrap_or(Color::TRANSPARENT),
-                style.layout.border_width,
-            )
-            .background_color(style.colors.bg.unwrap_or(Color::TRANSPARENT))
-            .color(text_color),
-    )
+    Arc::new(apply_direct_widget_style(
+        button(entity, action, label_text.into()).color(text_color),
+        style,
+    ))
 }
 
 fn action_button(
-    world: &World,
+    _world: &World,
     entity: Entity,
     action: AppAction,
     label_text: impl Into<String>,
 ) -> UiView {
-    let style = resolve_style(world, entity);
-    button_from_style(entity, action, label_text, &style)
+    Arc::new(button(entity, action, label_text.into()))
 }
 
 fn sidebar_button_view(
@@ -723,7 +715,7 @@ fn sidebar_button_view(
     button_from_style(entity, action, label_text, &style)
 }
 
-fn setup(mut commands: Commands) {
+fn setup(mut commands: Commands, i18n: Res<AppI18n>) {
     ensure_task_pool_initialized();
 
     let (cmd_tx, cmd_rx) = unbounded::<NetworkCommand>();
@@ -824,15 +816,27 @@ fn setup(mut commands: Commands) {
         ))
         .id();
 
-    commands.entity(ui_components.locale_combo).insert((
-        UiComboBox::new(vec![
-            UiComboOption::new("en-US", "English"),
-            UiComboOption::new("zh-CN", "简体中文"),
-            UiComboOption::new("ja-JP", "日本語"),
-        ])
-        .with_placeholder("Language"),
-        ChildOf(sidebar),
-    ));
+    let locale_options = vec![
+        UiComboOption::new("en-US", "English"),
+        UiComboOption::new("zh-CN", "简体中文"),
+        UiComboOption::new("ja-JP", "日本語"),
+    ];
+    let active_locale_tag = i18n.active_locale.to_string();
+    let selected_locale = locale_options
+        .iter()
+        .position(|option| {
+            option
+                .value
+                .eq_ignore_ascii_case(active_locale_tag.as_str())
+        })
+        .unwrap_or(0);
+
+    let mut locale_combo = UiComboBox::new(locale_options).with_placeholder("Language");
+    locale_combo.selected = selected_locale;
+
+    commands
+        .entity(ui_components.locale_combo)
+        .insert((locale_combo, ChildOf(sidebar)));
 
     let main_column = commands.spawn((PixivMainColumn, ChildOf(root))).id();
 
@@ -1790,6 +1794,12 @@ fn drain_ui_actions_and_dispatch(world: &mut World) {
             .resource_mut::<AppI18n>()
             .set_active_locale(next.clone());
 
+        if let Some(mut combo) = world.get_mut::<UiComboBox>(ui_components.locale_combo)
+            && !combo.options.is_empty()
+        {
+            combo.selected = event.action.selected.min(combo.options.len() - 1);
+        }
+
         {
             let font_stack = {
                 let i18n = world.resource::<AppI18n>();
@@ -2448,7 +2458,13 @@ mod tests {
         world.insert_resource(StyleSheet::default());
         world.insert_resource(UiState::default());
 
-        let locale_combo = world.spawn_empty().id();
+        let locale_combo = world
+            .spawn((UiComboBox::new(vec![
+                UiComboOption::new("en-US", "English"),
+                UiComboOption::new("zh-CN", "简体中文"),
+                UiComboOption::new("ja-JP", "日本語"),
+            ]),))
+            .id();
         world.insert_resource(PixivUiComponents {
             toggle_sidebar: Entity::PLACEHOLDER,
             locale_combo,
@@ -2479,6 +2495,12 @@ mod tests {
             world.resource::<AppI18n>().active_locale,
             parse_locale("zh-CN")
         );
+        assert_eq!(
+            world
+                .get::<UiComboBox>(locale_combo)
+                .and_then(UiComboBox::clamped_selected),
+            Some(1)
+        );
     }
 
     #[test]
@@ -2503,6 +2525,7 @@ mod tests {
     #[test]
     fn setup_builds_componentized_ui_tree() {
         let mut world = World::new();
+        world.insert_resource(AppI18n::new(parse_locale("en-US")));
         let mut schedule = Schedule::default();
         schedule.add_systems(setup);
         schedule.run(&mut world);
@@ -2523,6 +2546,12 @@ mod tests {
             world
                 .get::<UiComboBox>(ui_components.locale_combo)
                 .is_some()
+        );
+        assert_eq!(
+            world
+                .get::<UiComboBox>(ui_components.locale_combo)
+                .and_then(UiComboBox::clamped_selected),
+            Some(0)
         );
     }
 
@@ -2555,5 +2584,88 @@ mod tests {
     fn embedded_pixiv_theme_ron_parses() {
         bevy_xilem::parse_stylesheet_ron(include_str!("../assets/themes/pixiv_client.ron"))
             .expect("embedded pixiv_client stylesheet should parse");
+    }
+
+    #[test]
+    fn pixiv_primary_button_declares_rounded_fluent_tokens() {
+        let sheet =
+            bevy_xilem::parse_stylesheet_ron(include_str!("../assets/themes/pixiv_client.ron"))
+                .expect("embedded pixiv_client stylesheet should parse");
+
+        let button = sheet
+            .get_class_values("pixiv.button")
+            .expect("pixiv.button class should exist");
+        let primary = sheet
+            .get_class_values("pixiv.button.primary")
+            .expect("pixiv.button.primary class should exist");
+
+        let corner_radius = match button.layout.corner_radius.as_ref() {
+            Some(bevy_xilem::StyleValue::Var(token)) => token.as_str(),
+            _ => panic!("pixiv.button corner_radius should come from a theme token"),
+        };
+        let primary_bg = match primary.colors.bg.as_ref() {
+            Some(bevy_xilem::StyleValue::Var(token)) => token.as_str(),
+            _ => panic!("pixiv.button.primary bg should come from a theme token"),
+        };
+
+        assert_eq!(corner_radius, "radius-md");
+        assert_eq!(primary_bg, "surface-accent");
+    }
+
+    #[test]
+    fn pixiv_warn_button_uses_fluent_tokens() {
+        let sheet =
+            bevy_xilem::parse_stylesheet_ron(include_str!("../assets/themes/pixiv_client.ron"))
+                .expect("embedded pixiv_client stylesheet should parse");
+        let warn = sheet
+            .get_class_values("pixiv.button.warn")
+            .expect("pixiv.button.warn class should exist");
+
+        let bg = match warn.colors.bg.as_ref() {
+            Some(bevy_xilem::StyleValue::Var(token)) => token.as_str(),
+            _ => panic!("pixiv.button.warn bg should come from a theme token"),
+        };
+        let hover_bg = match warn.colors.hover_bg.as_ref() {
+            Some(bevy_xilem::StyleValue::Var(token)) => token.as_str(),
+            _ => panic!("pixiv.button.warn hover_bg should come from a theme token"),
+        };
+        let pressed_bg = match warn.colors.pressed_bg.as_ref() {
+            Some(bevy_xilem::StyleValue::Var(token)) => token.as_str(),
+            _ => panic!("pixiv.button.warn pressed_bg should come from a theme token"),
+        };
+        let border = match warn.colors.border.as_ref() {
+            Some(bevy_xilem::StyleValue::Var(token)) => token.as_str(),
+            _ => panic!("pixiv.button.warn border should come from a theme token"),
+        };
+        let text = match warn.colors.text.as_ref() {
+            Some(bevy_xilem::StyleValue::Var(token)) => token.as_str(),
+            _ => panic!("pixiv.button.warn text should come from a theme token"),
+        };
+
+        assert_eq!(bg, "surface-subtle");
+        assert_eq!(hover_bg, "surface-subtle-hover");
+        assert_eq!(pressed_bg, "surface-subtle-pressed");
+        assert_eq!(border, "border-default");
+        assert_eq!(text, "text-primary");
+    }
+
+    #[test]
+    fn locale_combo_initial_selection_follows_active_locale() {
+        let mut world = World::new();
+        world.insert_resource(AppI18n::new(parse_locale("ja-JP")));
+
+        let mut schedule = Schedule::default();
+        schedule.add_systems(setup);
+        schedule.run(&mut world);
+
+        let ui_components = *world.resource::<PixivUiComponents>();
+        let combo = world
+            .get::<UiComboBox>(ui_components.locale_combo)
+            .expect("locale combo should exist");
+        let selected = combo
+            .clamped_selected()
+            .expect("locale combo should select active locale");
+
+        assert_eq!(combo.options[selected].value, "ja-JP");
     }
 }
