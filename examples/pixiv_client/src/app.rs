@@ -2659,7 +2659,7 @@ mod tests {
     }
 
     #[test]
-    fn pixiv_primary_button_declares_rounded_fluent_tokens() {
+    fn pixiv_primary_button_uses_neutral_fluent_tokens() {
         let sheet =
             bevy_xilem::parse_stylesheet_ron(include_str!("../assets/themes/pixiv_client.ron"))
                 .expect("embedded pixiv_client stylesheet should parse");
@@ -2679,9 +2679,14 @@ mod tests {
             Some(bevy_xilem::StyleValue::Var(token)) => token.as_str(),
             _ => panic!("pixiv.button.primary bg should come from a theme token"),
         };
+        let primary_border = match primary.colors.border.as_ref() {
+            Some(bevy_xilem::StyleValue::Var(token)) => token.as_str(),
+            _ => panic!("pixiv.button.primary border should come from a theme token"),
+        };
 
         assert_eq!(corner_radius, "radius-md");
-        assert_eq!(primary_bg, "surface-accent");
+        assert_eq!(primary_bg, "surface-panel");
+        assert_eq!(primary_border, "border-default");
     }
 
     #[test]
