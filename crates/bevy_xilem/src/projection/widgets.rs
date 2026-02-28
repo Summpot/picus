@@ -427,6 +427,22 @@ pub(crate) fn project_radio_group(radio_group: &UiRadioGroup, ctx: ProjectionCtx
 
 pub(crate) fn project_tab_bar(tab_bar: &UiTabBar, ctx: ProjectionCtx<'_>) -> UiView {
     let style = resolve_style(ctx.world, ctx.entity);
+
+    let content: UiView = ctx
+        .children
+        .get(tab_bar.active)
+        .cloned()
+        .unwrap_or_else(|| Arc::new(label("")));
+
+    // When headers are hidden only show the active content (page-container mode).
+    if !tab_bar.show_headers {
+        return Arc::new(apply_widget_style(
+            apply_flex_alignment(flex_col(vec![content.into_any_flex()]), &style)
+                .gap(Length::px(0.0)),
+            &style,
+        ));
+    }
+
     let mut header_style = resolve_style_for_classes(ctx.world, ["widget.tab.header"]);
     if header_style.layout.padding <= 0.0 {
         header_style.layout.padding = 8.0;
@@ -442,12 +458,25 @@ pub(crate) fn project_tab_bar(tab_bar: &UiTabBar, ctx: ProjectionCtx<'_>) -> UiV
         active_style.layout.border_width = 2.0;
     }
 
+    // Resolve the selected-indicator-pipe style.
+    let pipe_style = resolve_style_for_classes(ctx.world, ["widget.tab.selected-pipe"]);
+    let pipe_color = pipe_style
+        .colors
+        .bg
+        .unwrap_or_else(|| Color::from_rgb8(0x00, 0x78, 0xD4));
+    let pipe_height = if pipe_style.layout.border_width > 0.0 {
+        pipe_style.layout.border_width
+    } else {
+        2.0
+    };
+
     let headers = tab_bar
         .tabs
         .iter()
         .enumerate()
         .map(|(i, tab_label)| {
-            let s = if i == tab_bar.active {
+            let is_active = i == tab_bar.active;
+            let s = if is_active {
                 &active_style
             } else {
                 &header_style
@@ -460,17 +489,32 @@ pub(crate) fn project_tab_bar(tab_bar: &UiTabBar, ctx: ProjectionCtx<'_>) -> UiV
                 },
                 tab_label.clone(),
             );
-            apply_direct_widget_style(btn, s).into_any_flex()
+            let styled_btn = apply_direct_widget_style(btn, s);
+
+            // Build a column with the button + an accent-colored bottom pipe
+            // for the active tab (Fluent-style selected indicator).
+            if is_active {
+                let pipe = sized_box(label(""))
+                    .width(Dim::Stretch)
+                    .height(Dim::Fixed(Length::px(pipe_height)))
+                    .background(pipe_color);
+                flex_col(vec![styled_btn.into_any_flex(), pipe.into_any_flex()])
+                    .gap(Length::px(0.0))
+                    .into_any_flex()
+            } else {
+                // Inactive: spacer at the bottom matching pipe height for alignment.
+                let spacer = sized_box(label(""))
+                    .width(Dim::Stretch)
+                    .height(Dim::Fixed(Length::px(pipe_height)))
+                    .background(Color::TRANSPARENT);
+                flex_col(vec![styled_btn.into_any_flex(), spacer.into_any_flex()])
+                    .gap(Length::px(0.0))
+                    .into_any_flex()
+            }
         })
         .collect::<Vec<_>>();
 
     let header_row = flex_row(headers).into_any_flex();
-
-    let content: UiView = ctx
-        .children
-        .get(tab_bar.active)
-        .cloned()
-        .unwrap_or_else(|| Arc::new(label("")));
 
     Arc::new(apply_widget_style(
         apply_flex_alignment(flex_col(vec![header_row, content.into_any_flex()]), &style)

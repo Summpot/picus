@@ -270,7 +270,10 @@ fn embedded_fluent_variants_inherit_shared_top_level_rules() {
         .get("high-contrast")
         .expect("high-contrast variant should exist");
 
-    assert!(!dark.rules.is_empty(), "dark variant rules should be non-empty");
+    assert!(
+        !dark.rules.is_empty(),
+        "dark variant rules should be non-empty"
+    );
     assert!(
         !light.rules.is_empty(),
         "light variant should inherit non-empty shared rules"

@@ -12,6 +12,10 @@ pub struct UiTabBar {
     pub tabs: Vec<String>,
     /// Index of the currently active tab.
     pub active: usize,
+    /// Whether to render the tab header row. When `false` only the active
+    /// child content is displayed, useful for page containers driven by
+    /// external navigation.
+    pub show_headers: bool,
 }
 
 impl UiTabBar {
@@ -20,12 +24,20 @@ impl UiTabBar {
         Self {
             tabs: tabs.into_iter().map(Into::into).collect(),
             active: 0,
+            show_headers: true,
         }
     }
 
     #[must_use]
     pub fn with_active(mut self, index: usize) -> Self {
         self.active = index;
+        self
+    }
+
+    /// Hide the tab header row. The active child is still displayed.
+    #[must_use]
+    pub fn with_hidden_headers(mut self) -> Self {
+        self.show_headers = false;
         self
     }
 }

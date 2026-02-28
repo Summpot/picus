@@ -247,14 +247,9 @@ fn setup_showcase(mut commands: Commands) {
             ChildOf(sidebar),
         ))
         .id();
-    commands.spawn((
-        UiLabel::new("Use the tabs on the right to switch pages."),
-        ChildOf(sidebar),
-    ));
-
     let pages = commands
         .spawn((
-            UiTabBar::new(["Components", "Theming", "Localization & CJK"]),
+            UiTabBar::new(["Components", "Theming", "Localization & CJK"]).with_hidden_headers(),
             StyleClass(vec!["showcase.pages".to_string()]),
             ChildOf(body),
         ))
@@ -287,25 +282,57 @@ fn setup_showcase(mut commands: Commands) {
     ));
 
     let tab_section = commands
-        .spawn((UiGroupBox::new("Nested Tab Bar"), ChildOf(components_col)))
+        .spawn((UiGroupBox::new("Tab Control"), ChildOf(components_col)))
         .id();
-    let tab_bar = commands
+    commands.spawn((
+        UiLabel::new("Fluent-style tabs with accent indicator pipe. Click to switch."),
+        ChildOf(tab_section),
+    ));
+    let tab_demo = commands
         .spawn((
             UiTabBar::new(["Details", "Settings", "Logs"]),
             ChildOf(tab_section),
         ))
         .id();
     commands.spawn((
-        UiLabel::new("Details tab content: item information and metadata."),
-        ChildOf(tab_bar),
+        UiLabel::new("Details tab content: item information and metadata. The selected tab shows an accent-colored indicator bar below its header, following the Fluent Design language."),
+        ChildOf(tab_demo),
     ));
     commands.spawn((
-        UiLabel::new("Settings tab content: configuration options."),
-        ChildOf(tab_bar),
+        UiLabel::new("Settings tab content: configuration options for the application. Toggle preferences and adjust values here."),
+        ChildOf(tab_demo),
     ));
     commands.spawn((
-        UiLabel::new("Logs tab content: event history and diagnostics."),
-        ChildOf(tab_bar),
+        UiLabel::new("Logs tab content: event history and diagnostics. Recent actions and system messages are shown."),
+        ChildOf(tab_demo),
+    ));
+
+    // Second tab bar demo: more tabs to show scrolling / overflow behavior.
+    let tab_demo2 = commands
+        .spawn((
+            UiTabBar::new(["Overview", "Analytics", "Reports", "Admin", "Help"]),
+            ChildOf(tab_section),
+        ))
+        .id();
+    commands.spawn((
+        UiLabel::new("Overview: A bird\u{2019}s eye view of the system."),
+        ChildOf(tab_demo2),
+    ));
+    commands.spawn((
+        UiLabel::new("Analytics: Charts and data visualizations."),
+        ChildOf(tab_demo2),
+    ));
+    commands.spawn((
+        UiLabel::new("Reports: Generated summaries and exports."),
+        ChildOf(tab_demo2),
+    ));
+    commands.spawn((
+        UiLabel::new("Admin: User management and permissions."),
+        ChildOf(tab_demo2),
+    ));
+    commands.spawn((
+        UiLabel::new("Help: Documentation and support."),
+        ChildOf(tab_demo2),
     ));
 
     let tree_section = commands
@@ -1480,9 +1507,9 @@ fn drain_showcase_events(world: &mut World) {
         .resource_mut::<UiEventQueue>()
         .drain_actions::<UiTabChanged>();
     for event in tab_events {
-        if event.action.bar == rt.pages_tab_bar {
-            set_showcase_page(world, rt, event.action.active);
-        }
+        // Pages tab bar has hidden headers so normal tab clicks go through
+        // the sidebar buttons instead.  Tab events from the component demos
+        // are reported in the status bar.
         let msg = format!("Tab: switched to index {}", event.action.active);
         update_status(world, rt.status_label, msg);
     }
@@ -1653,6 +1680,14 @@ fn set_showcase_page(world: &mut World, rt: ShowcaseRuntime, page: usize) {
 bevy_xilem::impl_ui_component_template!(ShowcaseRoot, project_showcase_root);
 bevy_xilem::impl_ui_component_template!(StatusDisplay, project_status_display);
 
+/// Explicitly install the Fluent Dark theme variant at startup so the
+/// showcase always renders with the correct theme.  Without a theme the
+/// UI root has no background/text styling and would appear blank.
+fn ensure_fluent_dark_on_startup(world: &mut World) {
+    install_embedded_fluent_theme_variant_by_name(world, "dark")
+        .expect("Fluent Dark theme should be available");
+}
+
 fn build_showcase_app() -> App {
     init_logging();
 
@@ -1693,7 +1728,14 @@ fn build_showcase_app() -> App {
     .insert_resource(ShowcaseState::default())
     .register_ui_component::<ShowcaseRoot>()
     .register_ui_component::<StatusDisplay>()
-    .add_systems(Startup, (setup_showcase_styles, setup_showcase))
+    .add_systems(
+        Startup,
+        (
+            setup_showcase_styles,
+            setup_showcase,
+            ensure_fluent_dark_on_startup,
+        ),
+    )
     .add_systems(PreUpdate, drain_showcase_events);
 
     app

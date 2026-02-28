@@ -1,5 +1,6 @@
 (
   tokens: {
+    "transparent": Color(Rgba(0.0, 0.0, 0.0, 0.0)),
     "surface-bg": Color(Hex("#1F1F1F")),
     "surface-panel": Color(Hex("#242424")),
     "surface-elevated": Color(Hex("#1F1F1F")),
@@ -1013,14 +1014,16 @@
       selector: Class("widget.tab.header"),
       setter: (
         layout: (
-          padding: Var("space-sm"),
-          corner_radius: Var("radius-md"),
-          border_width: Var("border-thin"),
+          padding: 12.0,
+          corner_radius: 0.0,
+          border_width: 0.0,
         ),
         colors: (
-          bg: Var("surface-subtle"),
-          border: Var("border-default"),
-          text: Var("text-primary"),
+          bg: Var("transparent"),
+          text: Var("text-secondary"),
+        ),
+        text: (
+          size: 14.0,
         ),
         transition: Var("duration-fast"),
       ),
@@ -1030,6 +1033,7 @@
       setter: (
         colors: (
           bg: Var("surface-subtle-hover"),
+          text: Var("text-primary"),
         ),
       ),
     ),
@@ -1038,6 +1042,7 @@
       setter: (
         colors: (
           bg: Var("surface-subtle-pressed"),
+          text: Var("text-primary"),
         ),
       ),
     ),
@@ -1045,14 +1050,28 @@
       selector: Class("widget.tab.active"),
       setter: (
         layout: (
-          padding: Var("space-sm"),
-          corner_radius: Var("radius-md"),
-          border_width: Var("border-thin"),
+          padding: 12.0,
+          corner_radius: 0.0,
+          border_width: 0.0,
         ),
         colors: (
-          bg: Var("surface-tab-active"),
-          border: Var("accent-primary"),
-          text: Var("text-on-accent"),
+          bg: Var("transparent"),
+          text: Var("text-primary"),
+        ),
+        text: (
+          size: 14.0,
+        ),
+      ),
+    ),
+    (
+      selector: Class("widget.tab.selected-pipe"),
+      setter: (
+        layout: (
+          border_width: 2.0,
+          corner_radius: Var("radius-sm"),
+        ),
+        colors: (
+          bg: Var("accent-primary"),
         ),
       ),
     ),
