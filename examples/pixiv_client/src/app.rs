@@ -12,8 +12,8 @@ use bevy_image::Image as BevyImage;
 use bevy_text::TextPlugin;
 use bevy_xilem::{
     AppBevyXilemExt, AppI18n, BevyXilemPlugin, OverlayConfig, OverlayPlacement, OverlayState,
-    ProjectionCtx, ResolvedStyle, StyleClass, StyleSheet, SyncAssetSource, SyncTextSource,
-    UiComboBox, UiComboBoxChanged, UiComboOption, UiEventQueue, UiRoot, UiView,
+    ProjectionCtx, ResolvedStyle, StyleClass, StyleSheet, StyleValue, SyncAssetSource,
+    SyncTextSource, UiComboBox, UiComboBoxChanged, UiComboOption, UiEventQueue, UiRoot, UiView,
     apply_direct_widget_style, apply_label_style, apply_text_input_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup, Update},
     bevy_ecs::{hierarchy::ChildOf, prelude::*},
@@ -120,10 +120,10 @@ fn sync_font_stack_for_locale(sheet: &mut StyleSheet, stack: Option<&[String]>) 
         "pixiv.tag",
         "pixiv.overlay",
     ] {
-        if let Some(existing) = sheet.get_class(class_name) {
+        if let Some(existing) = sheet.get_class_values(class_name).cloned() {
             let mut updated = existing;
-            updated.font_family = stack.map(|stack| stack.to_vec());
-            sheet.set_class(class_name, updated);
+            updated.font_family = stack.map(|stack| StyleValue::value(stack.to_vec()));
+            sheet.set_class_values(class_name, updated);
         }
     }
 }
@@ -2647,6 +2647,35 @@ mod tests {
         assert_eq!(pressed_bg, "surface-subtle-pressed");
         assert_eq!(border, "border-default");
         assert_eq!(text, "text-primary");
+    }
+
+    #[test]
+    fn sync_font_stack_for_locale_preserves_tokenized_fields() {
+        let mut sheet =
+            bevy_xilem::parse_stylesheet_ron(include_str!("../assets/themes/pixiv_client.ron"))
+                .expect("embedded pixiv_client stylesheet should parse");
+
+        // Pixiv sheet intentionally carries class rules with token refs but no local token map.
+        assert!(sheet.tokens.is_empty());
+
+        let stack = vec!["Inter".to_string(), "sans-serif".to_string()];
+        sync_font_stack_for_locale(&mut sheet, Some(&stack));
+
+        let root = sheet
+            .get_class_values("pixiv.root")
+            .expect("pixiv.root class should exist");
+
+        let padding_token = match root.layout.padding.as_ref() {
+            Some(bevy_xilem::StyleValue::Var(token)) => token.as_str(),
+            _ => panic!("pixiv.root padding should remain tokenized"),
+        };
+        assert_eq!(padding_token, "space-lg");
+
+        let font_family = match root.font_family.as_ref() {
+            Some(bevy_xilem::StyleValue::Value(value)) => value,
+            _ => panic!("font family should be written as a literal style value"),
+        };
+        assert_eq!(font_family, &stack);
     }
 
     #[test]

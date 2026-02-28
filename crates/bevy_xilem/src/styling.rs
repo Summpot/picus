@@ -532,16 +532,33 @@ impl StyleSheet {
         self
     }
 
+    #[must_use]
+    pub fn with_class_values(
+        mut self,
+        class_name: impl Into<String>,
+        setter: StyleSetterValue,
+    ) -> Self {
+        self.set_class_values(class_name, setter);
+        self
+    }
+
     pub fn set_class(&mut self, class_name: impl Into<String>, setter: StyleSetter) {
+        self.set_class_values(class_name, setter.into());
+    }
+
+    pub fn set_class_values(&mut self, class_name: impl Into<String>, setter: StyleSetterValue) {
         let class_name = class_name.into();
         if let Some(existing) = self.rules.iter_mut().find(|rule| {
             matches!(&rule.selector, Selector::Class(existing_name) if existing_name == &class_name)
         }) {
-            existing.setter = setter.into();
+            existing.setter = setter;
             return;
         }
 
-        self.rules.push(StyleRule::class(class_name, setter));
+        self.rules.push(StyleRule::new_with_values(
+            Selector::class(class_name),
+            setter,
+        ));
     }
 
     #[must_use]
