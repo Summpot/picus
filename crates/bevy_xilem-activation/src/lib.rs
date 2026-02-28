@@ -2,16 +2,19 @@ use std::{
     collections::HashSet,
     io::{self, BufRead, BufReader, Write},
     path::PathBuf,
-    sync::mpsc::{self, Receiver, Sender},
+    sync::{
+        Arc, Mutex,
+        mpsc::{self, Receiver, Sender},
+    },
     thread,
-    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
+use app_single_instance::{PrimaryHandle, notify_if_running, start_primary};
 use interprocess::local_socket::{
     GenericFilePath, GenericNamespaced, ListenerOptions, Name, Stream, prelude::*,
 };
-use single_instance::SingleInstance;
-use sysuri::UriScheme;
+use sysuri::{FnHandler, UriScheme};
 
 const IPC_CONNECT_RETRY_ATTEMPTS: usize = 120;
 const IPC_CONNECT_RETRY_DELAY: Duration = Duration::from_millis(50);
@@ -31,128 +34,6 @@ enum IpcIncomingLine {
 enum IpcAckLine {
     Ack,
     Nack,
-}
-
-#[cfg(target_os = "macos")]
-mod macos_apple_events {
-    use std::{
-        cell::RefCell,
-        sync::{Mutex, OnceLock, mpsc::Sender},
-    };
-
-    use objc2::rc::Retained;
-    use objc2::{MainThreadOnly, define_class, msg_send};
-    use objc2_core_services::{kAEISGetURL, kAEInternetSuite, keyDirectObject};
-    use objc2_foundation::{
-        MainThreadMarker, NSAppleEventDescriptor, NSAppleEventManager, NSObject, NSObjectProtocol,
-    };
-
-    use crate::{ActivationError, Result};
-
-    static URI_SENDER: OnceLock<Mutex<Option<Sender<String>>>> = OnceLock::new();
-
-    thread_local! {
-        static EVENT_HANDLER: RefCell<Option<Retained<ActivationAppleEventHandler>>> = const { RefCell::new(None) };
-    }
-
-    fn extract_uri_from_event(event: &NSAppleEventDescriptor) -> Option<String> {
-        if event.eventClass() != kAEInternetSuite || event.eventID() != kAEISGetURL {
-            return None;
-        }
-
-        let descriptor = event.paramDescriptorForKeyword(keyDirectObject)?;
-        let value = descriptor.stringValue()?.to_string();
-        let trimmed = value.trim();
-
-        if trimmed.is_empty() || !trimmed.contains("://") {
-            return None;
-        }
-
-        Some(trimmed.to_string())
-    }
-
-    define_class!(
-        #[unsafe(super = NSObject)]
-        #[thread_kind = MainThreadOnly]
-        #[name = "BevyXilemActivationAppleEventHandler"]
-        struct ActivationAppleEventHandler;
-
-        unsafe impl NSObjectProtocol for ActivationAppleEventHandler {}
-
-        impl ActivationAppleEventHandler {
-            #[unsafe(method(handleAppleEvent:withReplyEvent:))]
-            fn handle_apple_event(
-                &self,
-                event: &NSAppleEventDescriptor,
-                _reply: &NSAppleEventDescriptor,
-            ) {
-                let Some(uri) = extract_uri_from_event(event) else {
-                    return;
-                };
-
-                let Some(sender_slot) = URI_SENDER.get() else {
-                    return;
-                };
-
-                let Ok(sender_guard) = sender_slot.lock() else {
-                    return;
-                };
-
-                if let Some(sender) = sender_guard.as_ref() {
-                    let _ = sender.send(uri);
-                }
-            }
-        }
-    );
-
-    impl ActivationAppleEventHandler {
-        fn new(mtm: MainThreadMarker) -> Retained<Self> {
-            unsafe { msg_send![super(Self::alloc(mtm).set_ivars(())), init] }
-        }
-    }
-
-    pub fn install_uri_forwarder(sender: Sender<String>) -> Result<()> {
-        let sender_slot = URI_SENDER.get_or_init(|| Mutex::new(None));
-        {
-            let mut sender_guard = sender_slot.lock().map_err(|_| {
-                ActivationError::SingleInstance("apple-event sender mutex poisoned".to_string())
-            })?;
-            *sender_guard = Some(sender);
-        }
-
-        let mtm = MainThreadMarker::new().ok_or_else(|| {
-            ActivationError::SingleInstance(
-                "failed to get MainThreadMarker while installing apple-event handler".to_string(),
-            )
-        })?;
-
-        EVENT_HANDLER.with(|handler_slot| {
-            let mut handler_slot = handler_slot.borrow_mut();
-            if handler_slot.is_none() {
-                *handler_slot = Some(ActivationAppleEventHandler::new(mtm));
-            }
-
-            if let Some(handler) = handler_slot.as_ref() {
-                let manager = NSAppleEventManager::sharedAppleEventManager();
-                unsafe {
-                    manager.setEventHandler_andSelector_forEventClass_andEventID(
-                        &**handler,
-                        objc2::sel!(handleAppleEvent:withReplyEvent:),
-                        kAEInternetSuite,
-                        kAEISGetURL,
-                    );
-                }
-            }
-        });
-
-        Ok(())
-    }
-
-    pub fn current_uri() -> Option<String> {
-        let manager = NSAppleEventManager::sharedAppleEventManager();
-        let event = manager.currentAppleEvent()?;
-        extract_uri_from_event(&event)
-    }
 }
 
 pub type Result<T> = std::result::Result<T, ActivationError>;
@@ -250,7 +131,7 @@ pub enum BootstrapOutcome {
 pub struct ActivationService {
     startup_uris: Vec<String>,
     receiver: Receiver<String>,
-    _single_instance: SingleInstance,
+    _primary_handle: PrimaryHandle,
 }
 
 impl ActivationService {
@@ -276,32 +157,32 @@ pub fn bootstrap(config: ActivationConfig) -> Result<BootstrapOutcome> {
         ensure_protocol_registered(protocol)?;
     }
 
-    let mut startup_uris = collect_startup_uris();
-    let single_instance = SingleInstance::new(single_instance_name(&config.app_id).as_str())
-        .map_err(|error| ActivationError::SingleInstance(error.to_string()))?;
+    let startup_uris = collect_startup_uris(config.protocol.as_ref())?;
+    let should_exit_as_secondary = notify_if_running(&config.app_id);
 
     let name = ipc_name_for_app(&config.app_id)?;
 
-    if single_instance.is_single() {
+    if should_exit_as_secondary {
+        return Ok(finalize_secondary_forward_result(forward_uris_to_primary(
+            &name,
+            &startup_uris,
+        )));
+    }
+
+    let primary_handle = start_primary(&config.app_id, || {});
+
+    {
         let thread_name = listener_thread_name(&config.app_id);
         let (sender, receiver) = mpsc::channel::<String>();
 
         match spawn_ipc_listener(&name, thread_name.clone(), sender.clone()) {
-            Ok(()) => {
-                #[cfg(target_os = "macos")]
-                macos_apple_events::install_uri_forwarder(sender)?;
-
-                Ok(BootstrapOutcome::Primary(ActivationService {
-                    startup_uris,
-                    receiver,
-                    _single_instance: single_instance,
-                }))
-            }
+            Ok(()) => Ok(BootstrapOutcome::Primary(ActivationService {
+                startup_uris,
+                receiver,
+                _primary_handle: primary_handle,
+            })),
             Err(error) if should_treat_listener_bind_as_existing_primary(&error) => {
                 if primary_listener_is_reachable(&name) {
-                    #[cfg(target_os = "macos")]
-                    maybe_fill_startup_uris_from_secondary_apple_event(&mut startup_uris);
-
                     Ok(finalize_secondary_forward_result(forward_uris_to_primary(
                         &name,
                         &startup_uris,
@@ -310,26 +191,15 @@ pub fn bootstrap(config: ActivationConfig) -> Result<BootstrapOutcome> {
                     cleanup_stale_ipc_endpoint(&config.app_id)?;
                     spawn_ipc_listener(&name, thread_name, sender.clone())?;
 
-                    #[cfg(target_os = "macos")]
-                    macos_apple_events::install_uri_forwarder(sender)?;
-
                     Ok(BootstrapOutcome::Primary(ActivationService {
                         startup_uris,
                         receiver,
-                        _single_instance: single_instance,
+                        _primary_handle: primary_handle,
                     }))
                 }
             }
             Err(error) => Err(error),
         }
-    } else {
-        #[cfg(target_os = "macos")]
-        maybe_fill_startup_uris_from_secondary_apple_event(&mut startup_uris);
-
-        Ok(finalize_secondary_forward_result(forward_uris_to_primary(
-            &name,
-            &startup_uris,
-        )))
     }
 }
 
@@ -341,48 +211,47 @@ fn finalize_secondary_forward_result(forward_result: Result<()>) -> BootstrapOut
     BootstrapOutcome::SecondaryForwarded
 }
 
-fn collect_startup_uris() -> Vec<String> {
-    #[cfg(target_os = "macos")]
-    let use_argv = false;
-
-    #[cfg(not(target_os = "macos"))]
-    let use_argv = true;
-
-    let apple_event_uri = {
-        #[cfg(target_os = "macos")]
-        {
-            collect_macos_activation_uri_from_current_apple_event()
-        }
-
-        #[cfg(not(target_os = "macos"))]
-        {
-            None
-        }
+fn collect_startup_uris(protocol: Option<&ProtocolRegistration>) -> Result<Vec<String>> {
+    let Some(protocol) = protocol else {
+        return Ok(sysuri::parse_args().into_iter().collect());
     };
 
-    collect_startup_uris_from_sources(std::env::args().skip(1), apple_event_uri, use_argv)
-}
+    let pending_uris = Arc::new(Mutex::new(Vec::<String>::new()));
+    let pending_uris_for_handler = Arc::clone(&pending_uris);
+    let expected_scheme = protocol.scheme.clone();
 
-fn collect_startup_uris_from_sources<I, S>(
-    args: I,
-    apple_event_uri: Option<String>,
-    use_argv: bool,
-) -> Vec<String>
-where
-    I: IntoIterator<Item = S>,
-    S: AsRef<str>,
-{
-    let mut uris = if use_argv {
-        collect_activation_uris(args)
-    } else {
-        Vec::new()
-    };
+    sysuri::register_handler(
+        protocol.scheme.as_str(),
+        FnHandler::new(move |uri| {
+            let Some(scheme) = sysuri::extract_scheme(uri) else {
+                return;
+            };
 
-    if let Some(uri) = apple_event_uri {
-        uris.push(uri);
+            if !scheme.eq_ignore_ascii_case(expected_scheme.as_str()) {
+                return;
+            }
+
+            if let Ok(mut uris) = pending_uris_for_handler.lock() {
+                uris.push(uri.to_string());
+            }
+        }),
+    );
+
+    if let Some(uri) = sysuri::parse_args()
+        && let Some(scheme) = sysuri::extract_scheme(&uri)
+        && scheme.eq_ignore_ascii_case(protocol.scheme.as_str())
+    {
+        sysuri::should_handle_uri()?;
     }
 
-    dedupe_preserve_order(uris)
+    let startup_uris = pending_uris
+        .lock()
+        .map_err(|_| {
+            ActivationError::SingleInstance("sysuri callback buffer mutex poisoned".to_string())
+        })?
+        .clone();
+
+    Ok(dedupe_preserve_order(startup_uris))
 }
 
 fn dedupe_preserve_order(values: Vec<String>) -> Vec<String> {
@@ -396,33 +265,6 @@ fn dedupe_preserve_order(values: Vec<String>) -> Vec<String> {
     }
 
     deduped
-}
-
-#[cfg(target_os = "macos")]
-fn maybe_fill_startup_uris_from_secondary_apple_event(startup_uris: &mut Vec<String>) {
-    if !startup_uris.is_empty() {
-        return;
-    }
-
-    let deadline = Instant::now() + Duration::from_millis(1200);
-    loop {
-        if let Some(uri) = collect_macos_activation_uri_from_current_apple_event() {
-            startup_uris.push(uri);
-            *startup_uris = dedupe_preserve_order(std::mem::take(startup_uris));
-            return;
-        }
-
-        if Instant::now() >= deadline {
-            return;
-        }
-
-        thread::sleep(Duration::from_millis(50));
-    }
-}
-
-#[cfg(target_os = "macos")]
-fn collect_macos_activation_uri_from_current_apple_event() -> Option<String> {
-    macos_apple_events::current_uri()
 }
 
 pub fn ensure_protocol_registered(protocol: &ProtocolRegistration) -> Result<()> {
@@ -754,17 +596,6 @@ fn validate_config(config: &ActivationConfig) -> Result<()> {
     Ok(())
 }
 
-fn collect_activation_uris<I, S>(args: I) -> Vec<String>
-where
-    I: IntoIterator<Item = S>,
-    S: AsRef<str>,
-{
-    args.into_iter()
-        .map(|value| value.as_ref().trim().to_string())
-        .filter(|value| value.contains("://"))
-        .collect()
-}
-
 fn normalize_app_id(app_id: &str) -> String {
     app_id
         .chars()
@@ -776,21 +607,6 @@ fn normalize_app_id(app_id: &str) -> String {
             }
         })
         .collect::<String>()
-}
-
-fn single_instance_name(app_id: &str) -> String {
-    let normalized = normalize_app_id(app_id);
-
-    #[cfg(target_os = "macos")]
-    {
-        return std::env::temp_dir()
-            .join(format!("{normalized}.lock"))
-            .to_string_lossy()
-            .into_owned();
-    }
-
-    #[allow(unreachable_code)]
-    normalized
 }
 
 fn listener_thread_name(app_id: &str) -> String {
@@ -843,21 +659,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn collects_only_uri_like_arguments() {
-        let args = vec![
-            "--flag".to_string(),
-            "pixiv://account/login?code=abc&via=login".to_string(),
-            "https://example.com".to_string(),
-            "plain-text".to_string(),
-        ];
-
-        let uris = collect_activation_uris(args);
-        assert_eq!(uris.len(), 2);
-        assert!(uris[0].starts_with("pixiv://"));
-        assert!(uris[1].starts_with("https://"));
-    }
-
-    #[test]
     fn dedupe_preserve_order_keeps_first_occurrence() {
         let values = vec![
             "pixiv://account/login?code=abc".to_string(),
@@ -874,48 +675,6 @@ mod tests {
                 "pixiv://account/login?code=abc".to_string(),
                 "https://example.com".to_string(),
                 "pixiv://account/login?code=def".to_string(),
-            ]
-        );
-    }
-
-    #[test]
-    fn startup_source_policy_can_disable_argv_and_keep_apple_event() {
-        let args = vec![
-            "--flag".to_string(),
-            "pixiv://account/login?code=from-argv".to_string(),
-        ];
-
-        let uris = collect_startup_uris_from_sources(
-            args,
-            Some("pixiv://account/login?code=from-apple-event".to_string()),
-            false,
-        );
-
-        assert_eq!(
-            uris,
-            vec!["pixiv://account/login?code=from-apple-event".to_string()]
-        );
-    }
-
-    #[test]
-    fn startup_source_policy_merges_and_dedupes_when_argv_enabled() {
-        let args = vec![
-            "pixiv://account/login?code=abc".to_string(),
-            "https://example.com".to_string(),
-            "pixiv://account/login?code=abc".to_string(),
-        ];
-
-        let uris = collect_startup_uris_from_sources(
-            args,
-            Some("pixiv://account/login?code=abc".to_string()),
-            true,
-        );
-
-        assert_eq!(
-            uris,
-            vec![
-                "pixiv://account/login?code=abc".to_string(),
-                "https://example.com".to_string(),
             ]
         );
     }
