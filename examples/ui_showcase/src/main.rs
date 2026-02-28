@@ -17,8 +17,8 @@ use bevy_xilem::{
     bevy_ecs::{hierarchy::ChildOf, prelude::*},
     bevy_math::Vec2,
     bevy_text::TextPlugin,
-    install_embedded_fluent_theme_variant_by_name, resolve_style, resolve_style_for_classes,
-    run_app_with_window_options, spawn_in_overlay_root,
+    resolve_style, resolve_style_for_classes, run_app_with_window_options,
+    set_active_style_variant_by_name, spawn_in_overlay_root,
     xilem::{
         Color,
         masonry::layout::{Dim, Length},
@@ -734,6 +734,10 @@ fn setup_showcase(mut commands: Commands) {
         theme_danger_btn,
         theme_outline_btn,
     });
+}
+
+fn ensure_showcase_default_theme_variant(world: &mut World) {
+    set_active_style_variant_by_name(world, ThemeMode::FluentDark.variant_name());
 }
 
 fn setup_showcase_styles(mut style_sheet: ResMut<StyleSheet>) {
@@ -1611,18 +1615,7 @@ fn drain_showcase_events(world: &mut World) {
 
         if event.action.combo == rt.theme_mode_combo {
             if let Some(theme) = ThemeMode::from_combo_value(event.action.value.as_str()) {
-                let install_result =
-                    install_embedded_fluent_theme_variant_by_name(world, theme.variant_name());
-
-                if let Err(error) = install_result {
-                    update_status(
-                        world,
-                        rt.status_label,
-                        format!("Theme switch failed: {error}"),
-                    );
-                    continue;
-                }
-
+                set_active_style_variant_by_name(world, theme.variant_name());
                 world.resource_mut::<ShowcaseState>().theme = theme;
                 world.entity_mut(rt.root).insert(root_classes(theme));
                 update_status(
@@ -1682,14 +1675,6 @@ fn set_showcase_page(world: &mut World, rt: ShowcaseRuntime, page: usize) {
 bevy_xilem::impl_ui_component_template!(ShowcaseRoot, project_showcase_root);
 bevy_xilem::impl_ui_component_template!(StatusDisplay, project_status_display);
 
-/// Explicitly install the Fluent Dark theme variant at startup so the
-/// showcase always renders with the correct theme.  Without a theme the
-/// UI root has no background/text styling and would appear blank.
-fn ensure_fluent_dark_on_startup(world: &mut World) {
-    install_embedded_fluent_theme_variant_by_name(world, "dark")
-        .expect("Fluent Dark theme should be available");
-}
-
 fn build_showcase_app() -> App {
     init_logging();
 
@@ -1735,7 +1720,7 @@ fn build_showcase_app() -> App {
         (
             setup_showcase_styles,
             setup_showcase,
-            ensure_fluent_dark_on_startup,
+            ensure_showcase_default_theme_variant,
         ),
     )
     .add_systems(PreUpdate, drain_showcase_events);

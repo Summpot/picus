@@ -94,31 +94,67 @@ fn plugin_auto_registers_builtin_ui_components_without_manual_setup() {
 }
 
 #[test]
-fn plugin_boots_with_embedded_fluent_dark_theme_and_no_asset_path() {
+fn plugin_boots_with_embedded_fluent_dark_theme_and_applies_on_first_update() {
     let mut app = App::new();
     app.add_plugins(BevyXilemPlugin);
 
     let active = app.world().resource::<crate::ActiveStyleSheetAsset>();
     assert!(active.path.is_none());
 
+    let active_variant = app.world().resource::<crate::ActiveStyleVariant>();
+    assert_eq!(active_variant.0.as_deref(), Some("dark"));
+
+    let applied_variant_before_update = app.world().resource::<crate::AppliedStyleVariant>();
+    assert_eq!(applied_variant_before_update.0.as_deref(), None);
+
+    app.update();
+
     let sheet = app.world().resource::<crate::StyleSheet>();
     assert!(!sheet.rules.is_empty());
     assert!(sheet.tokens.contains_key("surface-bg"));
+
+    let applied_variant = app.world().resource::<crate::AppliedStyleVariant>();
+    assert_eq!(applied_variant.0.as_deref(), Some("dark"));
 }
 
 #[test]
-fn embedded_fluent_light_theme_installs_and_overrides_surface_bg_token() {
+fn active_style_variant_switches_automatically_without_install_calls() {
     let mut app = App::new();
     app.add_plugins(BevyXilemPlugin);
 
-    crate::install_embedded_fluent_theme_variant_by_name(app.world_mut(), "light")
-        .expect("embedded fluent light theme should install");
+    crate::set_active_style_variant_by_name(app.world_mut(), "light");
+    app.update();
+
+    let light_surface = app
+        .world()
+        .resource::<crate::StyleSheet>()
+        .tokens
+        .get("surface-bg")
+        .cloned()
+        .expect("surface-bg should exist after active variant switch to light");
+
+    assert_eq!(
+        light_surface,
+        crate::TokenValue::Color(crate::xilem::Color::from_rgb8(0xFA, 0xF9, 0xF8))
+    );
+
+    let applied_variant = app.world().resource::<crate::AppliedStyleVariant>();
+    assert_eq!(applied_variant.0.as_deref(), Some("light"));
+}
+
+#[test]
+fn active_style_variant_light_overrides_surface_bg_token() {
+    let mut app = App::new();
+    app.add_plugins(BevyXilemPlugin);
+
+    crate::set_active_style_variant_by_name(app.world_mut(), "light");
+    app.update();
 
     let sheet = app.world().resource::<crate::StyleSheet>();
     let token = sheet
         .tokens
         .get("surface-bg")
-        .expect("surface-bg token should exist after fluent light install");
+        .expect("surface-bg token should exist after fluent light activation");
 
     assert!(matches!(
         token,
@@ -128,18 +164,18 @@ fn embedded_fluent_light_theme_installs_and_overrides_surface_bg_token() {
 }
 
 #[test]
-fn embedded_fluent_high_contrast_theme_installs_and_overrides_surface_bg_token() {
+fn active_style_variant_high_contrast_overrides_surface_bg_token() {
     let mut app = App::new();
     app.add_plugins(BevyXilemPlugin);
 
-    crate::install_embedded_fluent_theme_variant_by_name(app.world_mut(), "high-contrast")
-        .expect("embedded fluent high-contrast theme should install");
+    crate::set_active_style_variant_by_name(app.world_mut(), "high-contrast");
+    app.update();
 
     let sheet = app.world().resource::<crate::StyleSheet>();
     let token = sheet
         .tokens
         .get("surface-bg")
-        .expect("surface-bg token should exist after fluent high-contrast install");
+        .expect("surface-bg token should exist after fluent high-contrast activation");
 
     assert!(matches!(
         token,
@@ -149,12 +185,12 @@ fn embedded_fluent_high_contrast_theme_installs_and_overrides_surface_bg_token()
 }
 
 #[test]
-fn embedded_fluent_theme_variant_api_switches_between_dark_light_and_high_contrast() {
+fn active_style_variant_api_switches_between_dark_light_and_high_contrast() {
     let mut app = App::new();
     app.add_plugins(BevyXilemPlugin);
 
-    crate::install_embedded_fluent_theme_variant_by_name(app.world_mut(), "light")
-        .expect("light variant should install");
+    crate::set_active_style_variant_by_name(app.world_mut(), "light");
+    app.update();
 
     let light_surface = app
         .world()
@@ -162,14 +198,14 @@ fn embedded_fluent_theme_variant_api_switches_between_dark_light_and_high_contra
         .tokens
         .get("surface-bg")
         .cloned()
-        .expect("surface-bg should exist after light install");
+        .expect("surface-bg should exist after light activation");
     assert_eq!(
         light_surface,
         crate::TokenValue::Color(crate::xilem::Color::from_rgb8(0xFA, 0xF9, 0xF8))
     );
 
-    crate::install_embedded_fluent_theme_variant_by_name(app.world_mut(), "dark")
-        .expect("dark variant should install");
+    crate::set_active_style_variant_by_name(app.world_mut(), "dark");
+    app.update();
 
     let dark_surface = app
         .world()
@@ -177,14 +213,14 @@ fn embedded_fluent_theme_variant_api_switches_between_dark_light_and_high_contra
         .tokens
         .get("surface-bg")
         .cloned()
-        .expect("surface-bg should exist after dark install");
+        .expect("surface-bg should exist after dark activation");
     assert_eq!(
         dark_surface,
         crate::TokenValue::Color(crate::xilem::Color::from_rgb8(0x1F, 0x1F, 0x1F))
     );
 
-    crate::install_embedded_fluent_theme_variant_by_name(app.world_mut(), "high-contrast")
-        .expect("high-contrast variant should install");
+    crate::set_active_style_variant_by_name(app.world_mut(), "high-contrast");
+    app.update();
 
     let hc_surface = app
         .world()
@@ -192,7 +228,7 @@ fn embedded_fluent_theme_variant_api_switches_between_dark_light_and_high_contra
         .tokens
         .get("surface-bg")
         .cloned()
-        .expect("surface-bg should exist after high-contrast install");
+        .expect("surface-bg should exist after high-contrast activation");
     assert_eq!(
         hc_surface,
         crate::TokenValue::Color(crate::xilem::Color::from_rgb8(0x00, 0x00, 0x00))
@@ -288,7 +324,7 @@ fn embedded_fluent_variants_inherit_shared_top_level_rules() {
 }
 
 #[test]
-fn install_registered_style_variant_applies_selected_variant_to_runtime_sheet() {
+fn apply_active_style_variant_applies_selected_registered_variant_to_runtime_sheet() {
     let ron_text = r##"(
         default_variant: "dark",
         variants: {
@@ -308,15 +344,16 @@ fn install_registered_style_variant_applies_selected_variant_to_runtime_sheet() 
     let mut world = World::new();
     crate::register_stylesheet_variants_ron(&mut world, ron_text)
         .expect("style variants should register");
-    crate::install_registered_style_variant(&mut world, "light")
-        .expect("registered style variant should install");
+    crate::set_active_style_variant_by_name(&mut world, "light");
+    crate::apply_active_style_variant(&mut world)
+        .expect("registered active style variant should apply");
 
     let token = world
         .resource::<crate::StyleSheet>()
         .tokens
         .get("surface-bg")
         .cloned()
-        .expect("surface-bg should exist after variant install");
+        .expect("surface-bg should exist after variant application");
 
     assert_eq!(
         token,

@@ -479,6 +479,17 @@ pub struct RegisteredStyleVariants {
     pub variants: HashMap<String, StyleSheet>,
 }
 
+/// Desired runtime style variant name.
+///
+/// When changed, [`sync_active_style_variant`] applies the corresponding
+/// registered variant to [`BaseStyleSheet`] and the live [`StyleSheet`].
+#[derive(Resource, Debug, Clone, Default, PartialEq, Eq)]
+pub struct ActiveStyleVariant(pub Option<String>);
+
+/// Last successfully applied runtime style variant name.
+#[derive(Resource, Debug, Clone, Default, PartialEq, Eq)]
+pub struct AppliedStyleVariant(pub Option<String>);
+
 /// Name-to-component-type map used by selector type tags loaded from RON assets.
 #[derive(Resource, Debug, Clone, Default)]
 pub struct StyleTypeRegistry {
@@ -715,8 +726,7 @@ pub fn register_stylesheet_variants_ron(world: &mut World, ron_text: &str) -> io
     Ok(())
 }
 
-/// Install a previously registered stylesheet variant by name.
-pub fn install_registered_style_variant(world: &mut World, variant_name: &str) -> io::Result<()> {
+fn apply_registered_style_variant_by_name(world: &mut World, variant_name: &str) -> io::Result<()> {
     let variants = world
         .get_resource::<RegisteredStyleVariants>()
         .ok_or_else(|| {
@@ -742,8 +752,16 @@ pub fn install_registered_style_variant(world: &mut World, variant_name: &str) -
     Ok(())
 }
 
-/// Install the default registered stylesheet variant.
-pub fn install_registered_default_style_variant(world: &mut World) -> io::Result<()> {
+/// Set desired active style variant by name.
+///
+/// This only updates desired state. Call [`apply_active_style_variant`] to
+/// apply immediately, or rely on [`sync_active_style_variant`] in the app loop.
+pub fn set_active_style_variant_by_name(world: &mut World, variant_name: &str) {
+    world.insert_resource(ActiveStyleVariant(Some(variant_name.to_string())));
+}
+
+/// Set desired active style variant to the registered default variant.
+pub fn set_active_style_variant_to_registered_default(world: &mut World) -> io::Result<()> {
     let default_variant = world
         .get_resource::<RegisteredStyleVariants>()
         .ok_or_else(|| {
@@ -755,27 +773,55 @@ pub fn install_registered_default_style_variant(world: &mut World) -> io::Result
         .default_variant
         .clone();
 
-    install_registered_style_variant(world, default_variant.as_str())
+    set_active_style_variant_by_name(world, default_variant.as_str());
+    Ok(())
+}
+
+/// Apply the currently desired active style variant immediately.
+pub fn apply_active_style_variant(world: &mut World) -> io::Result<()> {
+    let desired_variant = world
+        .get_resource::<ActiveStyleVariant>()
+        .and_then(|active| active.0.clone())
+        .ok_or_else(|| {
+            io::Error::new(io::ErrorKind::NotFound, "active style variant is not set")
+        })?;
+
+    apply_registered_style_variant_by_name(world, desired_variant.as_str())?;
+    world.insert_resource(AppliedStyleVariant(Some(desired_variant)));
+    Ok(())
+}
+
+/// Sync desired active style variant into the runtime stylesheet.
+///
+/// This system is safe to run every frame and only reapplies when desired and
+/// applied variants differ.
+pub fn sync_active_style_variant(world: &mut World) {
+    let desired_variant = world
+        .get_resource::<ActiveStyleVariant>()
+        .and_then(|active| active.0.clone());
+    let Some(desired_variant) = desired_variant else {
+        return;
+    };
+
+    let applied_variant = world
+        .get_resource::<AppliedStyleVariant>()
+        .and_then(|applied| applied.0.clone());
+
+    if applied_variant.as_deref() == Some(desired_variant.as_str()) {
+        return;
+    }
+
+    if let Err(error) = apply_active_style_variant(world) {
+        tracing::warn!(
+            desired_variant,
+            "failed to apply active style variant automatically: {error}"
+        );
+    }
 }
 
 /// Register all embedded Fluent variants from the bundled multi-variant theme file.
 pub fn register_embedded_fluent_theme_variants(world: &mut World) -> io::Result<()> {
     register_stylesheet_variants_ron(world, BUILTIN_FLUENT_THEME_RON)
-}
-
-/// Install an embedded Fluent variant by string name.
-pub fn install_embedded_fluent_theme_variant_by_name(
-    world: &mut World,
-    variant_name: &str,
-) -> io::Result<()> {
-    register_embedded_fluent_theme_variants(world)?;
-    install_registered_style_variant(world, variant_name)
-}
-
-/// Install the default variant from the embedded Fluent theme bundle.
-pub fn install_embedded_fluent_theme_default_variant(world: &mut World) -> io::Result<()> {
-    register_embedded_fluent_theme_variants(world)?;
-    install_registered_default_style_variant(world)
 }
 
 /// Merge a baseline stylesheet RON into the base + runtime tiers.

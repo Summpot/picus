@@ -11,7 +11,7 @@ It covers:
 - smooth transition animations (Phase 4) powered by `bevy_tweening`
 - practical usage patterns and common pitfalls
 
-> Applies to the current `master` branch state (2026-02-16).
+> Applies to the current `master` branch state (2026-02-28).
 
 ---
 
@@ -116,12 +116,20 @@ In short: class + inline define intent, pseudo state chooses target, animator pr
 `BevyXilemPlugin` automatically wires the style stack:
 
 - initializes `StyleSheet`
-- installs embedded baseline theme (`src/theme/fluent_dark.ron`) into `BaseStyleSheet`
+- registers embedded Fluent variant bundle (`src/theme/fluent_theme.ron`) into `RegisteredStyleVariants`
+- sets the bundle default variant as `ActiveStyleVariant`
 - `PreUpdate`: `collect_bevy_font_assets -> sync_fonts_to_xilem -> sync_ui_interaction_markers`
-- `Update`: `mark_style_dirty -> sync_style_targets -> animate_style_transitions`
+- `Update`: `sync_active_style_variant -> mark_style_dirty -> sync_style_targets -> animate_style_transitions`
 - registers `TweeningPlugin` (from crates.io `bevy_tweening`)
 
 So users only need to define styles and apply them from projectors.
+
+Theme switching uses active-variant state only:
+
+- `set_active_style_variant_by_name(world, "dark" | "light" | "high-contrast")`
+- optional `set_active_style_variant_to_registered_default(world)`
+
+There are no public style-theme `install_*` APIs anymore.
 
 ---
 

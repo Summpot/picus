@@ -144,9 +144,11 @@ Runtime styling distinguishes two explicit tiers: `BaseStyleSheet` (embedded Flu
 
 Baseline Fluent theme includes a global `Type("UiRoot")` preflight rule for app-surface background, and the `UiRoot` projector stretches to full viewport so root background styling consistently covers the entire window.
 
-`BevyXilemPlugin` boots with embedded **Fluent Dark** by default. Built-in Fluent theming is provided as a **single multi-variant bundle** (`fluent_theme.ron`) that contains named variants (`dark`, `light`, `high-contrast`, and future additions). The styling system parses/registers this bundle into `RegisteredStyleVariants`, then installs a chosen variant into `BaseStyleSheet`.
+`BevyXilemPlugin` boots with embedded **Fluent Dark** by default. Built-in Fluent theming is provided as a **single multi-variant bundle** (`fluent_theme.ron`) that contains named variants (`dark`, `light`, `high-contrast`, and future additions). The styling system parses/registers this bundle into `RegisteredStyleVariants`.
 
-Apps/examples can switch variants at runtime by name via `install_embedded_fluent_theme_variant_by_name(...)`, and plugin bootstrap installs the theme file's own default via `install_embedded_fluent_theme_default_variant(...)`.
+Runtime variant selection is state-driven via `ActiveStyleVariant`. Apps/examples set desired variant by name through `set_active_style_variant_by_name(...)`, and `sync_active_style_variant` automatically applies it to `BaseStyleSheet` + runtime `StyleSheet`. Plugin bootstrap sets the theme file's own default variant as active, and the first `Update` pass applies it automatically.
+
+Theme activation no longer exposes `install_*` APIs. The only public path is active-variant state (`set_active_style_variant_by_name` / `set_active_style_variant_to_registered_default`) plus automatic sync (`sync_active_style_variant`).
 
 Variant bundles support top-level shared `rules`/`tokens` plus per-variant overrides. This keeps common selector graphs out of any single variant and lets each variant focus on palette/token deltas.
 

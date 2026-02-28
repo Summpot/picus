@@ -28,11 +28,12 @@ use crate::{
     },
     styling::{
         ActiveStyleSheet, ActiveStyleSheetAsset, ActiveStyleSheetSelectors,
-        ActiveStyleSheetTokenNames, BaseStyleSheet, RegisteredStyleVariants, StyleAssetEventCursor,
-        StyleSheet, StyleSheetRonLoader, animate_style_transitions,
-        ensure_active_stylesheet_asset_handle, install_embedded_fluent_theme_default_variant,
-        mark_style_dirty, register_builtin_style_type_aliases, sync_style_targets,
-        sync_stylesheet_asset_events, sync_ui_interaction_markers,
+        ActiveStyleSheetTokenNames, ActiveStyleVariant, AppliedStyleVariant, BaseStyleSheet,
+        RegisteredStyleVariants, StyleAssetEventCursor, StyleSheet, StyleSheetRonLoader,
+        animate_style_transitions, ensure_active_stylesheet_asset_handle, mark_style_dirty,
+        register_builtin_style_type_aliases, register_embedded_fluent_theme_variants,
+        set_active_style_variant_to_registered_default, sync_active_style_variant,
+        sync_style_targets, sync_stylesheet_asset_events, sync_ui_interaction_markers,
     },
     synthesize::{SynthesizedUiViews, UiSynthesisStats, synthesize_ui},
     widget_actions::{
@@ -81,6 +82,8 @@ impl Plugin for BevyXilemPlugin {
             .init_resource::<ActiveStyleSheetAsset>()
             .init_resource::<ActiveStyleSheetSelectors>()
             .init_resource::<ActiveStyleSheetTokenNames>()
+            .init_resource::<ActiveStyleVariant>()
+            .init_resource::<AppliedStyleVariant>()
             .init_resource::<RegisteredStyleVariants>()
             .init_resource::<StyleAssetEventCursor>()
             .init_resource::<XilemFontBridge>()
@@ -126,6 +129,7 @@ impl Plugin for BevyXilemPlugin {
                     sync_overlay_stack_lifecycle,
                     ensure_active_stylesheet_asset_handle,
                     sync_stylesheet_asset_events,
+                    sync_active_style_variant,
                     mark_style_dirty,
                     sync_style_targets,
                 )
@@ -148,8 +152,11 @@ impl Plugin for BevyXilemPlugin {
         app.add_systems(Last, paint_masonry_ui);
 
         register_builtin_style_type_aliases(app.world_mut());
-        install_embedded_fluent_theme_default_variant(app.world_mut()).unwrap_or_else(|error| {
+        register_embedded_fluent_theme_variants(app.world_mut()).unwrap_or_else(|error| {
             panic!("failed to parse embedded Fluent theme bundle: {error}")
+        });
+        set_active_style_variant_to_registered_default(app.world_mut()).unwrap_or_else(|error| {
+            panic!("failed to select embedded Fluent default variant: {error}")
         });
 
         {
