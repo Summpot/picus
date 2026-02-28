@@ -1,6 +1,6 @@
 use bevy_ecs::entity::Entity;
 use masonry::core::{ArcStr, PointerButton};
-use xilem_core::{Arg, MessageResult};
+use xilem_core::MessageResult;
 use xilem_masonry::view::{
     Button, Checkbox, Label, Slider, Switch, TextInput, checkbox, slider, switch, text_button,
     text_input,
@@ -17,7 +17,7 @@ pub fn ecs_text_button<A>(
 ) -> Button<
     (),
     (),
-    impl for<'a> Fn(Arg<'a, ()>, Option<PointerButton>) -> MessageResult<()> + Send + Sync + 'static,
+    impl Fn(&mut (), Option<PointerButton>) -> MessageResult<()> + Send + Sync + 'static,
     Label,
 >
 where
@@ -35,7 +35,7 @@ pub fn ecs_checkbox<A, F>(
     label: impl Into<ArcStr>,
     checked: bool,
     map_action: F,
-) -> Checkbox<(), (), impl for<'a> Fn(Arg<'a, ()>, bool) -> () + Send + Sync + 'static>
+) -> Checkbox<(), (), impl Fn(&mut (), bool) -> () + Send + Sync + 'static>
 where
     A: Send + Sync + 'static,
     F: Fn(bool) -> A + Send + Sync + 'static,
@@ -53,7 +53,7 @@ pub fn ecs_slider<A, F>(
     max: f64,
     value: f64,
     map_action: F,
-) -> Slider<(), (), impl for<'a> Fn(Arg<'a, ()>, f64) -> () + Send + Sync + 'static>
+) -> Slider<(), (), impl Fn(&mut (), f64) -> () + Send + Sync + 'static>
 where
     A: Send + Sync + 'static,
     F: Fn(f64) -> A + Send + Sync + 'static,
@@ -69,7 +69,7 @@ pub fn ecs_switch<A, F>(
     entity: Entity,
     on: bool,
     map_action: F,
-) -> Switch<(), (), impl for<'a> Fn(Arg<'a, ()>, bool) -> () + Send + Sync + 'static>
+) -> Switch<(), (), impl Fn(&mut (), bool) -> () + Send + Sync + 'static>
 where
     A: Send + Sync + 'static,
     F: Fn(bool) -> A + Send + Sync + 'static,

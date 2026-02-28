@@ -1,6 +1,6 @@
 use bevy_ecs::entity::Entity;
 use masonry::core::ArcStr;
-use xilem_core::{Arg, MessageCtx, MessageResult, Mut, View, ViewMarker};
+use xilem_core::{MessageCtx, MessageResult, Mut, View, ViewMarker};
 use xilem_masonry::{Pod, ViewCtx};
 
 use crate::{
@@ -38,7 +38,7 @@ impl View<(), (), ViewCtx> for EcsDragThumbView {
     fn build(
         &self,
         ctx: &mut ViewCtx,
-        _app_state: Arg<'_, ()>,
+        _app_state: &mut (),
     ) -> (Self::Element, Self::ViewState) {
         (
             ctx.with_action_widget(|ctx| {
@@ -58,7 +58,7 @@ impl View<(), (), ViewCtx> for EcsDragThumbView {
         _view_state: &mut Self::ViewState,
         _ctx: &mut ViewCtx,
         mut element: Mut<'_, Self::Element>,
-        _app_state: Arg<'_, ()>,
+        _app_state: &mut (),
     ) {
         if self.entity != prev.entity {
             EcsDragThumbWidget::set_entity(&mut element, self.entity);
@@ -87,7 +87,7 @@ impl View<(), (), ViewCtx> for EcsDragThumbView {
         _view_state: &mut Self::ViewState,
         message: &mut MessageCtx,
         _element: Mut<'_, Self::Element>,
-        _app_state: Arg<'_, ()>,
+        _app_state: &mut (),
     ) -> MessageResult<()> {
         match message.take_first() {
             None => match message.take_message::<EcsDragThumbWidgetAction>() {

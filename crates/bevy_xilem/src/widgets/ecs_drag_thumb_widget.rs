@@ -260,11 +260,7 @@ impl Widget for EcsDragThumbWidget {
 
         let child_origin = ((size - child_size).to_vec2() * 0.5).to_point();
         ctx.place_child(&mut self.label, child_origin);
-
-        let child_baseline = ctx.child_baseline_offset(&self.label);
-        let child_bottom = child_origin.y + child_size.height;
-        let bottom_gap = size.height - child_bottom;
-        ctx.set_baseline_offset(child_baseline + bottom_gap);
+        ctx.derive_baselines(&self.label);
     }
 
     fn paint(&mut self, _ctx: &mut PaintCtx<'_>, _props: &PropertiesRef<'_>, _scene: &mut Scene) {}

@@ -1,6 +1,6 @@
 use bevy_ecs::entity::Entity;
 use masonry::core::ArcStr;
-use xilem_core::{Arg, MessageCtx, MessageResult, Mut, View, ViewMarker};
+use xilem_core::{MessageCtx, MessageResult, Mut, View, ViewMarker};
 use xilem_masonry::{Pod, ViewCtx};
 
 use crate::widgets::{EcsButtonWidget, EcsButtonWidgetAction};
@@ -37,7 +37,7 @@ where
     fn build(
         &self,
         ctx: &mut ViewCtx,
-        _app_state: Arg<'_, ()>,
+        _app_state: &mut (),
     ) -> (Self::Element, Self::ViewState) {
         (
             ctx.with_action_widget(|ctx| {
@@ -57,7 +57,7 @@ where
         _view_state: &mut Self::ViewState,
         _ctx: &mut ViewCtx,
         mut element: Mut<'_, Self::Element>,
-        _app_state: Arg<'_, ()>,
+        _app_state: &mut (),
     ) {
         if self.entity != prev.entity {
             EcsButtonWidget::set_entity(&mut element, self.entity);
@@ -84,7 +84,7 @@ where
         _view_state: &mut Self::ViewState,
         _message: &mut MessageCtx,
         _element: Mut<'_, Self::Element>,
-        _app_state: Arg<'_, ()>,
+        _app_state: &mut (),
     ) -> MessageResult<()> {
         match _message.take_first() {
             None => match _message.take_message::<EcsButtonWidgetAction>() {

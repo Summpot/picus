@@ -15,7 +15,7 @@ use bevy_math::Vec2;
 use bevy_time::Time;
 use bevy_window::{
     CursorLeft, CursorMoved, Ime as BevyIme, PrimaryWindow, Window, WindowFocused, WindowResized,
-    WindowScaleFactorChanged,
+    WindowScaleFactorChanged, RawHandleWrapper, WindowWrapper,
 };
 use masonry::layout::{Dim, UnitPoint};
 use masonry::{
@@ -107,7 +107,7 @@ impl FromWorld for MasonryRuntime {
 
         let initial_view: UiView = Arc::new(label("bevy_xilem: waiting for synthesized root"));
         let (initial_root_widget, view_state) =
-            <UiAnyView as View<(), (), ViewCtx>>::build(initial_view.as_ref(), &mut view_ctx, ());
+            <UiAnyView as View<(), (), ViewCtx>>::build(initial_view.as_ref(), &mut view_ctx, &mut ());
 
         let options = RenderRootOptions {
             default_properties: Arc::new(default_property_set()),
@@ -329,7 +329,7 @@ impl MasonryRuntime {
                 &mut self.view_state,
                 &mut self.view_ctx,
                 root.reborrow_mut(),
-                (),
+                &mut (),
             );
             self.root_widget_id = root.widget.inner_id();
         });
@@ -511,12 +511,29 @@ impl MasonryRuntime {
             )))
     }
 
-    pub fn ensure_external_surface(&mut self, window: Arc<xilem::winit::window::Window>) -> bool {
-        if self.window_surface.is_some() {
+    pub fn ensure_external_surface(
+        &mut self,
+        window: &WindowWrapper<xilem::winit::window::Window>,
+        metrics: ExistingWindowMetrics,
+    ) -> bool {
+        if let Some(surface) = self.window_surface.as_mut() {
+            let _ = surface.sync_window_metrics(metrics);
             return true;
         }
 
-        match ExternalWindowSurface::new(window, wgpu::PresentMode::AutoVsync) {
+        let raw_handle = match RawHandleWrapper::new(window) {
+            Ok(raw_handle) => raw_handle,
+            Err(error) => {
+                tracing::error!("failed to create raw window handle for Masonry surface: {error}");
+                return false;
+            }
+        };
+
+        match ExternalWindowSurface::new_from_bevy_raw_handle(
+            raw_handle,
+            metrics,
+            wgpu::PresentMode::AutoVsync,
+        ) {
             Ok(surface) => {
                 self.window_surface = Some(surface);
                 true
@@ -538,8 +555,6 @@ impl MasonryRuntime {
         let Some(surface) = self.window_surface.as_mut() else {
             return;
         };
-
-        let _ = surface.sync_window_metrics();
         surface.render_scene(
             &mut self.renderer,
             scene,
@@ -959,25 +974,36 @@ pub fn paint_masonry_ui(
         return;
     };
 
-    let Some((window, metrics)) = bevy_winit::WINIT_WINDOWS.with(|winit_windows| {
+    let Some(metrics) = bevy_winit::WINIT_WINDOWS.with(|winit_windows| {
         let winit_windows = winit_windows.borrow();
         winit_windows
             .get_window(primary_window_entity)
-            .map(|window| {
-                let cloned = window.clone_window();
-                let metrics = existing_window_metrics(&cloned);
-                (cloned, metrics)
-            })
+            .map(|window| existing_window_metrics(window))
     }) else {
         return;
     };
 
     runtime.attach_to_window(primary_window_entity, metrics);
 
-    if !runtime.ensure_external_surface(window.clone()) {
+    let has_surface = bevy_winit::WINIT_WINDOWS.with(|winit_windows| {
+        let winit_windows = winit_windows.borrow();
+        let Some(window) = winit_windows.get_window(primary_window_entity) else {
+            return false;
+        };
+
+        runtime.ensure_external_surface(window, metrics)
+    });
+
+    if !has_surface {
         return;
     }
 
     runtime.paint_frame(time.delta());
-    window.request_redraw();
+
+    bevy_winit::WINIT_WINDOWS.with(|winit_windows| {
+        let winit_windows = winit_windows.borrow();
+        if let Some(window) = winit_windows.get_window(primary_window_entity) {
+            window.request_redraw();
+        }
+    });
 }

@@ -1,5 +1,5 @@
 use bevy_ecs::entity::Entity;
-use xilem_core::{Arg, MessageCtx, MessageResult, Mut, View, ViewMarker};
+use xilem_core::{MessageCtx, MessageResult, Mut, View, ViewMarker};
 use xilem_masonry::{Pod, ViewCtx, WidgetView};
 
 use crate::widgets::{EcsButtonWidgetAction, EcsButtonWithChildWidget};
@@ -44,7 +44,7 @@ where
     type Element = Pod<EcsButtonWithChildWidget<A>>;
     type ViewState = Child::ViewState;
 
-    fn build(&self, ctx: &mut ViewCtx, app_state: Arg<'_, ()>) -> (Self::Element, Self::ViewState) {
+    fn build(&self, ctx: &mut ViewCtx, app_state: &mut ()) -> (Self::Element, Self::ViewState) {
         let (child, child_state) = self.child.build(ctx, app_state);
 
         (
@@ -65,7 +65,7 @@ where
         view_state: &mut Self::ViewState,
         ctx: &mut ViewCtx,
         mut element: Mut<'_, Self::Element>,
-        app_state: Arg<'_, ()>,
+        app_state: &mut (),
     ) {
         if self.entity != prev.entity {
             EcsButtonWithChildWidget::set_entity(&mut element, self.entity);
@@ -96,7 +96,7 @@ where
         view_state: &mut Self::ViewState,
         message: &mut MessageCtx,
         mut element: Mut<'_, Self::Element>,
-        app_state: Arg<'_, ()>,
+        app_state: &mut (),
     ) -> MessageResult<()> {
         if !message.remaining_path().is_empty() {
             let mut child = EcsButtonWithChildWidget::child_mut(&mut element);

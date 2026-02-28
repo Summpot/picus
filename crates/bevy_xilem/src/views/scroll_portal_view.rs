@@ -1,7 +1,7 @@
 use std::marker::PhantomData;
 
 use masonry::{kurbo::Point, widgets};
-use xilem_core::{Arg, MessageCtx, MessageResult, Mut, View, ViewArgument, ViewMarker};
+use xilem_core::{MessageCtx, MessageResult, Mut, View, ViewMarker};
 use xilem_masonry::{Pod, ViewCtx, WidgetView};
 
 /// Portal view with explicit viewport-position configuration.
@@ -11,7 +11,7 @@ pub fn scroll_portal<Child, State, Action>(
     viewport_pos: Point,
 ) -> ScrollPortalView<Child, State, Action>
 where
-    State: ViewArgument,
+    State: 'static,
     Child: WidgetView<State, Action>,
 {
     ScrollPortalView {
@@ -60,7 +60,7 @@ impl<V, State, Action> ViewMarker for ScrollPortalView<V, State, Action> {}
 impl<Child, State, Action> View<State, Action, ViewCtx> for ScrollPortalView<Child, State, Action>
 where
     Child: WidgetView<State, Action>,
-    State: ViewArgument,
+    State: 'static,
     Action: 'static,
 {
     type Element = Pod<widgets::Portal<Child::Widget>>;
@@ -69,7 +69,7 @@ where
     fn build(
         &self,
         ctx: &mut ViewCtx,
-        app_state: Arg<'_, State>,
+        app_state: &mut State,
     ) -> (Self::Element, Self::ViewState) {
         let (child, child_state) = self.child.build(ctx, app_state);
         let widget_pod = ctx.create_pod(
@@ -87,7 +87,7 @@ where
         view_state: &mut Self::ViewState,
         ctx: &mut ViewCtx,
         mut element: Mut<'_, Self::Element>,
-        app_state: Arg<'_, State>,
+        app_state: &mut State,
     ) {
         let child_element = widgets::Portal::child_mut(&mut element);
         self.child
@@ -123,7 +123,7 @@ where
         view_state: &mut Self::ViewState,
         message: &mut MessageCtx,
         mut element: Mut<'_, Self::Element>,
-        app_state: Arg<'_, State>,
+        app_state: &mut State,
     ) -> MessageResult<Action> {
         let child_element = widgets::Portal::child_mut(&mut element);
         self.child

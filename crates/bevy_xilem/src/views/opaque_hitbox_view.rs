@@ -1,7 +1,7 @@
 use std::marker::PhantomData;
 
 use bevy_ecs::entity::Entity;
-use xilem_core::{Arg, MessageCtx, MessageResult, Mut, View, ViewArgument, ViewMarker};
+use xilem_core::{MessageCtx, MessageResult, Mut, View, ViewMarker};
 use xilem_masonry::{Pod, ViewCtx, WidgetView};
 
 use crate::widgets::OpaqueHitboxWidget;
@@ -10,7 +10,7 @@ use crate::widgets::OpaqueHitboxWidget;
 pub fn opaque_hitbox<Child, State, Action>(child: Child) -> OpaqueHitboxView<Child, State, Action>
 where
     Child: WidgetView<State, Action>,
-    State: ViewArgument,
+    State: 'static,
 {
     OpaqueHitboxView {
         entity: None,
@@ -26,7 +26,7 @@ pub fn opaque_hitbox_for_entity<Child, State, Action>(
 ) -> OpaqueHitboxView<Child, State, Action>
 where
     Child: WidgetView<State, Action>,
-    State: ViewArgument,
+    State: 'static,
 {
     OpaqueHitboxView {
         entity: Some(entity),
@@ -47,7 +47,7 @@ impl<Child, State, Action> ViewMarker for OpaqueHitboxView<Child, State, Action>
 impl<Child, State, Action> View<State, Action, ViewCtx> for OpaqueHitboxView<Child, State, Action>
 where
     Child: WidgetView<State, Action>,
-    State: ViewArgument,
+    State: 'static,
     Action: 'static,
 {
     type Element = Pod<OpaqueHitboxWidget>;
@@ -56,7 +56,7 @@ where
     fn build(
         &self,
         ctx: &mut ViewCtx,
-        app_state: Arg<'_, State>,
+        app_state: &mut State,
     ) -> (Self::Element, Self::ViewState) {
         let (child, child_state) = self.child.build(ctx, app_state);
         let widget = match self.entity {
@@ -73,7 +73,7 @@ where
         view_state: &mut Self::ViewState,
         ctx: &mut ViewCtx,
         mut element: Mut<'_, Self::Element>,
-        app_state: Arg<'_, State>,
+        app_state: &mut State,
     ) {
         if self.entity != prev.entity {
             OpaqueHitboxWidget::set_entity(&mut element, self.entity);
@@ -99,7 +99,7 @@ where
         view_state: &mut Self::ViewState,
         message: &mut MessageCtx,
         mut element: Mut<'_, Self::Element>,
-        app_state: Arg<'_, State>,
+        app_state: &mut State,
     ) -> MessageResult<Action> {
         let mut child = OpaqueHitboxWidget::child_mut(&mut element);
         self.child

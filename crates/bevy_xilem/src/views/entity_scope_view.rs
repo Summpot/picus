@@ -1,7 +1,7 @@
 use std::marker::PhantomData;
 
 use bevy_ecs::entity::Entity;
-use xilem_core::{Arg, MessageCtx, MessageResult, Mut, View, ViewArgument, ViewMarker};
+use xilem_core::{MessageCtx, MessageResult, Mut, View, ViewMarker};
 use xilem_masonry::{Pod, ViewCtx, WidgetView};
 
 use crate::widgets::EntityScopeWidget;
@@ -13,7 +13,7 @@ pub fn entity_scope<Child, State, Action>(
 ) -> EntityScopeView<Child, State, Action>
 where
     Child: WidgetView<State, Action>,
-    State: ViewArgument,
+    State: 'static,
 {
     EntityScopeView {
         entity,
@@ -34,7 +34,7 @@ impl<Child, State, Action> ViewMarker for EntityScopeView<Child, State, Action> 
 impl<Child, State, Action> View<State, Action, ViewCtx> for EntityScopeView<Child, State, Action>
 where
     Child: WidgetView<State, Action>,
-    State: ViewArgument,
+    State: 'static,
     Action: 'static,
 {
     type Element = Pod<EntityScopeWidget>;
@@ -43,7 +43,7 @@ where
     fn build(
         &self,
         ctx: &mut ViewCtx,
-        app_state: Arg<'_, State>,
+        app_state: &mut State,
     ) -> (Self::Element, Self::ViewState) {
         let (child, child_state) = self.child.build(ctx, app_state);
         (
@@ -58,7 +58,7 @@ where
         view_state: &mut Self::ViewState,
         ctx: &mut ViewCtx,
         mut element: Mut<'_, Self::Element>,
-        app_state: Arg<'_, State>,
+        app_state: &mut State,
     ) {
         if self.entity != prev.entity {
             EntityScopeWidget::set_entity(&mut element, self.entity);
@@ -84,7 +84,7 @@ where
         view_state: &mut Self::ViewState,
         message: &mut MessageCtx,
         mut element: Mut<'_, Self::Element>,
-        app_state: Arg<'_, State>,
+        app_state: &mut State,
     ) -> MessageResult<Action> {
         let mut child = EntityScopeWidget::child_mut(&mut element);
         self.child
