@@ -41,8 +41,8 @@ use bevy_xilem_activation::{
 use crossbeam_channel::{Receiver, Sender, unbounded};
 use lucide_icons::Icon as LucideIcon;
 use pixiv_client::{
-    AuthSession, DecodedImageRgba, IdpUrlResponse, Illust, PixivApiClient, PixivResponse,
-    build_browser_login_url, generate_pkce_code_verifier, pkce_s256_challenge,
+    AuthSession, DecodedImageRgba, IdpUrlResponse, Illust, PixivApiClient, PixivContentKind,
+    PixivResponse, build_browser_login_url, generate_pkce_code_verifier, pkce_s256_challenge,
 };
 use reqwest::Url;
 use shared_utils::{drain_fluent_theme_toggle_events, init_logging, setup_fluent_theme_toggle};
@@ -64,6 +64,7 @@ const PIXIV_ACTIVATION_APP_ID: &str = "bevy-xilem-example-pixiv-client";
 mod actions;
 mod activation;
 mod network;
+mod persistence;
 mod ui;
 
 use actions::{drain_ui_actions_and_dispatch, track_viewport_metrics};
@@ -148,6 +149,8 @@ fn sync_font_stack_for_locale(sheet: &mut StyleSheet, stack: Option<&[String]>) 
 enum NavTab {
     Home,
     Rankings,
+    Manga,
+    Novels,
     Search,
 }
 
@@ -208,6 +211,8 @@ struct PixivUiComponents {
     locale_combo: Entity,
     home_tab: Entity,
     rankings_tab: Entity,
+    manga_tab: Entity,
+    novels_tab: Entity,
     search_tab: Entity,
     open_browser_login: Entity,
     exchange_auth_code: Entity,
@@ -339,6 +344,8 @@ enum NetworkCommand {
     Refresh { refresh_token: String },
     FetchHome,
     FetchRanking,
+    FetchManga,
+    FetchNovels,
     Search { word: String },
     Bookmark { illust_id: u64 },
 }
@@ -483,6 +490,14 @@ fn spawn_ui_component_entity(commands: &mut Commands, classes: &[&str]) -> Entit
 fn setup(mut commands: Commands, i18n: Res<AppI18n>) {
     ensure_task_pool_initialized();
 
+    let restored_session = persistence::load_auth_session()
+        .map_err(|error| {
+            eprintln!("pixiv credential restore failed: {error}");
+            error
+        })
+        .ok()
+        .flatten();
+
     let (cmd_tx, cmd_rx) = unbounded::<NetworkCommand>();
     let (result_tx, result_rx) = unbounded::<NetworkResult>();
     let (image_cmd_tx, image_cmd_rx) = unbounded::<ImageCommand>();
@@ -502,10 +517,21 @@ fn setup(mut commands: Commands, i18n: Res<AppI18n>) {
     });
 
     commands.insert_resource(UiState {
-        status_line: "Booting Pixiv MVP…".to_string(),
+        status_line: if restored_session.is_some() {
+            "Booting Pixiv MVP… restored saved credentials, refreshing token…".to_string()
+        } else {
+            "Booting Pixiv MVP…".to_string()
+        },
         ..UiState::default()
     });
-    commands.insert_resource(AuthState::default());
+    commands.insert_resource(AuthState {
+        session: restored_session.clone(),
+        refresh_token_input: restored_session
+            .as_ref()
+            .map(|session| session.refresh_token.clone())
+            .unwrap_or_default(),
+        ..AuthState::default()
+    });
     commands.insert_resource(FeedOrder::default());
     commands.insert_resource(OverlayTags::default());
     commands.insert_resource(ResponsePanelState::default());
@@ -527,6 +553,14 @@ fn setup(mut commands: Commands, i18n: Res<AppI18n>) {
             &["pixiv.button", "pixiv.button.subtle"],
         ),
         rankings_tab: spawn_ui_component_entity(
+            &mut commands,
+            &["pixiv.button", "pixiv.button.subtle"],
+        ),
+        manga_tab: spawn_ui_component_entity(
+            &mut commands,
+            &["pixiv.button", "pixiv.button.subtle"],
+        ),
+        novels_tab: spawn_ui_component_entity(
             &mut commands,
             &["pixiv.button", "pixiv.button.subtle"],
         ),
@@ -644,6 +678,12 @@ fn setup(mut commands: Commands, i18n: Res<AppI18n>) {
     });
 
     let _ = cmd_tx.send(NetworkCommand::DiscoverIdp);
+
+    if let Some(session) = restored_session {
+        let _ = cmd_tx.send(NetworkCommand::Refresh {
+            refresh_token: session.refresh_token,
+        });
+    }
 }
 
 fn setup_styles(mut sheet: ResMut<StyleSheet>, i18n: Option<Res<AppI18n>>) {
@@ -809,6 +849,8 @@ mod tests {
             is_bookmarked: false,
             page_count: 1,
             meta_single_page: None,
+            content_kind: pixiv_client::PixivContentKind::Illust,
+            description: None,
         }
     }
 
@@ -872,6 +914,8 @@ mod tests {
             locale_combo,
             home_tab: Entity::PLACEHOLDER,
             rankings_tab: Entity::PLACEHOLDER,
+            manga_tab: Entity::PLACEHOLDER,
+            novels_tab: Entity::PLACEHOLDER,
             search_tab: Entity::PLACEHOLDER,
             open_browser_login: Entity::PLACEHOLDER,
             exchange_auth_code: Entity::PLACEHOLDER,
@@ -949,6 +993,8 @@ mod tests {
                 .get::<UiComboBox>(ui_components.locale_combo)
                 .is_some()
         );
+        assert!(world.get_entity(ui_components.manga_tab).is_ok());
+        assert!(world.get_entity(ui_components.novels_tab).is_ok());
         assert_eq!(
             world
                 .get::<UiComboBox>(ui_components.locale_combo)

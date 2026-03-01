@@ -19,6 +19,8 @@ pixiv-sidebar-collapse = 折りたたみ
 pixiv-sidebar-language = 言語
 pixiv-sidebar-home = ホーム
 pixiv-sidebar-rankings = ランキング
+pixiv-sidebar-manga = マンガ
+pixiv-sidebar-novels = 小説
 pixiv-sidebar-search = 検索
 
 pixiv-auth-loading = 読み込み中…
@@ -38,6 +40,7 @@ pixiv-search-submit = 検索
 
 pixiv-feed-empty = まだ作品が読み込まれていません。
 pixiv-feed-thumbnail-loading = サムネイル読み込み中…
+pixiv-feed-novel-placeholder = 小説のカバー画像はありません
 pixiv-feed-open = 開く
 pixiv-feed-high-res-loading = 高解像度画像を読み込み中…
 
@@ -54,6 +57,8 @@ pixiv-status-sidebar-expanded = サイドバーを展開しました
 pixiv-status-locale-switched = 言語を切り替えました
 pixiv-status-loading-home = ホームフィードを読み込み中…
 pixiv-status-loading-rankings = ランキングフィードを読み込み中…
+pixiv-status-loading-manga = マンガフィードを読み込み中…
+pixiv-status-loading-novels = 小説フィードを読み込み中…
 pixiv-status-search-ready = 検索パネルの準備ができました。
 pixiv-status-search-keyword-required = 検索キーワードを入力してください。
 pixiv-status-searching = 検索中

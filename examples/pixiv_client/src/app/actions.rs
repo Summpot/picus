@@ -77,6 +77,10 @@ pub(super) fn drain_ui_actions_and_dispatch(world: &mut World) {
                         "pixiv.status.loading_rankings",
                         "Loading Rankings feed…",
                     ),
+                    NavTab::Manga => tr(world, "pixiv.status.loading_manga", "Loading Manga feed…"),
+                    NavTab::Novels => {
+                        tr(world, "pixiv.status.loading_novels", "Loading Novels feed…")
+                    }
                     NavTab::Search => tr(
                         world,
                         "pixiv.status.search_ready",
@@ -93,6 +97,8 @@ pub(super) fn drain_ui_actions_and_dispatch(world: &mut World) {
                 let cmd = match tab {
                     NavTab::Home => NetworkCommand::FetchHome,
                     NavTab::Rankings => NetworkCommand::FetchRanking,
+                    NavTab::Manga => NetworkCommand::FetchManga,
+                    NavTab::Novels => NetworkCommand::FetchNovels,
                     NavTab::Search => continue,
                 };
                 let _ = world.resource::<NetworkBridge>().cmd_tx.send(cmd);
@@ -136,14 +142,17 @@ pub(super) fn drain_ui_actions_and_dispatch(world: &mut World) {
                         .as_ref()
                         .and_then(|meta| meta.original_image_url.clone())
                         .unwrap_or_else(|| illust.image_urls.large.clone());
-                    let _ = world
-                        .resource::<ImageBridge>()
-                        .cmd_tx
-                        .send(ImageCommand::Download {
-                            entity,
-                            kind: ImageKind::HighRes,
-                            url: high_res,
-                        });
+                    if high_res.starts_with("https://") || high_res.starts_with("http://") {
+                        let _ =
+                            world
+                                .resource::<ImageBridge>()
+                                .cmd_tx
+                                .send(ImageCommand::Download {
+                                    entity,
+                                    kind: ImageKind::HighRes,
+                                    url: high_res,
+                                });
+                    }
                 }
             }
             AppAction::CloseIllust => {

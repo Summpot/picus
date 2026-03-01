@@ -223,6 +223,26 @@ pub(super) fn project_sidebar(_: &PixivSidebar, ctx: ProjectionCtx<'_>) -> UiVie
         items.push(
             sidebar_button_view(
                 ctx.world,
+                ui_components.manga_tab,
+                AppAction::SetTab(NavTab::Manga),
+                tr(ctx.world, "pixiv.sidebar.manga", "Manga"),
+                ui.active_tab == NavTab::Manga,
+            )
+            .into_any_flex(),
+        );
+        items.push(
+            sidebar_button_view(
+                ctx.world,
+                ui_components.novels_tab,
+                AppAction::SetTab(NavTab::Novels),
+                tr(ctx.world, "pixiv.sidebar.novels", "Novels"),
+                ui.active_tab == NavTab::Novels,
+            )
+            .into_any_flex(),
+        );
+        items.push(
+            sidebar_button_view(
+                ctx.world,
                 ui_components.search_tab,
                 AppAction::SetTab(NavTab::Search),
                 tr(ctx.world, "pixiv.sidebar.search", "Search"),
@@ -512,15 +532,32 @@ pub(super) fn project_home_feed(_: &PixivHomeFeed, ctx: ProjectionCtx<'_>) -> Ui
     )
 }
 
-fn illust_thumbnail_view(world: &World, visual: &IllustVisual) -> UiView {
+fn illust_thumbnail_view(world: &World, illust: &Illust, visual: &IllustVisual) -> UiView {
     if let Some(image_data) = visual.thumb_ui.clone() {
         Arc::new(image(image_data))
     } else {
-        Arc::new(label(tr(
-            world,
-            "pixiv.feed.thumbnail_loading",
-            "thumbnail loading…",
-        )))
+        match illust.content_kind {
+            PixivContentKind::Novel => Arc::new(
+                flex_col((
+                    lucide_icon(LucideIcon::BookOpen, 24.0, Color::WHITE).into_any_flex(),
+                    label(tr(
+                        world,
+                        "pixiv.feed.novel_placeholder",
+                        "Novel cover unavailable",
+                    ))
+                    .into_any_flex(),
+                ))
+                .cross_axis_alignment(CrossAxisAlignment::Center)
+                .main_axis_alignment(MainAxisAlignment::Center)
+                .width(Dim::Stretch)
+                .height(Dim::Stretch),
+            ),
+            _ => Arc::new(label(tr(
+                world,
+                "pixiv.feed.thumbnail_loading",
+                "thumbnail loading…",
+            ))),
+        }
     }
 }
 
@@ -630,7 +667,7 @@ pub(super) fn project_illust_card(_: &PixivIllustCard, ctx: ProjectionCtx<'_>) -
                 button_with_child(
                     action_entities.open_thumbnail,
                     AppAction::OpenIllust(ctx.entity),
-                    sized_box(illust_thumbnail_view(ctx.world, &visual))
+                    sized_box(illust_thumbnail_view(ctx.world, illust, &visual))
                         .dims((Dim::Stretch, Length::px(image_height))),
                 )
                 .padding(0.0)

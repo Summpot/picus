@@ -14,6 +14,11 @@ fn summarize_error(details: &str) -> String {
     summary
 }
 
+fn is_downloadable_image_url(url: &str) -> bool {
+    let trimmed = url.trim();
+    trimmed.starts_with("https://") || trimmed.starts_with("http://")
+}
+
 pub(super) fn spawn_network_tasks(world: &mut World) {
     let cmd_rx = world.resource::<NetworkBridge>().cmd_rx.clone();
     let result_tx = world.resource::<NetworkBridge>().result_tx.clone();
@@ -103,6 +108,30 @@ fn run_network_command(
                 payload,
             })
         }
+        NetworkCommand::FetchManga => {
+            let token = auth
+                .session
+                .as_ref()
+                .map(|s| s.access_token.clone())
+                .ok_or_else(|| anyhow::anyhow!("not authenticated"))?;
+            let payload = client.recommended_manga(&token)?;
+            Ok(NetworkResult::FeedLoaded {
+                source: NavTab::Manga,
+                payload,
+            })
+        }
+        NetworkCommand::FetchNovels => {
+            let token = auth
+                .session
+                .as_ref()
+                .map(|s| s.access_token.clone())
+                .ok_or_else(|| anyhow::anyhow!("not authenticated"))?;
+            let payload = client.recommended_novels(&token)?;
+            Ok(NetworkResult::FeedLoaded {
+                source: NavTab::Novels,
+                payload,
+            })
+        }
         NetworkCommand::Search { word } => {
             let token = auth
                 .session
@@ -143,6 +172,9 @@ pub(super) fn apply_network_results(world: &mut World) {
             }
             NetworkResult::Authenticated(session) => {
                 world.resource_mut::<AuthState>().session = Some(session.clone());
+                if let Err(error) = super::persistence::save_auth_session(&session) {
+                    eprintln!("pixiv credential persist failed: {error}");
+                }
                 set_status_key(
                     world,
                     "pixiv.status.authenticated_loading_home",
@@ -199,16 +231,20 @@ pub(super) fn apply_network_results(world: &mut World) {
                         ))
                         .id();
 
-                    let _ = image_cmd_tx.send(ImageCommand::Download {
-                        entity,
-                        kind: ImageKind::Thumb,
-                        url: illust.image_urls.square_medium.clone(),
-                    });
-                    let _ = image_cmd_tx.send(ImageCommand::Download {
-                        entity,
-                        kind: ImageKind::Avatar,
-                        url: illust.user.profile_image_urls.medium.clone(),
-                    });
+                    if is_downloadable_image_url(&illust.image_urls.square_medium) {
+                        let _ = image_cmd_tx.send(ImageCommand::Download {
+                            entity,
+                            kind: ImageKind::Thumb,
+                            url: illust.image_urls.square_medium.clone(),
+                        });
+                    }
+                    if is_downloadable_image_url(&illust.user.profile_image_urls.medium) {
+                        let _ = image_cmd_tx.send(ImageCommand::Download {
+                            entity,
+                            kind: ImageKind::Avatar,
+                            url: illust.user.profile_image_urls.medium.clone(),
+                        });
+                    }
 
                     new_order.push(entity);
                 }

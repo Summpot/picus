@@ -3,10 +3,12 @@
 A desktop Pixiv client MVP built with `bevy_xilem`.
 
 It demonstrates:
+
 - Pixiv OAuth token exchange (auth code + refresh token)
-- Home / Ranking / Search feeds
+- Home / Ranking / Manga / Novels / Search feeds
 - Thumbnail + avatar loading
 - Illustration detail overlay and bookmark action
+- Login credential persistence (auto-restore refresh token on next launch)
 
 > This project is an experimental example for learning and prototyping.
 
@@ -32,26 +34,32 @@ From workspace root:
 5. If your browser does not hand off the callback automatically, copy the `code` value (or the full callback URL) manually and click **Login (auth_code)**.
 6. (Optional) Save and use the refresh token with **Refresh Token** later.
 
+### Credential persistence
+
+- After successful login/refresh, the app persists the latest auth session locally.
+- On next launch, the app auto-restores refresh token and tries refresh flow automatically.
+- If auto-refresh fails, you can still log in manually as before.
+
 ### How to get `code_verifier` + `auth_code`
 
 - `code_verifier`
-   - Click **Open Browser Login**.
-   - Copy the value from the app field **PKCE code_verifier**.
-   - Keep this value; it must match the authorization code you are exchanging.
+  - Click **Open Browser Login**.
+  - Copy the value from the app field **PKCE code_verifier**.
+  - Keep this value; it must match the authorization code you are exchanging.
 
 - `auth_code`
-   - Complete login in browser.
-   - In the callback URL, find query parameter `code=...`.
-   - **Official callback format** (from APK routing/parser):
-      - `pixiv://account/login?code=...&via=login`
-      - `via=signup` is used for sign-up flow.
-   - `via` is required by official app routing parser.
-   - A URL like below is **not** a usable auth code callback (it has no `code`):
-      - `https://accounts.pixiv.net/post-redirect?.../start?...code_challenge=...`
-   - Keep following redirects until you see a URL that contains `code=`.
-   - You can paste either:
-      - only the code value, or
-      - the full callback URL (the app auto-extracts `code`).
+  - Complete login in browser.
+  - In the callback URL, find query parameter `code=...`.
+  - **Official callback format** (from APK routing/parser):
+    - `pixiv://account/login?code=...&via=login`
+    - `via=signup` is used for sign-up flow.
+  - `via` is required by official app routing parser.
+  - A URL like below is **not** a usable auth code callback (it has no `code`):
+    - `https://accounts.pixiv.net/post-redirect?.../start?...code_challenge=...`
+  - Keep following redirects until you see a URL that contains `code=`.
+  - You can paste either:
+    - only the code value, or
+    - the full callback URL (the app auto-extracts `code`).
 
 ### How to get `refresh_token`
 
@@ -77,12 +85,12 @@ From workspace root:
 ### If login shows redirect URI mismatch (`code:1508`)
 
 - This usually means one of:
-   1. `code_verifier` does not match the login attempt,
-   2. auth code already expired/used, or
-   3. redirect binding mismatch.
+  1. `code_verifier` does not match the login attempt,
+  2. auth code already expired/used, or
+  3. redirect binding mismatch.
 - This client now follows official exchange behavior:
-   - token URL and `redirect_uri` come from `/idp-urls`
-   - fallback redirect is `https://app-api.pixiv.net/web/v1/users/auth/pixiv/callback`
+  - token URL and `redirect_uri` come from `/idp-urls`
+  - fallback redirect is `https://app-api.pixiv.net/web/v1/users/auth/pixiv/callback`
 - If you still get `1508`, re-run **Open Browser Login**, keep the new `code_verifier`, and exchange immediately.
 
 ## Response Body Panel

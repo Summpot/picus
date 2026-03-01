@@ -175,6 +175,33 @@ where
     }
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum PixivContentKind {
+    #[default]
+    Illust,
+    Manga,
+    Novel,
+}
+
+fn deserialize_content_kind<'de, D>(
+    deserializer: D,
+) -> std::result::Result<PixivContentKind, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let raw = Option::<String>::deserialize(deserializer)?;
+    let Some(kind) = raw.map(|value| value.to_ascii_lowercase()) else {
+        return Ok(PixivContentKind::Illust);
+    };
+
+    Ok(match kind.as_str() {
+        "manga" => PixivContentKind::Manga,
+        "novel" => PixivContentKind::Novel,
+        _ => PixivContentKind::Illust,
+    })
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Component)]
 pub struct User {
     #[serde(deserialize_with = "deserialize_u64_from_string_or_number")]
@@ -204,6 +231,14 @@ pub struct Illust {
     pub title: String,
     pub image_urls: ImageUrls,
     pub user: User,
+    #[serde(
+        default,
+        rename = "type",
+        deserialize_with = "deserialize_content_kind"
+    )]
+    pub content_kind: PixivContentKind,
+    #[serde(default)]
+    pub description: Option<String>,
     #[serde(default)]
     pub tags: Vec<Tag>,
     #[serde(default)]
@@ -226,6 +261,94 @@ pub struct PixivResponse {
     pub illusts: Vec<Illust>,
     #[serde(default)]
     pub next_url: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct NovelImageUrls {
+    #[serde(default)]
+    pub medium: Option<String>,
+    #[serde(default)]
+    pub large: Option<String>,
+    #[serde(default)]
+    pub square_medium: Option<String>,
+}
+
+impl NovelImageUrls {
+    fn into_image_urls(self) -> ImageUrls {
+        let medium = self.medium.unwrap_or_default();
+        let large = self.large.unwrap_or_else(|| medium.clone());
+        let square_medium = self.square_medium.unwrap_or_else(|| medium.clone());
+
+        ImageUrls {
+            medium,
+            large,
+            square_medium,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Novel {
+    pub id: u64,
+    pub title: String,
+    pub user: User,
+    #[serde(default)]
+    pub caption: Option<String>,
+    #[serde(default)]
+    pub image_urls: Option<NovelImageUrls>,
+    #[serde(default)]
+    pub tags: Vec<Tag>,
+    #[serde(default)]
+    pub total_view: u64,
+    #[serde(default)]
+    pub total_bookmarks: u64,
+    #[serde(default)]
+    pub total_comments: u64,
+    #[serde(default)]
+    pub is_bookmarked: bool,
+}
+
+impl Novel {
+    fn into_feed_illust(self) -> Illust {
+        let image_urls = self.image_urls.unwrap_or_default().into_image_urls();
+
+        Illust {
+            id: self.id,
+            title: self.title,
+            image_urls,
+            user: self.user,
+            content_kind: PixivContentKind::Novel,
+            description: self.caption,
+            tags: self.tags,
+            total_view: self.total_view,
+            total_bookmarks: self.total_bookmarks,
+            total_comments: self.total_comments,
+            is_bookmarked: self.is_bookmarked,
+            page_count: 1,
+            meta_single_page: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct NovelResponse {
+    #[serde(default)]
+    pub novels: Vec<Novel>,
+    #[serde(default)]
+    pub next_url: Option<String>,
+}
+
+impl NovelResponse {
+    fn into_pixiv_response(self) -> PixivResponse {
+        PixivResponse {
+            illusts: self
+                .novels
+                .into_iter()
+                .map(Novel::into_feed_illust)
+                .collect(),
+            next_url: self.next_url,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -358,6 +481,25 @@ impl PixivApiClient {
         let req = self.app_headers(self.http.get(url), Some(access_token));
         let response = req.send().context("ranking illusts failed")?;
         Self::decode_json(response)
+    }
+
+    pub fn recommended_manga(&self, access_token: &str) -> Result<PixivResponse> {
+        let url = format!("{APP_API_BASE}/v1/manga/recommended?filter=for_android");
+        let req = self.app_headers(self.http.get(url), Some(access_token));
+        let response = req.send().context("recommended manga failed")?;
+        let mut payload: PixivResponse = Self::decode_json(response)?;
+        for illust in &mut payload.illusts {
+            illust.content_kind = PixivContentKind::Manga;
+        }
+        Ok(payload)
+    }
+
+    pub fn recommended_novels(&self, access_token: &str) -> Result<PixivResponse> {
+        let url = format!("{APP_API_BASE}/v1/novel/recommended?filter=for_android");
+        let req = self.app_headers(self.http.get(url), Some(access_token));
+        let response = req.send().context("recommended novels failed")?;
+        let payload: NovelResponse = Self::decode_json(response)?;
+        Ok(payload.into_pixiv_response())
     }
 
     pub fn search_illusts(&self, access_token: &str, word: &str) -> Result<PixivResponse> {
@@ -505,5 +647,67 @@ mod tests {
         let user = parsed.user.expect("user should exist");
         assert_eq!(user.id, 33_239_622);
         assert_eq!(user.profile_image_urls.medium, "https://example.com/50.png");
+    }
+
+    #[test]
+    fn illust_content_kind_defaults_to_illust() {
+        let body = r#"{
+            "illusts": [{
+                "id": 1,
+                "title": "sample",
+                "image_urls": {
+                    "medium": "https://example.com/m.jpg",
+                    "large": "https://example.com/l.jpg",
+                    "square_medium": "https://example.com/s.jpg"
+                },
+                "user": {
+                    "id": 9,
+                    "name": "artist",
+                    "profile_image_urls": {
+                        "medium": "https://example.com/u.jpg"
+                    }
+                }
+            }]
+        }"#;
+
+        let parsed =
+            PixivApiClient::decode_json_from_body::<PixivResponse>(reqwest::StatusCode::OK, body)
+                .expect("illust response should parse");
+
+        assert_eq!(parsed.illusts.len(), 1);
+        assert_eq!(parsed.illusts[0].content_kind, PixivContentKind::Illust);
+    }
+
+    #[test]
+    fn novel_response_is_mapped_into_feed_cards() {
+        let body = r#"{
+            "novels": [{
+                "id": 7,
+                "title": "novel title",
+                "caption": "story",
+                "user": {
+                    "id": "22",
+                    "name": "writer",
+                    "profile_image_urls": {
+                        "px_50x50": "https://example.com/u.jpg"
+                    }
+                },
+                "tags": [{"name": "tag-a"}],
+                "total_view": 12,
+                "total_bookmarks": 3,
+                "total_comments": 1,
+                "is_bookmarked": false
+            }]
+        }"#;
+
+        let parsed =
+            PixivApiClient::decode_json_from_body::<NovelResponse>(reqwest::StatusCode::OK, body)
+                .expect("novel response should parse");
+        let mapped = parsed.into_pixiv_response();
+
+        assert_eq!(mapped.illusts.len(), 1);
+        assert_eq!(mapped.illusts[0].content_kind, PixivContentKind::Novel);
+        assert_eq!(mapped.illusts[0].description.as_deref(), Some("story"));
+        assert!(mapped.illusts[0].image_urls.square_medium.is_empty());
     }
 }

@@ -10,5 +10,6 @@ path = "src/lib.rs"
 
 [dependencies]
 app-single-instance.workspace = true
-interprocess.workspace = true
+ipc-channel.workspace = true
+serde.workspace = true
 sysuri.workspace = true

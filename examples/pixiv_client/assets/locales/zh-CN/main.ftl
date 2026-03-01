@@ -19,6 +19,8 @@ pixiv-sidebar-collapse = 收起
 pixiv-sidebar-language = 语言
 pixiv-sidebar-home = 首页
 pixiv-sidebar-rankings = 排行
+pixiv-sidebar-manga = 漫画
+pixiv-sidebar-novels = 小说
 pixiv-sidebar-search = 搜索
 
 pixiv-auth-loading = 加载中…
@@ -38,6 +40,7 @@ pixiv-search-submit = 搜索
 
 pixiv-feed-empty = 还没有加载任何作品。
 pixiv-feed-thumbnail-loading = 缩略图加载中…
+pixiv-feed-novel-placeholder = 暂无小说封面
 pixiv-feed-open = 打开
 pixiv-feed-high-res-loading = 高清图加载中…
 
@@ -54,6 +57,8 @@ pixiv-status-sidebar-expanded = 侧栏已展开
 pixiv-status-locale-switched = 语言已切换为
 pixiv-status-loading-home = 正在加载首页内容…
 pixiv-status-loading-rankings = 正在加载排行榜…
+pixiv-status-loading-manga = 正在加载漫画内容…
+pixiv-status-loading-novels = 正在加载小说内容…
 pixiv-status-search-ready = 搜索面板已就绪。
 pixiv-status-search-keyword-required = 请输入搜索关键词。
 pixiv-status-searching = 正在搜索

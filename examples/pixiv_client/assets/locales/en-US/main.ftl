@@ -19,6 +19,8 @@ pixiv-sidebar-collapse = Collapse
 pixiv-sidebar-language = Language
 pixiv-sidebar-home = Home
 pixiv-sidebar-rankings = Rankings
+pixiv-sidebar-manga = Manga
+pixiv-sidebar-novels = Novels
 pixiv-sidebar-search = Search
 
 pixiv-auth-loading = loading…
@@ -38,6 +40,7 @@ pixiv-search-submit = Search
 
 pixiv-feed-empty = No artworks loaded yet.
 pixiv-feed-thumbnail-loading = Thumbnail loading…
+pixiv-feed-novel-placeholder = Novel cover unavailable
 pixiv-feed-open = Open
 pixiv-feed-high-res-loading = High-res loading…
 
@@ -54,6 +57,8 @@ pixiv-status-sidebar-expanded = Sidebar expanded
 pixiv-status-locale-switched = Language switched to
 pixiv-status-loading-home = Loading Home feed…
 pixiv-status-loading-rankings = Loading Rankings feed…
+pixiv-status-loading-manga = Loading Manga feed…
+pixiv-status-loading-novels = Loading Novels feed…
 pixiv-status-search-ready = Search panel ready.
 pixiv-status-search-keyword-required = Please enter a search keyword.
 pixiv-status-searching = Searching for

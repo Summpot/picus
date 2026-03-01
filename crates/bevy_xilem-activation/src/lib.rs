@@ -1,6 +1,6 @@
 use std::{
     collections::HashSet,
-    io::{self, BufRead, BufReader, Write},
+    fs, io,
     path::PathBuf,
     sync::{
         Arc, Mutex,
@@ -11,27 +11,26 @@ use std::{
 };
 
 use app_single_instance::{PrimaryHandle, notify_if_running, start_primary};
-use interprocess::local_socket::{
-    GenericFilePath, GenericNamespaced, ListenerOptions, Name, Stream, prelude::*,
+use ipc_channel::{
+    IpcError, TryRecvError,
+    ipc::{IpcOneShotServer, IpcSender, channel},
 };
+use serde::{Deserialize, Serialize};
 use sysuri::{FnHandler, UriScheme};
 
 const IPC_CONNECT_RETRY_ATTEMPTS: usize = 120;
 const IPC_CONNECT_RETRY_DELAY: Duration = Duration::from_millis(50);
-const IPC_PROTOCOL_PREFIX: &str = "bevy-xilem-activation-v1";
-const IPC_PROTOCOL_URI: &str = "URI";
-const IPC_PROTOCOL_END: &str = "END";
-const IPC_PROTOCOL_ACK: &str = "ACK";
-const IPC_PROTOCOL_NACK: &str = "NACK";
+const IPC_ACK_TIMEOUT: Duration = Duration::from_secs(2);
 
-enum IpcIncomingLine {
-    LegacyUri(String),
-    ProtocolUri { request_id: String, uri: String },
-    ProtocolEnd { request_id: String },
-    ProtocolControl,
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct ActivationForwardMessage {
+    request_id: String,
+    uris: Vec<String>,
+    ack_sender: IpcSender<ActivationForwardAck>,
 }
 
-enum IpcAckLine {
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+enum ActivationForwardAck {
     Ack,
     Nack,
 }
@@ -160,47 +159,25 @@ pub fn bootstrap(config: ActivationConfig) -> Result<BootstrapOutcome> {
     let startup_uris = collect_startup_uris(config.protocol.as_ref())?;
     let should_exit_as_secondary = notify_if_running(&config.app_id);
 
-    let name = ipc_name_for_app(&config.app_id)?;
-
     if should_exit_as_secondary {
         return Ok(finalize_secondary_forward_result(forward_uris_to_primary(
-            &name,
+            &config.app_id,
             &startup_uris,
         )));
     }
 
+    let _ = cleanup_stale_ipc_endpoint(&config.app_id);
     let primary_handle = start_primary(&config.app_id, || {});
 
-    {
-        let thread_name = listener_thread_name(&config.app_id);
-        let (sender, receiver) = mpsc::channel::<String>();
+    let thread_name = listener_thread_name(&config.app_id);
+    let (sender, receiver) = mpsc::channel::<String>();
+    spawn_ipc_listener(&config.app_id, thread_name, sender)?;
 
-        match spawn_ipc_listener(&name, thread_name.clone(), sender.clone()) {
-            Ok(()) => Ok(BootstrapOutcome::Primary(ActivationService {
-                startup_uris,
-                receiver,
-                _primary_handle: primary_handle,
-            })),
-            Err(error) if should_treat_listener_bind_as_existing_primary(&error) => {
-                if primary_listener_is_reachable(&name) {
-                    Ok(finalize_secondary_forward_result(forward_uris_to_primary(
-                        &name,
-                        &startup_uris,
-                    )))
-                } else {
-                    cleanup_stale_ipc_endpoint(&config.app_id)?;
-                    spawn_ipc_listener(&name, thread_name, sender.clone())?;
-
-                    Ok(BootstrapOutcome::Primary(ActivationService {
-                        startup_uris,
-                        receiver,
-                        _primary_handle: primary_handle,
-                    }))
-                }
-            }
-            Err(error) => Err(error),
-        }
-    }
+    Ok(BootstrapOutcome::Primary(ActivationService {
+        startup_uris,
+        receiver,
+        _primary_handle: primary_handle,
+    }))
 }
 
 fn finalize_secondary_forward_result(forward_result: Result<()>) -> BootstrapOutcome {
@@ -331,17 +308,17 @@ pub fn ensure_protocol_registered(protocol: &ProtocolRegistration) -> Result<()>
     Ok(())
 }
 
-fn spawn_ipc_listener(name: &Name<'_>, thread_name: String, sender: Sender<String>) -> Result<()> {
-    let listener = ListenerOptions::new().name(name.borrow()).create_sync()?;
+fn spawn_ipc_listener(app_id: &str, thread_name: String, sender: Sender<String>) -> Result<()> {
+    let app_id = app_id.to_string();
 
     thread::Builder::new()
         .name(thread_name)
         .spawn(move || {
-            for stream in listener.incoming() {
-                let Ok(stream) = stream else {
-                    continue;
-                };
-                handle_ipc_stream(stream, &sender);
+            loop {
+                if let Err(error) = run_ipc_listener_cycle(&app_id, &sender) {
+                    eprintln!("activation: listener cycle failed: {error}");
+                    thread::sleep(IPC_CONNECT_RETRY_DELAY);
+                }
             }
         })
         .map_err(ActivationError::Io)?;
@@ -349,102 +326,41 @@ fn spawn_ipc_listener(name: &Name<'_>, thread_name: String, sender: Sender<Strin
     Ok(())
 }
 
-fn handle_ipc_stream(stream: Stream, sender: &Sender<String>) {
-    let mut reader = BufReader::new(stream);
-    let mut line = String::new();
-    let mut pending_uris = Vec::new();
-    let mut should_send_receipt = false;
-    let mut request_id_for_receipt: Option<String> = None;
+fn run_ipc_listener_cycle(app_id: &str, sender: &Sender<String>) -> io::Result<()> {
+    let (server, server_name) = IpcOneShotServer::<ActivationForwardMessage>::new()?;
+    publish_ipc_server_name(app_id, &server_name)?;
 
-    loop {
-        line.clear();
-        match reader.read_line(&mut line) {
-            Ok(0) => break,
-            Ok(_) => {
-                let payload = line.trim();
-                if payload.is_empty() {
-                    continue;
-                }
-
-                match parse_ipc_incoming_line(payload) {
-                    IpcIncomingLine::LegacyUri(uri) => pending_uris.push(uri),
-                    IpcIncomingLine::ProtocolUri { request_id, uri } => {
-                        if request_id_for_receipt.is_none() {
-                            request_id_for_receipt = Some(request_id.clone());
-                        }
-                        pending_uris.push(uri);
-                    }
-                    IpcIncomingLine::ProtocolEnd { request_id } => {
-                        if request_id_for_receipt.is_none() {
-                            request_id_for_receipt = Some(request_id);
-                        }
-                        should_send_receipt = true;
-                        break;
-                    }
-                    IpcIncomingLine::ProtocolControl => {}
-                }
-            }
-            Err(_) => break,
-        }
-    }
+    let (_, message) = server.accept().map_err(ipc_error_to_io)?;
 
     let mut all_forwarded = true;
-    for uri in pending_uris {
+    for uri in message.uris {
         if sender.send(uri).is_err() {
             all_forwarded = false;
             break;
         }
     }
 
-    if should_send_receipt && let Some(request_id) = request_id_for_receipt {
-        let receipt_line = if all_forwarded {
-            encode_ipc_ack_line(&request_id)
-        } else {
-            encode_ipc_nack_line(&request_id)
-        };
+    let receipt = if all_forwarded {
+        ActivationForwardAck::Ack
+    } else {
+        ActivationForwardAck::Nack
+    };
+    let _ = message.ack_sender.send(receipt);
 
-        let stream = reader.get_mut();
-        let _ = stream.write_all(receipt_line.as_bytes());
-        let _ = stream.write_all(b"\n");
-        let _ = stream.flush();
-    }
-}
-
-fn should_treat_listener_bind_as_existing_primary(error: &ActivationError) -> bool {
-    match error {
-        ActivationError::Io(io_error) => matches!(
-            io_error.kind(),
-            io::ErrorKind::AddrInUse | io::ErrorKind::AlreadyExists
-        ),
-        _ => false,
-    }
-}
-
-fn primary_listener_is_reachable(name: &Name<'_>) -> bool {
-    for _ in 0..IPC_CONNECT_RETRY_ATTEMPTS {
-        if Stream::connect(name.borrow()).is_ok() {
-            return true;
-        }
-
-        thread::sleep(IPC_CONNECT_RETRY_DELAY);
-    }
-
-    false
+    Ok(())
 }
 
 fn cleanup_stale_ipc_endpoint(app_id: &str) -> io::Result<()> {
-    let Some(path) = ipc_socket_path_for_app(app_id) else {
-        return Ok(());
-    };
+    let path = ipc_rendezvous_path_for_app(app_id);
 
-    match std::fs::remove_file(path) {
+    match fs::remove_file(path) {
         Ok(()) => Ok(()),
         Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
         Err(error) => Err(error),
     }
 }
 
-fn forward_uris_to_primary(name: &Name<'_>, uris: &[String]) -> Result<()> {
+fn forward_uris_to_primary(app_id: &str, uris: &[String]) -> Result<()> {
     if uris.is_empty() {
         return Ok(());
     }
@@ -453,75 +369,59 @@ fn forward_uris_to_primary(name: &Name<'_>, uris: &[String]) -> Result<()> {
     let mut last_error: Option<io::Error> = None;
 
     for _ in 0..IPC_CONNECT_RETRY_ATTEMPTS {
-        match Stream::connect(name.borrow()) {
-            Ok(stream) => {
-                let mut reader = BufReader::new(stream);
-                let mut write_failed = false;
-
-                for uri in uris {
-                    let payload = encode_ipc_uri_line(&request_id, uri);
-                    if let Err(error) = write_ipc_line(reader.get_mut(), payload.as_str()) {
-                        last_error = Some(error);
-                        write_failed = true;
-                        break;
-                    }
-                }
-
-                if write_failed {
-                    thread::sleep(IPC_CONNECT_RETRY_DELAY);
-                    continue;
-                }
-
-                let end_payload = encode_ipc_end_line(&request_id);
-                if let Err(error) = write_ipc_line(reader.get_mut(), end_payload.as_str()) {
-                    last_error = Some(error);
-                    thread::sleep(IPC_CONNECT_RETRY_DELAY);
-                    continue;
-                }
-
-                if let Err(error) = reader.get_mut().flush() {
-                    last_error = Some(error);
-                    thread::sleep(IPC_CONNECT_RETRY_DELAY);
-                    continue;
-                }
-
-                let mut ack_line = String::new();
-                match reader.read_line(&mut ack_line) {
-                    Ok(0) => {
-                        last_error = Some(io::Error::new(
-                            io::ErrorKind::ConnectionAborted,
-                            "primary closed activation stream before acknowledgement",
-                        ));
-                        thread::sleep(IPC_CONNECT_RETRY_DELAY);
-                    }
-                    Ok(_) => {
-                        let ack_payload = ack_line.trim();
-                        match parse_ipc_ack_line(ack_payload, &request_id) {
-                            Some(IpcAckLine::Ack) => return Ok(()),
-                            Some(IpcAckLine::Nack) => {
-                                last_error =
-                                    Some(io::Error::other("primary rejected activation payload"));
-                                thread::sleep(IPC_CONNECT_RETRY_DELAY);
-                            }
-                            None => {
-                                last_error = Some(io::Error::new(
-                                    io::ErrorKind::InvalidData,
-                                    format!(
-                                        "invalid activation acknowledgement from primary: {ack_payload}"
-                                    ),
-                                ));
-                                thread::sleep(IPC_CONNECT_RETRY_DELAY);
-                            }
-                        }
-                    }
-                    Err(error) => {
-                        last_error = Some(error);
-                        thread::sleep(IPC_CONNECT_RETRY_DELAY);
-                    }
-                }
+        let server_name = match load_ipc_server_name(app_id) {
+            Ok(Some(name)) => name,
+            Ok(None) => {
+                thread::sleep(IPC_CONNECT_RETRY_DELAY);
+                continue;
             }
             Err(error) => {
                 last_error = Some(error);
+                thread::sleep(IPC_CONNECT_RETRY_DELAY);
+                continue;
+            }
+        };
+
+        let (ack_sender, ack_receiver) = match channel::<ActivationForwardAck>() {
+            Ok(pair) => pair,
+            Err(error) => {
+                last_error = Some(error);
+                thread::sleep(IPC_CONNECT_RETRY_DELAY);
+                continue;
+            }
+        };
+
+        let sender = match IpcSender::<ActivationForwardMessage>::connect(server_name) {
+            Ok(sender) => sender,
+            Err(error) => {
+                last_error = Some(error);
+                thread::sleep(IPC_CONNECT_RETRY_DELAY);
+                continue;
+            }
+        };
+
+        let payload = ActivationForwardMessage {
+            request_id: request_id.clone(),
+            uris: uris.to_vec(),
+            ack_sender,
+        };
+
+        if let Err(error) = sender.send(payload) {
+            last_error = Some(ipc_error_to_io(error));
+            thread::sleep(IPC_CONNECT_RETRY_DELAY);
+            continue;
+        }
+
+        match ack_receiver.try_recv_timeout(IPC_ACK_TIMEOUT) {
+            Ok(ActivationForwardAck::Ack) => return Ok(()),
+            Ok(ActivationForwardAck::Nack) => {
+                last_error = Some(io::Error::other(
+                    "primary rejected activation payload while enqueuing",
+                ));
+                thread::sleep(IPC_CONNECT_RETRY_DELAY);
+            }
+            Err(error) => {
+                last_error = Some(try_recv_error_to_io(error));
                 thread::sleep(IPC_CONNECT_RETRY_DELAY);
             }
         }
@@ -535,85 +435,68 @@ fn forward_uris_to_primary(name: &Name<'_>, uris: &[String]) -> Result<()> {
     })))
 }
 
-fn parse_ipc_incoming_line(payload: &str) -> IpcIncomingLine {
-    let mut parts = payload.splitn(4, '\t');
-    let Some(prefix) = parts.next() else {
-        return IpcIncomingLine::ProtocolControl;
-    };
+fn publish_ipc_server_name(app_id: &str, server_name: &str) -> io::Result<()> {
+    let path = ipc_rendezvous_path_for_app(app_id);
 
-    if prefix != IPC_PROTOCOL_PREFIX {
-        return IpcIncomingLine::LegacyUri(payload.to_string());
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
     }
 
-    let Some(request_id) = parts.next() else {
-        return IpcIncomingLine::ProtocolControl;
-    };
-    let Some(kind) = parts.next() else {
-        return IpcIncomingLine::ProtocolControl;
-    };
+    let temp_path = path.with_extension("tmp");
+    fs::write(&temp_path, server_name)?;
 
-    match kind {
-        IPC_PROTOCOL_URI => {
-            let Some(uri) = parts.next() else {
-                return IpcIncomingLine::ProtocolControl;
-            };
+    match fs::rename(&temp_path, &path) {
+        Ok(()) => Ok(()),
+        Err(_) => {
+            fs::write(&path, server_name)?;
+            let _ = fs::remove_file(&temp_path);
+            Ok(())
+        }
+    }
+}
 
-            let uri = uri.trim();
-            if uri.is_empty() {
-                IpcIncomingLine::ProtocolControl
+fn load_ipc_server_name(app_id: &str) -> io::Result<Option<String>> {
+    let path = ipc_rendezvous_path_for_app(app_id);
+    match fs::read_to_string(path) {
+        Ok(raw) => {
+            let name = raw.trim().to_string();
+            if name.is_empty() {
+                Ok(None)
             } else {
-                IpcIncomingLine::ProtocolUri {
-                    request_id: request_id.to_string(),
-                    uri: uri.to_string(),
-                }
+                Ok(Some(name))
             }
         }
-        IPC_PROTOCOL_END => IpcIncomingLine::ProtocolEnd {
-            request_id: request_id.to_string(),
-        },
-        _ => IpcIncomingLine::ProtocolControl,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(error),
     }
 }
 
-fn parse_ipc_ack_line(payload: &str, request_id: &str) -> Option<IpcAckLine> {
-    let mut parts = payload.splitn(4, '\t');
-    let prefix = parts.next()?;
-    if prefix != IPC_PROTOCOL_PREFIX {
-        return None;
-    }
+fn ipc_rendezvous_path_for_app(app_id: &str) -> PathBuf {
+    let normalized = normalize_app_id(app_id);
+    std::env::temp_dir().join(format!("{normalized}.activation.ipc-name"))
+}
 
-    let response_request_id = parts.next()?;
-    if response_request_id != request_id {
-        return None;
-    }
-
-    match parts.next()? {
-        IPC_PROTOCOL_ACK => Some(IpcAckLine::Ack),
-        IPC_PROTOCOL_NACK => Some(IpcAckLine::Nack),
-        _ => None,
+fn try_recv_error_to_io(error: TryRecvError) -> io::Error {
+    match error {
+        TryRecvError::IpcError(ipc_error) => ipc_error_to_io(ipc_error),
+        TryRecvError::Empty => io::Error::new(
+            io::ErrorKind::TimedOut,
+            "timed out waiting for primary activation acknowledgement",
+        ),
     }
 }
 
-fn encode_ipc_uri_line(request_id: &str, uri: &str) -> String {
-    format!("{IPC_PROTOCOL_PREFIX}\t{request_id}\t{IPC_PROTOCOL_URI}\t{uri}")
-}
-
-fn encode_ipc_end_line(request_id: &str) -> String {
-    format!("{IPC_PROTOCOL_PREFIX}\t{request_id}\t{IPC_PROTOCOL_END}")
-}
-
-fn encode_ipc_ack_line(request_id: &str) -> String {
-    format!("{IPC_PROTOCOL_PREFIX}\t{request_id}\t{IPC_PROTOCOL_ACK}")
-}
-
-fn encode_ipc_nack_line(request_id: &str) -> String {
-    format!("{IPC_PROTOCOL_PREFIX}\t{request_id}\t{IPC_PROTOCOL_NACK}")
-}
-
-fn write_ipc_line(stream: &mut Stream, payload: &str) -> io::Result<()> {
-    stream.write_all(payload.as_bytes())?;
-    stream.write_all(b"\n")?;
-    Ok(())
+fn ipc_error_to_io(error: IpcError) -> io::Error {
+    match error {
+        IpcError::Io(io_error) => io_error,
+        IpcError::SerializationError(error) => {
+            io::Error::new(io::ErrorKind::InvalidData, error.to_string())
+        }
+        IpcError::Disconnected => io::Error::new(
+            io::ErrorKind::ConnectionAborted,
+            "ipc channel disconnected unexpectedly",
+        ),
+    }
 }
 
 fn next_forward_request_id() -> String {
@@ -648,47 +531,6 @@ fn normalize_app_id(app_id: &str) -> String {
 
 fn listener_thread_name(app_id: &str) -> String {
     format!("{}-activation-listener", normalize_app_id(app_id))
-}
-
-fn ipc_name_for_app(app_id: &str) -> io::Result<Name<'static>> {
-    let normalized = normalize_app_id(app_id);
-    let token = format!("{normalized}.activation");
-
-    if use_namespaced_ipc_socket() {
-        token
-            .to_ns_name::<GenericNamespaced>()
-            .map(|name| name.into_owned())
-    } else {
-        let socket_path = ipc_socket_path_for_app(app_id)
-            .expect("filesystem local sockets must have an ipc path");
-        socket_path
-            .to_string_lossy()
-            .to_string()
-            .to_fs_name::<GenericFilePath>()
-            .map(|name| name.into_owned())
-    }
-}
-
-fn ipc_socket_path_for_app(app_id: &str) -> Option<PathBuf> {
-    if use_namespaced_ipc_socket() {
-        return None;
-    }
-
-    let normalized = normalize_app_id(app_id);
-    let token = format!("{normalized}.activation");
-    Some(std::env::temp_dir().join(format!("{token}.sock")))
-}
-
-fn use_namespaced_ipc_socket() -> bool {
-    #[cfg(target_os = "macos")]
-    {
-        // Keep macOS on filesystem sockets so stale endpoints can be cleaned up
-        // deterministically and listener reachability checks are stable.
-        return false;
-    }
-
-    #[allow(unreachable_code)]
-    GenericNamespaced::is_supported()
 }
 
 #[cfg(test)]
@@ -738,50 +580,15 @@ mod tests {
     }
 
     #[test]
-    fn listener_bind_conflicts_are_treated_as_existing_primary() {
-        let addr_in_use = ActivationError::Io(io::Error::new(io::ErrorKind::AddrInUse, "boom"));
-        let already_exists =
-            ActivationError::Io(io::Error::new(io::ErrorKind::AlreadyExists, "boom"));
-
-        assert!(should_treat_listener_bind_as_existing_primary(&addr_in_use));
-        assert!(should_treat_listener_bind_as_existing_primary(
-            &already_exists
-        ));
-    }
-
-    #[test]
-    fn non_conflict_listener_errors_are_not_treated_as_existing_primary() {
-        let permission_denied =
-            ActivationError::Io(io::Error::new(io::ErrorKind::PermissionDenied, "boom"));
-        assert!(!should_treat_listener_bind_as_existing_primary(
-            &permission_denied
-        ));
-    }
-
-    #[test]
-    fn stale_ipc_endpoint_cleanup_removes_filesystem_socket_path() {
+    fn stale_ipc_endpoint_cleanup_removes_rendezvous_file() {
         let app_id = "bevy-xilem-activation-test-cleanup";
-        let Some(path) = ipc_socket_path_for_app(app_id) else {
-            return;
-        };
+        let path = ipc_rendezvous_path_for_app(app_id);
 
-        let _ = std::fs::remove_file(&path);
-        std::fs::write(&path, b"stale").expect("should create stale endpoint marker");
+        let _ = fs::remove_file(&path);
+        fs::write(&path, b"stale").expect("should create stale endpoint marker");
         cleanup_stale_ipc_endpoint(app_id).expect("cleanup should succeed");
 
         assert!(!path.exists());
-    }
-
-    #[test]
-    fn socket_transport_selection_is_platform_consistent() {
-        #[cfg(target_os = "macos")]
-        assert!(!use_namespaced_ipc_socket());
-
-        #[cfg(not(target_os = "macos"))]
-        assert_eq!(
-            use_namespaced_ipc_socket(),
-            GenericNamespaced::is_supported()
-        );
     }
 
     #[test]
@@ -797,44 +604,6 @@ mod tests {
             "boom",
         ))));
         assert!(matches!(outcome, BootstrapOutcome::SecondaryForwarded));
-    }
-
-    #[test]
-    fn protocol_parser_keeps_legacy_uri_payloads() {
-        let parsed = parse_ipc_incoming_line("pixiv://account/login?code=abc");
-        match parsed {
-            IpcIncomingLine::LegacyUri(uri) => {
-                assert_eq!(uri, "pixiv://account/login?code=abc");
-            }
-            _ => panic!("expected legacy URI payload"),
-        }
-    }
-
-    #[test]
-    fn protocol_parser_reads_uri_and_end_markers() {
-        let request_id = "req-123";
-        let uri_line = encode_ipc_uri_line(request_id, "pixiv://account/login?code=abc");
-        let end_line = encode_ipc_end_line(request_id);
-
-        match parse_ipc_incoming_line(uri_line.as_str()) {
-            IpcIncomingLine::ProtocolUri {
-                request_id: parsed_request,
-                uri,
-            } => {
-                assert_eq!(parsed_request, request_id);
-                assert_eq!(uri, "pixiv://account/login?code=abc");
-            }
-            _ => panic!("expected protocol URI line"),
-        }
-
-        match parse_ipc_incoming_line(end_line.as_str()) {
-            IpcIncomingLine::ProtocolEnd {
-                request_id: parsed_request,
-            } => {
-                assert_eq!(parsed_request, request_id);
-            }
-            _ => panic!("expected protocol END line"),
-        }
     }
 
     #[test]
@@ -857,23 +626,6 @@ mod tests {
     }
 
     #[test]
-    fn protocol_ack_parser_validates_request_id() {
-        let request_id = "req-ack";
-        let ack_line = encode_ipc_ack_line(request_id);
-        let nack_line = encode_ipc_nack_line(request_id);
-
-        assert!(matches!(
-            parse_ipc_ack_line(ack_line.as_str(), request_id),
-            Some(IpcAckLine::Ack)
-        ));
-        assert!(matches!(
-            parse_ipc_ack_line(nack_line.as_str(), request_id),
-            Some(IpcAckLine::Nack)
-        ));
-        assert!(parse_ipc_ack_line(ack_line.as_str(), "other-request").is_none());
-    }
-
-    #[test]
     fn forward_uris_to_primary_delivers_payload_with_receipt() {
         let short_nanos = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -882,14 +634,13 @@ mod tests {
         let unique = format!("ack-{}-{short_nanos}", std::process::id(),);
 
         let _ = cleanup_stale_ipc_endpoint(&unique);
-        let name = ipc_name_for_app(&unique).expect("should build ipc name");
         let (sender, receiver) = mpsc::channel::<String>();
 
-        spawn_ipc_listener(&name, listener_thread_name(&unique), sender)
+        spawn_ipc_listener(&unique, listener_thread_name(&unique), sender)
             .expect("should spawn listener");
 
         let uris = vec!["pixiv://account/login?code=ack-check".to_string()];
-        forward_uris_to_primary(&name, &uris).expect("forward should succeed with receipt");
+        forward_uris_to_primary(&unique, &uris).expect("forward should succeed with receipt");
 
         let forwarded = receiver
             .recv_timeout(Duration::from_secs(2))
