@@ -235,6 +235,8 @@ The workspace now includes a dedicated crate: `bevy_xilem-activation`.
 - **Activation IPC bridge** (`interprocess` local socket): secondary launches forward URI payloads to the primary process with bounded retries, then wait for explicit receipt (`ACK` / `NACK`) from the primary listener before exiting. Receipt is emitted after the primary listener successfully enqueues payloads into activation service. If no receipt is obtained after retries, secondary still exits fail-closed for single-instance UI (prevents accidental dual-instance windows during callback relaunch races).
 - **macOS IPC transport policy:** activation keeps macOS on filesystem local sockets (still via `interprocess`) for deterministic stale-endpoint cleanup and stable reachability checks during single-instance conflict recovery.
 - **Custom URI protocol registration + callback dispatch** (`sysuri`): app-managed registration for OS-level protocol handling and callback dispatch (`register_handler` + `should_handle_uri`) instead of manual per-platform callback parsing.
+- **Startup URI collection hardening:** activation collects protocol callback URIs from both `sysuri::parse_args()` and raw process arguments (scheme-filtered, case-insensitive) before dedupe, so callback launchers that bypass `sysuri` argv parsing still forward payloads correctly.
+- **macOS callback dispatch tolerance:** activation always performs a best-effort `should_handle_uri` pass on macOS protocol boots (even when argv contains no callback URI), preventing missed callback deliveries from platform dispatch paths that do not populate command-line arguments.
 
 ### 12.2 Pixiv callback flow
 

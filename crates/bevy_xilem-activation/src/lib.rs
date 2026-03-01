@@ -219,6 +219,7 @@ fn collect_startup_uris(protocol: Option<&ProtocolRegistration>) -> Result<Vec<S
     let pending_uris = Arc::new(Mutex::new(Vec::<String>::new()));
     let pending_uris_for_handler = Arc::clone(&pending_uris);
     let expected_scheme = protocol.scheme.clone();
+    let expected_scheme_for_handler = expected_scheme.clone();
 
     sysuri::register_handler(
         protocol.scheme.as_str(),
@@ -227,7 +228,7 @@ fn collect_startup_uris(protocol: Option<&ProtocolRegistration>) -> Result<Vec<S
                 return;
             };
 
-            if !scheme.eq_ignore_ascii_case(expected_scheme.as_str()) {
+            if !scheme.eq_ignore_ascii_case(expected_scheme_for_handler.as_str()) {
                 return;
             }
 
@@ -237,21 +238,57 @@ fn collect_startup_uris(protocol: Option<&ProtocolRegistration>) -> Result<Vec<S
         }),
     );
 
+    let mut startup_uris =
+        collect_matching_protocol_uris_from_process_args(expected_scheme.as_str());
+    let mut should_dispatch_sysuri = cfg!(target_os = "macos") || !startup_uris.is_empty();
+
     if let Some(uri) = sysuri::parse_args()
         && let Some(scheme) = sysuri::extract_scheme(&uri)
         && scheme.eq_ignore_ascii_case(protocol.scheme.as_str())
     {
-        sysuri::should_handle_uri()?;
+        startup_uris.push(uri);
+        should_dispatch_sysuri = true;
     }
 
-    let startup_uris = pending_uris
-        .lock()
-        .map_err(|_| {
-            ActivationError::SingleInstance("sysuri callback buffer mutex poisoned".to_string())
-        })?
-        .clone();
+    if should_dispatch_sysuri && let Err(error) = sysuri::should_handle_uri() {
+        eprintln!("activation: sysuri callback dispatch failed: {error}");
+    }
+
+    startup_uris.extend(
+        pending_uris
+            .lock()
+            .map_err(|_| {
+                ActivationError::SingleInstance("sysuri callback buffer mutex poisoned".to_string())
+            })?
+            .iter()
+            .cloned(),
+    );
 
     Ok(dedupe_preserve_order(startup_uris))
+}
+
+fn collect_matching_protocol_uris_from_process_args(expected_scheme: &str) -> Vec<String> {
+    collect_matching_protocol_uris_from_iter(std::env::args().skip(1), expected_scheme)
+}
+
+fn collect_matching_protocol_uris_from_iter<I>(args: I, expected_scheme: &str) -> Vec<String>
+where
+    I: IntoIterator,
+    I::Item: AsRef<str>,
+{
+    args.into_iter()
+        .filter_map(|arg| {
+            let raw = arg.as_ref().trim();
+            let candidate = raw.trim_matches('"').trim_matches('\'');
+
+            let scheme = sysuri::extract_scheme(candidate)?;
+            if scheme.eq_ignore_ascii_case(expected_scheme) {
+                Some(candidate.to_string())
+            } else {
+                None
+            }
+        })
+        .collect()
 }
 
 fn dedupe_preserve_order(values: Vec<String>) -> Vec<String> {
@@ -798,6 +835,25 @@ mod tests {
             }
             _ => panic!("expected protocol END line"),
         }
+    }
+
+    #[test]
+    fn protocol_uri_fallback_from_raw_args_filters_by_scheme() {
+        let args = vec![
+            "-psn_0_12345".to_string(),
+            "pixiv://account/login?code=first".to_string(),
+            "\"PIXIV://account/login?code=second\"".to_string(),
+            "https://example.com/callback?code=ignored".to_string(),
+        ];
+
+        let uris = collect_matching_protocol_uris_from_iter(args, "pixiv");
+        assert_eq!(
+            uris,
+            vec![
+                "pixiv://account/login?code=first".to_string(),
+                "PIXIV://account/login?code=second".to_string(),
+            ]
+        );
     }
 
     #[test]
