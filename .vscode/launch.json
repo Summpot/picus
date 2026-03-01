@@ -1,0 +1,277 @@
+{
+    // 使用 IntelliSense 了解相关属性。 
+    // 悬停以查看现有属性的描述。
+    // 欲了解更多信息，请访问: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug unit tests in library 'bevy_xilem_activation'",
+            "type": "lldb",
+            "request": "launch",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--package=bevy_xilem-activation"
+                ]
+            }
+        },
+        {
+            "name": "Debug unit tests in library 'bevy_xilem'",
+            "type": "lldb",
+            "request": "launch",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--package=bevy_xilem"
+                ]
+            }
+        },
+        {
+            "name": "Debug executable 'example_async_downloader'",
+            "type": "lldb",
+            "request": "launch",
+            "cargo": {
+                "args": [
+                    "run",
+                    "--bin=example_async_downloader",
+                    "--package=example_async_downloader"
+                ]
+            },
+            "args": []
+        },
+        {
+            "name": "Debug unit tests in executable 'example_async_downloader'",
+            "type": "lldb",
+            "request": "launch",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--bin=example_async_downloader",
+                    "--package=example_async_downloader"
+                ]
+            }
+        },
+        {
+            "name": "Debug unit tests in library 'shared_utils'",
+            "type": "lldb",
+            "request": "launch",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--package=shared_utils"
+                ]
+            }
+        },
+        {
+            "name": "Debug executable 'example_calculator'",
+            "type": "lldb",
+            "request": "launch",
+            "cargo": {
+                "args": [
+                    "run",
+                    "--bin=example_calculator",
+                    "--package=example_calculator"
+                ]
+            },
+            "args": []
+        },
+        {
+            "name": "Debug unit tests in executable 'example_calculator'",
+            "type": "lldb",
+            "request": "launch",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--bin=example_calculator",
+                    "--package=example_calculator"
+                ]
+            }
+        },
+        {
+            "name": "Debug executable 'example_chess_game'",
+            "type": "lldb",
+            "request": "launch",
+            "cargo": {
+                "args": [
+                    "run",
+                    "--bin=example_chess_game",
+                    "--package=example_chess_game"
+                ]
+            },
+            "args": []
+        },
+        {
+            "name": "Debug unit tests in executable 'example_chess_game'",
+            "type": "lldb",
+            "request": "launch",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--bin=example_chess_game",
+                    "--package=example_chess_game"
+                ]
+            }
+        },
+        {
+            "name": "Debug executable 'example_game_2048'",
+            "type": "lldb",
+            "request": "launch",
+            "cargo": {
+                "args": [
+                    "run",
+                    "--bin=example_game_2048",
+                    "--package=example_game_2048"
+                ]
+            },
+            "args": []
+        },
+        {
+            "name": "Debug unit tests in executable 'example_game_2048'",
+            "type": "lldb",
+            "request": "launch",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--bin=example_game_2048",
+                    "--package=example_game_2048"
+                ]
+            }
+        },
+        {
+            "name": "Debug executable 'example_overlay_hit_routing'",
+            "type": "lldb",
+            "request": "launch",
+            "cargo": {
+                "args": [
+                    "run",
+                    "--bin=example_overlay_hit_routing",
+                    "--package=example_overlay_hit_routing"
+                ]
+            },
+            "args": []
+        },
+        {
+            "name": "Debug unit tests in executable 'example_overlay_hit_routing'",
+            "type": "lldb",
+            "request": "launch",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--bin=example_overlay_hit_routing",
+                    "--package=example_overlay_hit_routing"
+                ]
+            }
+        },
+        {
+            "name": "Debug unit tests in library 'pixiv_client'",
+            "type": "lldb",
+            "request": "launch",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--package=example_pixiv_client"
+                ]
+            }
+        },
+        {
+            "name": "Debug executable 'example_pixiv_client'",
+            "type": "lldb",
+            "request": "launch",
+            "cargo": {
+                "args": [
+                    "run",
+                    "--bin=example_pixiv_client",
+                    "--package=example_pixiv_client"
+                ]
+            },
+            "args": []
+        },
+        {
+            "name": "Debug unit tests in executable 'example_pixiv_client'",
+            "type": "lldb",
+            "request": "launch",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--bin=example_pixiv_client",
+                    "--package=example_pixiv_client"
+                ]
+            }
+        },
+        {
+            "name": "Debug executable 'example_timer'",
+            "type": "lldb",
+            "request": "launch",
+            "cargo": {
+                "args": [
+                    "run",
+                    "--bin=example_timer",
+                    "--package=example_timer"
+                ]
+            },
+            "args": []
+        },
+        {
+            "name": "Debug unit tests in executable 'example_timer'",
+            "type": "lldb",
+            "request": "launch",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--bin=example_timer",
+                    "--package=example_timer"
+                ]
+            }
+        },
+        {
+            "name": "Debug executable 'example_todo_list'",
+            "type": "lldb",
+            "request": "launch",
+            "cargo": {
+                "args": [
+                    "run",
+                    "--bin=example_todo_list",
+                    "--package=example_todo_list"
+                ]
+            },
+            "args": []
+        },
+        {
+            "name": "Debug unit tests in executable 'example_todo_list'",
+            "type": "lldb",
+            "request": "launch",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--bin=example_todo_list",
+                    "--package=example_todo_list"
+                ]
+            }
+        },
+        {
+            "name": "Debug executable 'example_ui_showcase'",
+            "type": "lldb",
+            "request": "launch",
+            "cargo": {
+                "args": [
+                    "run",
+                    "--bin=example_ui_showcase",
+                    "--package=example_ui_showcase"
+                ]
+            },
+            "args": []
+        },
+        {
+            "name": "Debug unit tests in executable 'example_ui_showcase'",
+            "type": "lldb",
+            "request": "launch",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--bin=example_ui_showcase",
+                    "--package=example_ui_showcase"
+                ]
+            }
+        }
+    ]
+}
