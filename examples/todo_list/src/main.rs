@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
 use bevy_xilem::{
-    AppBevyXilemExt, BevyXilemPlugin, ProjectionCtx, StyleClass, UiEventQueue, UiRoot, UiView,
-    apply_label_style, apply_text_input_style, apply_widget_style,
+    AppBevyXilemExt, BevyXilemPlugin, ProjectionCtx, StyleClass, UiEventQueue, UiRoot,
+    UiThemePicker, UiView, apply_label_style, apply_text_input_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
     bevy_ecs::{
         hierarchy::{ChildOf, Children},
@@ -20,7 +20,7 @@ use bevy_xilem::{
         winit::error::EventLoopError,
     },
 };
-use shared_utils::{drain_fluent_theme_toggle_events, init_logging, setup_fluent_theme_toggle};
+use shared_utils::init_logging;
 
 const LIST_VIEWPORT_HEIGHT: f64 = 360.0;
 
@@ -277,6 +277,7 @@ fn setup_todo_world(mut commands: Commands) {
         ))
         .id();
 
+    commands.spawn((UiThemePicker::fluent(), ChildOf(root)));
     commands.spawn((
         TodoHeader,
         StyleClass(vec!["todo.header".to_string()]),
@@ -390,7 +391,7 @@ fn build_bevy_todo_app() -> App {
 
     let mut app = App::new();
     app.add_plugins(BevyXilemPlugin)
-        .load_style_sheet("assets/themes/todo_list.ron")
+        .load_style_sheet_ron(include_str!("../assets/themes/todo_list.ron"))
         .insert_resource(ActiveFilter(FilterType::All))
         .insert_resource(DraftTodo("My Next Task".to_string()))
         .register_ui_component::<TodoRootView>()
@@ -400,19 +401,22 @@ fn build_bevy_todo_app() -> App {
         .register_ui_component::<TodoItem>()
         .register_ui_component::<TodoFilterBar>()
         .register_ui_component::<FilterToggle>()
-        .add_systems(Startup, (setup_todo_world, setup_fluent_theme_toggle));
+        .add_systems(Startup, setup_todo_world);
 
-    app.add_systems(
-        PreUpdate,
-        (
-            drain_fluent_theme_toggle_events,
-            drain_todo_events_and_mutate_world,
-        ),
-    );
+    app.add_systems(PreUpdate, drain_todo_events_and_mutate_world);
 
     app
 }
 
 fn main() -> Result<(), EventLoopError> {
     run_app(build_bevy_todo_app(), "To Do MVC")
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn embedded_todo_theme_ron_parses() {
+        bevy_xilem::parse_stylesheet_ron(include_str!("../assets/themes/todo_list.ron"))
+            .expect("embedded todo_list stylesheet should parse");
+    }
 }

@@ -252,7 +252,7 @@ This removes the manual copy/paste requirement in normal desktop callback flow w
 ## 13. Examples and Non-goals
 
 - **Examples:** Highlighted in crates evaluating architectures (`chess_game`, `ui_showcase`, `todo_list`).
-- **Shared Fluent variant toggle for examples:** non-showcase examples use a common floating theme toggle button (Dark / Light / High Contrast), implemented in `examples/shared_utils`, which updates `ActiveStyleVariant` through `set_active_style_variant_by_name(...)`.
+- **Built-in Fluent variant picker for examples:** non-showcase examples use the built-in `UiThemePicker` component in their normal UI tree so the `sun-moon` trigger lives in the same layout layer as the rest of the app. Its anchored dropdown menu (Dark / Light / High Contrast) is projected through the overlay system with auto-flip placement, and selecting an item updates `ActiveStyleVariant` through `set_active_style_variant_by_name(...)`.
 - **Example-specific style sources:** examples use crate-embedded style overrides via `AppBevyXilemExt::load_style_sheet_ron(...)` (`include_str!` from each example crate), avoiding runtime path dependence for built-in demos.
 - **Example localization bundles:** showcase/pixiv examples register Fluent bundles from crate-embedded `.ftl` text (`SyncTextSource::String(include_str!(...))`) so locale switching does not depend on runtime filesystem path lookups.
 - **Example font registration:** examples that need explicit font bridge setup register fonts from embedded bytes (`SyncAssetSource::Bytes(include_bytes!(...))`) instead of runtime `FilePath` loading.

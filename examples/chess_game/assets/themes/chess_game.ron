@@ -1,0 +1,170 @@
+(
+  rules: [
+    (
+      selector: Class("chess.root"),
+      setter: (
+        layout: (
+          padding: Var("space-xl"),
+          gap: Var("gap-lg"),
+        ),
+        colors: (
+          bg: Var("surface-bg"),
+          text: Var("text-primary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("chess.ui-components"),
+      setter: (
+        layout: (
+          padding: Var("space-lg"),
+          gap: Var("gap-md"),
+          corner_radius: Var("radius-lg"),
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          bg: Var("surface-panel"),
+          border: Var("border-default"),
+        ),
+        box_shadow: Var("shadow-ui-component"),
+      ),
+    ),
+    (
+      selector: Class("chess.status"),
+      setter: (
+        layout: (
+          padding: Var("space-sm"),
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          bg: Var("surface-subtle"),
+          border: Var("border-default"),
+          text: Var("text-primary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("chess.clock"),
+      setter: (
+        text: (
+          size: 18.0,
+        ),
+        colors: (
+          text: Var("text-primary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("chess.time-per-move"),
+      setter: (
+        text: (
+          size: Var("text-sm"),
+        ),
+        colors: (
+          text: Var("text-secondary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("chess.toggle"),
+      setter: (
+        text: (
+          size: Var("text-sm"),
+        ),
+        colors: (
+          text: Var("text-primary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("chess.action-button"),
+      setter: (
+        layout: (
+          padding: Var("space-sm"),
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          bg: Var("surface-subtle"),
+          hover_bg: Var("surface-subtle-hover"),
+          pressed_bg: Var("surface-subtle-pressed"),
+          border: Var("border-default"),
+          text: Var("text-primary"),
+        ),
+        transition: Var("duration-fast"),
+      ),
+    ),
+    (
+      selector: Class("chess.movelist"),
+      setter: (
+        layout: (
+          padding: Var("space-sm"),
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          bg: Var("surface-subtle"),
+          border: Var("border-default"),
+          text: Var("text-primary"),
+        ),
+        text: (
+          size: 13.0,
+        ),
+      ),
+    ),
+    (
+      selector: Class("chess.board"),
+      setter: (
+        layout: (
+          padding: Var("space-sm"),
+          corner_radius: Var("radius-lg"),
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          bg: Var("surface-panel"),
+          border: Var("border-default"),
+        ),
+        box_shadow: Var("shadow-ui-component"),
+      ),
+    ),
+    (
+      selector: Class("chess.cell"),
+      setter: (
+        layout: (
+          padding: 12.0,
+          corner_radius: Var("radius-sm"),
+          border_width: 0.0,
+        ),
+      ),
+    ),
+    (
+      selector: Class("chess.cell.light"),
+      setter: (
+        colors: (
+          bg: Hex("#E8DFD0"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("chess.cell.dark"),
+      setter: (
+        colors: (
+          bg: Hex("#8C785F"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("chess.cell-piece"),
+      setter: (
+        text: (
+          size: 36.0,
+          text_align: Center,
+        ),
+        colors: (
+          text: Var("text-primary"),
+        ),
+      ),
+    ),
+  ],
+)

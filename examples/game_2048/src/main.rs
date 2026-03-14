@@ -4,8 +4,8 @@ use std::{
 };
 
 use bevy_xilem::{
-    AppBevyXilemExt, BevyXilemPlugin, ProjectionCtx, StyleClass, UiEventQueue, UiRoot, UiView,
-    apply_label_style, apply_widget_style,
+    AppBevyXilemExt, BevyXilemPlugin, ProjectionCtx, StyleClass, UiEventQueue, UiRoot,
+    UiThemePicker, UiView, apply_label_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
     bevy_ecs::{hierarchy::ChildOf, prelude::*},
     bevy_input::{ButtonInput, keyboard::KeyCode},
@@ -38,7 +38,7 @@ use masonry::{
     layout::LenReq,
     vello::Scene,
 };
-use shared_utils::{drain_fluent_theme_toggle_events, init_logging, setup_fluent_theme_toggle};
+use shared_utils::init_logging;
 
 const BOARD_SIDE: usize = 4;
 const BOARD_LEN: usize = BOARD_SIDE * BOARD_SIDE;
@@ -661,11 +661,7 @@ where
     type Element = Pod<HotkeyCaptureWidget<Child::Widget>>;
     type ViewState = Child::ViewState;
 
-    fn build(
-        &self,
-        ctx: &mut ViewCtx,
-        _app_state: &mut (),
-    ) -> (Self::Element, Self::ViewState) {
+    fn build(&self, ctx: &mut ViewCtx, _app_state: &mut ()) -> (Self::Element, Self::ViewState) {
         let (child, child_state) = ctx.with_id(HOTKEY_CAPTURE_CHILD_VIEW_ID, |ctx| {
             self.child.build(ctx, &mut ())
         });
@@ -741,16 +737,22 @@ where
 
 fn project_game_root(_: &GameRoot, ctx: ProjectionCtx<'_>) -> UiView {
     let style = resolve_style(ctx.world, ctx.entity);
-    let children = ctx
-        .children
-        .into_iter()
+    let mut children = ctx.children.into_iter();
+    let theme_picker = children.next().unwrap_or_else(|| Arc::new(label("")));
+    let content_children = children
         .map(|child| child.into_any_flex())
         .collect::<Vec<_>>();
 
     let content = apply_widget_style(
-        flex_col(children)
-            .cross_axis_alignment(CrossAxisAlignment::Center)
-            .main_axis_alignment(MainAxisAlignment::Start),
+        flex_col(vec![
+            theme_picker.into_any_flex(),
+            flex_col(content_children)
+                .cross_axis_alignment(CrossAxisAlignment::Center)
+                .main_axis_alignment(MainAxisAlignment::Start)
+                .into_any_flex(),
+        ])
+        .cross_axis_alignment(CrossAxisAlignment::Stretch)
+        .main_axis_alignment(MainAxisAlignment::Start),
         &style,
     );
 
@@ -998,6 +1000,8 @@ fn setup_game_world(mut commands: Commands) {
     let root = commands
         .spawn((UiRoot, GameRoot, StyleClass(vec!["g2048.root".to_string()])))
         .id();
+
+    commands.spawn((UiThemePicker::fluent(), ChildOf(root)));
 
     commands.spawn((
         HeaderBlock,
@@ -1289,11 +1293,8 @@ fn build_2048_app() -> App {
         .register_ui_component::<UiComponentsRow>()
         .register_ui_component::<UiComponentButton>()
         .register_ui_component::<HintLine>()
-        .add_systems(Startup, (setup_game_world, setup_fluent_theme_toggle))
-        .add_systems(
-            PreUpdate,
-            (drain_fluent_theme_toggle_events, track_game_viewport),
-        )
+        .add_systems(Startup, setup_game_world)
+        .add_systems(PreUpdate, track_game_viewport)
         .add_systems(
             PreUpdate,
             (

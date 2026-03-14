@@ -7,7 +7,7 @@ use std::{
 
 use bevy_xilem::{
     AppBevyXilemExt, BevyXilemPlugin, ProjectionCtx, StyleClass, UiDialog, UiEventQueue, UiRoot,
-    UiView, apply_label_style, apply_text_input_style, apply_widget_style,
+    UiThemePicker, UiView, apply_label_style, apply_text_input_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
     bevy_ecs::{hierarchy::ChildOf, prelude::*},
     bevy_tasks::{IoTaskPool, TaskPoolBuilder},
@@ -22,7 +22,7 @@ use bevy_xilem::{
         winit::{dpi::LogicalSize, error::EventLoopError},
     },
 };
-use shared_utils::{drain_fluent_theme_toggle_events, init_logging, setup_fluent_theme_toggle};
+use shared_utils::init_logging;
 
 const HEARTBEAT_MS: u64 = 60;
 const DEFAULT_URL: &str = "https://hil-speed.hetzner.com/100MB.bin";
@@ -427,6 +427,7 @@ fn setup_download_world(mut commands: Commands) {
         ))
         .id();
 
+    commands.spawn((UiThemePicker::fluent(), ChildOf(root)));
     commands.spawn((DownloadTitle, ChildOf(root)));
     commands.spawn((DownloadUrlRow, ChildOf(root)));
     commands.spawn((DownloadActionRow, ChildOf(root)));
@@ -557,7 +558,7 @@ fn build_async_downloader_app() -> App {
 
     let mut app = App::new();
     app.add_plugins(BevyXilemPlugin)
-        .load_style_sheet("assets/themes/async_downloader.ron")
+        .load_style_sheet_ron(include_str!("../assets/themes/async_downloader.ron"))
         .insert_resource(DownloadState::default())
         .register_ui_component::<DownloadRootView>()
         .register_ui_component::<DownloadTitle>()
@@ -565,11 +566,8 @@ fn build_async_downloader_app() -> App {
         .register_ui_component::<DownloadActionRow>()
         .register_ui_component::<DownloadDialogModeRow>()
         .register_ui_component::<DownloadProgressPanel>()
-        .add_systems(Startup, (setup_download_world, setup_fluent_theme_toggle))
-        .add_systems(
-            PreUpdate,
-            (drain_fluent_theme_toggle_events, drain_download_events),
-        );
+        .add_systems(Startup, setup_download_world)
+        .add_systems(PreUpdate, drain_download_events);
 
     app
 }
@@ -580,4 +578,13 @@ fn main() -> Result<(), EventLoopError> {
         "Async Downloader",
         |options| options.with_initial_inner_size(LogicalSize::new(760.0, 360.0)),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn embedded_async_downloader_theme_ron_parses() {
+        bevy_xilem::parse_stylesheet_ron(include_str!("../assets/themes/async_downloader.ron"))
+            .expect("embedded async_downloader stylesheet should parse");
+    }
 }

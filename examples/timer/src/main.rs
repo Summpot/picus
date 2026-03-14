@@ -6,8 +6,8 @@ use std::{
 use tokio::time;
 
 use bevy_xilem::{
-    AppBevyXilemExt, BevyXilemPlugin, ProjectionCtx, StyleClass, UiEventQueue, UiRoot, UiView,
-    apply_label_style, apply_widget_style,
+    AppBevyXilemExt, BevyXilemPlugin, ProjectionCtx, StyleClass, UiEventQueue, UiRoot,
+    UiThemePicker, UiView, apply_label_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
     bevy_ecs::{hierarchy::ChildOf, prelude::*},
     button, emit_ui_action, resolve_style, resolve_style_for_classes,
@@ -29,7 +29,7 @@ use bevy_xilem::{
         winit::{dpi::LogicalSize, error::EventLoopError},
     },
 };
-use shared_utils::{drain_fluent_theme_toggle_events, init_logging, setup_fluent_theme_toggle};
+use shared_utils::init_logging;
 
 const DIAL_SIZE: f64 = 188.0;
 
@@ -272,9 +272,11 @@ fn project_timer_dial(_: &TimerDialView, ctx: ProjectionCtx<'_>) -> UiView {
 
     Arc::new(
         sized_box(
-            canvas(move |_: &mut (), _ctx: &mut _, scene: &mut Scene, size: Size| {
-                draw_timer_dial(scene, size, progress_value, state.running);
-            })
+            canvas(
+                move |_: &mut (), _ctx: &mut _, scene: &mut Scene, size: Size| {
+                    draw_timer_dial(scene, size, progress_value, state.running);
+                },
+            )
             .alt_text("Timer dial")
             .padding(dial_shell_style.layout.padding)
             .corner_radius(dial_shell_style.layout.corner_radius)
@@ -372,6 +374,7 @@ fn setup_timer_world(mut commands: Commands) {
         ))
         .id();
 
+    commands.spawn((UiThemePicker::fluent(), ChildOf(root)));
     commands.spawn((TimerTitle, ChildOf(root)));
     commands.spawn((TimerDialView, ChildOf(root)));
     commands.spawn((TimerElapsedRow, ChildOf(root)));
@@ -407,7 +410,7 @@ fn build_bevy_timer_app() -> App {
 
     let mut app = App::new();
     app.add_plugins(BevyXilemPlugin)
-        .load_style_sheet("assets/themes/timer.ron")
+        .load_style_sheet_ron(include_str!("../assets/themes/timer.ron"))
         .insert_resource(TimerState::default())
         .register_ui_component::<TimerRootView>()
         .register_ui_component::<TimerTitle>()
@@ -416,22 +419,16 @@ fn build_bevy_timer_app() -> App {
         .register_ui_component::<TimerProgressRow>()
         .register_ui_component::<TimerDurationRow>()
         .register_ui_component::<TimerUiComponentsRow>()
-        .add_systems(Startup, (setup_timer_world, setup_fluent_theme_toggle));
+        .add_systems(Startup, setup_timer_world);
 
-    app.add_systems(
-        PreUpdate,
-        (
-            drain_fluent_theme_toggle_events,
-            drain_timer_events_and_tick,
-        ),
-    );
+    app.add_systems(PreUpdate, drain_timer_events_and_tick);
 
     app
 }
 
 fn main() -> Result<(), EventLoopError> {
     run_app_with_window_options(build_bevy_timer_app(), "Timer", |options| {
-        options.with_initial_inner_size(LogicalSize::new(520.0, 260.0))
+        options.with_initial_inner_size(LogicalSize::new(520.0, 480.0))
     })
 }
 
@@ -439,6 +436,12 @@ fn main() -> Result<(), EventLoopError> {
 mod tests {
     use super::*;
     use std::time::Duration;
+
+    #[test]
+    fn embedded_timer_theme_ron_parses() {
+        bevy_xilem::parse_stylesheet_ron(include_str!("../assets/themes/timer.ron"))
+            .expect("embedded timer stylesheet should parse");
+    }
 
     #[test]
     fn dial_angle_maps_progress_clockwise_from_top() {

@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
 use bevy_xilem::{
-    AppBevyXilemExt, BevyXilemPlugin, ProjectionCtx, StyleClass, UiEventQueue, UiRoot, UiView,
-    apply_label_style, apply_widget_style,
+    AppBevyXilemExt, BevyXilemPlugin, ProjectionCtx, StyleClass, UiEventQueue, UiRoot,
+    UiThemePicker, UiView, apply_label_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
     bevy_ecs::{hierarchy::ChildOf, prelude::*},
     button, resolve_style, resolve_style_for_classes, run_app_with_window_options,
@@ -11,7 +11,7 @@ use bevy_xilem::{
         winit::{dpi::LogicalSize, error::EventLoopError},
     },
 };
-use shared_utils::{drain_fluent_theme_toggle_events, init_logging, setup_fluent_theme_toggle};
+use shared_utils::init_logging;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum MathOperator {
@@ -465,6 +465,7 @@ fn setup_calculator_world(mut commands: Commands) {
     let root = commands
         .spawn((UiRoot, CalcRoot, StyleClass(vec!["calc.root".to_string()])))
         .id();
+    commands.spawn((UiThemePicker::fluent(), ChildOf(root)));
     commands.spawn((CalcDisplayPanel, ChildOf(root)));
 
     let keypad = commands.spawn((CalcKeypad, ChildOf(root))).id();
@@ -501,19 +502,16 @@ fn build_bevy_calculator_app() -> App {
 
     let mut app = App::new();
     app.add_plugins(BevyXilemPlugin)
-        .load_style_sheet("assets/themes/calculator.ron")
+        .load_style_sheet_ron(include_str!("../assets/themes/calculator.ron"))
         .insert_resource(CalculatorEngine::default())
         .register_ui_component::<CalcRoot>()
         .register_ui_component::<CalcDisplayPanel>()
         .register_ui_component::<CalcKeypad>()
         .register_ui_component::<CalcButtonRow>()
         .register_ui_component::<CalcButtonSpec>()
-        .add_systems(Startup, (setup_calculator_world, setup_fluent_theme_toggle));
+        .add_systems(Startup, setup_calculator_world);
 
-    app.add_systems(
-        PreUpdate,
-        (drain_fluent_theme_toggle_events, drain_calc_events),
-    );
+    app.add_systems(PreUpdate, drain_calc_events);
 
     app
 }
@@ -528,6 +526,12 @@ fn main() -> Result<(), EventLoopError> {
 mod tests {
     use super::*;
     use bevy_xilem::bevy_ecs::schedule::Schedule;
+
+    #[test]
+    fn embedded_calculator_theme_ron_parses() {
+        bevy_xilem::parse_stylesheet_ron(include_str!("../assets/themes/calculator.ron"))
+            .expect("embedded calculator stylesheet should parse");
+    }
 
     #[test]
     fn setup_spawns_componentized_keypad_entities() {

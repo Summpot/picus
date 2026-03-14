@@ -601,6 +601,45 @@
     ),
 
     (
+      selector: Type("UiThemePicker"),
+      setter: (
+        layout: (
+          padding: Var("space-xs"),
+          corner_radius: Var("radius-pill"),
+          border_width: Var("border-thin"),
+          justify_content: Center,
+          align_items: Center,
+        ),
+        colors: (
+          bg: Var("surface-subtle"),
+          border: Var("border-default"),
+          text: Var("text-primary"),
+        ),
+        box_shadow: Var("shadow-ui-component"),
+        transition: Var("duration-fast"),
+      ),
+    ),
+    (
+      selector: And([Type("UiThemePicker"), PseudoClass(Hovered)]),
+      setter: (
+        colors: (
+          bg: Var("surface-subtle-hover"),
+        ),
+      ),
+    ),
+    (
+      selector: And([Type("UiThemePicker"), PseudoClass(Pressed)]),
+      setter: (
+        layout: (
+          scale: 0.98,
+        ),
+        colors: (
+          bg: Var("surface-subtle-pressed"),
+        ),
+      ),
+    ),
+
+    (
       selector: Type("UiDatePickerPanel"),
       setter: (
         layout: (

@@ -1,0 +1,99 @@
+(
+  rules: [
+    (
+      selector: Class("timer.root"),
+      setter: (
+        layout: (
+          padding: Var("space-xl"),
+          gap: Var("gap-md"),
+        ),
+        colors: (
+          bg: Var("surface-bg"),
+          text: Var("text-primary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("timer.title"),
+      setter: (
+        text: (
+          size: 30.0,
+        ),
+        colors: (
+          text: Var("text-primary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("timer.dial-shell"),
+      setter: (
+        layout: (
+          padding: Var("space-sm"),
+          corner_radius: Var("radius-lg"),
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          bg: Var("surface-panel"),
+          border: Var("border-default"),
+        ),
+        box_shadow: Var("shadow-ui-component"),
+      ),
+    ),
+    (
+      selector: Class("timer.row"),
+      setter: (
+        layout: (
+          gap: Var("gap-md"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("timer.body-text"),
+      setter: (
+        text: (
+          size: Var("text-md"),
+        ),
+        colors: (
+          text: Var("text-primary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("timer.pause-button"),
+      setter: (
+        layout: (
+          padding: Var("space-sm"),
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          bg: Var("surface-accent"),
+          hover_bg: Var("surface-accent-hover"),
+          pressed_bg: Var("surface-accent-pressed"),
+          border: Var("surface-accent"),
+          text: Var("text-on-accent"),
+        ),
+        box_shadow: Var("shadow-ui-component"),
+        transition: Var("duration-fast"),
+      ),
+    ),
+    (
+      selector: Class("timer.reset-button"),
+      setter: (
+        layout: (
+          padding: Var("space-sm"),
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          bg: Var("surface-subtle"),
+          hover_bg: Var("surface-subtle-hover"),
+          pressed_bg: Var("surface-subtle-pressed"),
+          border: Var("border-default"),
+          text: Var("text-primary"),
+        ),
+        transition: Var("duration-fast"),
+      ),
+    ),
+  ],
+)

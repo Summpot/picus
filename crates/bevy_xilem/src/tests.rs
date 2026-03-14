@@ -1278,6 +1278,68 @@ fn overlay_actions_toggle_and_select_combo_box() {
 }
 
 #[test]
+fn overlay_actions_toggle_and_select_theme_picker() {
+    let mut world = World::new();
+    world.insert_resource(UiEventQueue::default());
+
+    let overlay_root = world.spawn((UiRoot, crate::UiOverlayRoot)).id();
+    let picker = world.spawn((crate::UiThemePicker::fluent(),)).id();
+
+    world
+        .resource::<UiEventQueue>()
+        .push_typed(picker, crate::OverlayUiAction::ToggleThemePicker);
+
+    handle_overlay_actions(&mut world);
+
+    let mut panel_query = world.query::<(Entity, &crate::UiThemePickerMenu)>();
+    let panels = panel_query
+        .iter(&world)
+        .filter_map(|(entity, panel)| (panel.anchor == picker).then_some(entity))
+        .collect::<Vec<_>>();
+
+    assert_eq!(panels.len(), 1);
+    let panel = panels[0];
+    assert_eq!(
+        world
+            .get::<bevy_ecs::hierarchy::ChildOf>(panel)
+            .expect("theme picker panel should be parented")
+            .parent(),
+        overlay_root
+    );
+    assert!(
+        world
+            .get::<crate::UiThemePicker>(picker)
+            .expect("theme picker should exist")
+            .is_open
+    );
+
+    world.resource::<UiEventQueue>().push_typed(
+        panel,
+        crate::OverlayUiAction::SelectThemePickerItem { index: 1 },
+    );
+
+    handle_overlay_actions(&mut world);
+
+    let picker_after = world
+        .get::<crate::UiThemePicker>(picker)
+        .expect("theme picker should exist");
+    assert_eq!(picker_after.selected, 1);
+    assert!(!picker_after.is_open);
+    assert!(world.get_entity(panel).is_err());
+
+    let active_variant = world.resource::<crate::ActiveStyleVariant>();
+    assert_eq!(active_variant.0.as_deref(), Some("light"));
+
+    let changed = world
+        .resource_mut::<UiEventQueue>()
+        .drain_actions::<crate::UiThemePickerChanged>();
+    assert_eq!(changed.len(), 1);
+    assert_eq!(changed[0].entity, picker);
+    assert_eq!(changed[0].action.selected, 1);
+    assert_eq!(changed[0].action.variant, "light");
+}
+
+#[test]
 /// On HiDPI displays, `Window::cursor_position` (logical) must still resolve to an
 /// inside-overlay retained hit after conversion to physical coordinates.
 fn overlay_click_inside_computed_overlay_position_not_dismissed_on_hidpi() {
@@ -2044,6 +2106,57 @@ fn handle_global_overlay_clicks_closes_menu_panel_anchor_and_resets_open_state()
         !app.world()
             .get::<crate::UiMenuBarItem>(menu_item)
             .expect("menu item should remain")
+            .is_open
+    );
+}
+
+#[test]
+fn handle_global_overlay_clicks_closes_theme_picker_anchor_and_resets_open_state() {
+    let mut app = App::new();
+    app.add_plugins(BevyXilemPlugin);
+
+    let mut window = Window::default();
+    window.resolution.set(900.0, 680.0);
+    let window_entity = app.world_mut().spawn((window, PrimaryWindow)).id();
+
+    let root = app.world_mut().spawn((UiRoot, crate::UiFlexColumn)).id();
+    let picker = app
+        .world_mut()
+        .spawn((crate::UiThemePicker::fluent(), ChildOf(root)))
+        .id();
+
+    app.update();
+
+    app.world()
+        .resource::<UiEventQueue>()
+        .push_typed(picker, crate::OverlayUiAction::ToggleThemePicker);
+    app.update();
+
+    let panel = {
+        let mut query = app
+            .world_mut()
+            .query::<(Entity, &crate::UiThemePickerMenu)>();
+        query
+            .iter(app.world())
+            .find_map(|(entity, panel)| (panel.anchor == picker).then_some(entity))
+            .expect("theme picker toggle should spawn menu panel")
+    };
+
+    assert!(
+        app.world()
+            .get::<crate::UiThemePicker>(picker)
+            .expect("theme picker should exist")
+            .is_open
+    );
+
+    let anchor_center = widget_center_for_entity(&app, picker);
+    run_global_overlay_click(&mut app, window_entity, anchor_center);
+
+    assert!(app.world().get_entity(panel).is_err());
+    assert!(
+        !app.world()
+            .get::<crate::UiThemePicker>(picker)
+            .expect("theme picker should remain")
             .is_open
     );
 }

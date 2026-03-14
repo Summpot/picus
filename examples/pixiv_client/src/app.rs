@@ -13,8 +13,8 @@ use bevy_xilem::{
     AppBevyXilemExt, AppI18n, BevyXilemPlugin, LUCIDE_FONT_FAMILY, OverlayConfig, OverlayPlacement,
     OverlayState, ProjectionCtx, ResolvedStyle, StyleClass, StyleSheet, StyleValue,
     SyncAssetSource, SyncTextSource, UiComboBox, UiComboBoxChanged, UiComboOption, UiEventQueue,
-    UiRoot, UiView, apply_direct_widget_style, apply_label_style, apply_text_input_style,
-    apply_widget_style,
+    UiRoot, UiThemePicker, UiView, apply_direct_widget_style, apply_label_style,
+    apply_text_input_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup, Update},
     bevy_ecs::{hierarchy::ChildOf, prelude::*},
     bevy_tasks::{AsyncComputeTaskPool, IoTaskPool, TaskPool},
@@ -51,7 +51,7 @@ use pixiv_client::{
     PixivResponse, build_browser_login_url, generate_pkce_code_verifier, pkce_s256_challenge,
 };
 use reqwest::Url;
-use shared_utils::{drain_fluent_theme_toggle_events, init_logging, setup_fluent_theme_toggle};
+use shared_utils::init_logging;
 use unic_langid::LanguageIdentifier;
 use vello::peniko::{Blob, ImageAlphaType, ImageData, ImageFormat};
 
@@ -607,6 +607,8 @@ fn setup(mut commands: Commands, i18n: Res<AppI18n>) {
         ))
         .id();
 
+    commands.spawn((UiThemePicker::fluent(), ChildOf(root)));
+
     let sidebar = commands
         .spawn((
             PixivSidebar,
@@ -780,14 +782,10 @@ fn build_app(mut activation_service: Option<ActivationService>) -> App {
     .register_ui_component::<PixivOverlayTags>()
     .register_ui_component::<OverlayTag>()
     .add_tween_systems(Update, component_tween_system::<CardAnimLens>())
-    .add_systems(Startup, (setup_styles, setup, setup_fluent_theme_toggle))
+    .add_systems(Startup, (setup_styles, setup))
     .add_systems(
         PreUpdate,
-        (
-            drain_fluent_theme_toggle_events,
-            drain_ui_actions_and_dispatch,
-            poll_activation_messages,
-        ),
+        (drain_ui_actions_and_dispatch, poll_activation_messages),
     )
     .add_systems(
         Update,

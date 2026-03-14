@@ -22,6 +22,7 @@ mod switch;
 mod tab_bar;
 mod table;
 mod text_input;
+mod theme_picker;
 mod toast;
 mod tooltip;
 mod tree_node;
@@ -43,6 +44,7 @@ pub use switch::*;
 pub use tab_bar::*;
 pub use table::*;
 pub use text_input::*;
+pub use theme_picker::*;
 pub use toast::*;
 pub use tooltip::*;
 pub use tree_node::*;
@@ -148,5 +150,7 @@ pub fn register_builtin_ui_components(app: &mut App) {
         .register_ui_component::<split_pane::UiSplitPane>()
         .register_ui_component::<toast::UiToast>()
         .register_ui_component::<date_picker::UiDatePicker>()
-        .register_ui_component::<date_picker::UiDatePickerPanel>();
+        .register_ui_component::<date_picker::UiDatePickerPanel>()
+        .register_ui_component::<theme_picker::UiThemePicker>()
+        .register_ui_component::<theme_picker::UiThemePickerMenu>();
 }

@@ -1,0 +1,118 @@
+(
+  rules: [
+    (
+      selector: Class("calc.root"),
+      setter: (
+        layout: (
+          padding: Var("space-lg"),
+          gap: Var("gap-sm"),
+        ),
+        colors: (
+          bg: Var("surface-bg"),
+          text: Var("text-primary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("calc.display.row"),
+      setter: (
+        layout: (
+          padding: Var("space-lg"),
+          corner_radius: Var("radius-lg"),
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          bg: Var("surface-panel"),
+          border: Var("border-default"),
+        ),
+        box_shadow: Var("shadow-ui-component"),
+      ),
+    ),
+    (
+      selector: Class("calc.display.text"),
+      setter: (
+        text: (
+          size: 34.0,
+        ),
+        colors: (
+          text: Var("text-primary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("calc.row"),
+      setter: (
+        layout: (
+          gap: Var("gap-sm"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("calc.button.digit"),
+      setter: (
+        layout: (
+          padding: Var("space-md"),
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          bg: Var("surface-subtle"),
+          hover_bg: Var("surface-subtle-hover"),
+          pressed_bg: Var("surface-subtle-pressed"),
+          border: Var("border-default"),
+          text: Var("text-primary"),
+        ),
+        text: (
+          size: 18.0,
+          text_align: Center,
+        ),
+        transition: Var("duration-fast"),
+      ),
+    ),
+    (
+      selector: Class("calc.button.action"),
+      setter: (
+        layout: (
+          padding: Var("space-md"),
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          bg: Var("surface-panel"),
+          hover_bg: Var("surface-subtle-hover"),
+          pressed_bg: Var("surface-subtle-pressed"),
+          border: Var("border-default"),
+          text: Var("text-primary"),
+        ),
+        text: (
+          size: 18.0,
+          text_align: Center,
+        ),
+        transition: Var("duration-fast"),
+      ),
+    ),
+    (
+      selector: Class("calc.button.operator"),
+      setter: (
+        layout: (
+          padding: Var("space-md"),
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          bg: Var("surface-accent"),
+          hover_bg: Var("surface-accent-hover"),
+          pressed_bg: Var("surface-accent-pressed"),
+          border: Var("surface-accent"),
+          text: Var("text-on-accent"),
+        ),
+        text: (
+          size: 18.0,
+          text_align: Center,
+        ),
+        box_shadow: Var("shadow-ui-component"),
+        transition: Var("duration-fast"),
+      ),
+    ),
+  ],
+)

@@ -155,17 +155,24 @@ pub(super) fn project_root(_: &PixivRoot, ctx: ProjectionCtx<'_>) -> UiView {
     };
 
     let mut children = ctx.children.into_iter();
+    let theme_picker = children.next().unwrap_or_else(empty_ui);
     let sidebar = children.next().unwrap_or_else(empty_ui);
     let main_content = children.next().unwrap_or_else(empty_ui);
 
     Arc::new(apply_widget_style(
-        flex_row((
-            sized_box(sidebar)
-                .dims((Length::px(sidebar_width), Dim::Stretch))
-                .into_any_flex(),
-            main_content.flex(1.0).into_any_flex(),
-        ))
-        .main_axis_alignment(MainAxisAlignment::Start)
+        flex_col(vec![
+            theme_picker.into_any_flex(),
+            flex_row((
+                sized_box(sidebar)
+                    .dims((Length::px(sidebar_width), Dim::Stretch))
+                    .into_any_flex(),
+                main_content.flex(1.0).into_any_flex(),
+            ))
+            .main_axis_alignment(MainAxisAlignment::Start)
+            .cross_axis_alignment(CrossAxisAlignment::Stretch)
+            .dims(Dim::Stretch)
+            .into_any_flex(),
+        ])
         .cross_axis_alignment(CrossAxisAlignment::Stretch)
         .dims(Dim::Stretch),
         &root_style,

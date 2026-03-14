@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use bevy_xilem::{
     AppBevyXilemExt, BevyXilemPlugin, BuiltinUiAction, ProjectionCtx, UiButton, UiComboBox,
-    UiComboOption, UiEventQueue, UiFlexColumn, UiLabel, UiRoot, UiView,
+    UiComboOption, UiEventQueue, UiFlexColumn, UiLabel, UiRoot, UiThemePicker, UiView,
     bevy_app::{App, PreUpdate, Startup},
     bevy_ecs::{hierarchy::ChildOf, prelude::*},
     run_app_with_window_options, spawn_in_overlay_root,
@@ -11,7 +11,7 @@ use bevy_xilem::{
         winit::{dpi::LogicalSize, error::EventLoopError},
     },
 };
-use shared_utils::{drain_fluent_theme_toggle_events, init_logging, setup_fluent_theme_toggle};
+use shared_utils::init_logging;
 
 #[derive(Component, Debug, Clone)]
 struct UiToast {
@@ -29,6 +29,8 @@ bevy_xilem::impl_ui_component_template!(UiToast, project_ui_toast);
 
 fn setup_overlay_hit_routing_world(mut commands: Commands) {
     let root = commands.spawn((UiRoot, UiFlexColumn)).id();
+
+    commands.spawn((UiThemePicker::fluent(), ChildOf(root)));
 
     commands.spawn((
         UiLabel::new(
@@ -96,20 +98,10 @@ fn build_overlay_hit_routing_app() -> App {
 
     let mut app = App::new();
     app.add_plugins(BevyXilemPlugin)
-        .load_style_sheet("assets/themes/overlay_hit_routing.ron")
+        .load_style_sheet_ron(include_str!("../assets/themes/overlay_hit_routing.ron"))
         .register_ui_component::<UiToast>()
-        .add_systems(
-            Startup,
-            (setup_overlay_hit_routing_world, setup_fluent_theme_toggle),
-        )
-        .add_systems(
-            PreUpdate,
-            (
-                drain_fluent_theme_toggle_events,
-                drain_overlay_hit_routing_events,
-            )
-                .chain(),
-        );
+        .add_systems(Startup, setup_overlay_hit_routing_world)
+        .add_systems(PreUpdate, drain_overlay_hit_routing_events);
 
     app
 }
@@ -120,4 +112,13 @@ fn main() -> Result<(), EventLoopError> {
         "Overlay Hit Routing",
         |opts| opts.with_initial_inner_size(LogicalSize::new(960.0, 640.0)),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn embedded_overlay_hit_routing_theme_ron_parses() {
+        bevy_xilem::parse_stylesheet_ron(include_str!("../assets/themes/overlay_hit_routing.ron"))
+            .expect("embedded overlay_hit_routing stylesheet should parse");
+    }
 }

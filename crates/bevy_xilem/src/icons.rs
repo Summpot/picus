@@ -16,6 +16,7 @@ pub enum BevyXilemIcon {
     ChevronRight,
     Circle,
     CircleDot,
+    SunMoon,
 }
 
 impl BevyXilemIcon {
@@ -27,6 +28,7 @@ impl BevyXilemIcon {
             Self::ChevronRight => lucide_icons::Icon::ChevronRight,
             Self::Circle => lucide_icons::Icon::Circle,
             Self::CircleDot => lucide_icons::Icon::CircleDot,
+            Self::SunMoon => lucide_icons::Icon::SunMoon,
         }
     }
 

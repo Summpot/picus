@@ -21,9 +21,11 @@ use crate::{
     UiColorPickerChanged, UiColorPickerPanel, UiComboBox, UiComboBoxChanged, UiDatePicker,
     UiDatePickerChanged, UiDatePickerPanel, UiDialog, UiDropdownMenu, UiEventQueue,
     UiInteractionEvent, UiMenuBarItem, UiMenuItemPanel, UiMenuItemSelected, UiOverlayRoot,
-    UiPointerEvent, UiPointerHitEvent, UiRoot, UiToast, UiTooltip,
+    UiPointerEvent, UiPointerHitEvent, UiRoot, UiThemePicker, UiThemePickerChanged,
+    UiThemePickerMenu, UiToast, UiTooltip,
     events::UiEvent,
     runtime::MasonryRuntime,
+    set_active_style_variant_by_name,
     styling::{resolve_style, resolve_style_for_classes},
 };
 
@@ -39,6 +41,9 @@ pub enum OverlayUiAction {
     ToggleCombo,
     SelectComboItem { index: usize },
     DismissDropdown,
+    ToggleThemePicker,
+    SelectThemePickerItem { index: usize },
+    DismissThemePicker,
     // Menu bar overlay
     ToggleMenuBarItem,
     DismissMenuBarItem,
@@ -206,6 +211,14 @@ fn collect_dropdowns_for_combo(world: &mut World, combo: Entity) -> Vec<Entity> 
         .collect()
 }
 
+fn collect_theme_picker_menus_for_picker(world: &mut World, picker: Entity) -> Vec<Entity> {
+    let mut query = world.query::<(Entity, &UiThemePickerMenu)>();
+    query
+        .iter(world)
+        .filter_map(|(entity, panel)| (panel.anchor == picker).then_some(entity))
+        .collect()
+}
+
 fn despawn_entity_tree(world: &mut World, entity: Entity) {
     let children = world
         .get::<Children>(entity)
@@ -233,6 +246,21 @@ fn close_dropdown(world: &mut World, dropdown_entity: Entity) {
         && let Some(mut combo_box) = world.get_mut::<UiComboBox>(anchor)
     {
         combo_box.is_open = false;
+    }
+}
+
+fn close_theme_picker_menu(world: &mut World, panel_entity: Entity) {
+    let anchor = world
+        .get::<UiThemePickerMenu>(panel_entity)
+        .map(|panel| panel.anchor);
+
+    despawn_entity_tree(world, panel_entity);
+    remove_overlay_from_stack(world, panel_entity);
+
+    if let Some(anchor) = anchor
+        && let Some(mut picker) = world.get_mut::<UiThemePicker>(anchor)
+    {
+        picker.is_open = false;
     }
 }
 
@@ -336,6 +364,40 @@ pub fn ensure_overlay_defaults(world: &mut World) {
         if world.get::<OverlayConfig>(panel_entity).is_none() {
             world.entity_mut(panel_entity).insert(OverlayConfig {
                 placement: OverlayPlacement::BottomStart,
+                anchor: Some(anchor),
+                auto_flip: true,
+            });
+        }
+        if world.get::<OverlayState>(panel_entity).is_none() {
+            world.entity_mut(panel_entity).insert(OverlayState {
+                is_modal: false,
+                anchor: Some(anchor),
+            });
+        }
+        if world.get::<OverlayComputedPosition>(panel_entity).is_none() {
+            world
+                .entity_mut(panel_entity)
+                .insert(OverlayComputedPosition::default());
+        }
+        if world.get::<OverlayAnchorRect>(panel_entity).is_none() {
+            world
+                .entity_mut(panel_entity)
+                .insert(OverlayAnchorRect::default());
+        }
+    }
+
+    let theme_picker_panels = {
+        let mut query = world.query::<(Entity, &UiThemePickerMenu)>();
+        query
+            .iter(world)
+            .map(|(entity, panel)| (entity, panel.anchor))
+            .collect::<Vec<_>>()
+    };
+
+    for (panel_entity, anchor) in theme_picker_panels {
+        if world.get::<OverlayConfig>(panel_entity).is_none() {
+            world.entity_mut(panel_entity).insert(OverlayConfig {
+                placement: OverlayPlacement::BottomEnd,
                 anchor: Some(anchor),
                 auto_flip: true,
             });
@@ -523,6 +585,7 @@ pub fn reparent_overlay_entities(world: &mut World) {
                 With<UiDialog>,
                 With<UiDropdownMenu>,
                 With<UiMenuItemPanel>,
+                With<UiThemePickerMenu>,
                 With<UiColorPickerPanel>,
                 With<UiDatePickerPanel>,
                 With<UiToast>,
@@ -624,6 +687,8 @@ fn close_date_picker_panel(world: &mut World, panel_entity: Entity) {
 fn close_overlay_entity(world: &mut World, overlay_entity: Entity) {
     if world.get::<UiDropdownMenu>(overlay_entity).is_some() {
         close_dropdown(world, overlay_entity);
+    } else if world.get::<UiThemePickerMenu>(overlay_entity).is_some() {
+        close_theme_picker_menu(world, overlay_entity);
     } else if world.get::<UiMenuItemPanel>(overlay_entity).is_some() {
         close_menu_panel(world, overlay_entity);
     } else if world.get::<UiColorPickerPanel>(overlay_entity).is_some() {
@@ -737,6 +802,99 @@ pub fn handle_overlay_actions(world: &mut World) {
                     && world.get::<UiDropdownMenu>(event.entity).is_some()
                 {
                     close_dropdown(world, event.entity);
+                }
+            }
+
+            OverlayUiAction::ToggleThemePicker => {
+                let Some(picker) = world.get::<UiThemePicker>(event.entity).cloned() else {
+                    continue;
+                };
+
+                let existing_panels = collect_theme_picker_menus_for_picker(world, event.entity);
+                for panel in existing_panels {
+                    if world.get_entity(panel).is_ok() {
+                        close_theme_picker_menu(world, panel);
+                    }
+                }
+
+                if picker.is_open {
+                    if let Some(mut theme_picker) = world.get_mut::<UiThemePicker>(event.entity) {
+                        theme_picker.is_open = false;
+                    }
+                    continue;
+                }
+
+                if picker.options.is_empty() {
+                    continue;
+                }
+
+                spawn_in_overlay_root(
+                    world,
+                    (
+                        UiThemePickerMenu {
+                            anchor: event.entity,
+                        },
+                        AnchoredTo(event.entity),
+                        OverlayState {
+                            is_modal: false,
+                            anchor: Some(event.entity),
+                        },
+                        OverlayAnchorRect::default(),
+                        OverlayConfig {
+                            placement: picker.dropdown_placement,
+                            anchor: Some(event.entity),
+                            auto_flip: picker.auto_flip_placement,
+                        },
+                        OverlayComputedPosition::default(),
+                    ),
+                );
+
+                if let Some(mut theme_picker) = world.get_mut::<UiThemePicker>(event.entity) {
+                    theme_picker.is_open = true;
+                }
+            }
+
+            OverlayUiAction::SelectThemePickerItem { index } => {
+                let Some(anchor) = world
+                    .get::<UiThemePickerMenu>(event.entity)
+                    .map(|panel| panel.anchor)
+                else {
+                    continue;
+                };
+
+                let mut changed_event = None;
+                let mut selected_variant = None;
+                if let Some(mut picker) = world.get_mut::<UiThemePicker>(anchor)
+                    && !picker.options.is_empty()
+                {
+                    let selected = index.min(picker.options.len() - 1);
+                    picker.selected = selected;
+                    selected_variant = Some(picker.options[selected].variant.clone());
+                    changed_event = Some(UiThemePickerChanged {
+                        picker: anchor,
+                        selected,
+                        variant: picker.options[selected].variant.clone(),
+                    });
+                }
+
+                if let Some(variant) = selected_variant {
+                    set_active_style_variant_by_name(world, variant.as_str());
+                }
+
+                if world.get_entity(event.entity).is_ok() {
+                    close_theme_picker_menu(world, event.entity);
+                }
+
+                if let Some(ev) = changed_event {
+                    world.resource::<UiEventQueue>().push_typed(anchor, ev);
+                }
+            }
+
+            OverlayUiAction::DismissThemePicker => {
+                if world.get_entity(event.entity).is_ok()
+                    && world.get::<UiThemePickerMenu>(event.entity).is_some()
+                {
+                    close_theme_picker_menu(world, event.entity);
                 }
             }
 
@@ -1296,6 +1454,44 @@ fn overlay_size_for_entity(
         return (width, height);
     }
 
+    if let Some(panel) = world.get::<UiThemePickerMenu>(entity) {
+        let anchor = panel.anchor;
+        if let Some(picker) = world.get::<UiThemePicker>(anchor) {
+            let item_style = resolve_style_for_classes(world, ["overlay.dropdown.item"]);
+            let menu_style = resolve_style_for_classes(world, ["overlay.dropdown.menu"]);
+
+            let translated_options = picker
+                .options
+                .iter()
+                .map(|option| translate_text(world, option.label_key.as_deref(), &option.label))
+                .collect::<Vec<_>>();
+
+            let anchor_width = anchor_rects
+                .get(&anchor)
+                .map(|rect| rect.width)
+                .unwrap_or(40.0);
+
+            let width = estimate_dropdown_surface_width_px(
+                anchor_width,
+                translated_options.iter().map(String::as_str),
+                item_style.text.size.max(15.0),
+                item_style.layout.padding * 2.0 + menu_style.layout.padding * 2.0 + 18.0,
+            );
+
+            let item_gap = menu_style.layout.gap.max(6.0);
+            let height = estimate_dropdown_viewport_height_px(
+                translated_options.len().max(1),
+                item_style.text.size.max(15.0),
+                item_style.layout.padding.max(8.0),
+                item_gap,
+            );
+
+            return (width, height);
+        }
+
+        return (180.0, 48.0);
+    }
+
     if let Some(panel) = world.get::<UiMenuItemPanel>(entity) {
         let anchor = panel.anchor;
         if let Some(bar_item) = world.get::<UiMenuBarItem>(anchor) {
@@ -1636,6 +1832,8 @@ pub fn sync_overlay_positions(world: &mut World) {
         if world.get_entity(stale).is_ok() {
             if world.get::<UiDropdownMenu>(stale).is_some() {
                 close_dropdown(world, stale);
+            } else if world.get::<UiThemePickerMenu>(stale).is_some() {
+                close_theme_picker_menu(world, stale);
             } else {
                 despawn_entity_tree(world, stale);
                 remove_overlay_from_stack(world, stale);

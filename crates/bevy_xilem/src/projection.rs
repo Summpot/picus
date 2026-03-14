@@ -4,6 +4,7 @@ pub mod dropdown;
 pub mod elements;
 pub mod layout;
 pub mod overlay;
+pub mod theme_picker;
 pub mod utils;
 pub mod widgets;
 
@@ -13,8 +14,8 @@ use crate::ecs::{
     UiButton, UiCheckbox, UiColorPicker, UiColorPickerPanel, UiComboBox, UiDatePicker,
     UiDatePickerPanel, UiDialog, UiDropdownMenu, UiFlexColumn, UiFlexRow, UiGroupBox, UiLabel,
     UiMenuBar, UiMenuBarItem, UiMenuItemPanel, UiOverlayRoot, UiRadioGroup, UiRoot, UiScrollView,
-    UiSlider, UiSpinner, UiSplitPane, UiSwitch, UiTabBar, UiTable, UiTextInput, UiToast, UiTooltip,
-    UiTreeNode,
+    UiSlider, UiSpinner, UiSplitPane, UiSwitch, UiTabBar, UiTable, UiTextInput, UiThemePicker,
+    UiThemePickerMenu, UiToast, UiTooltip, UiTreeNode,
 };
 
 /// Register non-UI-component foundational projectors.
@@ -59,5 +60,7 @@ pub fn register_builtin_projectors(registry: &mut UiProjectorRegistry) {
         .register_component::<UiSplitPane>(widgets::project_split_pane)
         .register_component::<UiToast>(widgets::project_toast)
         .register_component::<UiDatePicker>(widgets::project_date_picker)
-        .register_component::<UiDatePickerPanel>(widgets::project_date_picker_panel);
+        .register_component::<UiDatePickerPanel>(widgets::project_date_picker_panel)
+        .register_component::<UiThemePicker>(theme_picker::project_theme_picker)
+        .register_component::<UiThemePickerMenu>(theme_picker::project_theme_picker_menu);
 }

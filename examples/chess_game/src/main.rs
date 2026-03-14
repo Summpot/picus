@@ -5,8 +5,8 @@ use std::{
 };
 
 use bevy_xilem::{
-    AppBevyXilemExt, BevyXilemPlugin, ProjectionCtx, StyleClass, UiEventQueue, UiRoot, UiView,
-    apply_label_style, apply_widget_style,
+    AppBevyXilemExt, BevyXilemPlugin, ProjectionCtx, StyleClass, UiEventQueue, UiRoot,
+    UiThemePicker, UiView, apply_label_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
     bevy_ecs::{hierarchy::ChildOf, prelude::*},
     button, button_with_child, checkbox, resolve_style, resolve_style_for_classes,
@@ -22,7 +22,7 @@ use bevy_xilem::{
         winit::error::EventLoopError,
     },
 };
-use shared_utils::{drain_fluent_theme_toggle_events, init_logging, setup_fluent_theme_toggle};
+use shared_utils::init_logging;
 
 #[allow(unexpected_cfgs)]
 mod engine;
@@ -587,14 +587,20 @@ fn build_chess_ui_components_view(
 
 fn project_chess_root(_: &ChessRootView, ctx: ProjectionCtx<'_>) -> UiView {
     let style = resolve_style(ctx.world, ctx.entity);
+    let mut children = ctx.children.into_iter();
+    let theme_picker = children.next().unwrap_or_else(|| Arc::new(label("")));
+    let content_children = children
+        .map(|child| child.into_any_flex())
+        .collect::<Vec<_>>();
+
     Arc::new(apply_widget_style(
-        flex_row(
-            ctx.children
-                .into_iter()
-                .map(|child| child.into_any_flex())
-                .collect::<Vec<_>>(),
-        )
-        .cross_axis_alignment(CrossAxisAlignment::Start),
+        flex_col(vec![
+            theme_picker.into_any_flex(),
+            flex_row(content_children)
+                .cross_axis_alignment(CrossAxisAlignment::Start)
+                .into_any_flex(),
+        ])
+        .cross_axis_alignment(CrossAxisAlignment::Stretch),
         &style,
     ))
 }
@@ -620,6 +626,7 @@ fn setup_chess_world(mut commands: Commands) {
         ))
         .id();
 
+    commands.spawn((UiThemePicker::fluent(), ChildOf(root)));
     commands.spawn((ChessUiComponentsPanel, ChildOf(root)));
     commands.spawn((ChessBoardPanel, ChildOf(root)));
 }
@@ -649,19 +656,16 @@ fn build_bevy_chess_app() -> App {
 
     let mut app = App::new();
     app.add_plugins(BevyXilemPlugin)
-        .load_style_sheet("assets/themes/chess_game.ron")
+        .load_style_sheet_ron(include_str!("../assets/themes/chess_game.ron"))
         .insert_resource(ChessGameResource::new(game))
         .insert_resource(ui)
         .insert_resource(ChessFlowResource::default())
         .register_ui_component::<ChessRootView>()
         .register_ui_component::<ChessUiComponentsPanel>()
         .register_ui_component::<ChessBoardPanel>()
-        .add_systems(Startup, (setup_chess_world, setup_fluent_theme_toggle));
+        .add_systems(Startup, setup_chess_world);
 
-    app.add_systems(
-        PreUpdate,
-        (drain_fluent_theme_toggle_events, drain_events_and_tick),
-    );
+    app.add_systems(PreUpdate, drain_events_and_tick);
 
     app
 }
@@ -741,4 +745,13 @@ fn main() -> Result<(), EventLoopError> {
             .with_min_inner_size(LogicalSize::new(640.0, 560.0))
             .with_initial_inner_size(LogicalSize::new(1024.0, 760.0))
     })
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn embedded_chess_theme_ron_parses() {
+        bevy_xilem::parse_stylesheet_ron(include_str!("../assets/themes/chess_game.ron"))
+            .expect("embedded chess stylesheet should parse");
+    }
 }
