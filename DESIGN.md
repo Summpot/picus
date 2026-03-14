@@ -49,8 +49,8 @@ Because Bevy's renderer plugins are intentionally not required for the retained 
 `bevy_xilem` performs an explicit Vello paint/present pass in `Last`:
 
 - `RenderRoot::redraw()` produces the current scene.
-- `ExternalWindowSurface` (from `masonry_winit`) owns persistent surface/device state bound
-  to the Bevy primary window.
+- a local `bevy_xilem-surface::ExternalWindowSurface` bridge owns persistent
+  surface/device state bound to the Bevy primary window.
 - the pass renders to an intermediate texture, blits to the swapchain surface, and presents.
 - the primary window requests another redraw to keep UI animations and visual updates flowing.
 
@@ -136,7 +136,7 @@ The runtime supports a data-driven style pipeline with four phases:
 
 ### 6.1 Smooth transitions
 
-`TargetColorStyle` + `CurrentColorStyle` are driven by `bevy_tweening::TweenAnim`, targeting `CurrentColorStyle` for smooth micro-interaction transforms and color transitions without snapping.
+`TargetColorStyle` + `CurrentColorStyle` are driven by `bevy_tween` time-runner + component-tween state targeting `CurrentColorStyle`, allowing smooth micro-interaction transforms and color transitions without snapping.
 
 ### 6.2 Base vs active stylesheet tiers
 

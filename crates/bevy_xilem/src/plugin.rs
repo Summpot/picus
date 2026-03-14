@@ -5,7 +5,10 @@ use bevy_input::keyboard::KeyboardInput;
 use bevy_input::mouse::{MouseButtonInput, MouseWheel};
 use bevy_text::Font;
 use bevy_time::TimePlugin;
-use bevy_tweening::{AnimationSystem, TweeningPlugin};
+use bevy_tween::{
+    BevyTweenRegisterSystems, DefaultTweenPlugins, TweenCorePlugin, TweenSystemSet,
+    component_tween_system,
+};
 use bevy_window::{
     CursorLeft, CursorMoved, Ime, WindowFocused, WindowResized, WindowScaleFactorChanged,
 };
@@ -67,8 +70,15 @@ impl Plugin for BevyXilemPlugin {
         if !app.is_plugin_added::<AssetPlugin>() {
             app.add_plugins(AssetPlugin::default());
         }
+        if !app.is_plugin_added::<TweenCorePlugin<()>>() {
+            app.add_plugins(DefaultTweenPlugins::<()>::in_schedule(Update));
+        }
 
-        app.add_plugins((TimePlugin, TweeningPlugin, BevyXilemBuiltinsPlugin))
+        app.add_plugins((TimePlugin, BevyXilemBuiltinsPlugin))
+            .add_tween_systems(
+                Update,
+                component_tween_system::<crate::styling::ColorStyleLens>(),
+            )
             .register_xilem_font_bytes(crate::icons::LUCIDE_FONT_BYTES)
             .init_asset::<StyleSheet>()
             .init_asset_loader::<StyleSheetRonLoader>()
@@ -134,11 +144,11 @@ impl Plugin for BevyXilemPlugin {
                     sync_style_targets,
                 )
                     .chain()
-                    .before(AnimationSystem::AnimationUpdate),
+                    .before(TweenSystemSet::UpdateInterpolationValue),
             )
             .add_systems(
                 Update,
-                animate_style_transitions.after(AnimationSystem::AnimationUpdate),
+                animate_style_transitions.after(TweenSystemSet::ApplyTween),
             )
             .add_systems(PostUpdate, (synthesize_ui, rebuild_masonry_runtime).chain());
 

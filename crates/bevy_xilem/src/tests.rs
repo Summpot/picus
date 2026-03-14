@@ -21,9 +21,14 @@ use bevy_input::{
     mouse::{MouseButton, MouseButtonInput, MouseScrollUnit, MouseWheel},
 };
 use bevy_math::{Rect, Vec2};
-use bevy_tweening::Lens;
+use bevy_tween::{
+    bevy_time_runner::{TimeContext, TimeRunner, TimeSpan},
+    interpolate::Interpolator,
+    interpolation::EaseKind,
+    tween::ComponentTween,
+};
 use bevy_window::{CursorMoved, PrimaryWindow, Window, WindowResized};
-use masonry::core::{Widget, WidgetRef};
+use masonry::core::{Widget, WidgetId, WidgetRef};
 
 #[derive(Component, Debug, Clone, Copy)]
 struct TestRoot;
@@ -971,7 +976,12 @@ fn sync_style_targets_restarts_tween_when_current_differs_but_target_unchanged()
             .and_then(|target| target.bg),
         Some(base)
     );
-    assert!(world.get::<bevy_tweening::TweenAnim>(entity).is_some());
+    assert!(world.get::<TimeRunner>(entity).is_some());
+    assert!(
+        world
+            .get::<ComponentTween<crate::ColorStyleLens>>(entity)
+            .is_some()
+    );
 }
 
 #[test]
@@ -1003,31 +1013,42 @@ fn pointer_left_does_not_clear_pressed_marker() {
 fn sync_style_targets_keeps_unmanaged_tween_anim() {
     let mut world = World::new();
 
-    let tween = bevy_tweening::Tween::new(
-        bevy_tweening::EaseMethod::default(),
-        Duration::from_secs(1),
-        crate::ColorStyleLens {
-            start: crate::CurrentColorStyle {
-                bg: Some(crate::xilem::Color::from_rgb8(0x10, 0x20, 0x30)),
-                text: None,
-                border: None,
-                scale: 1.0,
+    let duration = Duration::from_secs(1);
+    let entity = world.spawn_empty().id();
+    world.entity_mut(entity).insert((
+        TimeSpan::try_from(Duration::ZERO..duration)
+            .expect("test tween duration range should be valid"),
+        EaseKind::Linear,
+        ComponentTween::new_target(
+            entity,
+            crate::ColorStyleLens {
+                start: crate::CurrentColorStyle {
+                    bg: Some(crate::xilem::Color::from_rgb8(0x10, 0x20, 0x30)),
+                    text: None,
+                    border: None,
+                    scale: 1.0,
+                },
+                end: crate::CurrentColorStyle {
+                    bg: Some(crate::xilem::Color::from_rgb8(0x40, 0x50, 0x60)),
+                    text: None,
+                    border: None,
+                    scale: 1.0,
+                },
             },
-            end: crate::CurrentColorStyle {
-                bg: Some(crate::xilem::Color::from_rgb8(0x40, 0x50, 0x60)),
-                text: None,
-                border: None,
-                scale: 1.0,
-            },
-        },
-    );
-
-    let entity = world.spawn((bevy_tweening::TweenAnim::new(tween),)).id();
+        ),
+        TimeRunner::new(duration),
+        TimeContext::<()>::default(),
+    ));
     world.entity_mut(entity).insert(crate::StyleDirty);
 
     crate::sync_style_targets(&mut world);
 
-    assert!(world.get::<bevy_tweening::TweenAnim>(entity).is_some());
+    assert!(world.get::<TimeRunner>(entity).is_some());
+    assert!(
+        world
+            .get::<ComponentTween<crate::ColorStyleLens>>(entity)
+            .is_some()
+    );
 }
 
 #[test]
@@ -1071,7 +1092,7 @@ fn computed_style_lens_keeps_font_family_until_completion() {
     };
 
     let entity = world.spawn((start.clone(),)).id();
-    let mut lens = crate::ComputedStyleLens {
+    let lens = crate::ComputedStyleLens {
         start: start.clone(),
         end: end.clone(),
     };
@@ -1080,7 +1101,7 @@ fn computed_style_lens_keeps_font_family_until_completion() {
         let target = world
             .get_mut::<crate::ComputedStyle>(entity)
             .expect("computed style should exist");
-        lens.lerp(target, 0.5);
+        lens.interpolate(&mut target.into_inner(), 0.5, 0.0);
     }
 
     assert_eq!(
@@ -1094,7 +1115,7 @@ fn computed_style_lens_keeps_font_family_until_completion() {
         let target = world
             .get_mut::<crate::ComputedStyle>(entity)
             .expect("computed style should exist");
-        lens.lerp(target, 1.0);
+        lens.interpolate(&mut target.into_inner(), 1.0, 0.0);
     }
 
     assert_eq!(
@@ -1621,11 +1642,7 @@ fn run_global_overlay_click(app: &mut App, window_entity: Entity, position: Vec2
     input.clear();
 }
 
-fn hit_path_for_position(
-    app: &mut App,
-    window_entity: Entity,
-    position: Vec2,
-) -> Vec<xilem_masonry::WidgetId> {
+fn hit_path_for_position(app: &mut App, window_entity: Entity, position: Vec2) -> Vec<WidgetId> {
     set_window_cursor_position(app, window_entity, position);
 
     let mut runtime = app
@@ -1638,7 +1655,7 @@ fn hit_path_for_position(
 fn find_widget_id_by_debug_text(
     widget: WidgetRef<'_, dyn Widget>,
     expected_debug_text: &str,
-) -> Option<xilem_masonry::WidgetId> {
+) -> Option<WidgetId> {
     for child in widget.children() {
         if let Some(id) = find_widget_id_by_debug_text(child, expected_debug_text) {
             return Some(id);
@@ -1648,7 +1665,7 @@ fn find_widget_id_by_debug_text(
     (widget.get_debug_text().as_deref() == Some(expected_debug_text)).then_some(widget.id())
 }
 
-fn widget_center_for_widget_id(app: &App, widget_id: xilem_masonry::WidgetId) -> Vec2 {
+fn widget_center_for_widget_id(app: &App, widget_id: WidgetId) -> Vec2 {
     let runtime = app.world().non_send_resource::<crate::MasonryRuntime>();
     let widget = runtime
         .render_root
@@ -1664,11 +1681,7 @@ fn widget_center_for_widget_id(app: &App, widget_id: xilem_masonry::WidgetId) ->
     )
 }
 
-fn widget_inset_point_for_widget_id(
-    app: &App,
-    widget_id: xilem_masonry::WidgetId,
-    inset: f64,
-) -> Vec2 {
+fn widget_inset_point_for_widget_id(app: &App, widget_id: WidgetId, inset: f64) -> Vec2 {
     let runtime = app.world().non_send_resource::<crate::MasonryRuntime>();
     let widget = runtime
         .render_root

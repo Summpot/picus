@@ -17,6 +17,7 @@ use bevy_window::{
     CursorLeft, CursorMoved, Ime as BevyIme, PrimaryWindow, RawHandleWrapper, Window,
     WindowFocused, WindowResized, WindowScaleFactorChanged, WindowWrapper,
 };
+use bevy_xilem_surface::{ExistingWindowMetrics, ExternalWindowSurface};
 use masonry::layout::{Dim, UnitPoint};
 use masonry::{
     app::{RenderRoot, RenderRootOptions, WindowSizePolicy},
@@ -32,8 +33,8 @@ use masonry::{
     vello::{Renderer, wgpu},
     widgets::Passthrough,
 };
-use masonry_winit::app::{ExistingWindowMetrics, ExternalWindowSurface, existing_window_metrics};
 use xilem::style::Style as _;
+use xilem::winit::window::Window as XilemWinitWindow;
 use xilem_core::{ProxyError, RawProxy, SendMessage, View, ViewId};
 use xilem_masonry::{
     ViewCtx,
@@ -162,6 +163,44 @@ fn focus_fallback_widget(render_root: &RenderRoot) -> Option<WidgetId> {
         .map(|root| root.inner().inner_id())
 }
 
+fn existing_window_metrics(window: &XilemWinitWindow) -> ExistingWindowMetrics {
+    let physical_size = window.inner_size();
+    let scale_factor = window.scale_factor();
+    let logical_size = physical_size.to_logical(scale_factor);
+
+    ExistingWindowMetrics {
+        physical_width: physical_size.width,
+        physical_height: physical_size.height,
+        logical_width: logical_size.width,
+        logical_height: logical_size.height,
+        scale_factor,
+    }
+}
+
+fn build_widget_path(
+    widget: WidgetRef<'_, dyn Widget>,
+    target: WidgetId,
+    path: &mut Vec<WidgetId>,
+) -> bool {
+    if widget.ctx().is_stashed() {
+        return false;
+    }
+
+    path.push(widget.id());
+    if widget.id() == target {
+        return true;
+    }
+
+    for child in widget.children() {
+        if build_widget_path(child, target, path) {
+            return true;
+        }
+    }
+
+    path.pop();
+    false
+}
+
 fn parse_entity_debug_binding(debug: &str) -> Option<(u64, bool)> {
     if let Some(bits) = debug.strip_prefix("opaque_hitbox_entity=") {
         return Some((bits.parse::<u64>().ok()?, true));
@@ -194,7 +233,33 @@ impl MasonryRuntime {
         &self,
         physical_pos: masonry::kurbo::Point,
     ) -> Vec<masonry::core::WidgetId> {
-        self.render_root.get_hit_path(physical_pos)
+        let target = self
+            .render_root
+            .pointer_capture_target()
+            .filter(|widget_id| self.render_root.has_widget(*widget_id))
+            .or_else(|| {
+                let scale_factor = self.window_scale_factor.max(f64::EPSILON);
+                let logical_pos = masonry::kurbo::Point::new(
+                    physical_pos.x / scale_factor,
+                    physical_pos.y / scale_factor,
+                );
+
+                self.render_root
+                    .get_layer_root(0)
+                    .find_widget_under_pointer(logical_pos)
+                    .map(|widget| widget.id())
+            });
+
+        let Some(target) = target else {
+            return Vec::new();
+        };
+
+        let mut path = Vec::new();
+        if build_widget_path(self.render_root.get_layer_root(0), target, &mut path) {
+            path
+        } else {
+            Vec::new()
+        }
     }
 
     #[must_use]
@@ -266,7 +331,7 @@ impl MasonryRuntime {
     /// Returns `(bevy_window_scale_factor, masonry_global_scale_factor)` for diagnostics.
     #[must_use]
     pub fn masonry_scale_factors(&self) -> (f64, f64) {
-        (self.window_scale_factor, self.render_root.scale_factor())
+        (self.window_scale_factor, self.window_scale_factor)
     }
 
     /// Returns the bounding box of a widget by its id, for diagnostics.
@@ -520,7 +585,7 @@ impl MasonryRuntime {
         metrics: ExistingWindowMetrics,
     ) -> bool {
         if let Some(surface) = self.window_surface.as_mut() {
-            let _ = surface.sync_window_metrics(metrics);
+            surface.sync_window_metrics(metrics);
             return true;
         }
 
@@ -576,8 +641,8 @@ impl MasonryRuntime {
         }
 
         let next_scale = metrics.scale_factor.max(f64::EPSILON);
-        let next_viewport_width = metrics.logical_size.width.max(1.0);
-        let next_viewport_height = metrics.logical_size.height.max(1.0);
+        let next_viewport_width = metrics.logical_width.max(1.0);
+        let next_viewport_height = metrics.logical_height.max(1.0);
         let needs_rescale = (self.window_scale_factor - next_scale).abs() > f64::EPSILON;
         let needs_resize = (self.viewport_width - next_viewport_width).abs() > f64::EPSILON
             || (self.viewport_height - next_viewport_height).abs() > f64::EPSILON;
@@ -596,8 +661,8 @@ impl MasonryRuntime {
             let _ = self
                 .render_root
                 .handle_window_event(WindowEvent::Resize(PhysicalSize::new(
-                    metrics.physical_size.width.max(1),
-                    metrics.physical_size.height.max(1),
+                    metrics.physical_width.max(1),
+                    metrics.physical_height.max(1),
                 )));
         }
     }
@@ -926,8 +991,8 @@ pub fn initialize_masonry_runtime_from_primary_window(
 
     tracing::trace!(
         "Runtime Init - Primary Window Logic Size: {}x{}, Scale: {}",
-        metrics.logical_size.width,
-        metrics.logical_size.height,
+        metrics.logical_width,
+        metrics.logical_height,
         metrics.scale_factor
     );
 
@@ -935,13 +1000,13 @@ pub fn initialize_masonry_runtime_from_primary_window(
     // never starts from a zero-sized root, even before the first window-resize message.
     runtime.handle_window_resized(
         primary_window_entity,
-        metrics.logical_size.width as f32,
-        metrics.logical_size.height as f32,
+        metrics.logical_width as f32,
+        metrics.logical_height as f32,
     );
     tracing::trace!(
         "Runtime Init - Priming Masonry Resize: {}x{}",
-        metrics.logical_size.width,
-        metrics.logical_size.height
+        metrics.logical_width,
+        metrics.logical_height
     );
 }
 

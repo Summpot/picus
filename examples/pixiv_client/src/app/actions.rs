@@ -440,12 +440,5 @@ fn trigger_bookmark_pulse(world: &mut World, entity: Entity) {
     let mut end = start;
     end.heart_scale = 1.0;
 
-    spawn_card_tween(
-        world,
-        entity,
-        start,
-        end,
-        420,
-        EaseMethod::CustomFunction(ease_elastic_out),
-    );
+    spawn_card_tween(world, entity, start, end, 420, EaseKind::ElasticOut);
 }

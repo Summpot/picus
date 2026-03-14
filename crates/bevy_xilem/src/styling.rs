@@ -18,7 +18,12 @@ use bevy_ecs::{
     prelude::*,
 };
 use bevy_reflect::TypePath;
-use bevy_tweening::{EaseMethod, Lens, Tween, TweenAnim};
+use bevy_tween::{
+    bevy_time_runner::{TimeContext, TimeRunner, TimeSpan},
+    interpolate::Interpolator,
+    interpolation::EaseKind,
+    tween::{ComponentTween, TweenInterpolationValue, TweenPreviousValue},
+};
 use masonry::core::HasProperty;
 use masonry::theme;
 use serde::{
@@ -193,7 +198,7 @@ impl Default for TargetColorStyle {
     }
 }
 
-/// Marker identifying a [`TweenAnim`] created by the style transition pipeline.
+/// Marker identifying a `bevy_tween` runner created by the style transition pipeline.
 #[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq)]
 struct StyleManagedTween;
 
@@ -1970,15 +1975,6 @@ fn ensure_current(world: &mut World, entity: Entity, current: CurrentColorStyle)
     }
 }
 
-fn quadratic_in_out(x: f32) -> f32 {
-    let x = x.clamp(0.0, 1.0);
-    if x < 0.5 {
-        2.0 * x * x
-    } else {
-        1.0 - ((-2.0 * x + 2.0).powi(2) / 2.0)
-    }
-}
-
 fn spawn_color_style_tween(
     world: &mut World,
     entity: Entity,
@@ -1986,21 +1982,31 @@ fn spawn_color_style_tween(
     end: CurrentColorStyle,
     duration_secs: f32,
 ) {
-    let tween = Tween::new::<CurrentColorStyle, _>(
-        EaseMethod::CustomFunction(quadratic_in_out),
-        Duration::from_secs_f32(duration_secs.max(0.0)),
-        ColorStyleLens { start, end },
-    );
+    let duration = Duration::from_secs_f32(duration_secs.max(0.0));
 
-    world
-        .entity_mut(entity)
-        .insert((TweenAnim::new(tween), StyleManagedTween));
+    world.entity_mut(entity).insert((
+        TimeSpan::try_from(Duration::ZERO..duration)
+            .expect("style tween duration range should be valid"),
+        EaseKind::QuadraticInOut,
+        ComponentTween::new_target(entity, ColorStyleLens { start, end }),
+        TimeRunner::new(duration),
+        TimeContext::<()>::default(),
+        StyleManagedTween,
+    ));
 }
 
 fn clear_style_managed_tween(world: &mut World, entity: Entity) {
     if world.get::<StyleManagedTween>(entity).is_some() {
-        world.entity_mut(entity).remove::<TweenAnim>();
-        world.entity_mut(entity).remove::<StyleManagedTween>();
+        world.entity_mut(entity).remove::<(
+            TimeSpan,
+            EaseKind,
+            ComponentTween<ColorStyleLens>,
+            TimeRunner,
+            TimeContext<()>,
+            TweenInterpolationValue,
+            TweenPreviousValue,
+            StyleManagedTween,
+        )>();
     }
 }
 
@@ -2309,8 +2315,10 @@ pub struct ComputedStyleLens {
     pub end: ComputedStyle,
 }
 
-impl Lens<ComputedStyle> for ComputedStyleLens {
-    fn lerp(&mut self, mut target: Mut<'_, ComputedStyle>, ratio: f32) {
+impl Interpolator for ComputedStyleLens {
+    type Item = ComputedStyle;
+
+    fn interpolate(&self, target: &mut Self::Item, ratio: f32, _previous_value: f32) {
         let t = ratio.clamp(0.0, 1.0);
 
         target.layout.padding = lerp_f64(self.start.layout.padding, self.end.layout.padding, t);
@@ -2370,8 +2378,10 @@ pub struct ColorStyleLens {
     pub end: CurrentColorStyle,
 }
 
-impl Lens<CurrentColorStyle> for ColorStyleLens {
-    fn lerp(&mut self, mut target: Mut<'_, CurrentColorStyle>, ratio: f32) {
+impl Interpolator for ColorStyleLens {
+    type Item = CurrentColorStyle;
+
+    fn interpolate(&self, target: &mut Self::Item, ratio: f32, _previous_value: f32) {
         target.bg = lerp_optional_color(self.start.bg, self.end.bg, ratio);
         target.text = lerp_optional_color(self.start.text, self.end.text, ratio);
         target.border = lerp_optional_color(self.start.border, self.end.border, ratio);
@@ -2379,7 +2389,7 @@ impl Lens<CurrentColorStyle> for ColorStyleLens {
     }
 }
 
-/// Style transition stepping is handled by `bevy_tweening::TweeningPlugin`.
+/// Style transition stepping is handled by `bevy_tween::DefaultTweenPlugins`.
 ///
 /// This hook is intentionally kept as a no-op for schedule readability and
 /// compatibility with existing system chains.

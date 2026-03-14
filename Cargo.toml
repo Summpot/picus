@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
+	"crates/bevy_xilem-surface",
 	"crates/bevy_xilem-activation",
 	"crates/bevy_xilem",
 	"examples/async_downloader",
@@ -33,7 +34,7 @@ bevy_tasks = { version = "0.18", default-features = false, features = ["multi_th
 bevy_time = { version = "0.18", default-features = false, features = ["std"] }
 bevy_window = { version = "0.18", default-features = false, features = ["std"] }
 bevy_winit = { version = "0.18", default-features = false }
-bevy_tweening = { version = "0.15", default-features = false }
+bevy_tween = { version = "0.12", default-features = false }
 bevy_embedded_assets = "0.15.0"
 crossbeam-queue = "0.3"
 tokio = { version = "1.49", features = ["rt-multi-thread"] }
@@ -57,6 +58,8 @@ lucide-icons = "0.575.0"
 app-single-instance = "0.1.0"
 ipc-channel = "0.21.0"
 sysuri = "0.4.0"
+
+bevy_xilem-surface = { path = "crates/bevy_xilem-surface" }
 
 [patch.crates-io]
 bevy = { path = "third_party/bevy" }

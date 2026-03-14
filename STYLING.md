@@ -8,7 +8,7 @@ It covers:
 - cascade + pseudo state resolution
 - computed style cache + incremental invalidation
 - projector integration patterns
-- smooth transition animations (Phase 4) powered by `bevy_tweening`
+- smooth transition animations (Phase 4) powered by `bevy_tween`
 - practical usage patterns and common pitfalls
 
 > Applies to the current `master` branch state (2026-02-28).
@@ -90,7 +90,7 @@ their descendants so `A B`-style rules stay correct after ancestor class/pseudo 
 
 - `TargetColorStyle` (resolved target colors for the current pseudo state)
 - `CurrentColorStyle` (animated colors read by projectors)
-- `bevy_tweening::TweenAnim` targeting `CurrentColorStyle`
+- `bevy_tween` timer/interpolator components targeting `CurrentColorStyle`
 
 ---
 
@@ -120,7 +120,7 @@ In short: class + inline define intent, pseudo state chooses target, animator pr
 - sets the bundle default variant as `ActiveStyleVariant`
 - `PreUpdate`: `collect_bevy_font_assets -> sync_fonts_to_xilem -> sync_ui_interaction_markers`
 - `Update`: `sync_active_style_variant -> mark_style_dirty -> sync_style_targets -> animate_style_transitions`
-- registers `TweeningPlugin` (from crates.io `bevy_tweening`)
+- registers `DefaultTweenPlugins` (from crates.io `bevy_tween`)
 
 So users only need to define styles and apply them from projectors.
 
@@ -198,21 +198,21 @@ That state then affects color target selection during style resolution.
 
 Phase 4 replaces manual per-frame color lerp logic with a tweening animator pipeline.
 
-### 8.1 `bevy_tweening` integration
+### 8.1 `bevy_tween` integration
 
-`bevy_xilem` now uses crates.io `bevy_tweening` (`0.15`) for transitions:
+`bevy_xilem` now uses crates.io `bevy_tween` (`0.12`) for transitions:
 
-- `TweeningPlugin`
-- `EaseMethod` (configured with a QuadraticInOut-equivalent easing function)
-- `Tween<T>`
-- `TweenAnim`
-- `Lens<T>`
+- `DefaultTweenPlugins`
+- `EaseKind`
+- `TimeRunner` + `TimeSpan`
+- `ComponentTween<T>`
+- `Interpolator`
 
-### 8.2 Custom lens: `ColorStyleLens`
+### 8.2 Custom interpolator: `ColorStyleLens`
 
 `ColorStyleLens` implements:
 
-- `Lens<CurrentColorStyle>`
+- `Interpolator<Item = CurrentColorStyle>`
 
 It linearly interpolates each RGBA channel for:
 
@@ -232,9 +232,9 @@ When target style changes (for example, due to hover/press changes):
 - `mark_style_dirty` marks entities with changed style dependencies.
 - `sync_style_targets` recomputes dirty entities, updates `ComputedStyle`, and computes a new `TargetColorStyle`.
 - If a transition is configured and target changed:
-  - insert/update `TweenAnim` with a new `Tween` targeting `CurrentColorStyle`
+  - insert/update `TimeRunner` + `TimeSpan` + `ComponentTween<ColorStyleLens>` targeting `CurrentColorStyle`
   - tween starts from current animated value and ends at new target value
-- `TweeningPlugin` advances animations each frame in `AnimationSystem::AnimationUpdate`.
+- `DefaultTweenPlugins` sample easing and apply component tweens each frame in the configured tween system sets.
 - Projectors read `ComputedStyle` (+ animated `CurrentColorStyle`) via `resolve_style`.
 
 Result: no color snap; smooth CSS-like interpolation.

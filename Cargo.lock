@@ -752,6 +752,7 @@ dependencies = [
  "bevy_time",
  "const-fnv1a-hash",
  "log",
+ "serde",
 ]
 
 [[package]]
@@ -864,23 +865,25 @@ dependencies = [
 name = "bevy_internal"
 version = "0.18.1"
 dependencies = [
+ "bevy_a11y",
  "bevy_android",
  "bevy_app",
- "bevy_asset",
  "bevy_color",
  "bevy_derive",
  "bevy_diagnostic",
  "bevy_ecs",
  "bevy_input",
- "bevy_log",
+ "bevy_input_focus",
  "bevy_math",
  "bevy_platform",
  "bevy_ptr",
  "bevy_reflect",
+ "bevy_state",
  "bevy_tasks",
  "bevy_time",
  "bevy_transform",
  "bevy_utils",
+ "bevy_window",
 ]
 
 [[package]]
@@ -988,6 +991,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "bevy_state"
+version = "0.18.1"
+dependencies = [
+ "bevy_app",
+ "bevy_ecs",
+ "bevy_platform",
+ "bevy_reflect",
+ "bevy_state_macros",
+ "bevy_utils",
+ "log",
+ "variadics_please",
+]
+
+[[package]]
+name = "bevy_state_macros"
+version = "0.18.1"
+dependencies = [
+ "bevy_macro_utils",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "bevy_tasks"
 version = "0.18.1"
 dependencies = [
@@ -1042,27 +1068,46 @@ dependencies = [
 ]
 
 [[package]]
+name = "bevy_time_runner"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "181bea9ae6ea983de7fd9697ea1232e689b8ac011bb12ac8aa470c8b1a4f5197"
+dependencies = [
+ "bevy_app",
+ "bevy_ecs",
+ "bevy_log",
+ "bevy_reflect",
+ "bevy_time",
+ "rustc_version",
+]
+
+[[package]]
 name = "bevy_transform"
 version = "0.18.1"
 dependencies = [
  "bevy_app",
  "bevy_ecs",
+ "bevy_log",
  "bevy_math",
  "bevy_reflect",
  "bevy_tasks",
+ "bevy_utils",
  "derive_more",
  "serde",
  "thiserror 2.0.18",
 ]
 
 [[package]]
-name = "bevy_tweening"
-version = "0.15.0"
+name = "bevy_tween"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "af8511c4208a4eb3fdec028088a2ff63f2a4ae4a7079eeb56a0cffae19fe064f"
+checksum = "4aa0fed39187fbb52028d92c36d3ffea49ffc06a4dc4c28a886815adf9c67650"
 dependencies = [
  "bevy",
- "thiserror 2.0.18",
+ "bevy_math",
+ "bevy_time_runner",
+ "rustc_version",
+ "tracing",
 ]
 
 [[package]]
@@ -1132,14 +1177,14 @@ dependencies = [
  "bevy_tasks",
  "bevy_text",
  "bevy_time",
- "bevy_tweening",
+ "bevy_tween",
  "bevy_window",
  "bevy_winit",
+ "bevy_xilem-surface",
  "crossbeam-queue",
  "fluent",
  "lucide-icons",
  "masonry",
- "masonry_winit",
  "num-traits",
  "reqwest",
  "rfd",
@@ -1163,6 +1208,16 @@ dependencies = [
  "ipc-channel",
  "serde",
  "sysuri",
+]
+
+[[package]]
+name = "bevy_xilem-surface"
+version = "0.1.0"
+dependencies = [
+ "bevy_window",
+ "pollster",
+ "tracing",
+ "vello",
 ]
 
 [[package]]
@@ -2886,7 +2941,7 @@ dependencies = [
  "js-sys",
  "log",
  "wasm-bindgen",
- "windows-core 0.58.0",
+ "windows-core 0.61.2",
 ]
 
 [[package]]
@@ -3467,7 +3522,6 @@ name = "masonry_winit"
 version = "0.4.0"
 dependencies = [
  "accesskit_winit",
- "bevy_window",
  "copypasta",
  "masonry_core",
  "pollster",
@@ -6755,7 +6809,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.48.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

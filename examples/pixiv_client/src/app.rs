@@ -1,5 +1,4 @@
 use std::{
-    f32::consts::PI,
     process::Command,
     sync::{Arc, Mutex},
     time::Duration,
@@ -19,7 +18,14 @@ use bevy_xilem::{
     bevy_app::{App, PreUpdate, Startup, Update},
     bevy_ecs::{hierarchy::ChildOf, prelude::*},
     bevy_tasks::{AsyncComputeTaskPool, IoTaskPool, TaskPool},
-    bevy_tweening::{EaseMethod, Lens, Tween, TweenAnim},
+    bevy_tween::{
+        BevyTweenRegisterSystems,
+        bevy_time_runner::{TimeContext, TimeRunner, TimeSpan},
+        component_tween_system,
+        interpolate::Interpolator,
+        interpolation::EaseKind,
+        tween::ComponentTween,
+    },
     bevy_window::WindowResized,
     button, button_with_child, resolve_style, resolve_style_for_classes,
     resolve_style_for_entity_classes, run_app_with_window_options, spawn_in_overlay_root,
@@ -418,8 +424,10 @@ struct CardAnimLens {
     end: CardAnimState,
 }
 
-impl Lens<CardAnimState> for CardAnimLens {
-    fn lerp(&mut self, mut target: Mut<'_, CardAnimState>, ratio: f32) {
+impl Interpolator for CardAnimLens {
+    type Item = CardAnimState;
+
+    fn interpolate(&self, target: &mut Self::Item, ratio: f32, _previous_value: f32) {
         target.card_scale =
             self.start.card_scale + (self.end.card_scale - self.start.card_scale) * ratio;
         target.image_brightness = self.start.image_brightness
@@ -435,14 +443,17 @@ fn spawn_card_tween(
     start: CardAnimState,
     end: CardAnimState,
     duration_ms: u64,
-    ease: EaseMethod,
+    ease: EaseKind,
 ) {
-    let tween = Tween::new::<CardAnimState, _>(
+    let duration = Duration::from_millis(duration_ms);
+    world.entity_mut(entity).insert((
+        TimeSpan::try_from(Duration::ZERO..duration)
+            .expect("card tween duration range should be valid"),
         ease,
-        Duration::from_millis(duration_ms),
-        CardAnimLens { start, end },
-    );
-    world.entity_mut(entity).insert(TweenAnim::new(tween));
+        ComponentTween::new_target(entity, CardAnimLens { start, end }),
+        TimeRunner::new(duration),
+        TimeContext::<()>::default(),
+    ));
 }
 
 fn ensure_task_pool_initialized() {
@@ -466,17 +477,6 @@ fn register_bridge_fonts(app: &mut App) {
     app.register_xilem_font(SyncAssetSource::Bytes(include_bytes!(
         "../../../assets/fonts/NotoSansCJKkr-Regular.otf",
     )));
-}
-
-fn ease_elastic_out(t: f32) -> f32 {
-    if t == 0.0 {
-        return 0.0;
-    }
-    if t == 1.0 {
-        return 1.0;
-    }
-    let c4 = (2.0 * PI) / 3.0;
-    2.0_f32.powf(-10.0 * t) * ((t * 10.0 - 0.75) * c4).sin() + 1.0
 }
 
 fn spawn_ui_component_entity(commands: &mut Commands, classes: &[&str]) -> Entity {
@@ -779,6 +779,7 @@ fn build_app(mut activation_service: Option<ActivationService>) -> App {
     .register_ui_component::<PixivDetailOverlay>()
     .register_ui_component::<PixivOverlayTags>()
     .register_ui_component::<OverlayTag>()
+    .add_tween_systems(Update, component_tween_system::<CardAnimLens>())
     .add_systems(Startup, (setup_styles, setup, setup_fluent_theme_toggle))
     .add_systems(
         PreUpdate,
