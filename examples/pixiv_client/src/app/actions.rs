@@ -50,6 +50,10 @@ fn open_in_system_browser(url: &str) -> Result<()> {
 }
 
 pub(super) fn drain_ui_actions_and_dispatch(world: &mut World) {
+    // Materialize built-in widget state changes before the app drains its own
+    // action queues and mirrors resource state back into ECS-owned inputs.
+    bevy_xilem::handle_widget_actions(world);
+
     let events = world
         .resource_mut::<UiEventQueue>()
         .drain_actions::<AppAction>();
@@ -225,6 +229,8 @@ pub(super) fn drain_ui_actions_and_dispatch(world: &mut World) {
                 );
             }
             AppAction::OpenBrowserLogin => {
+                ensure_pixiv_scheme_takeover_for_dev();
+
                 let (idp_urls, verifier) = {
                     let mut auth = world.resource_mut::<AuthState>();
                     let idp_urls = auth.idp_urls.clone();

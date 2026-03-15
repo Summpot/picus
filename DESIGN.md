@@ -63,6 +63,8 @@ window/input plugins are active.
 
 `PreUpdate` system consumes Bevy messages (`CursorMoved`, `CursorLeft`, `MouseButtonInput`, `MouseWheel`, `KeyboardInput`, `Ime`, `WindowFocused`, `WindowResized`, `WindowScaleFactorChanged`) and translates them to Masonry events (`PointerEvent`, `TextEvent`, `WindowEvent`), which are injected into `MasonryRuntime.render_root`.
 
+Built-in widget-originated ECS sync for controls like `UiTextInput` runs immediately after this injection pass in the same `PreUpdate` stage, so `WidgetUiAction` mutations and derived events (for example `UiTextInputChanged`) are available to same-frame app logic instead of being deferred behind later schedule ordering.
+
 **Pointer bridge invariants:**
 
 - `Window::physical_cursor_position()` from the current `PrimaryWindow` is the source of truth

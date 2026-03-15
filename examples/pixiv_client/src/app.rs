@@ -65,6 +65,74 @@ const PIXIV_AUTH_TOKEN_FALLBACK: &str = "https://oauth.secure.pixiv.net/auth/tok
 const PIXIV_WEB_REDIRECT_FALLBACK: &str =
     "https://app-api.pixiv.net/web/v1/users/auth/pixiv/callback";
 const PIXIV_ACTIVATION_APP_ID: &str = "bevy-xilem-example-pixiv-client";
+#[cfg(target_os = "macos")]
+const PIXIV_CALLBACK_BUNDLE_ID: &str = "dev.summpot.example-pixiv-client";
+
+#[cfg(target_os = "macos")]
+mod macos_scheme_takeover {
+    use std::ffi::{CString, c_char, c_void};
+
+    type CFAllocatorRef = *const c_void;
+    type CFStringRef = *const c_void;
+    type OSStatus = i32;
+
+    const K_CFSTRING_ENCODING_UTF8: u32 = 0x0800_0100;
+
+    #[link(name = "CoreFoundation", kind = "framework")]
+    unsafe extern "C" {
+        fn CFStringCreateWithCString(
+            alloc: CFAllocatorRef,
+            c_str: *const c_char,
+            encoding: u32,
+        ) -> CFStringRef;
+        fn CFRelease(cf: *const c_void);
+    }
+
+    #[link(name = "ApplicationServices", kind = "framework")]
+    unsafe extern "C" {
+        fn LSSetDefaultHandlerForURLScheme(
+            in_url_scheme: CFStringRef,
+            in_handler_bundle_id: CFStringRef,
+        ) -> OSStatus;
+    }
+
+    fn make_cf_string(value: &str) -> Result<CFStringRef, String> {
+        let c_string = CString::new(value)
+            .map_err(|_| format!("value contains embedded NUL byte: {value:?}"))?;
+        let value_ref = unsafe {
+            CFStringCreateWithCString(
+                std::ptr::null(),
+                c_string.as_ptr(),
+                K_CFSTRING_ENCODING_UTF8,
+            )
+        };
+        if value_ref.is_null() {
+            Err(format!("failed to create CFString for {value:?}"))
+        } else {
+            Ok(value_ref)
+        }
+    }
+
+    pub(super) fn take_over_url_scheme(scheme: &str, bundle_id: &str) -> Result<(), String> {
+        let scheme_ref = make_cf_string(scheme)?;
+        let bundle_ref = make_cf_string(bundle_id)?;
+
+        let status = unsafe { LSSetDefaultHandlerForURLScheme(scheme_ref, bundle_ref) };
+
+        unsafe {
+            CFRelease(bundle_ref);
+            CFRelease(scheme_ref);
+        }
+
+        if status == 0 {
+            Ok(())
+        } else {
+            Err(format!(
+                "LSSetDefaultHandlerForURLScheme failed with OSStatus {status}"
+            ))
+        }
+    }
+}
 
 mod actions;
 mod activation;
@@ -131,6 +199,15 @@ fn set_status_key(world: &mut World, key: &str, fallback: &str) {
         tr(world_ref, key, fallback)
     };
     set_status(world, message);
+}
+
+pub(super) fn ensure_pixiv_scheme_takeover_for_dev() {
+    #[cfg(target_os = "macos")]
+    if let Err(error) =
+        macos_scheme_takeover::take_over_url_scheme("pixiv", PIXIV_CALLBACK_BUNDLE_ID)
+    {
+        eprintln!("pixiv scheme takeover failed: {error}");
+    }
 }
 
 fn sync_font_stack_for_locale(sheet: &mut StyleSheet, stack: Option<&[String]>) {
@@ -906,7 +983,9 @@ fn build_app(mut activation_service: Option<ActivationService>) -> App {
     .add_systems(
         Update,
         (
-            drain_ui_actions_and_dispatch,
+            drain_ui_actions_and_dispatch
+                .after(bevy_xilem::handle_widget_actions)
+                .after(bevy_xilem::handle_overlay_actions),
             poll_activation_messages,
             track_viewport_metrics,
             spawn_network_tasks,
@@ -932,6 +1011,8 @@ pub fn run() -> std::result::Result<(), EventLoopError> {
             None
         }
     };
+
+    ensure_pixiv_scheme_takeover_for_dev();
 
     run_app_with_window_options(build_app(activation_service), "Pixiv Desktop", |options| {
         options.with_initial_inner_size(LogicalSize::new(1360.0, 860.0))
@@ -1088,6 +1169,15 @@ mod tests {
             Some("from_protocol")
         );
         assert!(activation::is_pixiv_callback_uri(uri));
+    }
+
+    #[test]
+    fn info_plist_bundle_identifier_matches_takeover_bundle_id() {
+        let plist = include_str!("../Info.plist");
+        assert!(
+            plist.contains("<string>dev.summpot.example-pixiv-client</string>"),
+            "Info.plist should keep the macOS URL-handler bundle id in sync"
+        );
     }
 
     #[test]
@@ -1291,6 +1381,72 @@ mod tests {
                 .expect("search input should exist")
                 .value,
             "猫咪"
+        );
+    }
+
+    #[test]
+    fn drain_dispatch_consumes_pending_widget_text_actions_before_sync() {
+        let mut world = World::new();
+        world.insert_resource(UiEventQueue::default());
+        world.insert_resource(AppI18n::new(parse_locale("en-US")));
+        world.insert_resource(StyleSheet::default());
+        world.insert_resource(UiState::default());
+        world.insert_resource(AuthState::default());
+
+        let code_verifier_input = world
+            .spawn((UiTextInput::new("").with_placeholder("PKCE code_verifier"),))
+            .id();
+        let auth_code_input = world
+            .spawn((UiTextInput::new("").with_placeholder("Auth code"),))
+            .id();
+        let refresh_token_input = world
+            .spawn((UiTextInput::new("").with_placeholder("Refresh token"),))
+            .id();
+        let search_input = world
+            .spawn((UiTextInput::new("").with_placeholder("Search illust keyword"),))
+            .id();
+
+        world.insert_resource(PixivUiComponents {
+            toggle_sidebar: Entity::PLACEHOLDER,
+            locale_combo: Entity::PLACEHOLDER,
+            code_verifier_input,
+            auth_code_input,
+            refresh_token_input,
+            search_input,
+            home_tab: Entity::PLACEHOLDER,
+            rankings_tab: Entity::PLACEHOLDER,
+            manga_tab: Entity::PLACEHOLDER,
+            novels_tab: Entity::PLACEHOLDER,
+            search_tab: Entity::PLACEHOLDER,
+            open_browser_login: Entity::PLACEHOLDER,
+            exchange_auth_code: Entity::PLACEHOLDER,
+            refresh_token: Entity::PLACEHOLDER,
+            search_submit: Entity::PLACEHOLDER,
+            copy_response: Entity::PLACEHOLDER,
+            clear_response: Entity::PLACEHOLDER,
+            close_overlay: Entity::PLACEHOLDER,
+        });
+
+        world.resource::<UiEventQueue>().push_typed(
+            search_input,
+            bevy_xilem::WidgetUiAction::SetTextInput {
+                input: search_input,
+                value: "same-frame widget action".to_string(),
+            },
+        );
+
+        drain_ui_actions_and_dispatch(&mut world);
+
+        assert_eq!(
+            world.resource::<UiState>().search_text,
+            "same-frame widget action"
+        );
+        assert_eq!(
+            world
+                .get::<UiTextInput>(search_input)
+                .expect("search input should exist")
+                .value,
+            "same-frame widget action"
         );
     }
 

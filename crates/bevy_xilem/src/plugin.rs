@@ -122,6 +122,7 @@ impl Plugin for BevyXilemPlugin {
                     sync_scroll_view_layout_geometry,
                     handle_scroll_view_wheel,
                     inject_bevy_input_into_masonry,
+                    handle_widget_actions,
                     sync_ui_interaction_markers,
                 )
                     .chain(),
