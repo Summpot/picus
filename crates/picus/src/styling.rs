@@ -2287,7 +2287,7 @@ fn map_font_family_name(name: &str) -> FontFamily<'static> {
     }
 }
 
-fn font_stack_from_style(style: &ResolvedStyle) -> Option<FontStack<'static>> {
+pub(crate) fn font_stack_from_style(style: &ResolvedStyle) -> Option<FontStack<'static>> {
     let families = style.font_family.as_ref()?;
     if families.is_empty() {
         return None;

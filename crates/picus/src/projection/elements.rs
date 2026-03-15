@@ -10,8 +10,8 @@ use crate::{
     },
     i18n::resolve_localized_text,
     styling::{
-        apply_direct_text_input_style, apply_direct_widget_style, apply_label_style,
-        apply_widget_style, resolve_style,
+        apply_direct_widget_style, apply_label_style, apply_widget_style, font_stack_from_style,
+        resolve_style,
     },
     views::{ecs_button_with_child, ecs_checkbox, ecs_text_input},
     widget_actions::WidgetUiAction,
@@ -21,7 +21,7 @@ use masonry::layout::Length;
 use std::sync::Arc;
 use tracing::trace;
 use xilem_masonry::style::Style as _;
-use xilem_masonry::view::{FlexExt as _, flex_row, label};
+use xilem_masonry::view::{FlexExt as _, flex_row, label, transformed};
 
 fn child_entity_views(ctx: &ProjectionCtx<'_>) -> Vec<(Entity, UiView)> {
     let child_entities = ctx
@@ -43,6 +43,24 @@ fn first_part_view<P: Component>(
     pairs
         .iter()
         .find_map(|(entity, view)| ctx.world.get::<P>(*entity).map(|_| view.clone()))
+}
+
+fn placeholder_color_from_style(style: &crate::styling::ResolvedStyle) -> xilem::Color {
+    style
+        .colors
+        .text
+        .unwrap_or(xilem::Color::WHITE)
+        .with_alpha(0.72)
+}
+
+fn map_text_alignment_for_input(
+    text_align: crate::styling::TextAlign,
+) -> masonry::parley::Alignment {
+    match text_align {
+        crate::styling::TextAlign::Start => masonry::parley::Alignment::Start,
+        crate::styling::TextAlign::Center => masonry::parley::Alignment::Center,
+        crate::styling::TextAlign::End => masonry::parley::Alignment::End,
+    }
 }
 
 pub(crate) fn project_label(label_component: &UiLabel, ctx: ProjectionCtx<'_>) -> UiView {
@@ -170,14 +188,53 @@ pub(crate) fn project_switch(switch_component: &UiSwitch, ctx: ProjectionCtx<'_>
 
 pub(crate) fn project_text_input(input: &UiTextInput, ctx: ProjectionCtx<'_>) -> UiView {
     let style = resolve_style(ctx.world, ctx.entity);
-    Arc::new(apply_direct_text_input_style(
-        ecs_text_input(ctx.entity, input.value.clone(), move |value| {
-            WidgetUiAction::SetTextInput {
-                input: ctx.entity,
-                value,
-            }
-        })
-        .placeholder(input.placeholder.clone()),
-        &style,
-    ))
+    let scale = style.layout.scale.max(0.01);
+    let mut styled = ecs_text_input(ctx.entity, input.value.clone(), move |value| {
+        WidgetUiAction::SetTextInput {
+            input: ctx.entity,
+            value,
+        }
+    })
+    .placeholder(input.placeholder.clone())
+    .text_size(style.text.size)
+    .text_alignment(map_text_alignment_for_input(style.text.text_align));
+
+    if let Some(font_stack) = font_stack_from_style(&style) {
+        styled = styled.font(font_stack);
+    }
+
+    let styled = styled.placeholder_color(placeholder_color_from_style(&style));
+
+    if let Some(text_color) = style.colors.text {
+        return Arc::new(
+            transformed(
+                styled
+                    .text_color(text_color)
+                    .padding(style.layout.padding)
+                    .corner_radius(style.layout.corner_radius)
+                    .border(
+                        style.colors.border.unwrap_or(xilem::Color::TRANSPARENT),
+                        style.layout.border_width,
+                    )
+                    .background_color(style.colors.bg.unwrap_or(xilem::Color::TRANSPARENT))
+                    .box_shadow(style.box_shadow.unwrap_or_default()),
+            )
+            .scale(scale),
+        );
+    }
+
+    Arc::new(
+        transformed(
+            styled
+                .padding(style.layout.padding)
+                .corner_radius(style.layout.corner_radius)
+                .border(
+                    style.colors.border.unwrap_or(xilem::Color::TRANSPARENT),
+                    style.layout.border_width,
+                )
+                .background_color(style.colors.bg.unwrap_or(xilem::Color::TRANSPARENT))
+                .box_shadow(style.box_shadow.unwrap_or_default()),
+        )
+        .scale(scale),
+    )
 }

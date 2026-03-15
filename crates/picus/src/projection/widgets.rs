@@ -10,7 +10,8 @@ use masonry::layout::{Dim, Length};
 use xilem::Color;
 use xilem::style::Style as _;
 use xilem_masonry::view::{
-    FlexExt as _, flex_col, flex_row, label, sized_box, spinner, split, transformed, zstack,
+    FlexExt as _, flex_col, flex_row, label, radio_group as xilem_radio_group, sized_box, spinner,
+    split, transformed, zstack,
 };
 
 use crate::{
@@ -24,10 +25,11 @@ use crate::{
     overlay::OverlayUiAction,
     styling::{
         ResolvedStyle, apply_direct_widget_style, apply_flex_alignment, apply_label_style,
-        apply_widget_style, resolve_style, resolve_style_for_classes,
+        apply_widget_style, font_stack_from_style, resolve_style, resolve_style_for_classes,
     },
     views::{
-        ecs_button, ecs_button_with_child, ecs_drag_thumb, opaque_hitbox_for_entity, scroll_portal,
+        ecs_button, ecs_button_with_child, ecs_drag_thumb, ecs_radio_button,
+        opaque_hitbox_for_entity, scroll_portal,
     },
     widget_actions::WidgetUiAction,
 };
@@ -398,39 +400,34 @@ pub(crate) fn project_radio_group(radio_group: &UiRadioGroup, ctx: ProjectionCtx
         .iter()
         .enumerate()
         .map(|(i, opt)| {
-            let icon_color = item_style
-                .colors
-                .text
-                .or(style.colors.text)
-                .unwrap_or(Color::from_rgb8(0xE7, 0xEC, 0xF8));
-            let indicator = if i == radio_group.selected {
-                vector_icon(VectorIcon::RadioOn, 14.0, icon_color)
-            } else {
-                vector_icon(VectorIcon::RadioOff, 14.0, icon_color)
-            };
-
-            let content = flex_row(vec![
-                indicator.into_any_flex(),
-                apply_label_style(label(opt.clone()), &item_style).into_any_flex(),
-            ])
-            .gap(Length::px(6.0));
-
-            let btn = ecs_button_with_child(
+            let mut btn = ecs_radio_button(
                 ctx.entity,
                 WidgetUiAction::SelectRadioItem {
                     group: ctx.entity,
                     index: i,
                 },
-                content,
-            );
+                opt.clone(),
+                i == radio_group.selected,
+            )
+            .text_size(item_style.text.size);
+
+            if let Some(font_stack) = font_stack_from_style(&item_style) {
+                btn = btn.font(font_stack);
+            }
+
+            if let Some(text_color) = item_style.colors.text.or(style.colors.text) {
+                btn = btn.text_color(text_color);
+            }
+
             apply_direct_widget_style(btn, &item_style).into_any_flex()
         })
         .collect::<Vec<_>>();
 
-    Arc::new(apply_widget_style(
+    let group = xilem_radio_group::<(), (), _>(
         apply_flex_alignment(flex_col(items), &style).gap(Length::px(style.layout.gap.max(4.0))),
-        &style,
-    ))
+    );
+
+    Arc::new(apply_widget_style(group, &style))
 }
 
 // ---------------------------------------------------------------------------

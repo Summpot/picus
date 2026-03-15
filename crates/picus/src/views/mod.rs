@@ -33,6 +33,7 @@ pub use ecs_button_view::{EcsButtonView, ecs_button};
 pub use ecs_button_with_child_view::ecs_button_with_child as button_with_child;
 pub use ecs_button_with_child_view::{EcsButtonWithChildView, ecs_button_with_child};
 pub use ecs_component_views::ecs_checkbox as checkbox;
+pub(crate) use ecs_component_views::ecs_radio_button;
 pub use ecs_component_views::ecs_slider as slider;
 pub use ecs_component_views::ecs_switch as switch;
 pub use ecs_component_views::ecs_text_button as text_button;

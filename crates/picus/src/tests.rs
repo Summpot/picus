@@ -2819,6 +2819,38 @@ fn template_expansion_and_widget_actions_update_checkbox_state() {
 }
 
 #[test]
+fn widget_actions_update_radio_group_selection() {
+    let mut world = World::new();
+    world.insert_resource(UiEventQueue::default());
+
+    let group = world
+        .spawn((crate::UiRadioGroup::new(["Apple", "Banana", "Cherry"]),))
+        .id();
+
+    world.resource::<UiEventQueue>().push_typed(
+        group,
+        crate::WidgetUiAction::SelectRadioItem { group, index: 2 },
+    );
+
+    crate::handle_widget_actions(&mut world);
+
+    assert_eq!(
+        world
+            .get::<crate::UiRadioGroup>(group)
+            .expect("radio group should exist")
+            .selected,
+        2
+    );
+
+    let changed = world
+        .resource_mut::<UiEventQueue>()
+        .drain_actions::<crate::UiRadioGroupChanged>();
+    assert_eq!(changed.len(), 1);
+    assert_eq!(changed[0].entity, group);
+    assert_eq!(changed[0].action.selected, 2);
+}
+
+#[test]
 fn third_party_ui_component_can_register_via_trait_api() {
     #[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
     struct UiKnob;
