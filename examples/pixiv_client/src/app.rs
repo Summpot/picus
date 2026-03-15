@@ -13,8 +13,8 @@ use bevy_xilem::{
     AppBevyXilemExt, AppI18n, BevyXilemPlugin, LUCIDE_FONT_FAMILY, OverlayConfig, OverlayPlacement,
     OverlayState, ProjectionCtx, ResolvedStyle, StyleClass, StyleSheet, StyleValue,
     SyncAssetSource, SyncTextSource, UiComboBox, UiComboBoxChanged, UiComboOption, UiEventQueue,
-    UiRoot, UiThemePicker, UiView, apply_direct_widget_style, apply_label_style,
-    apply_text_input_style, apply_widget_style,
+    UiRoot, UiTextInput, UiTextInputChanged, UiThemePicker, UiView, apply_direct_widget_style,
+    apply_label_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup, Update},
     bevy_ecs::{hierarchy::ChildOf, prelude::*},
     bevy_tasks::{AsyncComputeTaskPool, IoTaskPool, TaskPool},
@@ -27,9 +27,8 @@ use bevy_xilem::{
         tween::ComponentTween,
     },
     bevy_window::WindowResized,
-    button, button_with_child, resolve_style, resolve_style_for_classes,
-    resolve_style_for_entity_classes, run_app_with_window_options, spawn_in_overlay_root,
-    text_input,
+    button_with_child, resolve_style, resolve_style_for_classes, resolve_style_for_entity_classes,
+    run_app_with_window_options, spawn_in_overlay_root,
     xilem::{
         Color,
         masonry::layout::{Dim, Length},
@@ -137,6 +136,11 @@ fn set_status_key(world: &mut World, key: &str, fallback: &str) {
 fn sync_font_stack_for_locale(sheet: &mut StyleSheet, stack: Option<&[String]>) {
     for class_name in [
         "pixiv.root",
+        "pixiv.sidebar",
+        "pixiv.sidebar.title",
+        "pixiv.sidebar.button",
+        "pixiv.auth-panel",
+        "pixiv.text-input",
         "pixiv.button",
         "pixiv.primary-btn",
         "pixiv.card",
@@ -215,6 +219,10 @@ impl Default for ViewportMetrics {
 struct PixivUiComponents {
     toggle_sidebar: Entity,
     locale_combo: Entity,
+    code_verifier_input: Entity,
+    auth_code_input: Entity,
+    refresh_token_input: Entity,
+    search_input: Entity,
     home_tab: Entity,
     rankings_tab: Entity,
     manga_tab: Entity,
@@ -333,9 +341,6 @@ enum AppAction {
     CloseIllust,
     Bookmark(Entity),
     SearchByTag(String),
-    SetAuthCode(String),
-    SetCodeVerifier(String),
-    SetRefreshToken(String),
     CopyResponseBody,
     ClearResponseBody,
     OpenBrowserLogin,
@@ -487,6 +492,96 @@ fn spawn_ui_component_entity(commands: &mut Commands, classes: &[&str]) -> Entit
         .id()
 }
 
+fn spawn_bound_text_input(
+    commands: &mut Commands,
+    parent: Entity,
+    value: impl Into<String>,
+    placeholder: impl Into<String>,
+) -> Entity {
+    commands
+        .spawn((
+            UiTextInput::new(value).with_placeholder(placeholder),
+            StyleClass(vec!["pixiv.text-input".to_string()]),
+            ChildOf(parent),
+        ))
+        .id()
+}
+
+fn set_text_input_component_value(world: &mut World, entity: Entity, value: &str) {
+    if let Some(mut input) = world.get_mut::<UiTextInput>(entity)
+        && input.value != value
+    {
+        input.value = value.to_string();
+    }
+}
+
+fn set_text_input_component_placeholder(world: &mut World, entity: Entity, placeholder: &str) {
+    if let Some(mut input) = world.get_mut::<UiTextInput>(entity)
+        && input.placeholder != placeholder
+    {
+        input.placeholder = placeholder.to_string();
+    }
+}
+
+fn sync_bound_text_inputs(world: &mut World) {
+    let Some(ui_components) = world.get_resource::<PixivUiComponents>().copied() else {
+        return;
+    };
+    let search_text = world
+        .get_resource::<UiState>()
+        .map(|ui| ui.search_text.clone())
+        .unwrap_or_default();
+    let (code_verifier_input, auth_code_input, refresh_token_input) = world
+        .get_resource::<AuthState>()
+        .map(|auth| {
+            (
+                auth.code_verifier_input.clone(),
+                auth.auth_code_input.clone(),
+                auth.refresh_token_input.clone(),
+            )
+        })
+        .unwrap_or_else(|| (String::new(), String::new(), String::new()));
+    let placeholders = [
+        (
+            ui_components.code_verifier_input,
+            tr(world, "pixiv.auth.placeholder.pkce", "PKCE code_verifier"),
+        ),
+        (
+            ui_components.auth_code_input,
+            tr(world, "pixiv.auth.placeholder.code", "Auth code"),
+        ),
+        (
+            ui_components.refresh_token_input,
+            tr(
+                world,
+                "pixiv.auth.placeholder.refresh_token",
+                "Refresh token",
+            ),
+        ),
+        (
+            ui_components.search_input,
+            tr(world, "pixiv.search.placeholder", "Search illust keyword"),
+        ),
+    ];
+
+    set_text_input_component_value(world, ui_components.search_input, &search_text);
+    set_text_input_component_value(
+        world,
+        ui_components.code_verifier_input,
+        &code_verifier_input,
+    );
+    set_text_input_component_value(world, ui_components.auth_code_input, &auth_code_input);
+    set_text_input_component_value(
+        world,
+        ui_components.refresh_token_input,
+        &refresh_token_input,
+    );
+
+    for (entity, placeholder) in placeholders {
+        set_text_input_component_placeholder(world, entity, &placeholder);
+    }
+}
+
 fn setup(mut commands: Commands, i18n: Res<AppI18n>) {
     ensure_task_pool_initialized();
 
@@ -539,7 +634,7 @@ fn setup(mut commands: Commands, i18n: Res<AppI18n>) {
     commands.insert_resource(PixivApiClient::default());
     commands.insert_resource(Assets::<BevyImage>::default());
 
-    let ui_components = PixivUiComponents {
+    let mut ui_components = PixivUiComponents {
         toggle_sidebar: spawn_ui_component_entity(
             &mut commands,
             &["pixiv.button", "pixiv.button.sidebar"],
@@ -548,6 +643,10 @@ fn setup(mut commands: Commands, i18n: Res<AppI18n>) {
             &mut commands,
             &["pixiv.button", "pixiv.button.sidebar"],
         ),
+        code_verifier_input: Entity::PLACEHOLDER,
+        auth_code_input: Entity::PLACEHOLDER,
+        refresh_token_input: Entity::PLACEHOLDER,
+        search_input: Entity::PLACEHOLDER,
         home_tab: spawn_ui_component_entity(
             &mut commands,
             &["pixiv.button", "pixiv.button.subtle"],
@@ -597,8 +696,6 @@ fn setup(mut commands: Commands, i18n: Res<AppI18n>) {
             &["pixiv.button", "pixiv.button.warn"],
         ),
     };
-    commands.insert_resource(ui_components);
-
     let root = commands
         .spawn((
             UiRoot,
@@ -641,13 +738,36 @@ fn setup(mut commands: Commands, i18n: Res<AppI18n>) {
 
     let main_column = commands.spawn((PixivMainColumn, ChildOf(root))).id();
 
-    commands.spawn((
-        PixivAuthPanel,
-        StyleClass(vec!["pixiv.auth-panel".to_string()]),
-        ChildOf(main_column),
-    ));
+    let auth_panel = commands
+        .spawn((
+            PixivAuthPanel,
+            StyleClass(vec!["pixiv.auth-panel".to_string()]),
+            ChildOf(main_column),
+        ))
+        .id();
     commands.spawn((PixivResponsePanel, ChildOf(main_column)));
-    commands.spawn((PixivSearchPanel, ChildOf(main_column)));
+    let search_panel = commands
+        .spawn((PixivSearchPanel, ChildOf(main_column)))
+        .id();
+
+    ui_components.code_verifier_input =
+        spawn_bound_text_input(&mut commands, auth_panel, "", "PKCE code_verifier");
+    ui_components.auth_code_input =
+        spawn_bound_text_input(&mut commands, auth_panel, "", "Auth code");
+    ui_components.refresh_token_input = spawn_bound_text_input(
+        &mut commands,
+        auth_panel,
+        restored_session
+            .as_ref()
+            .map(|session| session.refresh_token.clone())
+            .unwrap_or_default(),
+        "Refresh token",
+    );
+    ui_components.search_input =
+        spawn_bound_text_input(&mut commands, search_panel, "", "Search illust keyword");
+
+    commands.insert_resource(ui_components);
+    commands.queue(sync_bound_text_inputs);
 
     let home_feed = commands.spawn((PixivHomeFeed, ChildOf(main_column))).id();
 
@@ -784,18 +904,17 @@ fn build_app(mut activation_service: Option<ActivationService>) -> App {
     .add_tween_systems(Update, component_tween_system::<CardAnimLens>())
     .add_systems(Startup, (setup_styles, setup))
     .add_systems(
-        PreUpdate,
-        (drain_ui_actions_and_dispatch, poll_activation_messages),
-    )
-    .add_systems(
         Update,
         (
+            drain_ui_actions_and_dispatch,
+            poll_activation_messages,
             track_viewport_metrics,
             spawn_network_tasks,
             apply_network_results,
             spawn_image_tasks,
             apply_image_results,
-        ),
+        )
+            .chain(),
     );
     app
 }
@@ -911,6 +1030,10 @@ mod tests {
         world.insert_resource(PixivUiComponents {
             toggle_sidebar: Entity::PLACEHOLDER,
             locale_combo,
+            code_verifier_input: Entity::PLACEHOLDER,
+            auth_code_input: Entity::PLACEHOLDER,
+            refresh_token_input: Entity::PLACEHOLDER,
+            search_input: Entity::PLACEHOLDER,
             home_tab: Entity::PLACEHOLDER,
             rankings_tab: Entity::PLACEHOLDER,
             manga_tab: Entity::PLACEHOLDER,
@@ -968,6 +1091,48 @@ mod tests {
     }
 
     #[test]
+    fn app_actions_emitted_in_preupdate_are_drained_in_update() {
+        let mut app = App::new();
+        app.insert_resource(UiEventQueue::default());
+        app.insert_resource(UiState::default());
+        app.insert_resource(PixivUiComponents {
+            toggle_sidebar: Entity::PLACEHOLDER,
+            locale_combo: Entity::PLACEHOLDER,
+            code_verifier_input: Entity::PLACEHOLDER,
+            auth_code_input: Entity::PLACEHOLDER,
+            refresh_token_input: Entity::PLACEHOLDER,
+            search_input: Entity::PLACEHOLDER,
+            home_tab: Entity::PLACEHOLDER,
+            rankings_tab: Entity::PLACEHOLDER,
+            manga_tab: Entity::PLACEHOLDER,
+            novels_tab: Entity::PLACEHOLDER,
+            search_tab: Entity::PLACEHOLDER,
+            open_browser_login: Entity::PLACEHOLDER,
+            exchange_auth_code: Entity::PLACEHOLDER,
+            refresh_token: Entity::PLACEHOLDER,
+            search_submit: Entity::PLACEHOLDER,
+            copy_response: Entity::PLACEHOLDER,
+            clear_response: Entity::PLACEHOLDER,
+            close_overlay: Entity::PLACEHOLDER,
+        });
+
+        app.add_systems(PreUpdate, |queue: Res<UiEventQueue>| {
+            queue.push_typed(
+                Entity::PLACEHOLDER,
+                AppAction::SetSearchText("same-frame text".to_string()),
+            );
+        });
+        app.add_systems(Update, drain_ui_actions_and_dispatch);
+
+        app.update();
+
+        assert_eq!(
+            app.world().resource::<UiState>().search_text,
+            "same-frame text"
+        );
+    }
+
+    #[test]
     fn setup_builds_componentized_ui_tree() {
         let mut world = World::new();
         world.insert_resource(AppI18n::new(parse_locale("en-US")));
@@ -990,6 +1155,26 @@ mod tests {
         assert!(
             world
                 .get::<UiComboBox>(ui_components.locale_combo)
+                .is_some()
+        );
+        assert!(
+            world
+                .get::<UiTextInput>(ui_components.code_verifier_input)
+                .is_some()
+        );
+        assert!(
+            world
+                .get::<UiTextInput>(ui_components.auth_code_input)
+                .is_some()
+        );
+        assert!(
+            world
+                .get::<UiTextInput>(ui_components.refresh_token_input)
+                .is_some()
+        );
+        assert!(
+            world
+                .get::<UiTextInput>(ui_components.search_input)
                 .is_some()
         );
         assert!(world.get_entity(ui_components.manga_tab).is_ok());
@@ -1028,6 +1213,88 @@ mod tests {
     }
 
     #[test]
+    fn text_input_events_and_programmatic_updates_stay_in_sync() {
+        let mut world = World::new();
+        world.insert_resource(UiEventQueue::default());
+        world.insert_resource(AppI18n::new(parse_locale("en-US")));
+        world.insert_resource(StyleSheet::default());
+        world.insert_resource(UiState::default());
+        world.insert_resource(AuthState::default());
+
+        let code_verifier_input = world
+            .spawn((UiTextInput::new("").with_placeholder("PKCE code_verifier"),))
+            .id();
+        let auth_code_input = world
+            .spawn((UiTextInput::new("").with_placeholder("Auth code"),))
+            .id();
+        let refresh_token_input = world
+            .spawn((UiTextInput::new("").with_placeholder("Refresh token"),))
+            .id();
+        let search_input = world
+            .spawn((UiTextInput::new("").with_placeholder("Search illust keyword"),))
+            .id();
+
+        world.insert_resource(PixivUiComponents {
+            toggle_sidebar: Entity::PLACEHOLDER,
+            locale_combo: Entity::PLACEHOLDER,
+            code_verifier_input,
+            auth_code_input,
+            refresh_token_input,
+            search_input,
+            home_tab: Entity::PLACEHOLDER,
+            rankings_tab: Entity::PLACEHOLDER,
+            manga_tab: Entity::PLACEHOLDER,
+            novels_tab: Entity::PLACEHOLDER,
+            search_tab: Entity::PLACEHOLDER,
+            open_browser_login: Entity::PLACEHOLDER,
+            exchange_auth_code: Entity::PLACEHOLDER,
+            refresh_token: Entity::PLACEHOLDER,
+            search_submit: Entity::PLACEHOLDER,
+            copy_response: Entity::PLACEHOLDER,
+            clear_response: Entity::PLACEHOLDER,
+            close_overlay: Entity::PLACEHOLDER,
+        });
+
+        world.resource::<UiEventQueue>().push_typed(
+            search_input,
+            UiTextInputChanged {
+                input: search_input,
+                value: "same-frame keyword".to_string(),
+            },
+        );
+
+        drain_ui_actions_and_dispatch(&mut world);
+
+        assert_eq!(
+            world.resource::<UiState>().search_text,
+            "same-frame keyword"
+        );
+        assert_eq!(
+            world
+                .get::<UiTextInput>(search_input)
+                .expect("search input should exist")
+                .value,
+            "same-frame keyword"
+        );
+
+        world.resource::<UiEventQueue>().push_typed(
+            Entity::PLACEHOLDER,
+            AppAction::SetSearchText("猫咪".to_string()),
+        );
+
+        drain_ui_actions_and_dispatch(&mut world);
+
+        assert_eq!(world.resource::<UiState>().search_text, "猫咪");
+        assert_eq!(
+            world
+                .get::<UiTextInput>(search_input)
+                .expect("search input should exist")
+                .value,
+            "猫咪"
+        );
+    }
+
+    #[test]
     fn embedded_pixiv_theme_ron_parses() {
         bevy_xilem::parse_stylesheet_ron(include_str!("../assets/themes/pixiv_client.ron"))
             .expect("embedded pixiv_client stylesheet should parse");
@@ -1062,6 +1329,29 @@ mod tests {
         assert_eq!(corner_radius, "radius-md");
         assert_eq!(primary_bg, "surface-panel");
         assert_eq!(primary_border, "border-default");
+    }
+
+    #[test]
+    fn pixiv_text_input_uses_neutral_fluent_tokens() {
+        let sheet =
+            bevy_xilem::parse_stylesheet_ron(include_str!("../assets/themes/pixiv_client.ron"))
+                .expect("embedded pixiv_client stylesheet should parse");
+
+        let input = sheet
+            .get_class_values("pixiv.text-input")
+            .expect("pixiv.text-input class should exist");
+
+        let bg = match input.colors.bg.as_ref() {
+            Some(bevy_xilem::StyleValue::Var(token)) => token.as_str(),
+            _ => panic!("pixiv.text-input bg should come from a theme token"),
+        };
+        let border = match input.colors.border.as_ref() {
+            Some(bevy_xilem::StyleValue::Var(token)) => token.as_str(),
+            _ => panic!("pixiv.text-input border should come from a theme token"),
+        };
+
+        assert_eq!(bg, "surface-subtle");
+        assert_eq!(border, "border-default");
     }
 
     #[test]
@@ -1128,6 +1418,15 @@ mod tests {
             _ => panic!("font family should be written as a literal style value"),
         };
         assert_eq!(font_family, &stack);
+
+        let sidebar_button = sheet
+            .get_class_values("pixiv.sidebar.button")
+            .expect("pixiv.sidebar.button class should exist");
+        let sidebar_font_family = match sidebar_button.font_family.as_ref() {
+            Some(bevy_xilem::StyleValue::Value(value)) => value,
+            _ => panic!("sidebar button font family should be written as a literal style value"),
+        };
+        assert_eq!(sidebar_font_family, &stack);
     }
 
     #[test]

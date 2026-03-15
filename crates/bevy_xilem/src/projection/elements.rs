@@ -10,8 +10,8 @@ use crate::{
     },
     i18n::resolve_localized_text,
     styling::{
-        apply_direct_widget_style, apply_label_style, apply_text_input_style, apply_widget_style,
-        resolve_style,
+        apply_direct_text_input_style, apply_direct_widget_style, apply_label_style,
+        apply_widget_style, resolve_style,
     },
     views::{ecs_button_with_child, ecs_checkbox, ecs_text_input},
     widget_actions::WidgetUiAction,
@@ -170,16 +170,14 @@ pub(crate) fn project_switch(switch_component: &UiSwitch, ctx: ProjectionCtx<'_>
 
 pub(crate) fn project_text_input(input: &UiTextInput, ctx: ProjectionCtx<'_>) -> UiView {
     let style = resolve_style(ctx.world, ctx.entity);
-    Arc::new(apply_widget_style(
-        apply_text_input_style(
-            ecs_text_input(ctx.entity, input.value.clone(), move |value| {
-                WidgetUiAction::SetTextInput {
-                    input: ctx.entity,
-                    value,
-                }
-            }),
-            &style,
-        ),
+    Arc::new(apply_direct_text_input_style(
+        ecs_text_input(ctx.entity, input.value.clone(), move |value| {
+            WidgetUiAction::SetTextInput {
+                input: ctx.entity,
+                value,
+            }
+        })
+        .placeholder(input.placeholder.clone()),
         &style,
     ))
 }

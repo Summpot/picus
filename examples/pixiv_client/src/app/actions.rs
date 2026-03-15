@@ -186,15 +186,6 @@ pub(super) fn drain_ui_actions_and_dispatch(world: &mut World) {
                     .cmd_tx
                     .send(NetworkCommand::Search { word: tag });
             }
-            AppAction::SetAuthCode(value) => {
-                world.resource_mut::<AuthState>().auth_code_input = value;
-            }
-            AppAction::SetCodeVerifier(value) => {
-                world.resource_mut::<AuthState>().code_verifier_input = value;
-            }
-            AppAction::SetRefreshToken(value) => {
-                world.resource_mut::<AuthState>().refresh_token_input = value;
-            }
             AppAction::CopyResponseBody => {
                 let body = world.resource::<ResponsePanelState>().content.clone();
                 if body.trim().is_empty() {
@@ -338,10 +329,33 @@ pub(super) fn drain_ui_actions_and_dispatch(world: &mut World) {
         }
     }
 
+    let text_input_events = world
+        .resource_mut::<UiEventQueue>()
+        .drain_actions::<UiTextInputChanged>();
+    let ui_components = *world.resource::<PixivUiComponents>();
+
+    for event in text_input_events {
+        let value = event.action.value;
+        match event.action.input {
+            input if input == ui_components.search_input => {
+                world.resource_mut::<UiState>().search_text = value;
+            }
+            input if input == ui_components.code_verifier_input => {
+                world.resource_mut::<AuthState>().code_verifier_input = value;
+            }
+            input if input == ui_components.auth_code_input => {
+                world.resource_mut::<AuthState>().auth_code_input = value;
+            }
+            input if input == ui_components.refresh_token_input => {
+                world.resource_mut::<AuthState>().refresh_token_input = value;
+            }
+            _ => {}
+        }
+    }
+
     let combo_events = world
         .resource_mut::<UiEventQueue>()
         .drain_actions::<UiComboBoxChanged>();
-    let ui_components = *world.resource::<PixivUiComponents>();
 
     for event in combo_events {
         if event.action.combo != ui_components.locale_combo {
@@ -376,6 +390,8 @@ pub(super) fn drain_ui_actions_and_dispatch(world: &mut World) {
         );
         set_status(world, format!("{status_prefix} {}", locale_badge(&next)));
     }
+
+    sync_bound_text_inputs(world);
 }
 
 pub(super) fn track_viewport_metrics(

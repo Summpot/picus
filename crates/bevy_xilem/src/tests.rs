@@ -1222,12 +1222,12 @@ fn overlay_actions_toggle_and_select_combo_box() {
     world.insert_resource(UiEventQueue::default());
 
     let overlay_root = world.spawn((UiRoot, crate::UiOverlayRoot)).id();
-    let combo = world
-        .spawn((crate::UiComboBox::new(vec![
-            crate::UiComboOption::new("one", "One"),
-            crate::UiComboOption::new("two", "Two"),
-        ]),))
-        .id();
+    let mut combo_box = crate::UiComboBox::new(vec![
+        crate::UiComboOption::new("one", "One"),
+        crate::UiComboOption::new("two", "Two"),
+    ]);
+    combo_box.selected = 0;
+    let combo = world.spawn((combo_box,)).id();
 
     world
         .resource::<UiEventQueue>()
@@ -1243,6 +1243,26 @@ fn overlay_actions_toggle_and_select_combo_box() {
 
     assert_eq!(dropdowns.len(), 1);
     let dropdown = dropdowns[0];
+    let mut item_query = world.query::<(Entity, &crate::UiDropdownItem, &crate::StyleClass)>();
+    let items = item_query
+        .iter(&world)
+        .filter(|(_, item, _)| item.dropdown == dropdown)
+        .map(|(entity, item, classes)| (entity, *item, classes.clone()))
+        .collect::<Vec<_>>();
+
+    assert_eq!(items.len(), 2);
+    assert!(items.iter().any(|(_, item, classes)| {
+        item.index == 0
+            && classes
+                .0
+                .iter()
+                .any(|class_name| class_name == "overlay.dropdown.item.selected")
+    }));
+
+    let second_item = items
+        .iter()
+        .find_map(|(entity, item, _)| (item.index == 1).then_some(*entity))
+        .expect("second dropdown item should exist");
     assert!(
         world
             .get::<bevy_ecs::hierarchy::ChildOf>(dropdown)
@@ -1263,8 +1283,8 @@ fn overlay_actions_toggle_and_select_combo_box() {
     );
 
     world.resource::<UiEventQueue>().push_typed(
-        dropdown,
-        crate::OverlayUiAction::SelectComboItem { index: 1 },
+        second_item,
+        crate::OverlayUiAction::SelectComboItem { dropdown, index: 1 },
     );
 
     handle_overlay_actions(&mut world);
@@ -1275,6 +1295,7 @@ fn overlay_actions_toggle_and_select_combo_box() {
     assert_eq!(combo_after.selected, 1);
     assert!(!combo_after.is_open);
     assert!(world.get_entity(dropdown).is_err());
+    assert!(world.get_entity(second_item).is_err());
 }
 
 #[test]

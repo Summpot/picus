@@ -1,5 +1,8 @@
 use crate::{
-    ecs::{AnchoredTo, OverlayAnchorRect, OverlayComputedPosition, UiComboBox, UiDropdownMenu},
+    ecs::{
+        AnchoredTo, OverlayAnchorRect, OverlayComputedPosition, UiComboBox, UiDropdownItem,
+        UiDropdownMenu,
+    },
     overlay::OverlayUiAction,
     styling::{
         apply_direct_widget_style, apply_flex_alignment, apply_label_style, apply_widget_style,
@@ -53,6 +56,17 @@ pub(crate) fn estimate_dropdown_viewport_height_px(
     let gap_total = item_gap * item_count.saturating_sub(1) as f64;
     let content_height = per_item * item_count as f64 + gap_total;
     content_height.clamp(per_item, DROPDOWN_MAX_VIEWPORT_HEIGHT)
+}
+
+fn apply_app_i18n_font_stack_if_missing(
+    style: &mut crate::styling::ResolvedStyle,
+    world: &bevy_ecs::world::World,
+) {
+    if style.font_family.is_none()
+        && let Some(stack) = app_i18n_font_stack(world)
+    {
+        style.font_family = Some(stack);
+    }
 }
 
 #[cfg(test)]
@@ -345,16 +359,8 @@ fn combo_box_display_text(combo_box: &UiComboBox, world: &bevy_ecs::world::World
 
 pub(crate) fn project_combo_box(combo_box: &UiComboBox, ctx: ProjectionCtx<'_>) -> UiView {
     let mut style = resolve_style(ctx.world, ctx.entity);
-
-    if (combo_box.placeholder_key.is_some()
-        || combo_box
-            .options
-            .iter()
-            .any(|option| option.label_key.is_some()))
-        && let Some(stack) = app_i18n_font_stack(ctx.world)
-    {
-        style.font_family = Some(stack);
-    }
+    let _ = combo_box;
+    apply_app_i18n_font_stack_if_missing(&mut style, ctx.world);
 
     let selected_label = combo_box_display_text(combo_box, ctx.world);
 
@@ -410,19 +416,7 @@ pub(crate) fn project_dropdown_menu(_: &UiDropdownMenu, ctx: ProjectionCtx<'_>) 
     }
 
     let mut item_style = resolve_style_for_classes(ctx.world, ["overlay.dropdown.item"]);
-
-    let options_have_localized_labels = anchor
-        .and_then(|anchor| ctx.world.get::<UiComboBox>(anchor))
-        .is_some_and(|combo_box| {
-            combo_box
-                .options
-                .iter()
-                .any(|option| option.label_key.is_some())
-        });
-
-    if options_have_localized_labels && let Some(stack) = app_i18n_font_stack(ctx.world) {
-        item_style.font_family = Some(stack);
-    }
+    apply_app_i18n_font_stack_if_missing(&mut item_style, ctx.world);
 
     let translated_options = anchor
         .and_then(|anchor| ctx.world.get::<UiComboBox>(anchor))
@@ -482,20 +476,14 @@ pub(crate) fn project_dropdown_menu(_: &UiDropdownMenu, ctx: ProjectionCtx<'_>) 
     let dropdown_x = computed_position.x;
     let dropdown_y = computed_position.y;
 
-    let items = translated_options
-        .into_iter()
-        .enumerate()
-        .map(|(index, label_text)| {
-            let item_button = ecs_button_with_child(
-                ctx.entity,
-                OverlayUiAction::SelectComboItem { index },
-                apply_label_style(label(label_text), &item_style),
-            )
-            .width(Dim::Stretch);
-
-            apply_direct_widget_style(item_button, &item_style).into_any_flex()
-        })
-        .collect::<Vec<_>>();
+    let items = if computed_position.is_positioned {
+        ctx.children
+            .into_iter()
+            .map(|child| child.into_any_flex())
+            .collect::<Vec<_>>()
+    } else {
+        Vec::new()
+    };
 
     let scrollable_menu = portal(
         apply_flex_alignment(
@@ -516,14 +504,74 @@ pub(crate) fn project_dropdown_menu(_: &UiDropdownMenu, ctx: ProjectionCtx<'_>) 
     Arc::new(dropdown_panel)
 }
 
+pub(crate) fn project_dropdown_item(item: &UiDropdownItem, ctx: ProjectionCtx<'_>) -> UiView {
+    let Some(anchor) = ctx
+        .world
+        .get::<AnchoredTo>(item.dropdown)
+        .map(|anchored| anchored.0)
+    else {
+        return Arc::new(label(""));
+    };
+
+    let Some(combo_box) = ctx.world.get::<UiComboBox>(anchor) else {
+        return Arc::new(label(""));
+    };
+
+    let Some(option) = combo_box.options.get(item.index) else {
+        return Arc::new(label(""));
+    };
+
+    let is_selected = combo_box.clamped_selected() == Some(item.index);
+    let mut item_style = resolve_style(ctx.world, ctx.entity);
+    apply_app_i18n_font_stack_if_missing(&mut item_style, ctx.world);
+
+    let icon_color = item_style
+        .colors
+        .text
+        .unwrap_or(xilem::Color::from_rgb8(0xE7, 0xEC, 0xF8));
+    let indicator = vector_icon(
+        VectorIcon::Check,
+        14.0,
+        if is_selected {
+            icon_color
+        } else {
+            xilem::Color::from_rgba8(0, 0, 0, 0)
+        },
+    );
+    let label_text = translate_text(ctx.world, option.label_key.as_deref(), &option.label);
+
+    let content = flex_row(vec![
+        indicator.into_any_flex(),
+        apply_label_style(label(label_text), &item_style)
+            .flex(1.0)
+            .into_any_flex(),
+    ])
+    .cross_axis_alignment(CrossAxisAlignment::Center)
+    .gap(Length::px(8.0));
+
+    Arc::new(apply_direct_widget_style(
+        ecs_button_with_child(
+            ctx.entity,
+            OverlayUiAction::SelectComboItem {
+                dropdown: item.dropdown,
+                index: item.index,
+            },
+            content,
+        )
+        .width(Dim::Stretch),
+        &item_style,
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
         DROPDOWN_MAX_VIEWPORT_HEIGHT, OverlayAnchorRect, UiComboBox, UiDropdownPlacement,
-        combo_box_display_text, estimate_dropdown_surface_width_px,
-        estimate_dropdown_viewport_height_px, select_dropdown_origin,
+        apply_app_i18n_font_stack_if_missing, combo_box_display_text,
+        estimate_dropdown_surface_width_px, estimate_dropdown_viewport_height_px,
+        select_dropdown_origin,
     };
-    use crate::UiComboOption;
+    use crate::{AppI18n, UiComboOption, styling::ResolvedStyle};
 
     #[test]
     fn dropdown_width_estimation_respects_anchor_min_width() {
@@ -637,5 +685,40 @@ mod tests {
             UiComboBox::new(vec![UiComboOption::new("one", "One")]).with_placeholder("Pick one");
 
         assert_eq!(combo_box_display_text(&combo, &world), "Pick one");
+    }
+
+    #[test]
+    fn app_i18n_font_stack_is_applied_to_dropdown_styles_when_missing() {
+        let mut world = bevy_ecs::world::World::new();
+        let mut i18n = AppI18n::default();
+        i18n.default_font_stack = vec!["Noto Sans CJK SC".to_string(), "sans-serif".to_string()];
+        world.insert_resource(i18n);
+
+        let mut style = ResolvedStyle::default();
+        apply_app_i18n_font_stack_if_missing(&mut style, &world);
+
+        assert_eq!(
+            style.font_family,
+            Some(vec![
+                "Noto Sans CJK SC".to_string(),
+                "sans-serif".to_string()
+            ])
+        );
+    }
+
+    #[test]
+    fn explicit_dropdown_font_stack_is_preserved() {
+        let mut world = bevy_ecs::world::World::new();
+        let mut i18n = AppI18n::default();
+        i18n.default_font_stack = vec!["Noto Sans CJK JP".to_string(), "sans-serif".to_string()];
+        world.insert_resource(i18n);
+
+        let mut style = ResolvedStyle {
+            font_family: Some(vec!["lucide".to_string()]),
+            ..ResolvedStyle::default()
+        };
+        apply_app_i18n_font_stack_if_missing(&mut style, &world);
+
+        assert_eq!(style.font_family, Some(vec!["lucide".to_string()]));
     }
 }

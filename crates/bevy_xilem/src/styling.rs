@@ -2411,6 +2411,10 @@ pub fn apply_label_style(view: Label, style: &ResolvedStyle) -> impl WidgetView<
         .line_break_mode(LineBreaking::WordWrap)
 }
 
+fn placeholder_color_from_style(style: &ResolvedStyle) -> Color {
+    style.colors.text.unwrap_or(Color::WHITE).with_alpha(0.72)
+}
+
 /// Apply text + box styling to a text input view.
 pub fn apply_text_input_style(
     view: TextInput<(), ()>,
@@ -2423,9 +2427,56 @@ pub fn apply_text_input_style(
         styled = styled.font(font_stack);
     }
     if let Some(text_color) = style.colors.text {
-        styled = styled.text_color(text_color);
+        return styled
+            .text_color(text_color)
+            .placeholder_color(placeholder_color_from_style(style));
     }
-    styled
+
+    styled.placeholder_color(placeholder_color_from_style(style))
+}
+
+/// Apply text-input styling directly on the widget itself.
+pub fn apply_direct_text_input_style(
+    view: TextInput<(), ()>,
+    style: &ResolvedStyle,
+) -> impl WidgetView<(), ()> {
+    let scale = style.layout.scale.max(0.01);
+    let mut styled = view
+        .text_size(style.text.size)
+        .text_alignment(map_text_alignment(style.text.text_align));
+    if let Some(font_stack) = font_stack_from_style(style) {
+        styled = styled.font(font_stack);
+    }
+    if let Some(text_color) = style.colors.text {
+        return transformed(
+            styled
+                .text_color(text_color)
+                .placeholder_color(placeholder_color_from_style(style))
+                .padding(style.layout.padding)
+                .corner_radius(style.layout.corner_radius)
+                .border(
+                    style.colors.border.unwrap_or(Color::TRANSPARENT),
+                    style.layout.border_width,
+                )
+                .background_color(style.colors.bg.unwrap_or(Color::TRANSPARENT))
+                .box_shadow(style.box_shadow.unwrap_or_default()),
+        )
+        .scale(scale);
+    }
+
+    transformed(
+        styled
+            .placeholder_color(placeholder_color_from_style(style))
+            .padding(style.layout.padding)
+            .corner_radius(style.layout.corner_radius)
+            .border(
+                style.colors.border.unwrap_or(Color::TRANSPARENT),
+                style.layout.border_width,
+            )
+            .background_color(style.colors.bg.unwrap_or(Color::TRANSPARENT))
+            .box_shadow(style.box_shadow.unwrap_or_default()),
+    )
+    .scale(scale)
 }
 
 #[derive(Debug, Deserialize)]

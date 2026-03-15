@@ -7,7 +7,7 @@ use bevy_ecs::{
 };
 use bevy_input::{
     ButtonState,
-    keyboard::{KeyCode, KeyboardInput},
+    keyboard::{Key as BevyKey, KeyCode, KeyboardInput},
     mouse::{MouseButton, MouseButtonInput, MouseScrollUnit, MouseWheel},
 };
 #[cfg(test)]
@@ -25,7 +25,7 @@ use masonry::{
         Handled, PointerButton, PointerButtonEvent, PointerEvent, PointerId, PointerInfo,
         PointerScrollEvent, PointerState, PointerType, PointerUpdate, ScrollDelta, TextEvent,
         Widget, WidgetId, WidgetRef, WindowEvent,
-        keyboard::{Key, KeyState, NamedKey},
+        keyboard::{Key, KeyState, Modifiers, NamedKey},
     },
     dpi::{PhysicalPosition, PhysicalSize},
     peniko::Color,
@@ -87,6 +87,7 @@ pub struct MasonryRuntime {
     window_scale_factor: f64,
     pointer_info: PointerInfo,
     pointer_state: PointerState,
+    keyboard_modifiers: Modifiers,
     viewport_width: f64,
     viewport_height: f64,
     window_surface: Option<ExternalWindowSurface>,
@@ -146,6 +147,7 @@ impl FromWorld for MasonryRuntime {
                 pointer_type: PointerType::Mouse,
             },
             pointer_state: PointerState::default(),
+            keyboard_modifiers: Modifiers::empty(),
             viewport_width: initial_viewport.0,
             viewport_height: initial_viewport.1,
             window_surface: None,
@@ -718,6 +720,35 @@ fn map_named_key_from_key_code(key_code: KeyCode) -> Option<NamedKey> {
     }
 }
 
+fn map_text_key_from_logical_key(key: &BevyKey) -> Option<Key> {
+    match key {
+        BevyKey::Character(text) => Some(Key::Character(text.clone().into())),
+        BevyKey::Space => Some(Key::Character(" ".into())),
+        _ => None,
+    }
+}
+
+fn modifier_from_logical_key(key: &BevyKey) -> Option<Modifiers> {
+    match key {
+        BevyKey::Alt | BevyKey::AltGraph => Some(Modifiers::ALT),
+        BevyKey::Control => Some(Modifiers::CONTROL),
+        BevyKey::Shift => Some(Modifiers::SHIFT),
+        BevyKey::Meta | BevyKey::Super => Some(Modifiers::META),
+        _ => None,
+    }
+}
+
+fn update_modifiers_from_logical_key(modifiers: &mut Modifiers, key: &BevyKey, state: ButtonState) {
+    let Some(next) = modifier_from_logical_key(key) else {
+        return;
+    };
+
+    match state {
+        ButtonState::Pressed => modifiers.insert(next),
+        ButtonState::Released => modifiers.remove(next),
+    }
+}
+
 /// PreUpdate input bridge: consume Bevy window/input messages and inject them into Masonry.
 pub fn inject_bevy_input_into_masonry(
     runtime: Option<NonSendMut<MasonryRuntime>>,
@@ -816,28 +847,28 @@ pub fn inject_bevy_input_into_masonry(
             continue;
         }
 
-        if let Some(named_key) = map_named_key_from_key_code(event.key_code) {
-            runtime.handle_text_event(
-                primary_window_entity,
-                TextEvent::Keyboard(masonry::core::KeyboardEvent {
-                    state: map_button_state_to_key_state(event.state),
-                    key: Key::Named(named_key),
-                    repeat: event.repeat,
-                    ..Default::default()
-                }),
-            );
-        }
+        update_modifiers_from_logical_key(
+            &mut runtime.keyboard_modifiers,
+            &event.logical_key,
+            event.state,
+        );
 
-        if event.key_code == KeyCode::Space {
+        if let Some(key) = map_named_key_from_key_code(event.key_code)
+            .map(Key::Named)
+            .or_else(|| map_text_key_from_logical_key(&event.logical_key))
+        {
+            let keyboard_modifiers = runtime.keyboard_modifiers;
             runtime.handle_text_event(
                 primary_window_entity,
                 TextEvent::Keyboard(masonry::core::KeyboardEvent {
                     state: map_button_state_to_key_state(event.state),
-                    key: Key::Character(" ".into()),
+                    key,
                     repeat: event.repeat,
+                    modifiers: keyboard_modifiers,
                     ..Default::default()
                 }),
             );
+            continue;
         }
 
         if event.state == ButtonState::Pressed
@@ -1074,4 +1105,32 @@ pub fn paint_masonry_ui(
             window.request_redraw();
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn logical_character_keys_map_to_text_keys() {
+        assert!(matches!(
+            map_text_key_from_logical_key(&BevyKey::Character("骨".into())),
+            Some(Key::Character(text)) if text.as_str() == "骨"
+        ));
+        assert!(matches!(
+            map_text_key_from_logical_key(&BevyKey::Space),
+            Some(Key::Character(text)) if text.as_str() == " "
+        ));
+    }
+
+    #[test]
+    fn modifier_tracking_maps_super_to_meta() {
+        let mut modifiers = Modifiers::empty();
+
+        update_modifiers_from_logical_key(&mut modifiers, &BevyKey::Super, ButtonState::Pressed);
+        assert!(modifiers.meta());
+
+        update_modifiers_from_logical_key(&mut modifiers, &BevyKey::Super, ButtonState::Released);
+        assert!(!modifiers.meta());
+    }
 }

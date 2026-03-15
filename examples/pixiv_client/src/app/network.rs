@@ -281,6 +281,8 @@ pub(super) fn apply_network_results(world: &mut World) {
             }
         }
     }
+
+    sync_bound_text_inputs(world);
 }
 
 pub(super) fn spawn_image_tasks(world: &mut World) {

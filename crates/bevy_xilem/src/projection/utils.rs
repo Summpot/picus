@@ -14,6 +14,7 @@ use xilem_masonry::view::{label, sized_box};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum VectorIcon {
+    Check,
     ChevronDown,
     ChevronUp,
     ChevronRight,
@@ -24,6 +25,7 @@ pub(crate) enum VectorIcon {
 
 pub(crate) fn vector_icon(icon: VectorIcon, size_px: f64, color: xilem::Color) -> UiView {
     let lucide_icon = match icon {
+        VectorIcon::Check => BevyXilemIcon::Check,
         VectorIcon::ChevronDown => BevyXilemIcon::ChevronDown,
         VectorIcon::ChevronUp => BevyXilemIcon::ChevronUp,
         VectorIcon::ChevronRight => BevyXilemIcon::ChevronRight,

@@ -54,9 +54,9 @@ fn button_from_style(
     label_text: impl Into<String>,
     style: &ResolvedStyle,
 ) -> UiView {
-    let text_color = style.colors.text.unwrap_or(Color::WHITE);
+    let label_text = label_text.into();
     Arc::new(apply_direct_widget_style(
-        button(entity, action, label_text.into()).color(text_color),
+        button_with_child(entity, action, apply_label_style(label(label_text), style)),
         style,
     ))
 }
@@ -299,9 +299,13 @@ pub(super) fn project_main_column(_: &PixivMainColumn, ctx: ProjectionCtx<'_>) -
 
 pub(super) fn project_auth_panel(_: &PixivAuthPanel, ctx: ProjectionCtx<'_>) -> UiView {
     let style = resolve_style(ctx.world, ctx.entity);
-    let input_style = resolve_style_for_classes(ctx.world, ["pixiv.root"]);
+    let text_style = resolve_style_for_classes(ctx.world, ["pixiv.root"]);
     let auth = ctx.world.resource::<AuthState>();
     let ui_components = *ctx.world.resource::<PixivUiComponents>();
+    let mut children = ctx.children.into_iter();
+    let code_verifier_input = children.next().unwrap_or_else(empty_ui);
+    let auth_code_input = children.next().unwrap_or_else(empty_ui);
+    let refresh_token_input = children.next().unwrap_or_else(empty_ui);
     let auth_endpoint = auth
         .idp_urls
         .as_ref()
@@ -316,35 +320,15 @@ pub(super) fn project_auth_panel(_: &PixivAuthPanel, ctx: ProjectionCtx<'_>) -> 
                 tr(ctx.world, "pixiv.auth.endpoint", "Auth endpoint:"),
                 auth_endpoint
             )),
-            &input_style,
+            &text_style,
         )
         .into_any_flex(),
-        sized_box(apply_text_input_style(
-            text_input(
-                ctx.entity,
-                auth.code_verifier_input.clone(),
-                AppAction::SetCodeVerifier,
-            )
-            .placeholder(tr(
-                ctx.world,
-                "pixiv.auth.placeholder.pkce",
-                "PKCE code_verifier",
-            )),
-            &input_style,
-        ))
-        .width(Dim::Stretch)
-        .into_any_flex(),
-        sized_box(apply_text_input_style(
-            text_input(
-                ctx.entity,
-                auth.auth_code_input.clone(),
-                AppAction::SetAuthCode,
-            )
-            .placeholder(tr(ctx.world, "pixiv.auth.placeholder.code", "Auth code")),
-            &input_style,
-        ))
-        .width(Dim::Stretch)
-        .into_any_flex(),
+        sized_box(code_verifier_input)
+            .width(Dim::Stretch)
+            .into_any_flex(),
+        sized_box(auth_code_input)
+            .width(Dim::Stretch)
+            .into_any_flex(),
         action_button(
             ctx.world,
             ui_components.open_browser_login,
@@ -363,21 +347,9 @@ pub(super) fn project_auth_panel(_: &PixivAuthPanel, ctx: ProjectionCtx<'_>) -> 
             tr(ctx.world, "pixiv.auth.login_auth_code", "Login (auth_code)"),
         )
         .into_any_flex(),
-        sized_box(apply_text_input_style(
-            text_input(
-                ctx.entity,
-                auth.refresh_token_input.clone(),
-                AppAction::SetRefreshToken,
-            )
-            .placeholder(tr(
-                ctx.world,
-                "pixiv.auth.placeholder.refresh_token",
-                "Refresh token",
-            )),
-            &input_style,
-        ))
-        .width(Dim::Stretch)
-        .into_any_flex(),
+        sized_box(refresh_token_input)
+            .width(Dim::Stretch)
+            .into_any_flex(),
         action_button(
             ctx.world,
             ui_components.refresh_token,
@@ -398,6 +370,7 @@ pub(super) fn project_auth_panel(_: &PixivAuthPanel, ctx: ProjectionCtx<'_>) -> 
 pub(super) fn project_response_panel(_: &PixivResponsePanel, ctx: ProjectionCtx<'_>) -> UiView {
     let ui_components = *ctx.world.resource::<PixivUiComponents>();
     let panel = ctx.world.resource::<ResponsePanelState>();
+    let text_style = resolve_style_for_classes(ctx.world, ["pixiv.root"]);
 
     if panel.content.trim().is_empty() {
         return empty_ui();
@@ -409,11 +382,12 @@ pub(super) fn project_response_panel(_: &PixivResponsePanel, ctx: ProjectionCtx<
         .map(std::string::ToString::to_string)
         .collect::<Vec<_>>();
     let lines = Arc::new(lines);
+    let line_style = text_style.clone();
     let line_count = i64::try_from(lines.len()).unwrap_or(i64::MAX);
 
     Arc::new(
         flex_col((
-            label(panel.title.clone()).into_any_flex(),
+            apply_label_style(label(panel.title.clone()), &text_style).into_any_flex(),
             flex_row((
                 action_button(
                     ctx.world,
@@ -433,9 +407,13 @@ pub(super) fn project_response_panel(_: &PixivResponsePanel, ctx: ProjectionCtx<
             .into_any_flex(),
             sized_box(virtual_scroll(0..line_count, {
                 let lines = Arc::clone(&lines);
+                let line_style = line_style.clone();
                 move |_, idx| {
                     let row_idx = usize::try_from(idx).unwrap_or(0);
-                    Arc::new(label(lines.get(row_idx).cloned().unwrap_or_default())) as UiView
+                    Arc::new(apply_label_style(
+                        label(lines.get(row_idx).cloned().unwrap_or_default()),
+                        &line_style,
+                    )) as UiView
                 }
             }))
             .dims((Dim::Stretch, Length::px(RESPONSE_PANEL_HEIGHT)))
@@ -453,20 +431,11 @@ pub(super) fn project_search_panel(_: &PixivSearchPanel, ctx: ProjectionCtx<'_>)
     }
 
     let ui_components = *ctx.world.resource::<PixivUiComponents>();
-    let input_style = resolve_style_for_classes(ctx.world, ["pixiv.root"]);
+    let search_input = ctx.children.into_iter().next().unwrap_or_else(empty_ui);
 
     Arc::new(
         flex_row((
-            apply_text_input_style(
-                text_input(ctx.entity, ui.search_text.clone(), AppAction::SetSearchText)
-                    .placeholder(tr(
-                        ctx.world,
-                        "pixiv.search.placeholder",
-                        "Search illust keyword",
-                    )),
-                &input_style,
-            )
-            .flex(1.0),
+            search_input.flex(1.0),
             action_button(
                 ctx.world,
                 ui_components.search_submit,
@@ -482,11 +451,15 @@ pub(super) fn project_search_panel(_: &PixivSearchPanel, ctx: ProjectionCtx<'_>)
 
 pub(super) fn project_home_feed(_: &PixivHomeFeed, ctx: ProjectionCtx<'_>) -> UiView {
     if ctx.children.is_empty() {
-        return Arc::new(label(tr(
-            ctx.world,
-            "pixiv.feed.empty",
-            "No data yet. Login first, then switch tabs.",
-        )));
+        let style = resolve_style_for_classes(ctx.world, ["pixiv.root"]);
+        return Arc::new(apply_label_style(
+            label(tr(
+                ctx.world,
+                "pixiv.feed.empty",
+                "No data yet. Login first, then switch tabs.",
+            )),
+            &style,
+        ));
     }
 
     let ui = ctx.world.resource::<UiState>();
@@ -747,22 +720,28 @@ pub(super) fn project_detail_overlay(_: &PixivDetailOverlay, ctx: ProjectionCtx<
                 ))
                 .into_any_flex(),
                 hero.into_any_flex(),
-                label(illust.title.clone()).into_any_flex(),
-                label(format!(
-                    "{} {}",
-                    tr(ctx.world, "pixiv.overlay.author", "Author:"),
-                    illust.user.name
-                ))
+                apply_label_style(label(illust.title.clone()), &style).into_any_flex(),
+                apply_label_style(
+                    label(format!(
+                        "{} {}",
+                        tr(ctx.world, "pixiv.overlay.author", "Author:"),
+                        illust.user.name
+                    )),
+                    &style,
+                )
                 .into_any_flex(),
-                label(format!(
-                    "{} {}  {} {}  {} {}",
-                    tr(ctx.world, "pixiv.overlay.views", "Views"),
-                    illust.total_view,
-                    tr(ctx.world, "pixiv.overlay.bookmarks", "Bookmarks"),
-                    illust.total_bookmarks,
-                    tr(ctx.world, "pixiv.overlay.comments", "Comments"),
-                    illust.total_comments
-                ))
+                apply_label_style(
+                    label(format!(
+                        "{} {}  {} {}  {} {}",
+                        tr(ctx.world, "pixiv.overlay.views", "Views"),
+                        illust.total_view,
+                        tr(ctx.world, "pixiv.overlay.bookmarks", "Bookmarks"),
+                        illust.total_bookmarks,
+                        tr(ctx.world, "pixiv.overlay.comments", "Comments"),
+                        illust.total_comments
+                    )),
+                    &style,
+                )
                 .into_any_flex(),
                 apply_label_style(label(tr(ctx.world, "pixiv.overlay.tags", "Tags")), &style)
                     .into_any_flex(),

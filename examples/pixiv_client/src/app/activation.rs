@@ -88,6 +88,8 @@ fn process_activation_uri(world: &mut World, uri: &str) {
         "pixiv.status.activation_exchange_started",
         "Received pixiv callback. Exchanging auth code automatically…",
     );
+
+    sync_bound_text_inputs(world);
 }
 
 pub(super) fn poll_activation_messages(world: &mut World) {

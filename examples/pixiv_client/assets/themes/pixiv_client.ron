@@ -112,6 +112,27 @@
       ),
     ),
     (
+      selector: Class("pixiv.text-input"),
+      setter: (
+        layout: (
+          padding: Var("space-sm"),
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          bg: Var("surface-subtle"),
+          hover_bg: Var("surface-subtle-hover"),
+          pressed_bg: Var("surface-subtle-pressed"),
+          border: Var("border-default"),
+          text: Var("text-primary"),
+        ),
+        text: (
+          size: Var("text-sm"),
+        ),
+        transition: Var("duration-fast"),
+      ),
+    ),
+    (
       selector: Class("pixiv.button"),
       setter: (
         layout: (

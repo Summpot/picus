@@ -103,6 +103,13 @@ impl UiComboBox {
 #[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct UiDropdownMenu;
 
+/// A selectable option row rendered inside a [`UiDropdownMenu`].
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
+pub struct UiDropdownItem {
+    pub dropdown: Entity,
+    pub index: usize,
+}
+
 /// Emitted when a [`UiComboBox`] selection changes.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UiComboBoxChanged {
@@ -160,6 +167,12 @@ impl UiComponentTemplate for UiComboBox {
 impl UiComponentTemplate for UiDropdownMenu {
     fn project(component: &Self, ctx: ProjectionCtx<'_>) -> UiView {
         crate::projection::dropdown::project_dropdown_menu(component, ctx)
+    }
+}
+
+impl UiComponentTemplate for UiDropdownItem {
+    fn project(component: &Self, ctx: ProjectionCtx<'_>) -> UiView {
+        crate::projection::dropdown::project_dropdown_item(component, ctx)
     }
 }
 

@@ -11,6 +11,7 @@ pub const LUCIDE_FONT_BYTES: &[u8] = lucide_icons::LUCIDE_FONT_BYTES;
 /// Narrow icon set currently used by `bevy_xilem` built-in widgets.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum BevyXilemIcon {
+    Check,
     ChevronDown,
     ChevronUp,
     ChevronRight,
@@ -23,6 +24,7 @@ impl BevyXilemIcon {
     #[must_use]
     pub const fn as_lucide(self) -> lucide_icons::Icon {
         match self {
+            Self::Check => lucide_icons::Icon::Check,
             Self::ChevronDown => lucide_icons::Icon::ChevronDown,
             Self::ChevronUp => lucide_icons::Icon::ChevronUp,
             Self::ChevronRight => lucide_icons::Icon::ChevronRight,

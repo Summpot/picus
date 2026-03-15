@@ -19,7 +19,7 @@ use crate::{
     AnchoredTo, AppI18n, AutoDismiss, OverlayAnchorRect, OverlayComputedPosition, OverlayConfig,
     OverlayPlacement, OverlayStack, OverlayState, StopUiPointerPropagation, UiColorPicker,
     UiColorPickerChanged, UiColorPickerPanel, UiComboBox, UiComboBoxChanged, UiDatePicker,
-    UiDatePickerChanged, UiDatePickerPanel, UiDialog, UiDropdownMenu, UiEventQueue,
+    UiDatePickerChanged, UiDatePickerPanel, UiDialog, UiDropdownItem, UiDropdownMenu, UiEventQueue,
     UiInteractionEvent, UiMenuBarItem, UiMenuItemPanel, UiMenuItemSelected, UiOverlayRoot,
     UiPointerEvent, UiPointerHitEvent, UiRoot, UiThemePicker, UiThemePickerChanged,
     UiThemePickerMenu, UiToast, UiTooltip,
@@ -39,7 +39,7 @@ const DIALOG_SURFACE_MAX_WIDTH: f64 = 400.0;
 pub enum OverlayUiAction {
     DismissDialog,
     ToggleCombo,
-    SelectComboItem { index: usize },
+    SelectComboItem { dropdown: Entity, index: usize },
     DismissDropdown,
     ToggleThemePicker,
     SelectThemePickerItem { index: usize },
@@ -246,6 +246,31 @@ fn close_dropdown(world: &mut World, dropdown_entity: Entity) {
         && let Some(mut combo_box) = world.get_mut::<UiComboBox>(anchor)
     {
         combo_box.is_open = false;
+    }
+}
+
+fn spawn_dropdown_items(world: &mut World, dropdown_entity: Entity, combo_entity: Entity) {
+    let Some(combo_box) = world.get::<UiComboBox>(combo_entity) else {
+        return;
+    };
+
+    let selected = combo_box.clamped_selected();
+    let item_count = combo_box.options.len();
+
+    for index in 0..item_count {
+        let mut classes = vec!["overlay.dropdown.item".to_string()];
+        if selected == Some(index) {
+            classes.push("overlay.dropdown.item.selected".to_string());
+        }
+
+        world.spawn((
+            UiDropdownItem {
+                dropdown: dropdown_entity,
+                index,
+            },
+            crate::StyleClass(classes),
+            ChildOf(dropdown_entity),
+        ));
     }
 }
 
@@ -741,7 +766,7 @@ pub fn handle_overlay_actions(world: &mut World) {
                 let placement = combo.dropdown_placement;
                 let auto_flip = combo.auto_flip_placement;
 
-                spawn_in_overlay_root(
+                let dropdown = spawn_in_overlay_root(
                     world,
                     (
                         UiDropdownMenu,
@@ -760,16 +785,20 @@ pub fn handle_overlay_actions(world: &mut World) {
                     ),
                 );
 
+                spawn_dropdown_items(world, dropdown, event.entity);
+
                 if let Some(mut combo_box) = world.get_mut::<UiComboBox>(event.entity) {
                     combo_box.is_open = true;
                 }
             }
-            action @ OverlayUiAction::SelectComboItem { index } => {
+            action @ OverlayUiAction::SelectComboItem { dropdown, index } => {
                 tracing::info!("ComboBox Item Clicked: {:?}", action);
 
-                let Some(anchor) = world
-                    .get::<AnchoredTo>(event.entity)
-                    .map(|anchored| anchored.0)
+                if world.get_entity(dropdown).is_err() {
+                    continue;
+                }
+
+                let Some(anchor) = world.get::<AnchoredTo>(dropdown).map(|anchored| anchored.0)
                 else {
                     continue;
                 };
@@ -793,9 +822,7 @@ pub fn handle_overlay_actions(world: &mut World) {
                         .push_typed(anchor, changed_event);
                 }
 
-                if world.get_entity(event.entity).is_ok() {
-                    close_dropdown(world, event.entity);
-                }
+                close_dropdown(world, dropdown);
             }
             OverlayUiAction::DismissDropdown => {
                 if world.get_entity(event.entity).is_ok()

@@ -134,6 +134,7 @@ pub fn register_builtin_ui_components(app: &mut App) {
         .register_ui_component::<dialog::UiDialog>()
         .register_ui_component::<combo_box::UiComboBox>()
         .register_ui_component::<combo_box::UiDropdownMenu>()
+        .register_ui_component::<combo_box::UiDropdownItem>()
         .register_ui_component::<radio_group::UiRadioGroup>()
         .register_ui_component::<scroll_view::UiScrollView>()
         .register_ui_component::<tab_bar::UiTabBar>()

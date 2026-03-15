@@ -18,6 +18,13 @@ From workspace root:
 
 - `cargo run -p pixiv_client`
 
+## macOS deep-link bundle metadata
+
+- `Info.plist` source for registering the `pixiv:` URL scheme lives at `examples/pixiv_client/Info.plist`.
+- The running app listens for callback URIs through the activation bridge and drains pending URIs on the UI thread, similar to Pixeval’s `ProtocolActivationHub` pattern.
+- `embed_plist` is no longer used here. If you package the example as a macOS `.app`, keep `Info.plist` as the bundle metadata source so Launch Services can register `pixiv://account/login?...` for the app bundle.
+- For local development outside a bundled `.app`, protocol registration and callback forwarding are still handled by `bevy_xilem_activation`.
+
 ## Login Guide (English)
 
 ### Option A: Open browser directly (recommended)
