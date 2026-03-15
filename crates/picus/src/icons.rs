@@ -8,9 +8,9 @@ pub const LUCIDE_FONT_FAMILY: &str = "lucide";
 /// Raw TrueType bytes for Lucide glyph rendering.
 pub const LUCIDE_FONT_BYTES: &[u8] = lucide_icons::LUCIDE_FONT_BYTES;
 
-/// Narrow icon set currently used by `bevy_xilem` built-in widgets.
+/// Narrow icon set currently used by `picus` built-in widgets.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum BevyXilemIcon {
+pub enum PicusIcon {
     Check,
     ChevronDown,
     ChevronUp,
@@ -20,7 +20,7 @@ pub enum BevyXilemIcon {
     SunMoon,
 }
 
-impl BevyXilemIcon {
+impl PicusIcon {
     #[must_use]
     pub const fn as_lucide(self) -> lucide_icons::Icon {
         match self {

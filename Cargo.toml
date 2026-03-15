@@ -1,9 +1,9 @@
 [workspace]
 resolver = "2"
 members = [
-	"crates/bevy_xilem-surface",
-	"crates/bevy_xilem-activation",
-	"crates/bevy_xilem",
+	"crates/picus-surface",
+	"crates/picus-activation",
+	"crates/picus",
 	"examples/async_downloader",
 	"examples/calculator",
 	"examples/chess_game",
@@ -58,7 +58,7 @@ lucide-icons = "0.575.0"
 app-single-instance = "0.1.0"
 ipc-channel = "0.21.0"
 
-bevy_xilem-surface = { path = "crates/bevy_xilem-surface" }
+picus-surface = { path = "crates/picus-surface" }
 
 [patch.crates-io]
 bevy = { path = "third_party/bevy" }

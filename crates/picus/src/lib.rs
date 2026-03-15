@@ -1,6 +1,6 @@
 //! Bevy + Xilem/Masonry integration with ECS-driven UI projection.
 //!
-//! `bevy_xilem` lets you:
+//! `picus` lets you:
 //! - register ECS UI components through [`UiComponentTemplate`],
 //! - collect typed UI actions through [`UiEventQueue`],
 //! - synthesize and rebuild a retained Masonry tree every frame.
@@ -10,8 +10,8 @@
 //! ```no_run
 //! use std::sync::Arc;
 //!
-//! use bevy_xilem::{
-//!     AppBevyXilemExt, BevyXilemPlugin, ProjectionCtx, UiComponentTemplate, UiEventQueue, UiRoot,
+//! use picus::{
+//!     AppPicusExt, PicusPlugin, ProjectionCtx, UiComponentTemplate, UiEventQueue, UiRoot,
 //!     UiView,
 //!     bevy_app::{App, PreUpdate, Startup},
 //!     bevy_ecs::prelude::*,
@@ -41,7 +41,7 @@
 //! }
 //!
 //! let mut app = App::new();
-//! app.add_plugins(BevyXilemPlugin)
+//! app.add_plugins(PicusPlugin)
 //!     .register_ui_component::<Root>()
 //!     .add_systems(Startup, setup)
 //!     .add_systems(PreUpdate, drain);
@@ -99,24 +99,24 @@ pub use views::*;
 pub use widget_actions::*;
 
 pub mod prelude {
-    //! Convenience exports for building `bevy_xilem` apps.
+    //! Convenience exports for building `picus` apps.
 
     pub use bevy_ecs::hierarchy::{ChildOf, Children};
 
     pub use crate::{
-        AppBevyXilemExt, AppI18n, AutoDismiss, BevyWindowOptions, BevyXilemBuiltinsPlugin,
-        BevyXilemPlugin, BuiltinUiAction, ColorStyle, ComputedStyle, CurrentColorStyle,
-        EcsButtonView, HasTooltip, InlineStyle, InteractionState, LayoutStyle, LocalizeText,
-        MasonryRuntime, OverlayComputedPosition, OverlayConfig, OverlayMouseButtonCursor,
-        OverlayPlacement, OverlayPointerRoutingState, OverlayStack, OverlayState, OverlayUiAction,
-        ProjectionCtx, PseudoClass, ScrollAxis, Selector, SplitDirection, StopUiPointerPropagation,
-        StyleClass, StyleDirty, StyleRule, StyleSetter, StyleSheet, StyleTransition,
-        SyncAssetSource, SyncTextSource, SynthesizedUiViews, TargetColorStyle, TextStyle,
-        ToastKind, TypedUiEvent, UiAnyView, UiButton, UiCheckbox, UiCheckboxChanged, UiColorPicker,
-        UiColorPickerChanged, UiColorPickerPanel, UiComboBox, UiComboBoxChanged, UiComboOption,
-        UiComponentTemplate, UiDatePicker, UiDatePickerChanged, UiDatePickerPanel, UiDialog,
-        UiDropdownItem, UiDropdownMenu, UiDropdownPlacement, UiEvent, UiEventQueue, UiFlexColumn,
-        UiFlexRow, UiGroupBox, UiInteractionEvent, UiLabel, UiMenuBar, UiMenuBarItem, UiMenuItem,
+        AppI18n, AppPicusExt, AutoDismiss, BevyWindowOptions, BuiltinUiAction, ColorStyle,
+        ComputedStyle, CurrentColorStyle, EcsButtonView, HasTooltip, InlineStyle, InteractionState,
+        LayoutStyle, LocalizeText, MasonryRuntime, OverlayComputedPosition, OverlayConfig,
+        OverlayMouseButtonCursor, OverlayPlacement, OverlayPointerRoutingState, OverlayStack,
+        OverlayState, OverlayUiAction, PicusBuiltinsPlugin, PicusPlugin, ProjectionCtx,
+        PseudoClass, ScrollAxis, Selector, SplitDirection, StopUiPointerPropagation, StyleClass,
+        StyleDirty, StyleRule, StyleSetter, StyleSheet, StyleTransition, SyncAssetSource,
+        SyncTextSource, SynthesizedUiViews, TargetColorStyle, TextStyle, ToastKind, TypedUiEvent,
+        UiAnyView, UiButton, UiCheckbox, UiCheckboxChanged, UiColorPicker, UiColorPickerChanged,
+        UiColorPickerPanel, UiComboBox, UiComboBoxChanged, UiComboOption, UiComponentTemplate,
+        UiDatePicker, UiDatePickerChanged, UiDatePickerPanel, UiDialog, UiDropdownItem,
+        UiDropdownMenu, UiDropdownPlacement, UiEvent, UiEventQueue, UiFlexColumn, UiFlexRow,
+        UiGroupBox, UiInteractionEvent, UiLabel, UiMenuBar, UiMenuBarItem, UiMenuItem,
         UiMenuItemPanel, UiMenuItemSelected, UiOverlayRoot, UiPointerEvent, UiPointerHitEvent,
         UiPointerPhase, UiProjector, UiProjectorRegistry, UiRadioGroup, UiRadioGroupChanged,
         UiRoot, UiScrollView, UiScrollViewChanged, UiSlider, UiSliderChanged, UiSpinner,

@@ -3,9 +3,21 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use bevy_xilem::{
-    AppBevyXilemExt, BevyXilemPlugin, ProjectionCtx, StyleClass, UiEventQueue, UiRoot,
-    UiThemePicker, UiView, apply_label_style, apply_widget_style,
+use masonry::{
+    accesskit::{Node, Role},
+    core::{
+        AccessCtx, AccessEvent, ChildrenIds, EventCtx, FromDynWidget, LayoutCtx, MeasureCtx,
+        NewWidget, PaintCtx, PointerEvent, PropertiesMut, PropertiesRef, RegisterCtx, TextEvent,
+        Widget, WidgetMut, WidgetPod,
+        keyboard::{Key, NamedKey},
+    },
+    kurbo::{Axis, Point, Size},
+    layout::LenReq,
+    vello::Scene,
+};
+use picus::{
+    AppPicusExt, PicusPlugin, ProjectionCtx, StyleClass, UiEventQueue, UiRoot, UiThemePicker,
+    UiView, apply_label_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
     bevy_ecs::{hierarchy::ChildOf, prelude::*},
     bevy_input::{ButtonInput, keyboard::KeyCode},
@@ -25,18 +37,6 @@ use bevy_xilem::{
         Pod, ViewCtx, WidgetView,
         core::{MessageCtx, MessageResult, Mut, View, ViewId, ViewMarker, ViewPathTracker},
     },
-};
-use masonry::{
-    accesskit::{Node, Role},
-    core::{
-        AccessCtx, AccessEvent, ChildrenIds, EventCtx, FromDynWidget, LayoutCtx, MeasureCtx,
-        NewWidget, PaintCtx, PointerEvent, PropertiesMut, PropertiesRef, RegisterCtx, TextEvent,
-        Widget, WidgetMut, WidgetPod,
-        keyboard::{Key, NamedKey},
-    },
-    kurbo::{Axis, Point, Size},
-    layout::LenReq,
-    vello::Scene,
 };
 use shared_utils::init_logging;
 
@@ -1255,26 +1255,26 @@ fn apply_keyboard_game_input(world: &mut World) {
     }
 }
 
-bevy_xilem::impl_ui_component_template!(GameRoot, project_game_root);
-bevy_xilem::impl_ui_component_template!(HeaderBlock, project_header_block);
-bevy_xilem::impl_ui_component_template!(ScoreStrip, project_score_strip);
-bevy_xilem::impl_ui_component_template!(ScoreCard, project_score_card);
-bevy_xilem::impl_ui_component_template!(StatusLine, project_status_line);
-bevy_xilem::impl_ui_component_template!(GameFlowRow, project_game_flow_row);
-bevy_xilem::impl_ui_component_template!(BoardContainer, project_board_container);
-bevy_xilem::impl_ui_component_template!(BoardRow, project_board_row);
-bevy_xilem::impl_ui_component_template!(TileCell, project_tile_cell);
-bevy_xilem::impl_ui_component_template!(SidePanel, project_side_panel);
-bevy_xilem::impl_ui_component_template!(UiComponentsPad, project_ui_components_pad);
-bevy_xilem::impl_ui_component_template!(UiComponentsRow, project_ui_components_row);
-bevy_xilem::impl_ui_component_template!(UiComponentButton, project_ui_component_button);
-bevy_xilem::impl_ui_component_template!(HintLine, project_hint_line);
+picus::impl_ui_component_template!(GameRoot, project_game_root);
+picus::impl_ui_component_template!(HeaderBlock, project_header_block);
+picus::impl_ui_component_template!(ScoreStrip, project_score_strip);
+picus::impl_ui_component_template!(ScoreCard, project_score_card);
+picus::impl_ui_component_template!(StatusLine, project_status_line);
+picus::impl_ui_component_template!(GameFlowRow, project_game_flow_row);
+picus::impl_ui_component_template!(BoardContainer, project_board_container);
+picus::impl_ui_component_template!(BoardRow, project_board_row);
+picus::impl_ui_component_template!(TileCell, project_tile_cell);
+picus::impl_ui_component_template!(SidePanel, project_side_panel);
+picus::impl_ui_component_template!(UiComponentsPad, project_ui_components_pad);
+picus::impl_ui_component_template!(UiComponentsRow, project_ui_components_row);
+picus::impl_ui_component_template!(UiComponentButton, project_ui_component_button);
+picus::impl_ui_component_template!(HintLine, project_hint_line);
 
 fn build_2048_app() -> App {
     init_logging();
 
     let mut app = App::new();
-    app.add_plugins(BevyXilemPlugin)
+    app.add_plugins(PicusPlugin)
         .load_style_sheet_ron(include_str!("../assets/themes/game_2048.ron"))
         .insert_resource(ButtonInput::<KeyCode>::default())
         .insert_resource(GameViewport::default())
@@ -1470,7 +1470,7 @@ mod tests {
 
     #[test]
     fn embedded_theme_ron_parses() {
-        bevy_xilem::parse_stylesheet_ron(include_str!("../assets/themes/game_2048.ron"))
+        picus::parse_stylesheet_ron(include_str!("../assets/themes/game_2048.ron"))
             .expect("embedded game_2048 stylesheet should parse");
     }
 }

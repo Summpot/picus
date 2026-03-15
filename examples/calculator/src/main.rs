@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
-use bevy_xilem::{
-    AppBevyXilemExt, BevyXilemPlugin, ProjectionCtx, StyleClass, UiEventQueue, UiRoot,
-    UiThemePicker, UiView, apply_label_style, apply_widget_style,
+use picus::{
+    AppPicusExt, PicusPlugin, ProjectionCtx, StyleClass, UiEventQueue, UiRoot, UiThemePicker,
+    UiView, apply_label_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
     bevy_ecs::{hierarchy::ChildOf, prelude::*},
     button, resolve_style, resolve_style_for_classes, run_app_with_window_options,
@@ -491,17 +491,17 @@ fn drain_calc_events(world: &mut World) {
     }
 }
 
-bevy_xilem::impl_ui_component_template!(CalcRoot, project_calc_root);
-bevy_xilem::impl_ui_component_template!(CalcDisplayPanel, project_calc_display);
-bevy_xilem::impl_ui_component_template!(CalcKeypad, project_calc_keypad);
-bevy_xilem::impl_ui_component_template!(CalcButtonRow, project_calc_row);
-bevy_xilem::impl_ui_component_template!(CalcButtonSpec, project_calc_button_component);
+picus::impl_ui_component_template!(CalcRoot, project_calc_root);
+picus::impl_ui_component_template!(CalcDisplayPanel, project_calc_display);
+picus::impl_ui_component_template!(CalcKeypad, project_calc_keypad);
+picus::impl_ui_component_template!(CalcButtonRow, project_calc_row);
+picus::impl_ui_component_template!(CalcButtonSpec, project_calc_button_component);
 
 fn build_bevy_calculator_app() -> App {
     init_logging();
 
     let mut app = App::new();
-    app.add_plugins(BevyXilemPlugin)
+    app.add_plugins(PicusPlugin)
         .load_style_sheet_ron(include_str!("../assets/themes/calculator.ron"))
         .insert_resource(CalculatorEngine::default())
         .register_ui_component::<CalcRoot>()
@@ -525,11 +525,11 @@ fn main() -> Result<(), EventLoopError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bevy_xilem::bevy_ecs::schedule::Schedule;
+    use picus::bevy_ecs::schedule::Schedule;
 
     #[test]
     fn embedded_calculator_theme_ron_parses() {
-        bevy_xilem::parse_stylesheet_ron(include_str!("../assets/themes/calculator.ron"))
+        picus::parse_stylesheet_ron(include_str!("../assets/themes/calculator.ron"))
             .expect("embedded calculator stylesheet should parse");
     }
 

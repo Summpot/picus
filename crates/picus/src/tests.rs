@@ -7,12 +7,12 @@ use std::{
 };
 
 use crate::{
-    AppBevyXilemExt, AppI18n, BevyXilemPlugin, ColorStyle, InteractionState, ProjectionCtx,
-    Selector, StyleRule, StyleSetter, StyleSheet, SyncTextSource, UiEventQueue,
-    UiProjectorRegistry, UiRoot, UiView, bubble_ui_pointer_events, ecs_button,
-    ensure_overlay_defaults, ensure_overlay_root, ensure_overlay_root_entity,
-    handle_overlay_actions, register_builtin_projectors, reparent_overlay_entities, resolve_style,
-    resolve_style_for_entity_classes, spawn_in_overlay_root, synthesize_roots_with_stats,
+    AppI18n, AppPicusExt, ColorStyle, InteractionState, PicusPlugin, ProjectionCtx, Selector,
+    StyleRule, StyleSetter, StyleSheet, SyncTextSource, UiEventQueue, UiProjectorRegistry, UiRoot,
+    UiView, bubble_ui_pointer_events, ecs_button, ensure_overlay_defaults, ensure_overlay_root,
+    ensure_overlay_root_entity, handle_overlay_actions, register_builtin_projectors,
+    reparent_overlay_entities, resolve_style, resolve_style_for_entity_classes,
+    spawn_in_overlay_root, synthesize_roots_with_stats,
 };
 use bevy_app::App;
 use bevy_ecs::{hierarchy::ChildOf, prelude::*};
@@ -62,7 +62,7 @@ fn init_test_tracing() {
     static INIT: Once = Once::new();
     INIT.call_once(|| {
         let _ = tracing_subscriber::fmt()
-            .with_env_filter(tracing_subscriber::EnvFilter::new("bevy_xilem=debug"))
+            .with_env_filter(tracing_subscriber::EnvFilter::new("picus=debug"))
             .with_test_writer()
             .try_init();
     });
@@ -71,7 +71,7 @@ fn init_test_tracing() {
 #[test]
 fn plugin_wires_synthesis_and_runtime() {
     let mut app = App::new();
-    app.add_plugins(BevyXilemPlugin)
+    app.add_plugins(PicusPlugin)
         .register_projector::<TestRoot>(project_test_root);
 
     app.world_mut().spawn((UiRoot, TestRoot));
@@ -87,7 +87,7 @@ fn plugin_wires_synthesis_and_runtime() {
 #[test]
 fn plugin_auto_registers_builtin_ui_components_without_manual_setup() {
     let mut app = App::new();
-    app.add_plugins(BevyXilemPlugin);
+    app.add_plugins(PicusPlugin);
 
     app.world_mut()
         .spawn((UiRoot, crate::UiButton::new("auto-builtins")));
@@ -101,7 +101,7 @@ fn plugin_auto_registers_builtin_ui_components_without_manual_setup() {
 #[test]
 fn plugin_boots_with_embedded_fluent_dark_theme_and_applies_on_first_update() {
     let mut app = App::new();
-    app.add_plugins(BevyXilemPlugin);
+    app.add_plugins(PicusPlugin);
 
     let active = app.world().resource::<crate::ActiveStyleSheetAsset>();
     assert!(active.path.is_none());
@@ -125,7 +125,7 @@ fn plugin_boots_with_embedded_fluent_dark_theme_and_applies_on_first_update() {
 #[test]
 fn active_style_variant_switches_automatically_without_install_calls() {
     let mut app = App::new();
-    app.add_plugins(BevyXilemPlugin);
+    app.add_plugins(PicusPlugin);
 
     crate::set_active_style_variant_by_name(app.world_mut(), "light");
     app.update();
@@ -150,7 +150,7 @@ fn active_style_variant_switches_automatically_without_install_calls() {
 #[test]
 fn active_style_variant_light_overrides_surface_bg_token() {
     let mut app = App::new();
-    app.add_plugins(BevyXilemPlugin);
+    app.add_plugins(PicusPlugin);
 
     crate::set_active_style_variant_by_name(app.world_mut(), "light");
     app.update();
@@ -171,7 +171,7 @@ fn active_style_variant_light_overrides_surface_bg_token() {
 #[test]
 fn active_style_variant_high_contrast_overrides_surface_bg_token() {
     let mut app = App::new();
-    app.add_plugins(BevyXilemPlugin);
+    app.add_plugins(PicusPlugin);
 
     crate::set_active_style_variant_by_name(app.world_mut(), "high-contrast");
     app.update();
@@ -192,7 +192,7 @@ fn active_style_variant_high_contrast_overrides_surface_bg_token() {
 #[test]
 fn active_style_variant_api_switches_between_dark_light_and_high_contrast() {
     let mut app = App::new();
-    app.add_plugins(BevyXilemPlugin);
+    app.add_plugins(PicusPlugin);
 
     crate::set_active_style_variant_by_name(app.world_mut(), "light");
     app.update();
@@ -243,7 +243,7 @@ fn active_style_variant_api_switches_between_dark_light_and_high_contrast() {
 #[test]
 fn load_style_sheet_ron_applies_and_persists_across_variant_switches() {
     let mut app = App::new();
-    app.add_plugins(BevyXilemPlugin).load_style_sheet_ron(
+    app.add_plugins(PicusPlugin).load_style_sheet_ron(
         r##"(
             rules: [
                 (
@@ -403,7 +403,7 @@ fn apply_active_style_variant_applies_selected_registered_variant_to_runtime_she
 #[test]
 fn input_bridge_uses_primary_window_cursor_for_click_and_emits_move_before_down_up() {
     let mut app = App::new();
-    app.add_plugins(BevyXilemPlugin);
+    app.add_plugins(PicusPlugin);
 
     let mut window = Window::default();
     window.resolution.set(800.0, 600.0);
@@ -460,7 +460,7 @@ fn input_bridge_uses_primary_window_cursor_for_click_and_emits_move_before_down_
 #[test]
 fn input_bridge_uses_primary_window_cursor_for_mouse_wheel_events() {
     let mut app = App::new();
-    app.add_plugins(BevyXilemPlugin);
+    app.add_plugins(PicusPlugin);
 
     let mut window = Window::default();
     window.resolution.set(800.0, 600.0);
@@ -506,7 +506,7 @@ fn input_bridge_uses_primary_window_cursor_for_mouse_wheel_events() {
 #[test]
 fn input_bridge_uses_primary_window_logical_size_for_resize_events() {
     let mut app = App::new();
-    app.add_plugins(BevyXilemPlugin);
+    app.add_plugins(PicusPlugin);
 
     let mut window = Window::default();
     window.resolution.set(800.0, 600.0);
@@ -537,9 +537,48 @@ fn input_bridge_uses_primary_window_logical_size_for_resize_events() {
 }
 
 #[test]
+fn clicking_text_input_enables_window_ime() {
+    let mut app = App::new();
+    app.add_plugins(PicusPlugin);
+
+    let mut window = Window::default();
+    window.resolution.set(800.0, 600.0);
+    let window_entity = app.world_mut().spawn((window, PrimaryWindow)).id();
+
+    let root = app.world_mut().spawn((UiRoot, crate::UiFlexColumn)).id();
+    let input = app
+        .world_mut()
+        .spawn((
+            crate::UiTextInput::new("").with_placeholder("Type here"),
+            ChildOf(root),
+        ))
+        .id();
+
+    app.update();
+    app.update();
+
+    assert!(
+        !app.world()
+            .get::<Window>(window_entity)
+            .expect("primary window should exist")
+            .ime_enabled
+    );
+
+    let input_center = widget_center_for_entity(&app, input);
+    send_primary_click(&mut app, window_entity, input_center);
+
+    assert!(
+        app.world()
+            .get::<Window>(window_entity)
+            .expect("primary window should exist")
+            .ime_enabled
+    );
+}
+
+#[test]
 fn ui_event_queue_drains_typed_actions() {
     let mut app = App::new();
-    app.add_plugins(BevyXilemPlugin)
+    app.add_plugins(PicusPlugin)
         .register_projector::<TestRoot>(project_test_root);
 
     let root = app.world_mut().spawn((UiRoot, TestRoot)).id();
@@ -564,7 +603,7 @@ fn ui_event_queue_drains_typed_actions() {
 #[test]
 fn plugin_initializes_app_i18n_resource() {
     let mut app = App::new();
-    app.add_plugins(BevyXilemPlugin);
+    app.add_plugins(PicusPlugin);
 
     assert!(app.world().contains_resource::<AppI18n>());
 }
@@ -572,7 +611,7 @@ fn plugin_initializes_app_i18n_resource() {
 #[test]
 fn app_i18n_resolves_showcase_hello_world_for_zh_cn() {
     let mut app = App::new();
-    app.add_plugins(BevyXilemPlugin).register_i18n_bundle(
+    app.add_plugins(PicusPlugin).register_i18n_bundle(
         "zh-CN",
         SyncTextSource::String(include_str!("../../../assets/locales/zh-CN/main.ftl")),
         vec!["Inter", "Noto Sans CJK SC", "sans-serif"],
@@ -587,7 +626,7 @@ fn app_i18n_resolves_showcase_hello_world_for_zh_cn() {
 #[test]
 fn resolve_localized_text_prefers_translation_over_uilabel_fallback() {
     let mut app = App::new();
-    app.add_plugins(BevyXilemPlugin).register_i18n_bundle(
+    app.add_plugins(PicusPlugin).register_i18n_bundle(
         "zh-CN",
         SyncTextSource::String(include_str!("../../../assets/locales/zh-CN/main.ftl")),
         vec!["Inter", "Noto Sans CJK SC", "sans-serif"],
@@ -609,7 +648,7 @@ fn resolve_localized_text_prefers_translation_over_uilabel_fallback() {
 #[test]
 fn localized_text_updates_after_active_locale_change() {
     let mut app = App::new();
-    app.add_plugins(BevyXilemPlugin)
+    app.add_plugins(PicusPlugin)
         .insert_resource(AppI18n::new(
             "en-US"
                 .parse()
@@ -1141,7 +1180,7 @@ fn lucide_font_family_matches_upstream_identifier() {
 #[test]
 fn register_i18n_bundle_stores_locale_font_stacks_in_app_i18n() {
     let mut app = App::new();
-    app.add_plugins(BevyXilemPlugin)
+    app.add_plugins(PicusPlugin)
         .register_i18n_bundle(
             "en-US",
             SyncTextSource::String(include_str!("../../../assets/locales/en-US/main.ftl")),
@@ -1365,7 +1404,7 @@ fn overlay_actions_toggle_and_select_theme_picker() {
 /// inside-overlay retained hit after conversion to physical coordinates.
 fn overlay_click_inside_computed_overlay_position_not_dismissed_on_hidpi() {
     let mut app = App::new();
-    app.add_plugins(BevyXilemPlugin);
+    app.add_plugins(PicusPlugin);
 
     let mut window = Window::default();
     window.resolution.set(400.0, 300.0);
@@ -1600,7 +1639,7 @@ fn ensure_overlay_defaults_assigns_dialog_dropdown_and_toast_configs() {
 #[test]
 fn sync_overlay_positions_uses_dynamic_primary_window_size() {
     let mut app = App::new();
-    app.add_plugins(BevyXilemPlugin);
+    app.add_plugins(PicusPlugin);
 
     let mut window = Window::default();
     window.resolution.set(1024.0, 768.0);
@@ -1646,7 +1685,7 @@ fn sync_overlay_positions_uses_dynamic_primary_window_size() {
 #[test]
 fn sync_overlay_positions_works_without_primary_window_marker() {
     let mut app = App::new();
-    app.add_plugins(BevyXilemPlugin);
+    app.add_plugins(PicusPlugin);
 
     let mut window = Window::default();
     window.resolution.set(1280.0, 720.0);
@@ -1830,7 +1869,7 @@ fn collect_widget_bounds_by_short_name(
 #[test]
 fn dialog_body_click_does_not_dismiss_overlay() {
     let mut app = App::new();
-    app.add_plugins(BevyXilemPlugin);
+    app.add_plugins(PicusPlugin);
 
     let mut window = Window::default();
     window.resolution.set(800.0, 600.0);
@@ -1860,7 +1899,7 @@ fn dialog_body_click_does_not_dismiss_overlay() {
 #[test]
 fn dialog_padding_click_is_in_overlay_hit_path_and_does_not_dismiss() {
     let mut app = App::new();
-    app.add_plugins(BevyXilemPlugin);
+    app.add_plugins(PicusPlugin);
 
     let mut window = Window::default();
     window.resolution.set(800.0, 600.0);
@@ -1892,7 +1931,7 @@ fn dialog_padding_click_is_in_overlay_hit_path_and_does_not_dismiss() {
 #[test]
 fn dialog_dismiss_button_targets_dialog_entity() {
     let mut app = App::new();
-    app.add_plugins(BevyXilemPlugin);
+    app.add_plugins(PicusPlugin);
 
     let mut window = Window::default();
     window.resolution.set(800.0, 600.0);
@@ -1962,7 +2001,7 @@ fn dialog_dismiss_button_targets_dialog_entity() {
 #[test]
 fn dialog_projects_single_dismiss_button_without_fullscreen_backdrop_button() {
     let mut app = App::new();
-    app.add_plugins(BevyXilemPlugin);
+    app.add_plugins(PicusPlugin);
 
     let mut window = Window::default();
     window.resolution.set(800.0, 600.0);
@@ -2026,7 +2065,7 @@ fn overlay_action_dismiss_dialog_despawns_dialog() {
 #[test]
 fn handle_global_overlay_clicks_closes_when_clicking_anchor_and_suppresses_pointer() {
     let mut app = App::new();
-    app.add_plugins(BevyXilemPlugin);
+    app.add_plugins(PicusPlugin);
 
     let mut window = Window::default();
     window.resolution.set(800.0, 600.0);
@@ -2072,7 +2111,7 @@ fn handle_global_overlay_clicks_closes_when_clicking_anchor_and_suppresses_point
 #[test]
 fn handle_global_overlay_clicks_closes_menu_panel_anchor_and_resets_open_state() {
     let mut app = App::new();
-    app.add_plugins(BevyXilemPlugin);
+    app.add_plugins(PicusPlugin);
 
     let mut window = Window::default();
     window.resolution.set(900.0, 680.0);
@@ -2134,7 +2173,7 @@ fn handle_global_overlay_clicks_closes_menu_panel_anchor_and_resets_open_state()
 #[test]
 fn handle_global_overlay_clicks_closes_theme_picker_anchor_and_resets_open_state() {
     let mut app = App::new();
-    app.add_plugins(BevyXilemPlugin);
+    app.add_plugins(PicusPlugin);
 
     let mut window = Window::default();
     window.resolution.set(900.0, 680.0);
@@ -2185,7 +2224,7 @@ fn handle_global_overlay_clicks_closes_theme_picker_anchor_and_resets_open_state
 #[test]
 fn ui_button_projects_to_ecs_button_with_child_widget() {
     let mut app = App::new();
-    app.add_plugins(BevyXilemPlugin);
+    app.add_plugins(PicusPlugin);
 
     let mut window = Window::default();
     window.resolution.set(800.0, 600.0);
@@ -2233,7 +2272,7 @@ fn overlay_pointer_routing_suppress_click_only_suppresses_press() {
 #[test]
 fn handle_global_overlay_clicks_keeps_overlay_open_when_clicking_inside_overlay() {
     let mut app = App::new();
-    app.add_plugins(BevyXilemPlugin);
+    app.add_plugins(PicusPlugin);
 
     let mut window = Window::default();
     window.resolution.set(800.0, 600.0);
@@ -2270,7 +2309,7 @@ fn handle_global_overlay_clicks_keeps_overlay_open_when_clicking_inside_overlay(
 #[test]
 fn dropdown_padding_click_is_in_overlay_hit_path_and_does_not_dismiss() {
     let mut app = App::new();
-    app.add_plugins(BevyXilemPlugin);
+    app.add_plugins(PicusPlugin);
 
     let mut window = Window::default();
     window.resolution.set(800.0, 600.0);
@@ -2313,7 +2352,7 @@ fn dropdown_padding_click_is_in_overlay_hit_path_and_does_not_dismiss() {
 #[test]
 fn handle_global_overlay_clicks_closes_overlay_on_outside_click_without_suppression() {
     let mut app = App::new();
-    app.add_plugins(BevyXilemPlugin);
+    app.add_plugins(PicusPlugin);
 
     let mut window = Window::default();
     window.resolution.set(800.0, 600.0);
@@ -2349,7 +2388,7 @@ fn handle_global_overlay_clicks_closes_overlay_on_outside_click_without_suppress
 #[test]
 fn handle_global_overlay_clicks_works_without_primary_window_marker() {
     let mut app = App::new();
-    app.add_plugins(BevyXilemPlugin);
+    app.add_plugins(PicusPlugin);
 
     let mut window = Window::default();
     window.resolution.set(800.0, 600.0);
@@ -2379,7 +2418,7 @@ fn handle_global_overlay_clicks_works_without_primary_window_marker() {
 #[test]
 fn toast_in_overlay_root_is_isolated_from_dropdown_overlay_stack_dismissal() {
     let mut app = App::new();
-    app.add_plugins(BevyXilemPlugin)
+    app.add_plugins(PicusPlugin)
         .register_projector::<ToastProbe>(project_toast_probe);
 
     let mut window = Window::default();
@@ -2803,7 +2842,7 @@ fn third_party_ui_component_can_register_via_trait_api() {
     }
 
     let mut app = App::new();
-    app.add_plugins(BevyXilemPlugin)
+    app.add_plugins(PicusPlugin)
         .register_ui_component::<UiKnob>();
 
     let knob = app.world_mut().spawn((UiRoot, UiKnob)).id();
@@ -2889,7 +2928,7 @@ fn drag_scroll_thumb_action_updates_scroll_view_offset() {
 #[test]
 fn tooltip_hover_spawns_and_despawns_overlay_entity() {
     let mut app = App::new();
-    app.add_plugins(BevyXilemPlugin);
+    app.add_plugins(PicusPlugin);
 
     let root = app.world_mut().spawn((UiRoot, crate::UiFlexColumn)).id();
     let source = app
@@ -2945,7 +2984,7 @@ fn tooltip_hover_spawns_and_despawns_overlay_entity() {
 #[test]
 fn scroll_view_geometry_sync_clamps_out_of_bounds_offset() {
     let mut app = App::new();
-    app.add_plugins(BevyXilemPlugin);
+    app.add_plugins(PicusPlugin);
 
     let mut window = Window::default();
     window.resolution.set(900.0, 640.0);

@@ -1,4 +1,4 @@
-//! View helpers exported by `bevy_xilem`.
+//! View helpers exported by `picus`.
 //!
 //! This module exposes two naming groups:
 //! - ECS-adapted UI components (`button`, `button_with_child`, `checkbox`, `slider`, `switch`,
@@ -8,7 +8,7 @@
 //! # Example
 //!
 //! ```
-//! use bevy_xilem::{
+//! use picus::{
 //!     button, xilem_button,
 //!     bevy_ecs::world::World,
 //!     xilem::view::label,

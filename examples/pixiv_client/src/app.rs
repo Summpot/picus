@@ -11,11 +11,13 @@ use bevy_asset::{AssetPlugin, Assets, Handle, RenderAssetUsages};
 use bevy_embedded_assets::{EmbeddedAssetPlugin, PluginMode};
 use bevy_image::Image as BevyImage;
 use bevy_text::TextPlugin;
-use bevy_xilem::{
-    AppBevyXilemExt, AppI18n, BevyXilemPlugin, LUCIDE_FONT_FAMILY, OverlayConfig, OverlayPlacement,
-    OverlayState, ProjectionCtx, ResolvedStyle, StyleClass, StyleSheet, StyleValue,
-    SyncAssetSource, SyncTextSource, UiComboBox, UiComboBoxChanged, UiComboOption, UiEventQueue,
-    UiRoot, UiTextInput, UiTextInputChanged, UiThemePicker, UiView, apply_direct_widget_style,
+use crossbeam_channel::{Receiver, Sender, unbounded};
+use lucide_icons::Icon as LucideIcon;
+use picus::{
+    AppI18n, AppPicusExt, LUCIDE_FONT_FAMILY, OverlayConfig, OverlayPlacement, OverlayState,
+    PicusPlugin, ProjectionCtx, ResolvedStyle, StyleClass, StyleSheet, StyleValue, SyncAssetSource,
+    SyncTextSource, UiComboBox, UiComboBoxChanged, UiComboOption, UiEventQueue, UiRoot,
+    UiTextInput, UiTextInputChanged, UiThemePicker, UiView, apply_direct_widget_style,
     apply_label_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup, Update},
     bevy_ecs::{hierarchy::ChildOf, prelude::*},
@@ -43,12 +45,10 @@ use bevy_xilem::{
     },
 };
 #[cfg(target_os = "macos")]
-use bevy_xilem_activation::MacosBundleConfig;
-use bevy_xilem_activation::{
+use picus_activation::MacosBundleConfig;
+use picus_activation::{
     ActivationConfig, ActivationService, BootstrapOutcome, ProtocolRegistration, bootstrap,
 };
-use crossbeam_channel::{Receiver, Sender, unbounded};
-use lucide_icons::Icon as LucideIcon;
 use pixiv_client::{
     AuthSession, DecodedImageRgba, IdpUrlResponse, Illust, PixivApiClient, PixivContentKind,
     PixivResponse, build_browser_login_url, generate_pkce_code_verifier, pkce_s256_challenge,
@@ -826,17 +826,17 @@ fn setup_styles(mut sheet: ResMut<StyleSheet>, i18n: Option<Res<AppI18n>>) {
     sync_font_stack_for_locale(&mut sheet, font_stack.as_deref());
 }
 
-bevy_xilem::impl_ui_component_template!(PixivRoot, project_root);
-bevy_xilem::impl_ui_component_template!(PixivSidebar, project_sidebar);
-bevy_xilem::impl_ui_component_template!(PixivMainColumn, project_main_column);
-bevy_xilem::impl_ui_component_template!(PixivAuthPanel, project_auth_panel);
-bevy_xilem::impl_ui_component_template!(PixivResponsePanel, project_response_panel);
-bevy_xilem::impl_ui_component_template!(PixivSearchPanel, project_search_panel);
-bevy_xilem::impl_ui_component_template!(PixivHomeFeed, project_home_feed);
-bevy_xilem::impl_ui_component_template!(PixivIllustCard, project_illust_card);
-bevy_xilem::impl_ui_component_template!(PixivDetailOverlay, project_detail_overlay);
-bevy_xilem::impl_ui_component_template!(PixivOverlayTags, project_overlay_tags);
-bevy_xilem::impl_ui_component_template!(OverlayTag, project_overlay_tag);
+picus::impl_ui_component_template!(PixivRoot, project_root);
+picus::impl_ui_component_template!(PixivSidebar, project_sidebar);
+picus::impl_ui_component_template!(PixivMainColumn, project_main_column);
+picus::impl_ui_component_template!(PixivAuthPanel, project_auth_panel);
+picus::impl_ui_component_template!(PixivResponsePanel, project_response_panel);
+picus::impl_ui_component_template!(PixivSearchPanel, project_search_panel);
+picus::impl_ui_component_template!(PixivHomeFeed, project_home_feed);
+picus::impl_ui_component_template!(PixivIllustCard, project_illust_card);
+picus::impl_ui_component_template!(PixivDetailOverlay, project_detail_overlay);
+picus::impl_ui_component_template!(PixivOverlayTags, project_overlay_tags);
+picus::impl_ui_component_template!(OverlayTag, project_overlay_tag);
 
 fn build_app(mut activation_service: Option<ActivationService>) -> App {
     ensure_task_pool_initialized();
@@ -859,7 +859,7 @@ fn build_app(mut activation_service: Option<ActivationService>) -> App {
         },
         AssetPlugin::default(),
         TextPlugin::default(),
-        BevyXilemPlugin,
+        PicusPlugin,
     ))
     .load_style_sheet_ron(include_str!("../assets/themes/pixiv_client.ron"))
     .insert_resource(AppI18n::new(parse_locale("en-US")))
@@ -916,8 +916,8 @@ fn build_app(mut activation_service: Option<ActivationService>) -> App {
         Update,
         (
             drain_ui_actions_and_dispatch
-                .after(bevy_xilem::handle_widget_actions)
-                .after(bevy_xilem::handle_overlay_actions),
+                .after(picus::handle_widget_actions)
+                .after(picus::handle_overlay_actions),
             poll_activation_messages,
             track_viewport_metrics,
             spawn_network_tasks,
@@ -956,7 +956,7 @@ pub fn run() -> std::result::Result<(), EventLoopError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bevy_xilem::bevy_ecs::schedule::Schedule;
+    use picus::bevy_ecs::schedule::Schedule;
 
     fn mock_illust(title: &str) -> Illust {
         Illust {
@@ -1363,7 +1363,7 @@ mod tests {
 
         world.resource::<UiEventQueue>().push_typed(
             search_input,
-            bevy_xilem::WidgetUiAction::SetTextInput {
+            picus::WidgetUiAction::SetTextInput {
                 input: search_input,
                 value: "same-frame widget action".to_string(),
             },
@@ -1386,15 +1386,14 @@ mod tests {
 
     #[test]
     fn embedded_pixiv_theme_ron_parses() {
-        bevy_xilem::parse_stylesheet_ron(include_str!("../assets/themes/pixiv_client.ron"))
+        picus::parse_stylesheet_ron(include_str!("../assets/themes/pixiv_client.ron"))
             .expect("embedded pixiv_client stylesheet should parse");
     }
 
     #[test]
     fn pixiv_primary_button_uses_neutral_fluent_tokens() {
-        let sheet =
-            bevy_xilem::parse_stylesheet_ron(include_str!("../assets/themes/pixiv_client.ron"))
-                .expect("embedded pixiv_client stylesheet should parse");
+        let sheet = picus::parse_stylesheet_ron(include_str!("../assets/themes/pixiv_client.ron"))
+            .expect("embedded pixiv_client stylesheet should parse");
 
         let button = sheet
             .get_class_values("pixiv.button")
@@ -1404,15 +1403,15 @@ mod tests {
             .expect("pixiv.button.primary class should exist");
 
         let corner_radius = match button.layout.corner_radius.as_ref() {
-            Some(bevy_xilem::StyleValue::Var(token)) => token.as_str(),
+            Some(picus::StyleValue::Var(token)) => token.as_str(),
             _ => panic!("pixiv.button corner_radius should come from a theme token"),
         };
         let primary_bg = match primary.colors.bg.as_ref() {
-            Some(bevy_xilem::StyleValue::Var(token)) => token.as_str(),
+            Some(picus::StyleValue::Var(token)) => token.as_str(),
             _ => panic!("pixiv.button.primary bg should come from a theme token"),
         };
         let primary_border = match primary.colors.border.as_ref() {
-            Some(bevy_xilem::StyleValue::Var(token)) => token.as_str(),
+            Some(picus::StyleValue::Var(token)) => token.as_str(),
             _ => panic!("pixiv.button.primary border should come from a theme token"),
         };
 
@@ -1423,20 +1422,19 @@ mod tests {
 
     #[test]
     fn pixiv_text_input_uses_neutral_fluent_tokens() {
-        let sheet =
-            bevy_xilem::parse_stylesheet_ron(include_str!("../assets/themes/pixiv_client.ron"))
-                .expect("embedded pixiv_client stylesheet should parse");
+        let sheet = picus::parse_stylesheet_ron(include_str!("../assets/themes/pixiv_client.ron"))
+            .expect("embedded pixiv_client stylesheet should parse");
 
         let input = sheet
             .get_class_values("pixiv.text-input")
             .expect("pixiv.text-input class should exist");
 
         let bg = match input.colors.bg.as_ref() {
-            Some(bevy_xilem::StyleValue::Var(token)) => token.as_str(),
+            Some(picus::StyleValue::Var(token)) => token.as_str(),
             _ => panic!("pixiv.text-input bg should come from a theme token"),
         };
         let border = match input.colors.border.as_ref() {
-            Some(bevy_xilem::StyleValue::Var(token)) => token.as_str(),
+            Some(picus::StyleValue::Var(token)) => token.as_str(),
             _ => panic!("pixiv.text-input border should come from a theme token"),
         };
 
@@ -1446,31 +1444,30 @@ mod tests {
 
     #[test]
     fn pixiv_warn_button_uses_fluent_tokens() {
-        let sheet =
-            bevy_xilem::parse_stylesheet_ron(include_str!("../assets/themes/pixiv_client.ron"))
-                .expect("embedded pixiv_client stylesheet should parse");
+        let sheet = picus::parse_stylesheet_ron(include_str!("../assets/themes/pixiv_client.ron"))
+            .expect("embedded pixiv_client stylesheet should parse");
         let warn = sheet
             .get_class_values("pixiv.button.warn")
             .expect("pixiv.button.warn class should exist");
 
         let bg = match warn.colors.bg.as_ref() {
-            Some(bevy_xilem::StyleValue::Var(token)) => token.as_str(),
+            Some(picus::StyleValue::Var(token)) => token.as_str(),
             _ => panic!("pixiv.button.warn bg should come from a theme token"),
         };
         let hover_bg = match warn.colors.hover_bg.as_ref() {
-            Some(bevy_xilem::StyleValue::Var(token)) => token.as_str(),
+            Some(picus::StyleValue::Var(token)) => token.as_str(),
             _ => panic!("pixiv.button.warn hover_bg should come from a theme token"),
         };
         let pressed_bg = match warn.colors.pressed_bg.as_ref() {
-            Some(bevy_xilem::StyleValue::Var(token)) => token.as_str(),
+            Some(picus::StyleValue::Var(token)) => token.as_str(),
             _ => panic!("pixiv.button.warn pressed_bg should come from a theme token"),
         };
         let border = match warn.colors.border.as_ref() {
-            Some(bevy_xilem::StyleValue::Var(token)) => token.as_str(),
+            Some(picus::StyleValue::Var(token)) => token.as_str(),
             _ => panic!("pixiv.button.warn border should come from a theme token"),
         };
         let text = match warn.colors.text.as_ref() {
-            Some(bevy_xilem::StyleValue::Var(token)) => token.as_str(),
+            Some(picus::StyleValue::Var(token)) => token.as_str(),
             _ => panic!("pixiv.button.warn text should come from a theme token"),
         };
 
@@ -1484,7 +1481,7 @@ mod tests {
     #[test]
     fn sync_font_stack_for_locale_preserves_tokenized_fields() {
         let mut sheet =
-            bevy_xilem::parse_stylesheet_ron(include_str!("../assets/themes/pixiv_client.ron"))
+            picus::parse_stylesheet_ron(include_str!("../assets/themes/pixiv_client.ron"))
                 .expect("embedded pixiv_client stylesheet should parse");
 
         // Pixiv sheet intentionally carries class rules with token refs but no local token map.
@@ -1498,13 +1495,13 @@ mod tests {
             .expect("pixiv.root class should exist");
 
         let padding_token = match root.layout.padding.as_ref() {
-            Some(bevy_xilem::StyleValue::Var(token)) => token.as_str(),
+            Some(picus::StyleValue::Var(token)) => token.as_str(),
             _ => panic!("pixiv.root padding should remain tokenized"),
         };
         assert_eq!(padding_token, "space-lg");
 
         let font_family = match root.font_family.as_ref() {
-            Some(bevy_xilem::StyleValue::Value(value)) => value,
+            Some(picus::StyleValue::Value(value)) => value,
             _ => panic!("font family should be written as a literal style value"),
         };
         assert_eq!(font_family, &stack);
@@ -1513,7 +1510,7 @@ mod tests {
             .get_class_values("pixiv.sidebar.button")
             .expect("pixiv.sidebar.button class should exist");
         let sidebar_font_family = match sidebar_button.font_family.as_ref() {
-            Some(bevy_xilem::StyleValue::Value(value)) => value,
+            Some(picus::StyleValue::Value(value)) => value,
             _ => panic!("sidebar button font family should be written as a literal style value"),
         };
         assert_eq!(sidebar_font_family, &stack);

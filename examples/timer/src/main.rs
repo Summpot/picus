@@ -5,9 +5,9 @@ use std::{
 };
 use tokio::time;
 
-use bevy_xilem::{
-    AppBevyXilemExt, BevyXilemPlugin, ProjectionCtx, StyleClass, UiEventQueue, UiRoot,
-    UiThemePicker, UiView, apply_label_style, apply_widget_style,
+use picus::{
+    AppPicusExt, PicusPlugin, ProjectionCtx, StyleClass, UiEventQueue, UiRoot, UiThemePicker,
+    UiView, apply_label_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
     bevy_ecs::{hierarchy::ChildOf, prelude::*},
     button, emit_ui_action, resolve_style, resolve_style_for_classes,
@@ -397,19 +397,19 @@ fn drain_timer_events_and_tick(world: &mut World) {
     }
 }
 
-bevy_xilem::impl_ui_component_template!(TimerRootView, project_timer_root);
-bevy_xilem::impl_ui_component_template!(TimerTitle, project_timer_title);
-bevy_xilem::impl_ui_component_template!(TimerDialView, project_timer_dial);
-bevy_xilem::impl_ui_component_template!(TimerElapsedRow, project_timer_elapsed_row);
-bevy_xilem::impl_ui_component_template!(TimerProgressRow, project_timer_progress_row);
-bevy_xilem::impl_ui_component_template!(TimerDurationRow, project_timer_duration_row);
-bevy_xilem::impl_ui_component_template!(TimerUiComponentsRow, project_timer_ui_components_row,);
+picus::impl_ui_component_template!(TimerRootView, project_timer_root);
+picus::impl_ui_component_template!(TimerTitle, project_timer_title);
+picus::impl_ui_component_template!(TimerDialView, project_timer_dial);
+picus::impl_ui_component_template!(TimerElapsedRow, project_timer_elapsed_row);
+picus::impl_ui_component_template!(TimerProgressRow, project_timer_progress_row);
+picus::impl_ui_component_template!(TimerDurationRow, project_timer_duration_row);
+picus::impl_ui_component_template!(TimerUiComponentsRow, project_timer_ui_components_row,);
 
 fn build_bevy_timer_app() -> App {
     init_logging();
 
     let mut app = App::new();
-    app.add_plugins(BevyXilemPlugin)
+    app.add_plugins(PicusPlugin)
         .load_style_sheet_ron(include_str!("../assets/themes/timer.ron"))
         .insert_resource(TimerState::default())
         .register_ui_component::<TimerRootView>()
@@ -439,7 +439,7 @@ mod tests {
 
     #[test]
     fn embedded_timer_theme_ron_parses() {
-        bevy_xilem::parse_stylesheet_ron(include_str!("../assets/themes/timer.ron"))
+        picus::parse_stylesheet_ron(include_str!("../assets/themes/timer.ron"))
             .expect("embedded timer stylesheet should parse");
     }
 

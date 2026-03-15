@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
-use bevy_xilem::{
-    AppBevyXilemExt, BevyXilemPlugin, BuiltinUiAction, ProjectionCtx, UiButton, UiComboBox,
-    UiComboOption, UiEventQueue, UiFlexColumn, UiLabel, UiRoot, UiThemePicker, UiView,
+use picus::{
+    AppPicusExt, BuiltinUiAction, PicusPlugin, ProjectionCtx, UiButton, UiComboBox, UiComboOption,
+    UiEventQueue, UiFlexColumn, UiLabel, UiRoot, UiThemePicker, UiView,
     bevy_app::{App, PreUpdate, Startup},
     bevy_ecs::{hierarchy::ChildOf, prelude::*},
     run_app_with_window_options, spawn_in_overlay_root,
@@ -25,7 +25,7 @@ fn project_ui_toast(toast: &UiToast, _ctx: ProjectionCtx<'_>) -> UiView {
     Arc::new(transformed(label(toast.message.clone())).translate((520.0, 40.0)))
 }
 
-bevy_xilem::impl_ui_component_template!(UiToast, project_ui_toast);
+picus::impl_ui_component_template!(UiToast, project_ui_toast);
 
 fn setup_overlay_hit_routing_world(mut commands: Commands) {
     let root = commands.spawn((UiRoot, UiFlexColumn)).id();
@@ -97,7 +97,7 @@ fn build_overlay_hit_routing_app() -> App {
     init_logging();
 
     let mut app = App::new();
-    app.add_plugins(BevyXilemPlugin)
+    app.add_plugins(PicusPlugin)
         .load_style_sheet_ron(include_str!("../assets/themes/overlay_hit_routing.ron"))
         .register_ui_component::<UiToast>()
         .add_systems(Startup, setup_overlay_hit_routing_world)
@@ -118,7 +118,7 @@ fn main() -> Result<(), EventLoopError> {
 mod tests {
     #[test]
     fn embedded_overlay_hit_routing_theme_ron_parses() {
-        bevy_xilem::parse_stylesheet_ron(include_str!("../assets/themes/overlay_hit_routing.ron"))
+        picus::parse_stylesheet_ron(include_str!("../assets/themes/overlay_hit_routing.ron"))
             .expect("embedded overlay_hit_routing stylesheet should parse");
     }
 }

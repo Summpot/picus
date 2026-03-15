@@ -52,7 +52,7 @@ fn open_in_system_browser(url: &str) -> Result<()> {
 pub(super) fn drain_ui_actions_and_dispatch(world: &mut World) {
     // Materialize built-in widget state changes before the app drains its own
     // action queues and mirrors resource state back into ECS-owned inputs.
-    bevy_xilem::handle_widget_actions(world);
+    picus::handle_widget_actions(world);
 
     let events = world
         .resource_mut::<UiEventQueue>()

@@ -89,7 +89,7 @@ fn auth_base_dir() -> PathBuf {
         return home
             .join("Library")
             .join("Application Support")
-            .join("bevy_xilem")
+            .join("picus")
             .join("pixiv_client");
     }
 
@@ -103,7 +103,7 @@ fn auth_base_dir() -> PathBuf {
                     .map(|path| path.join("AppData").join("Roaming"))
             })
             .unwrap_or_else(std::env::temp_dir);
-        return base.join("bevy_xilem").join("pixiv_client");
+        return base.join("picus").join("pixiv_client");
     }
 
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
@@ -116,7 +116,7 @@ fn auth_base_dir() -> PathBuf {
                     .map(|path| path.join(".config"))
             })
             .unwrap_or_else(std::env::temp_dir);
-        base.join("bevy_xilem").join("pixiv_client")
+        base.join("picus").join("pixiv_client")
     }
 }
 
@@ -131,7 +131,7 @@ mod tests {
             .expect("system time should be after unix epoch")
             .as_nanos();
         let path = std::env::temp_dir().join(format!(
-            "bevy-xilem-pixiv-auth-test-{}-{nanos}.json",
+            "picus-pixiv-auth-test-{}-{nanos}.json",
             std::process::id()
         ));
 

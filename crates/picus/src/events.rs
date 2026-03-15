@@ -106,7 +106,7 @@ pub struct TypedUiEvent<T> {
 /// # Example
 ///
 /// ```
-/// use bevy_xilem::{UiEventQueue, bevy_ecs::world::World};
+/// use picus::{UiEventQueue, bevy_ecs::world::World};
 ///
 /// let mut world = World::new();
 /// let entity = world.spawn_empty().id();
@@ -215,7 +215,7 @@ pub(crate) fn push_global_ui_event(event: UiEvent) {
 /// # Example
 ///
 /// ```
-/// use bevy_xilem::{emit_ui_action, UiEventQueue, bevy_ecs::world::World};
+/// use picus::{emit_ui_action, UiEventQueue, bevy_ecs::world::World};
 ///
 /// let mut world = World::new();
 /// let entity = world.spawn_empty().id();

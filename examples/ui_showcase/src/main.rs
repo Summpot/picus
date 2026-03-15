@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
 use bevy_embedded_assets::{EmbeddedAssetPlugin, PluginMode};
-use bevy_xilem::{
-    AppBevyXilemExt, AppI18n, BevyXilemPlugin, BuiltinUiAction, HasTooltip, LocalizeText,
-    ProjectionCtx, StyleClass, SyncAssetSource, SyncTextSource, ToastKind, UiButton, UiCheckbox,
+use picus::{
+    AppI18n, AppPicusExt, BuiltinUiAction, HasTooltip, LocalizeText, PicusPlugin, ProjectionCtx,
+    StyleClass, SyncAssetSource, SyncTextSource, ToastKind, UiButton, UiCheckbox,
     UiCheckboxChanged, UiColorPicker, UiColorPickerChanged, UiComboBox, UiComboBoxChanged,
     UiComboOption, UiDatePicker, UiDatePickerChanged, UiDialog, UiEventQueue, UiFlexColumn,
     UiFlexRow, UiGroupBox, UiLabel, UiMenuBar, UiMenuBarItem, UiMenuItem, UiMenuItemSelected,
@@ -1028,8 +1028,8 @@ fn set_showcase_page(world: &mut World, rt: ShowcaseRuntime, page: usize) {
     }
 }
 
-bevy_xilem::impl_ui_component_template!(ShowcaseRoot, project_showcase_root);
-bevy_xilem::impl_ui_component_template!(StatusDisplay, project_status_display);
+picus::impl_ui_component_template!(ShowcaseRoot, project_showcase_root);
+picus::impl_ui_component_template!(StatusDisplay, project_status_display);
 
 fn build_showcase_app() -> App {
     init_logging();
@@ -1041,7 +1041,7 @@ fn build_showcase_app() -> App {
         },
         AssetPlugin::default(),
         TextPlugin::default(),
-        BevyXilemPlugin,
+        PicusPlugin,
     ))
     .load_style_sheet_ron(include_str!("../assets/themes/ui_showcase.ron"))
     .insert_resource(AppI18n::new(parse_locale("en-US")))
@@ -1091,7 +1091,7 @@ fn main() -> Result<(), EventLoopError> {
 mod tests {
     #[test]
     fn embedded_showcase_theme_ron_parses() {
-        bevy_xilem::parse_stylesheet_ron(include_str!("../assets/themes/ui_showcase.ron"))
+        picus::parse_stylesheet_ron(include_str!("../assets/themes/ui_showcase.ron"))
             .expect("embedded ui_showcase stylesheet should parse");
     }
 

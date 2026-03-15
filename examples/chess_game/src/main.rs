@@ -4,9 +4,9 @@ use std::{
     time::{Duration, Instant},
 };
 
-use bevy_xilem::{
-    AppBevyXilemExt, BevyXilemPlugin, ProjectionCtx, StyleClass, UiEventQueue, UiRoot,
-    UiThemePicker, UiView, apply_label_style, apply_widget_style,
+use picus::{
+    AppPicusExt, PicusPlugin, ProjectionCtx, StyleClass, UiEventQueue, UiRoot, UiThemePicker,
+    UiView, apply_label_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
     bevy_ecs::{hierarchy::ChildOf, prelude::*},
     button, button_with_child, checkbox, resolve_style, resolve_style_for_classes,
@@ -644,9 +644,9 @@ fn drain_events_and_tick(world: &mut World) {
     });
 }
 
-bevy_xilem::impl_ui_component_template!(ChessRootView, project_chess_root);
-bevy_xilem::impl_ui_component_template!(ChessUiComponentsPanel, project_chess_ui_components_panel,);
-bevy_xilem::impl_ui_component_template!(ChessBoardPanel, project_chess_board_panel);
+picus::impl_ui_component_template!(ChessRootView, project_chess_root);
+picus::impl_ui_component_template!(ChessUiComponentsPanel, project_chess_ui_components_panel,);
+picus::impl_ui_component_template!(ChessBoardPanel, project_chess_board_panel);
 
 fn build_bevy_chess_app() -> App {
     init_logging();
@@ -655,7 +655,7 @@ fn build_bevy_chess_app() -> App {
     let ui = ChessUiResource::from_game(&game);
 
     let mut app = App::new();
-    app.add_plugins(BevyXilemPlugin)
+    app.add_plugins(PicusPlugin)
         .load_style_sheet_ron(include_str!("../assets/themes/chess_game.ron"))
         .insert_resource(ChessGameResource::new(game))
         .insert_resource(ui)
@@ -751,7 +751,7 @@ fn main() -> Result<(), EventLoopError> {
 mod tests {
     #[test]
     fn embedded_chess_theme_ron_parses() {
-        bevy_xilem::parse_stylesheet_ron(include_str!("../assets/themes/chess_game.ron"))
+        picus::parse_stylesheet_ron(include_str!("../assets/themes/chess_game.ron"))
             .expect("embedded chess stylesheet should parse");
     }
 }

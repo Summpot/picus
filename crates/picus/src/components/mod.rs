@@ -3,7 +3,7 @@ use std::{any::TypeId, collections::HashSet};
 use bevy_app::App;
 use bevy_ecs::prelude::*;
 
-use crate::{AppBevyXilemExt, ProjectionCtx, StyleTypeRegistry, UiView};
+use crate::{AppPicusExt, ProjectionCtx, StyleTypeRegistry, UiView};
 
 mod button;
 mod checkbox;

@@ -14,7 +14,7 @@ use bevy_window::{
 };
 
 use crate::{
-    AppBevyXilemExt, OverlayStack,
+    AppPicusExt, OverlayStack,
     components::register_builtin_ui_components,
     events::UiEventQueue,
     fonts::{XilemFontBridge, collect_bevy_font_assets, sync_fonts_to_xilem},
@@ -28,6 +28,7 @@ use crate::{
     runtime::{
         MasonryRuntime, initialize_masonry_runtime_from_primary_window,
         inject_bevy_input_into_masonry, paint_masonry_ui, rebuild_masonry_runtime,
+        sync_masonry_ime_state_to_bevy_window,
     },
     styling::{
         ActiveStyleSheet, ActiveStyleSheetAsset, ActiveStyleSheetSelectors,
@@ -47,22 +48,22 @@ use crate::{
 
 /// Bevy plugin for headless Masonry runtime + ECS projection synthesis.
 #[derive(Default)]
-pub struct BevyXilemPlugin;
+pub struct PicusPlugin;
 
 /// Registers all built-in ECS UI components.
 ///
-/// This plugin is automatically added by [`BevyXilemPlugin`], so users get
+/// This plugin is automatically added by [`PicusPlugin`], so users get
 /// plug-and-play built-ins without manual registration in app setup code.
 #[derive(Default)]
-pub struct BevyXilemBuiltinsPlugin;
+pub struct PicusBuiltinsPlugin;
 
-impl Plugin for BevyXilemBuiltinsPlugin {
+impl Plugin for PicusBuiltinsPlugin {
     fn build(&self, app: &mut App) {
         register_builtin_ui_components(app);
     }
 }
 
-impl Plugin for BevyXilemPlugin {
+impl Plugin for PicusPlugin {
     fn build(&self, app: &mut App) {
         if !app.is_plugin_added::<TaskPoolPlugin>() {
             app.add_plugins(TaskPoolPlugin::default());
@@ -74,7 +75,7 @@ impl Plugin for BevyXilemPlugin {
             app.add_plugins(DefaultTweenPlugins::<()>::in_schedule(Update));
         }
 
-        app.add_plugins((TimePlugin, BevyXilemBuiltinsPlugin))
+        app.add_plugins((TimePlugin, PicusBuiltinsPlugin))
             .add_tween_systems(
                 Update,
                 component_tween_system::<crate::styling::ColorStyleLens>(),
@@ -122,6 +123,7 @@ impl Plugin for BevyXilemPlugin {
                     sync_scroll_view_layout_geometry,
                     handle_scroll_view_wheel,
                     inject_bevy_input_into_masonry,
+                    sync_masonry_ime_state_to_bevy_window,
                     handle_widget_actions,
                     sync_ui_interaction_markers,
                 )
@@ -151,7 +153,15 @@ impl Plugin for BevyXilemPlugin {
                 Update,
                 animate_style_transitions.after(TweenSystemSet::ApplyTween),
             )
-            .add_systems(PostUpdate, (synthesize_ui, rebuild_masonry_runtime).chain());
+            .add_systems(
+                PostUpdate,
+                (
+                    synthesize_ui,
+                    rebuild_masonry_runtime,
+                    sync_masonry_ime_state_to_bevy_window,
+                )
+                    .chain(),
+            );
 
         // Run overlay placement after Masonry's retained tree has been rebuilt,
         // so anchor/widget geometry is up-to-date for this frame.

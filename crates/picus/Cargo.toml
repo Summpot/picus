@@ -1,5 +1,5 @@
 [package]
-name = "bevy_xilem"
+name = "picus"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -21,7 +21,7 @@ bevy_tween.workspace = true
 bevy_window.workspace = true
 bevy_winit.workspace = true
 bevy_embedded_assets.workspace = true
-bevy_xilem-surface.workspace = true
+picus-surface.workspace = true
 crossbeam-queue.workspace = true
 fluent.workspace = true
 masonry.workspace = true

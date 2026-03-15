@@ -52,15 +52,15 @@ fn flush_pending_font_registrations(app: &mut App) {
     }
 }
 
-/// Fluent extension methods for registering bevy_xilem projectors on a Bevy [`App`].
+/// Fluent extension methods for registering picus projectors on a Bevy [`App`].
 ///
 /// # Example
 ///
 /// ```no_run
 /// use std::sync::Arc;
 ///
-/// use bevy_xilem::{
-///     AppBevyXilemExt, BevyXilemPlugin, ProjectionCtx, UiComponentTemplate, UiRoot, UiView,
+/// use picus::{
+///     AppPicusExt, PicusPlugin, ProjectionCtx, UiComponentTemplate, UiRoot, UiView,
 ///     bevy_app::{App, Startup},
 ///     bevy_ecs::prelude::*,
 ///     text_button,
@@ -85,11 +85,11 @@ fn flush_pending_font_registrations(app: &mut App) {
 /// }
 ///
 /// let mut app = App::new();
-/// app.add_plugins(BevyXilemPlugin)
+/// app.add_plugins(PicusPlugin)
 ///     .register_ui_component::<Root>()
 ///     .add_systems(Startup, setup);
 /// ```
-pub trait AppBevyXilemExt {
+pub trait AppPicusExt {
     /// Register a typed projector for a specific component.
     ///
     /// Last registered projector has precedence during projection.
@@ -159,7 +159,7 @@ pub trait AppBevyXilemExt {
     fn register_xilem_font_path(&mut self, path: impl AsRef<Path>) -> io::Result<&mut Self>;
 }
 
-impl AppBevyXilemExt for App {
+impl AppPicusExt for App {
     fn register_projector<C: Component>(
         &mut self,
         projector: fn(&C, ProjectionCtx<'_>) -> UiView,

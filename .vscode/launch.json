@@ -5,24 +5,24 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Debug unit tests in library 'bevy_xilem_activation'",
+            "name": "Debug unit tests in library 'picus_activation'",
             "type": "lldb",
             "request": "launch",
             "cargo": {
                 "args": [
                     "test",
-                    "--package=bevy_xilem-activation"
+                    "--package=picus-activation"
                 ]
             }
         },
         {
-            "name": "Debug unit tests in library 'bevy_xilem'",
+            "name": "Debug unit tests in library 'picus'",
             "type": "lldb",
             "request": "launch",
             "cargo": {
                 "args": [
                     "test",
-                    "--package=bevy_xilem"
+                    "--package=picus"
                 ]
             }
         },

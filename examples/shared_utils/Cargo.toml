@@ -6,5 +6,5 @@ license.workspace = true
 
 [dependencies]
 tracing-subscriber.workspace = true
-bevy_xilem = { path = "../../crates/bevy_xilem" }
+picus = { path = "../../crates/picus" }
 bevy_ecs.workspace = true

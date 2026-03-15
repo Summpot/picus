@@ -1,6 +1,6 @@
-# bevy_xilem Styling System
+# picus Styling System
 
-This document explains the CSS-like, ECS-driven styling pipeline used by `bevy_xilem`.
+This document explains the CSS-like, ECS-driven styling pipeline used by `picus`.
 
 It covers:
 
@@ -28,7 +28,7 @@ The styling system is designed to be:
 
 ## 2. Core Types
 
-All style primitives live in `crates/bevy_xilem/src/styling.rs`.
+All style primitives live in `crates/picus/src/styling.rs`.
 
 ### 2.1 Inline style components
 
@@ -113,7 +113,7 @@ In short: class + inline define intent, pseudo state chooses target, animator pr
 
 ## 4. Plugin Wiring
 
-`BevyXilemPlugin` automatically wires the style stack:
+`PicusPlugin` automatically wires the style stack:
 
 - initializes `StyleSheet`
 - registers embedded Fluent variant bundle (`src/theme/fluent_theme.ron`) into `RegisteredStyleVariants`
@@ -200,7 +200,7 @@ Phase 4 replaces manual per-frame color lerp logic with a tweening animator pipe
 
 ### 8.1 `bevy_tween` integration
 
-`bevy_xilem` now uses crates.io `bevy_tween` (`0.12`) for transitions:
+`picus` now uses crates.io `bevy_tween` (`0.12`) for transitions:
 
 - `DefaultTweenPlugins`
 - `EaseKind`
@@ -275,10 +275,10 @@ To make a UI component animate on interaction:
 
 ## 11. Reference Files
 
-- Styling core: `crates/bevy_xilem/src/styling.rs`
-- Plugin wiring: `crates/bevy_xilem/src/plugin.rs`
-- ECS button interaction source: `crates/bevy_xilem/src/widgets/ecs_button_widget.rs`
-- ECS button view path: `crates/bevy_xilem/src/views/ecs_button_view.rs`
+- Styling core: `crates/picus/src/styling.rs`
+- Plugin wiring: `crates/picus/src/plugin.rs`
+- ECS button interaction source: `crates/picus/src/widgets/ecs_button_widget.rs`
+- ECS button view path: `crates/picus/src/views/ecs_button_view.rs`
 - Architecture doc: `DESIGN.md`
 
 ---

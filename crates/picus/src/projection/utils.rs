@@ -4,7 +4,7 @@ use super::core::UiView;
 use crate::{
     ecs::LocalizeText,
     i18n::AppI18n,
-    icons::{BevyXilemIcon, LUCIDE_FONT_FAMILY},
+    icons::{LUCIDE_FONT_FAMILY, PicusIcon},
     styling::{ResolvedStyle, apply_label_style},
 };
 use bevy_ecs::prelude::*;
@@ -25,13 +25,13 @@ pub(crate) enum VectorIcon {
 
 pub(crate) fn vector_icon(icon: VectorIcon, size_px: f64, color: xilem::Color) -> UiView {
     let lucide_icon = match icon {
-        VectorIcon::Check => BevyXilemIcon::Check,
-        VectorIcon::ChevronDown => BevyXilemIcon::ChevronDown,
-        VectorIcon::ChevronUp => BevyXilemIcon::ChevronUp,
-        VectorIcon::ChevronRight => BevyXilemIcon::ChevronRight,
-        VectorIcon::RadioOff => BevyXilemIcon::Circle,
-        VectorIcon::RadioOn => BevyXilemIcon::CircleDot,
-        VectorIcon::SunMoon => BevyXilemIcon::SunMoon,
+        VectorIcon::Check => PicusIcon::Check,
+        VectorIcon::ChevronDown => PicusIcon::ChevronDown,
+        VectorIcon::ChevronUp => PicusIcon::ChevronUp,
+        VectorIcon::ChevronRight => PicusIcon::ChevronRight,
+        VectorIcon::RadioOff => PicusIcon::Circle,
+        VectorIcon::RadioOn => PicusIcon::CircleDot,
+        VectorIcon::SunMoon => PicusIcon::SunMoon,
     };
 
     let mut icon_style = ResolvedStyle::default();

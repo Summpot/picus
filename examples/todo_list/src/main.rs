@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
-use bevy_xilem::{
-    AppBevyXilemExt, BevyXilemPlugin, ProjectionCtx, StyleClass, UiEventQueue, UiRoot,
-    UiThemePicker, UiView, apply_label_style, apply_text_input_style, apply_widget_style,
+use picus::{
+    AppPicusExt, PicusPlugin, ProjectionCtx, StyleClass, UiEventQueue, UiRoot, UiThemePicker,
+    UiView, apply_label_style, apply_text_input_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
     bevy_ecs::{
         hierarchy::{ChildOf, Children},
@@ -378,19 +378,19 @@ fn drain_todo_events_and_mutate_world(world: &mut World) {
     }
 }
 
-bevy_xilem::impl_ui_component_template!(TodoRootView, project_todo_root);
-bevy_xilem::impl_ui_component_template!(TodoHeader, project_todo_header);
-bevy_xilem::impl_ui_component_template!(TodoInputArea, project_todo_input_area);
-bevy_xilem::impl_ui_component_template!(TodoListContainer, project_todo_list_container);
-bevy_xilem::impl_ui_component_template!(TodoItem, project_todo_item);
-bevy_xilem::impl_ui_component_template!(TodoFilterBar, project_filter_bar);
-bevy_xilem::impl_ui_component_template!(FilterToggle, project_filter_toggle);
+picus::impl_ui_component_template!(TodoRootView, project_todo_root);
+picus::impl_ui_component_template!(TodoHeader, project_todo_header);
+picus::impl_ui_component_template!(TodoInputArea, project_todo_input_area);
+picus::impl_ui_component_template!(TodoListContainer, project_todo_list_container);
+picus::impl_ui_component_template!(TodoItem, project_todo_item);
+picus::impl_ui_component_template!(TodoFilterBar, project_filter_bar);
+picus::impl_ui_component_template!(FilterToggle, project_filter_toggle);
 
 fn build_bevy_todo_app() -> App {
     init_logging();
 
     let mut app = App::new();
-    app.add_plugins(BevyXilemPlugin)
+    app.add_plugins(PicusPlugin)
         .load_style_sheet_ron(include_str!("../assets/themes/todo_list.ron"))
         .insert_resource(ActiveFilter(FilterType::All))
         .insert_resource(DraftTodo("My Next Task".to_string()))
@@ -416,7 +416,7 @@ fn main() -> Result<(), EventLoopError> {
 mod tests {
     #[test]
     fn embedded_todo_theme_ron_parses() {
-        bevy_xilem::parse_stylesheet_ron(include_str!("../assets/themes/todo_list.ron"))
+        picus::parse_stylesheet_ron(include_str!("../assets/themes/todo_list.ron"))
             .expect("embedded todo_list stylesheet should parse");
     }
 }

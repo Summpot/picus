@@ -1,4 +1,4 @@
-# bevy_xilem Design Document
+# picus Design Document
 
 Date: 2026-02-23
 
@@ -10,7 +10,7 @@ This document describes the **current implementation** after the architecture pi
 
 ## 1. Purpose
 
-`bevy_xilem` integrates Bevy ECS state management with a retained Masonry UI tree, while using
+`picus` integrates Bevy ECS state management with a retained Masonry UI tree, while using
 Xilem Core diff/rebuild semantics for view reconciliation.
 
 The framework now avoids the high-level `xilem::Xilem::new_simple` runner completely.
@@ -21,7 +21,7 @@ The framework now avoids the high-level `xilem::Xilem::new_simple` runner comple
 
 - Bevy owns scheduling and window/input message flow.
 - Masonry is driven as a retained UI runtime resource from Bevy systems.
-- `bevy_xilem` does **not** run a separate Xilem/Masonry event loop.
+- `picus` does **not** run a separate Xilem/Masonry event loop.
 - GUI apps use Bevy's native `App::run()` and `bevy_winit` window lifecycle.
 
 ### 2.2 Headless retained runtime resource
@@ -46,10 +46,10 @@ The framework now avoids the high-level `xilem::Xilem::new_simple` runner comple
 ### 2.3 Explicit Masonry/Vello paint pass (Last)
 
 Because Bevy's renderer plugins are intentionally not required for the retained UI path,
-`bevy_xilem` performs an explicit Vello paint/present pass in `Last`:
+`picus` performs an explicit Vello paint/present pass in `Last`:
 
 - `RenderRoot::redraw()` produces the current scene.
-- a local `bevy_xilem-surface::ExternalWindowSurface` bridge owns persistent
+- a local `picus-surface::ExternalWindowSurface` bridge owns persistent
   surface/device state bound to the Bevy primary window.
 - the pass renders to an intermediate texture, blits to the swapchain surface, and presents.
 - the primary window requests another redraw to keep UI animations and visual updates flowing.
@@ -86,7 +86,7 @@ Built-in widget-originated ECS sync for controls like `UiTextInput` runs immedia
 
 ### 4.1 Component-centric UI component encapsulation (`UiComponentTemplate`)
 
-Built-in logical UI components are organized under `crates/bevy_xilem/src/components/*.rs`. Each UI component module owns its logical component shape, template-part policy, and the trait contract used for registration.
+Built-in logical UI components are organized under `crates/picus/src/components/*.rs`. Each UI component module owns its logical component shape, template-part policy, and the trait contract used for registration.
 
 The unifying trait is `UiComponentTemplate`. Trait responsibilities:
 
@@ -95,11 +95,11 @@ The unifying trait is `UiComponentTemplate`. Trait responsibilities:
 
 ### 4.2 Streamlined registration API
 
-`AppBevyXilemExt` exposes `.register_ui_component::<T: UiComponentTemplate>()`. One call performs projector registration, `Added<T>` expansion system hookup, and selector type alias registration. Built-in UI components are registered centrally, so user apps only call this for explicit custom usage.
+`AppPicusExt` exposes `.register_ui_component::<T: UiComponentTemplate>()`. One call performs projector registration, `Added<T>` expansion system hookup, and selector type alias registration. Built-in UI components are registered centrally, so user apps only call this for explicit custom usage.
 
 ### 4.3 ECS UI component adapter coverage
 
-`bevy_xilem` provides ECS adapters for components producing user actions, such as `ecs_button`, `ecs_checkbox`, `ecs_slider`, `ecs_switch`, and `ecs_text_input`. Non-interactive display/layout widgets are reused directly.
+`picus` provides ECS adapters for components producing user actions, such as `ecs_button`, `ecs_checkbox`, `ecs_slider`, `ecs_switch`, and `ecs_text_input`. Non-interactive display/layout widgets are reused directly.
 
 ### 4.4 Portal-based `UiScrollView` UI component
 
@@ -146,7 +146,7 @@ Runtime styling distinguishes two explicit tiers: `BaseStyleSheet` (embedded Flu
 
 Baseline Fluent theme includes a global `Type("UiRoot")` preflight rule for app-surface background, and the `UiRoot` projector stretches to full viewport so root background styling consistently covers the entire window.
 
-`BevyXilemPlugin` boots with embedded **Fluent Dark** by default. Built-in Fluent theming is provided as a **single multi-variant bundle** (`fluent_theme.ron`) that contains named variants (`dark`, `light`, `high-contrast`, and future additions). The styling system parses/registers this bundle into `RegisteredStyleVariants`.
+`PicusPlugin` boots with embedded **Fluent Dark** by default. Built-in Fluent theming is provided as a **single multi-variant bundle** (`fluent_theme.ron`) that contains named variants (`dark`, `light`, `high-contrast`, and future additions). The styling system parses/registers this bundle into `RegisteredStyleVariants`.
 
 Runtime variant selection is state-driven via `ActiveStyleVariant`. Apps/examples set desired variant by name through `set_active_style_variant_by_name(...)`, and `sync_active_style_variant` automatically applies it to `BaseStyleSheet` + runtime `StyleSheet`. Plugin bootstrap sets the theme file's own default variant as active, and the first `Update` pass applies it automatically.
 
@@ -162,7 +162,7 @@ Layout-affecting styles (padding/border/background) are applied directly to the 
 
 ## 7. Overlays and Modals
 
-`bevy_xilem` includes a built-in ECS overlay model using floating/portal roots natively stacked through Masonry.
+`picus` includes a built-in ECS overlay model using floating/portal roots natively stacked through Masonry.
 
 ### 7.1 Layering and Positioning
 
@@ -185,7 +185,7 @@ trigger buttons in a sticky pressed visual/input state.
 ## 8. Iconography
 
 Built-in directional indicators and radio markers are provided through a dedicated
-`bevy_xilem::icons` module backed by `lucide-icons` icon data/font assets (instead of
+`picus::icons` module backed by `lucide-icons` icon data/font assets (instead of
 hand-drawn canvas paths). The plugin registers bundled Lucide font bytes at startup and icon
 text styling uses the upstream Lucide family name (`"lucide"`) so rendering remains stable
 across locales and system font configurations.
@@ -229,24 +229,24 @@ Driven via `UiProjectorRegistry`.
 
 ## 12. Activation / Deep-link Runtime
 
-The workspace now includes a dedicated crate: `bevy_xilem-activation`.
+The workspace now includes a dedicated crate: `picus-activation`.
 
 ### 12.1 Responsibilities
 
 - **Single-instance gate** (`app-single-instance`): `notify_if_running(app_id)` is used before startup to detect an already-running primary instance and signal it to show. On the first instance, `start_primary(app_id, ...)` keeps the primary ownership alive.
 - **Activation IPC bridge** (`ipc-channel` one-shot rendezvous): primary continuously rotates `IpcOneShotServer` endpoints and publishes the active server name in a per-app rendezvous file under temp dir. Secondary launches read that name, connect through `IpcSender::connect`, forward URI payloads, and wait for explicit ack (`Ack` / `Nack`) over an embedded IPC ack channel before exiting.
 - **Cross-platform transport consistency:** activation parameter forwarding now uses `ipc-channel` on all supported desktop platforms, relying on crate-native platform backends (Unix sockets / Mach ports / named pipes) instead of custom line-protocol socket framing.
-- **Custom URI protocol registration is crate-native:** `bevy_xilem-activation` implements its own protocol registration instead of depending on `sysuri`. Windows uses the same HKCU registry layout as `sysuri`; Linux writes the same `~/.local/share/applications/*.desktop` entry + `xdg-mime` default-handler flow.
+- **Custom URI protocol registration is crate-native:** `picus-activation` implements its own protocol registration instead of depending on `sysuri`. Windows uses the same HKCU registry layout as `sysuri`; Linux writes the same `~/.local/share/applications/*.desktop` entry + `xdg-mime` default-handler flow.
 - **Startup URI collection:** activation scans raw process arguments directly, normalizes quoted values, filters callback URIs by case-insensitive scheme match, and deduplicates before secondary-to-primary IPC forwarding.
-- **macOS bundle workflow:** apps supply their own `Info.plist` through `MacosBundleConfig`. `bevy_xilem-activation` reads that plist, creates/updates a runnable `.app` bundle around the current executable when needed, registers it with Launch Services, and then forcibly rebinds the configured URL scheme to the current app via `LSSetDefaultHandlerForURLScheme` during startup.
+- **macOS bundle workflow:** apps supply their own `Info.plist` through `MacosBundleConfig`. `picus-activation` reads that plist, creates/updates a runnable `.app` bundle around the current executable when needed, registers it with Launch Services, and then forcibly rebinds the configured URL scheme to the current app via `LSSetDefaultHandlerForURLScheme` during startup.
 
 ### 12.2 Pixiv callback flow
 
-`example_pixiv_client` registers `pixiv:` on startup through `bevy_xilem-activation` and uses activation IPC to route callback URIs:
+`example_pixiv_client` registers `pixiv:` on startup through `picus-activation` and uses activation IPC to route callback URIs:
 
 1. User starts browser OAuth from running app.
 2. Browser callback opens `pixiv://account/login?code=...&via=login`.
-3. `bevy_xilem-activation` registers `pixiv:` directly during bootstrap; on macOS it reads the example's checked-in `Info.plist`, generates/refreshes the app bundle used for protocol launches, force-takes over the scheme with `LSSetDefaultHandlerForURLScheme`, then forwards callback URIs from secondary launches over activation IPC to the primary and exits.
+3. `picus-activation` registers `pixiv:` directly during bootstrap; on macOS it reads the example's checked-in `Info.plist`, generates/refreshes the app bundle used for protocol launches, force-takes over the scheme with `LSSetDefaultHandlerForURLScheme`, then forwards callback URIs from secondary launches over activation IPC to the primary and exits.
 4. Primary instance auto-extracts `code` and triggers token exchange (`authorization_code`) using current PKCE verifier.
 
 This removes the manual copy/paste requirement in normal desktop callback flow while preserving manual fallback input behavior.
@@ -255,7 +255,7 @@ This removes the manual copy/paste requirement in normal desktop callback flow w
 
 - **Examples:** Highlighted in crates evaluating architectures (`chess_game`, `ui_showcase`, `todo_list`).
 - **Built-in Fluent variant picker for examples:** non-showcase examples use the built-in `UiThemePicker` component in their normal UI tree so the `sun-moon` trigger lives in the same layout layer as the rest of the app. Its anchored dropdown menu (Dark / Light / High Contrast) is projected through the overlay system with auto-flip placement, and selecting an item updates `ActiveStyleVariant` through `set_active_style_variant_by_name(...)`.
-- **Example-specific style sources:** examples use crate-embedded style overrides via `AppBevyXilemExt::load_style_sheet_ron(...)` (`include_str!` from each example crate), avoiding runtime path dependence for built-in demos.
+- **Example-specific style sources:** examples use crate-embedded style overrides via `AppPicusExt::load_style_sheet_ron(...)` (`include_str!` from each example crate), avoiding runtime path dependence for built-in demos.
 - **Example localization bundles:** showcase/pixiv examples register Fluent bundles from crate-embedded `.ftl` text (`SyncTextSource::String(include_str!(...))`) so locale switching does not depend on runtime filesystem path lookups.
 - **Example font registration:** examples that need explicit font bridge setup register fonts from embedded bytes (`SyncAssetSource::Bytes(include_bytes!(...))`) instead of runtime `FilePath` loading.
 - **Runtime path loading scope:** file-path based style/text/font loading remains available for third-party dynamic asset workflows, but first-party examples default to embedded resources for reproducible startup behavior.

@@ -5,8 +5,8 @@ use std::{
     time::{Duration, Instant},
 };
 
-use bevy_xilem::{
-    AppBevyXilemExt, BevyXilemPlugin, ProjectionCtx, StyleClass, UiDialog, UiEventQueue, UiRoot,
+use picus::{
+    AppPicusExt, PicusPlugin, ProjectionCtx, StyleClass, UiDialog, UiEventQueue, UiRoot,
     UiThemePicker, UiView, apply_label_style, apply_text_input_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
     bevy_ecs::{hierarchy::ChildOf, prelude::*},
@@ -126,7 +126,7 @@ fn spawn_download_modal(world: &mut World, message: String) {
 fn ensure_io_task_pool() {
     IoTaskPool::get_or_init(|| {
         TaskPoolBuilder::new()
-            .thread_name("bevy_xilem IO Task Pool".to_string())
+            .thread_name("picus IO Task Pool".to_string())
             .build()
     });
 }
@@ -546,18 +546,18 @@ fn drain_download_events(world: &mut World) {
     }
 }
 
-bevy_xilem::impl_ui_component_template!(DownloadRootView, project_download_root);
-bevy_xilem::impl_ui_component_template!(DownloadTitle, project_download_title);
-bevy_xilem::impl_ui_component_template!(DownloadUrlRow, project_download_url_row);
-bevy_xilem::impl_ui_component_template!(DownloadActionRow, project_download_action_row);
-bevy_xilem::impl_ui_component_template!(DownloadDialogModeRow, project_download_dialog_mode_row,);
-bevy_xilem::impl_ui_component_template!(DownloadProgressPanel, project_download_progress_panel);
+picus::impl_ui_component_template!(DownloadRootView, project_download_root);
+picus::impl_ui_component_template!(DownloadTitle, project_download_title);
+picus::impl_ui_component_template!(DownloadUrlRow, project_download_url_row);
+picus::impl_ui_component_template!(DownloadActionRow, project_download_action_row);
+picus::impl_ui_component_template!(DownloadDialogModeRow, project_download_dialog_mode_row,);
+picus::impl_ui_component_template!(DownloadProgressPanel, project_download_progress_panel);
 
 fn build_async_downloader_app() -> App {
     init_logging();
 
     let mut app = App::new();
-    app.add_plugins(BevyXilemPlugin)
+    app.add_plugins(PicusPlugin)
         .load_style_sheet_ron(include_str!("../assets/themes/async_downloader.ron"))
         .insert_resource(DownloadState::default())
         .register_ui_component::<DownloadRootView>()
@@ -584,7 +584,7 @@ fn main() -> Result<(), EventLoopError> {
 mod tests {
     #[test]
     fn embedded_async_downloader_theme_ron_parses() {
-        bevy_xilem::parse_stylesheet_ron(include_str!("../assets/themes/async_downloader.ron"))
+        picus::parse_stylesheet_ron(include_str!("../assets/themes/async_downloader.ron"))
             .expect("embedded async_downloader stylesheet should parse");
     }
 }

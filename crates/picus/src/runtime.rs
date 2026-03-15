@@ -1,4 +1,7 @@
-use std::{fmt::Debug, sync::Arc};
+use std::{
+    fmt::Debug,
+    sync::{Arc, mpsc},
+};
 
 use bevy_ecs::{
     entity::Entity,
@@ -10,17 +13,15 @@ use bevy_input::{
     keyboard::{Key as BevyKey, KeyCode, KeyboardInput},
     mouse::{MouseButton, MouseButtonInput, MouseScrollUnit, MouseWheel},
 };
-#[cfg(test)]
 use bevy_math::Vec2;
 use bevy_time::Time;
 use bevy_window::{
     CursorLeft, CursorMoved, Ime as BevyIme, PrimaryWindow, RawHandleWrapper, Window,
     WindowFocused, WindowResized, WindowScaleFactorChanged, WindowWrapper,
 };
-use bevy_xilem_surface::{ExistingWindowMetrics, ExternalWindowSurface};
 use masonry::layout::{Dim, UnitPoint};
 use masonry::{
-    app::{RenderRoot, RenderRootOptions, WindowSizePolicy},
+    app::{RenderRoot, RenderRootOptions, RenderRootSignal, WindowSizePolicy},
     core::{
         Handled, PointerButton, PointerButtonEvent, PointerEvent, PointerId, PointerInfo,
         PointerScrollEvent, PointerState, PointerType, PointerUpdate, ScrollDelta, TextEvent,
@@ -33,6 +34,7 @@ use masonry::{
     vello::{Renderer, wgpu},
     widgets::Passthrough,
 };
+use picus_surface::{ExistingWindowMetrics, ExternalWindowSurface};
 use xilem::style::Style as _;
 use xilem::winit::window::Window as XilemWinitWindow;
 use xilem_core::{ProxyError, RawProxy, SendMessage, View, ViewId};
@@ -63,6 +65,13 @@ impl RawProxy for NoopProxy {
 
 type RuntimeViewState = <UiAnyView as View<(), (), ViewCtx>>::ViewState;
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) enum ImeWindowSignal {
+    Start,
+    End,
+    Move(Vec2),
+}
+
 #[cfg(test)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum PointerTraceEvent {
@@ -88,6 +97,7 @@ pub struct MasonryRuntime {
     pointer_info: PointerInfo,
     pointer_state: PointerState,
     keyboard_modifiers: Modifiers,
+    ime_signal_receiver: mpsc::Receiver<ImeWindowSignal>,
     viewport_width: f64,
     viewport_height: f64,
     window_surface: Option<ExternalWindowSurface>,
@@ -106,8 +116,9 @@ impl FromWorld for MasonryRuntime {
             Arc::new(NoopProxy),
             Arc::new(tokio::runtime::Runtime::new().expect("tokio runtime should initialize")),
         );
+        let (ime_signal_sender, ime_signal_receiver) = mpsc::channel::<ImeWindowSignal>();
 
-        let initial_view: UiView = Arc::new(label("bevy_xilem: waiting for synthesized root"));
+        let initial_view: UiView = Arc::new(label("picus: waiting for synthesized root"));
         let (initial_root_widget, view_state) = <UiAnyView as View<(), (), ViewCtx>>::build(
             initial_view.as_ref(),
             &mut view_ctx,
@@ -124,8 +135,25 @@ impl FromWorld for MasonryRuntime {
         };
         let initial_viewport = (options.size.width as f64, options.size.height as f64);
 
-        let mut render_root =
-            RenderRoot::new(initial_root_widget.new_widget.erased(), |_| {}, options);
+        let mut render_root = RenderRoot::new(
+            initial_root_widget.new_widget.erased(),
+            move |signal| match signal {
+                RenderRootSignal::StartIme => {
+                    let _ = ime_signal_sender.send(ImeWindowSignal::Start);
+                }
+                RenderRootSignal::EndIme => {
+                    let _ = ime_signal_sender.send(ImeWindowSignal::End);
+                }
+                RenderRootSignal::ImeMoved(position, _size) => {
+                    let _ = ime_signal_sender.send(ImeWindowSignal::Move(Vec2::new(
+                        position.x as f32,
+                        position.y as f32,
+                    )));
+                }
+                _ => {}
+            },
+            options,
+        );
 
         if let Some(fallback) = focus_fallback_widget(&render_root) {
             let _ = render_root.set_focus_fallback(Some(fallback));
@@ -148,6 +176,7 @@ impl FromWorld for MasonryRuntime {
             },
             pointer_state: PointerState::default(),
             keyboard_modifiers: Modifiers::empty(),
+            ime_signal_receiver,
             viewport_width: initial_viewport.0,
             viewport_height: initial_viewport.1,
             window_surface: None,
@@ -223,6 +252,11 @@ impl MasonryRuntime {
 
     pub fn attach_to_window(&mut self, window: Entity, metrics: ExistingWindowMetrics) {
         self.sync_window_metrics(window, metrics);
+    }
+
+    #[must_use]
+    pub fn active_window(&self) -> Option<Entity> {
+        self.active_window
     }
 
     #[must_use]
@@ -634,6 +668,10 @@ impl MasonryRuntime {
         );
     }
 
+    pub(crate) fn take_pending_ime_signals(&mut self) -> Vec<ImeWindowSignal> {
+        self.ime_signal_receiver.try_iter().collect()
+    }
+
     fn sync_window_metrics(&mut self, window: Entity, metrics: ExistingWindowMetrics) {
         let window_changed = self.active_window != Some(window);
         if window_changed {
@@ -672,7 +710,7 @@ impl MasonryRuntime {
 
 fn compose_runtime_root(roots: &[UiView]) -> UiView {
     match roots {
-        [] => Arc::new(label("bevy_xilem: no synthesized root")),
+        [] => Arc::new(label("picus: no synthesized root")),
         [root] => root.clone(),
         _ => Arc::new(
             zstack(roots.to_vec())
@@ -680,6 +718,52 @@ fn compose_runtime_root(roots: &[UiView]) -> UiView {
                 .width(Dim::Stretch)
                 .height(Dim::Stretch),
         ),
+    }
+}
+
+pub fn sync_masonry_ime_state_to_bevy_window(
+    runtime: Option<NonSendMut<MasonryRuntime>>,
+    primary_window_query: Query<Entity, With<PrimaryWindow>>,
+    mut window_query: Query<&mut Window>,
+) {
+    let Some(mut runtime) = runtime else {
+        return;
+    };
+
+    let pending = runtime.take_pending_ime_signals();
+    if pending.is_empty() {
+        return;
+    }
+
+    let target_window = runtime
+        .active_window()
+        .or_else(|| primary_window_query.iter().next());
+    let Some(target_window) = target_window else {
+        return;
+    };
+
+    let Ok(mut window) = window_query.get_mut(target_window) else {
+        return;
+    };
+
+    for signal in pending {
+        match signal {
+            ImeWindowSignal::Start => {
+                if !window.ime_enabled {
+                    window.ime_enabled = true;
+                }
+            }
+            ImeWindowSignal::End => {
+                if window.ime_enabled {
+                    window.ime_enabled = false;
+                }
+            }
+            ImeWindowSignal::Move(position) => {
+                if window.ime_position != position {
+                    window.ime_position = position;
+                }
+            }
+        }
     }
 }
 

@@ -1163,65 +1163,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "bevy_xilem"
-version = "0.1.0"
-dependencies = [
- "bevy_a11y",
- "bevy_app",
- "bevy_asset",
- "bevy_ecs",
- "bevy_embedded_assets",
- "bevy_input",
- "bevy_math",
- "bevy_reflect",
- "bevy_tasks",
- "bevy_text",
- "bevy_time",
- "bevy_tween",
- "bevy_window",
- "bevy_winit",
- "bevy_xilem-surface",
- "crossbeam-queue",
- "fluent",
- "lucide-icons",
- "masonry",
- "num-traits",
- "reqwest",
- "rfd",
- "ron",
- "serde",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "unic-langid",
- "vello",
- "xilem",
- "xilem_core",
- "xilem_masonry",
-]
-
-[[package]]
-name = "bevy_xilem-activation"
-version = "0.1.0"
-dependencies = [
- "app-single-instance",
- "ipc-channel",
- "plist",
- "serde",
- "winreg",
-]
-
-[[package]]
-name = "bevy_xilem-surface"
-version = "0.1.0"
-dependencies = [
- "bevy_window",
- "pollster",
- "tracing",
- "vello",
-]
-
-[[package]]
 name = "bit-set"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2108,7 +2049,7 @@ name = "example_async_downloader"
 version = "0.1.0"
 dependencies = [
  "bevy_ecs",
- "bevy_xilem",
+ "picus",
  "reqwest",
  "shared_utils",
  "tokio",
@@ -2120,7 +2061,7 @@ name = "example_calculator"
 version = "0.1.0"
 dependencies = [
  "bevy_ecs",
- "bevy_xilem",
+ "picus",
  "shared_utils",
  "tracing-subscriber",
 ]
@@ -2130,8 +2071,8 @@ name = "example_chess_game"
 version = "0.1.0"
 dependencies = [
  "bevy_ecs",
- "bevy_xilem",
  "num-traits",
+ "picus",
  "shared_utils",
  "tracing-subscriber",
 ]
@@ -2141,8 +2082,8 @@ name = "example_game_2048"
 version = "0.1.0"
 dependencies = [
  "bevy_ecs",
- "bevy_xilem",
  "masonry",
+ "picus",
  "shared_utils",
  "tracing-subscriber",
 ]
@@ -2152,7 +2093,7 @@ name = "example_overlay_hit_routing"
 version = "0.1.0"
 dependencies = [
  "bevy_ecs",
- "bevy_xilem",
+ "picus",
  "shared_utils",
  "tracing-subscriber",
 ]
@@ -2169,13 +2110,13 @@ dependencies = [
  "bevy_embedded_assets",
  "bevy_image",
  "bevy_text",
- "bevy_xilem",
- "bevy_xilem-activation",
  "chrono",
  "crossbeam-channel",
  "image",
  "lucide-icons",
  "md5",
+ "picus",
+ "picus-activation",
  "reqwest",
  "serde",
  "serde_json",
@@ -2191,7 +2132,7 @@ name = "example_timer"
 version = "0.1.0"
 dependencies = [
  "bevy_ecs",
- "bevy_xilem",
+ "picus",
  "shared_utils",
  "tokio",
  "tracing-subscriber",
@@ -2202,7 +2143,7 @@ name = "example_todo_list"
 version = "0.1.0"
 dependencies = [
  "bevy_ecs",
- "bevy_xilem",
+ "picus",
  "shared_utils",
  "tracing-subscriber",
 ]
@@ -2213,7 +2154,7 @@ version = "0.1.0"
 dependencies = [
  "bevy_ecs",
  "bevy_embedded_assets",
- "bevy_xilem",
+ "picus",
  "shared_utils",
  "tracing",
  "tracing-subscriber",
@@ -4244,6 +4185,65 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5be167a7af36ee22fe3115051bc51f6e6c7054c9348e28deb4f49bd6f705a315"
 
 [[package]]
+name = "picus"
+version = "0.1.0"
+dependencies = [
+ "bevy_a11y",
+ "bevy_app",
+ "bevy_asset",
+ "bevy_ecs",
+ "bevy_embedded_assets",
+ "bevy_input",
+ "bevy_math",
+ "bevy_reflect",
+ "bevy_tasks",
+ "bevy_text",
+ "bevy_time",
+ "bevy_tween",
+ "bevy_window",
+ "bevy_winit",
+ "crossbeam-queue",
+ "fluent",
+ "lucide-icons",
+ "masonry",
+ "num-traits",
+ "picus-surface",
+ "reqwest",
+ "rfd",
+ "ron",
+ "serde",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "unic-langid",
+ "vello",
+ "xilem",
+ "xilem_core",
+ "xilem_masonry",
+]
+
+[[package]]
+name = "picus-activation"
+version = "0.1.0"
+dependencies = [
+ "app-single-instance",
+ "ipc-channel",
+ "plist",
+ "serde",
+ "winreg",
+]
+
+[[package]]
+name = "picus-surface"
+version = "0.1.0"
+dependencies = [
+ "bevy_window",
+ "pollster",
+ "tracing",
+ "vello",
+]
+
+[[package]]
 name = "pin-project"
 version = "1.1.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5250,7 +5250,7 @@ name = "shared_utils"
 version = "0.1.0"
 dependencies = [
  "bevy_ecs",
- "bevy_xilem",
+ "picus",
  "tracing-subscriber",
 ]
 
