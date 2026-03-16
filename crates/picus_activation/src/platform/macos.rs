@@ -14,7 +14,7 @@ use objc2::rc::Retained;
 #[cfg(target_os = "macos")]
 use objc2_app_kit::NSWorkspace;
 #[cfg(target_os = "macos")]
-use objc2_foundation::{NSError, NSString, NSURL};
+use objc2_foundation::{NSBundle, NSError, NSString, NSURL};
 #[cfg(target_os = "macos")]
 use plist::{Dictionary, Value};
 
@@ -29,7 +29,9 @@ const DEFAULT_HANDLER_COMPLETION_WAIT: Duration = Duration::from_secs(1);
 
 #[cfg(target_os = "macos")]
 pub(crate) fn register(protocol: &ResolvedProtocolRegistration) -> Result<()> {
-    let bundle = match find_current_app_bundle(protocol.executable.as_path())? {
+    let bundle = match find_main_app_bundle()?
+        .or(find_current_app_bundle(protocol.executable.as_path())?)
+    {
         Some(bundle) => bundle,
         None => {
             let Some(config) = protocol.macos_bundle.as_ref() else {
@@ -125,6 +127,9 @@ pub fn create_app_bundle_from_plist(
     })?;
 
     let bundle_path = applications_dir.join(format!("{bundle_name}.app"));
+    if bundle_path.exists() && !bundle_path.is_dir() {
+        remove_path_if_exists(&bundle_path)?;
+    }
     let contents_dir = bundle_path.join("Contents");
     let macos_dir = contents_dir.join("MacOS");
     fs::create_dir_all(&macos_dir).map_err(|error| {
@@ -141,6 +146,7 @@ pub fn create_app_bundle_from_plist(
             config.info_plist, info_plist_path
         ))
     })?;
+    write_pkg_info(&contents_dir)?;
 
     let executable_path = macos_dir.join(info_plist.executable_name.as_str());
     remove_path_if_exists(&executable_path)?;
@@ -177,16 +183,46 @@ pub(crate) fn find_current_app_bundle(executable: &Path) -> Result<Option<MacosA
         return Ok(None);
     }
 
+    app_bundle_from_bundle_path(bundle_path, Some(executable.to_path_buf()))
+}
+
+#[cfg(target_os = "macos")]
+fn find_main_app_bundle() -> Result<Option<MacosAppBundle>> {
+    let bundle = NSBundle::mainBundle();
+    let bundle_path = PathBuf::from(bundle.bundlePath().to_string());
+    app_bundle_from_bundle_path(bundle_path.as_path(), None)
+}
+
+#[cfg(target_os = "macos")]
+fn app_bundle_from_bundle_path(
+    bundle_path: &Path,
+    executable_override: Option<PathBuf>,
+) -> Result<Option<MacosAppBundle>> {
+    if bundle_path.extension().and_then(|value| value.to_str()) != Some("app") {
+        return Ok(None);
+    }
+
+    let contents_dir = bundle_path.join("Contents");
     let info_plist_path = contents_dir.join("Info.plist");
     if !info_plist_path.exists() {
         return Ok(None);
     }
 
     let info_plist = read_info_plist(&info_plist_path)?;
+    let executable_path = executable_override.unwrap_or_else(|| {
+        contents_dir
+            .join("MacOS")
+            .join(info_plist.executable_name.as_str())
+    });
+
+    if !executable_path.exists() {
+        return Ok(None);
+    }
+
     Ok(Some(MacosAppBundle {
         bundle_path: bundle_path.to_path_buf(),
         info_plist_path,
-        executable_path: executable.to_path_buf(),
+        executable_path,
         info_plist,
     }))
 }
@@ -305,6 +341,17 @@ fn create_symlink_or_copy(source: &Path, dest: &Path) -> Result<()> {
         })?;
         Ok(())
     }
+}
+
+#[cfg(target_os = "macos")]
+fn write_pkg_info(contents_dir: &Path) -> Result<()> {
+    let pkg_info_path = contents_dir.join("PkgInfo");
+    fs::write(&pkg_info_path, b"APPL????").map_err(|error| {
+        ActivationError::Platform(format!(
+            "failed to write PkgInfo at {:?}: {error}",
+            pkg_info_path
+        ))
+    })
 }
 
 #[cfg(target_os = "macos")]
@@ -478,6 +525,7 @@ mod tests {
         assert!(bundle.bundle_path.exists());
         assert!(bundle.info_plist_path.exists());
         assert!(bundle.executable_path.exists());
+        assert!(bundle.bundle_path.join("Contents/PkgInfo").exists());
         assert_eq!(
             bundle
                 .bundle_path

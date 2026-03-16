@@ -11,11 +11,11 @@ pub mod widgets;
 pub use core::*;
 
 use crate::ecs::{
-    UiButton, UiCheckbox, UiColorPicker, UiColorPickerPanel, UiComboBox, UiDatePicker,
+    UiBadge, UiButton, UiCheckbox, UiColorPicker, UiColorPickerPanel, UiComboBox, UiDatePicker,
     UiDatePickerPanel, UiDialog, UiDropdownMenu, UiFlexColumn, UiFlexRow, UiGroupBox, UiLabel,
-    UiMenuBar, UiMenuBarItem, UiMenuItemPanel, UiOverlayRoot, UiRadioGroup, UiRoot, UiScrollView,
-    UiSlider, UiSpinner, UiSplitPane, UiSwitch, UiTabBar, UiTable, UiTextInput, UiThemePicker,
-    UiThemePickerMenu, UiToast, UiTooltip, UiTreeNode,
+    UiMenuBar, UiMenuBarItem, UiMenuItemPanel, UiOverlayRoot, UiProgressBar, UiRadioGroup, UiRoot,
+    UiScrollView, UiSlider, UiSpinner, UiSplitPane, UiSwitch, UiTabBar, UiTable, UiTextInput,
+    UiThemePicker, UiThemePickerMenu, UiToast, UiTooltip, UiTreeNode,
 };
 
 /// Register non-UI-component foundational projectors.
@@ -37,10 +37,12 @@ pub fn register_builtin_projectors(registry: &mut UiProjectorRegistry) {
 
     registry
         .register_component::<UiButton>(elements::project_button)
+        .register_component::<UiBadge>(elements::project_badge)
         .register_component::<UiCheckbox>(elements::project_checkbox)
         .register_component::<UiSlider>(elements::project_slider)
         .register_component::<UiSwitch>(elements::project_switch)
         .register_component::<UiTextInput>(elements::project_text_input)
+        .register_component::<UiProgressBar>(elements::project_progress_bar)
         .register_component::<UiDialog>(dialog::project_dialog)
         .register_component::<UiComboBox>(dropdown::project_combo_box)
         .register_component::<UiDropdownMenu>(dropdown::project_dropdown_menu)

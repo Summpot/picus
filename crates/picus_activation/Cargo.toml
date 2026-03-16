@@ -18,7 +18,7 @@ plist = "1.8"
 block2 = "0.6.2"
 objc2 = { version = "0.6.4", default-features = false, features = ["std"] }
 objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std", "block2", "NSWorkspace"] }
-objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSError", "NSString", "NSURL"] }
+objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSBundle", "NSError", "NSString", "NSURL"] }
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.56"

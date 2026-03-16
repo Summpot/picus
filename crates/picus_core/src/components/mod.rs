@@ -5,6 +5,7 @@ use bevy_ecs::prelude::*;
 
 use crate::{AppPicusExt, ProjectionCtx, StyleTypeRegistry, UiView};
 
+mod badge;
 mod button;
 mod checkbox;
 mod color_picker;
@@ -13,6 +14,7 @@ mod date_picker;
 mod dialog;
 mod group_box;
 mod menu;
+mod progress_bar;
 mod radio_group;
 mod scroll_view;
 mod slider;
@@ -27,6 +29,7 @@ mod toast;
 mod tooltip;
 mod tree_node;
 
+pub use badge::*;
 pub use button::*;
 pub use checkbox::*;
 pub use color_picker::*;
@@ -35,6 +38,7 @@ pub use date_picker::*;
 pub use dialog::*;
 pub use group_box::*;
 pub use menu::*;
+pub use progress_bar::*;
 pub use radio_group::*;
 pub use scroll_view::*;
 pub use slider::*;
@@ -127,10 +131,12 @@ pub fn expand_all_ui_component_templates<T: UiComponentTemplate>(world: &mut Wor
 /// Register all built-in UI components with the unified UI component API.
 pub fn register_builtin_ui_components(app: &mut App) {
     app.register_ui_component::<button::UiButton>()
+        .register_ui_component::<badge::UiBadge>()
         .register_ui_component::<checkbox::UiCheckbox>()
         .register_ui_component::<slider::UiSlider>()
         .register_ui_component::<switch::UiSwitch>()
         .register_ui_component::<text_input::UiTextInput>()
+        .register_ui_component::<progress_bar::UiProgressBar>()
         .register_ui_component::<dialog::UiDialog>()
         .register_ui_component::<combo_box::UiComboBox>()
         .register_ui_component::<combo_box::UiDropdownMenu>()

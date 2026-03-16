@@ -1,12 +1,12 @@
 use super::{
     core::{BuiltinUiAction, ProjectionCtx, UiView},
-    utils::localized_font_stack,
+    utils::{localized_font_stack, translate_text},
 };
 use crate::{
     ecs::{
         LocalizeText, PartSliderDecrease, PartSliderIncrease, PartSliderThumb, PartSliderTrack,
-        PartSwitchThumb, PartSwitchTrack, UiButton, UiCheckbox, UiLabel, UiSlider, UiSwitch,
-        UiTextInput,
+        PartSwitchThumb, PartSwitchTrack, UiBadge, UiButton, UiCheckbox, UiLabel, UiProgressBar,
+        UiSlider, UiSwitch, UiTextInput,
     },
     i18n::resolve_localized_text,
     styling::{
@@ -21,7 +21,9 @@ use masonry::layout::Length;
 use std::sync::Arc;
 use tracing::trace;
 use xilem_masonry::style::Style as _;
-use xilem_masonry::view::{FlexExt as _, flex_row, label, transformed};
+use xilem_masonry::view::{
+    FlexExt as _, badge, flex_row, label, progress_bar, sized_box, transformed,
+};
 
 fn child_entity_views(ctx: &ProjectionCtx<'_>) -> Vec<(Entity, UiView)> {
     let child_entities = ctx
@@ -109,6 +111,24 @@ pub(crate) fn project_button(button_component: &UiButton, ctx: ProjectionCtx<'_>
     ))
 }
 
+pub(crate) fn project_badge(badge_component: &UiBadge, ctx: ProjectionCtx<'_>) -> UiView {
+    let mut style = resolve_style(ctx.world, ctx.entity);
+    let text = translate_text(
+        ctx.world,
+        badge_component.text_key.as_deref(),
+        &badge_component.text,
+    );
+
+    if let Some(stack) = localized_font_stack(ctx.world, ctx.entity) {
+        style.font_family = Some(stack);
+    }
+
+    Arc::new(apply_widget_style(
+        badge(apply_label_style(label(text), &style)),
+        &style,
+    ))
+}
+
 pub(crate) fn project_checkbox(checkbox: &UiCheckbox, ctx: ProjectionCtx<'_>) -> UiView {
     let style = resolve_style(ctx.world, ctx.entity);
     Arc::new(apply_direct_widget_style(
@@ -184,6 +204,27 @@ pub(crate) fn project_switch(switch_component: &UiSwitch, ctx: ProjectionCtx<'_>
         ),
         &style,
     ))
+}
+
+pub(crate) fn project_progress_bar(progress: &UiProgressBar, ctx: ProjectionCtx<'_>) -> UiView {
+    let style = resolve_style(ctx.world, ctx.entity);
+    let scale = style.layout.scale.max(0.01);
+
+    Arc::new(
+        transformed(
+            sized_box(
+                progress_bar(progress.progress)
+                    .corner_radius(style.layout.corner_radius)
+                    .border(
+                        style.colors.border.unwrap_or(xilem::Color::TRANSPARENT),
+                        style.layout.border_width,
+                    )
+                    .background_color(style.colors.bg.unwrap_or(xilem::Color::TRANSPARENT)),
+            )
+            .padding(style.layout.padding),
+        )
+        .scale(scale),
+    )
 }
 
 pub(crate) fn project_text_input(input: &UiTextInput, ctx: ProjectionCtx<'_>) -> UiView {

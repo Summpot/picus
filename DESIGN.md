@@ -99,7 +99,7 @@ The unifying trait is `UiComponentTemplate`. Trait responsibilities:
 
 ### 4.3 ECS UI component adapter coverage
 
-`picus_core` provides ECS adapters for components producing user actions, such as `ecs_button`, `ecs_checkbox`, `ecs_slider`, `ecs_switch`, and `ecs_text_input`. Non-interactive display/layout widgets are reused directly.
+`picus_core` provides ECS adapters for components producing user actions, such as `ecs_button`, `ecs_checkbox`, `ecs_slider`, `ecs_switch`, and `ecs_text_input`. It also ships ECS-native display wrappers for additional Masonry/Xilem widgets like `UiBadge` and `UiProgressBar`, while non-interactive display/layout widgets can still be reused directly.
 
 ### 4.4 Portal-based `UiScrollView` UI component
 
@@ -239,6 +239,7 @@ The workspace now includes a dedicated crate: `picus_activation`.
 - **Custom URI protocol registration is crate-native:** `picus_activation` implements its own protocol registration instead of depending on `sysuri`. Windows uses the same HKCU registry layout as `sysuri`; Linux writes the same `~/.local/share/applications/*.desktop` entry + `xdg-mime` default-handler flow.
 - **Startup URI collection:** activation scans raw process arguments directly, normalizes quoted values, filters callback URIs by case-insensitive scheme match, and deduplicates before secondary-to-primary IPC forwarding.
 - **macOS bundle workflow:** apps supply their own `Info.plist` through `MacosBundleConfig`. `picus_activation` reads that plist, creates/updates a runnable `.app` bundle around the current executable when needed, registers it with Launch Services, and then requests the current app bundle become the default URL-scheme handler via `NSWorkspace::setDefaultApplicationAtURL:toOpenURLsWithScheme:completionHandler:` through `objc2` AppKit/Foundation bindings during startup.
+- **macOS current-bundle detection:** when the process is already running from an application bundle, activation resolves that bundle through `NSBundle::mainBundle()` instead of inferring solely from `current_exe()`, keeping Launch Services registration and default URL-scheme ownership pinned to the real running app bundle.
 
 ### 12.2 Pixiv callback flow
 

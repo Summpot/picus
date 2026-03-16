@@ -2350,6 +2350,84 @@ fn dropdown_padding_click_is_in_overlay_hit_path_and_does_not_dismiss() {
 }
 
 #[test]
+fn dropdown_item_text_region_hits_button_entity_instead_of_child_subwidget() {
+    let mut app = App::new();
+    app.add_plugins(PicusPlugin);
+
+    let mut window = Window::default();
+    window.resolution.set(800.0, 600.0);
+    app.world_mut().spawn((window, PrimaryWindow));
+
+    let root = app.world_mut().spawn((UiRoot, crate::UiFlexColumn)).id();
+    let combo = app
+        .world_mut()
+        .spawn((
+            crate::UiComboBox::new(vec![
+                crate::UiComboOption::new("one", "One"),
+                crate::UiComboOption::new("two", "Longer option label"),
+            ]),
+            ChildOf(root),
+        ))
+        .id();
+
+    app.update();
+
+    let dropdown = open_combo_dropdown(&mut app, combo);
+    app.update();
+
+    let item_entity = {
+        let mut query = app.world_mut().query::<(Entity, &crate::UiDropdownItem)>();
+        query
+            .iter(app.world())
+            .find_map(|(entity, item)| {
+                (item.dropdown == dropdown && item.index == 1).then_some(entity)
+            })
+            .expect("second dropdown item should exist")
+    };
+
+    let hit_position = {
+        let debug = format!("entity={}", item_entity.to_bits());
+        let runtime = app.world().non_send_resource::<crate::MasonryRuntime>();
+        let root = runtime.render_root.get_layer_root(0);
+        let widget_id = find_widget_id_by_debug_text(root, &debug)
+            .expect("dropdown item button should expose an entity-tagged widget");
+        widget_center_for_widget_id(&app, widget_id)
+    };
+    let (hit_widget, hit_debug_text) = {
+        let runtime = app.world().non_send_resource::<crate::MasonryRuntime>();
+        let root = runtime.render_root.get_layer_root(0);
+        root.find_widget_under_pointer((hit_position.x as f64, hit_position.y as f64).into())
+            .map(|widget| {
+                (
+                    widget.short_type_name().to_string(),
+                    widget.get_debug_text().unwrap_or_default(),
+                )
+            })
+            .unwrap_or_default()
+    };
+
+    assert_eq!(hit_widget.as_str(), "EcsButtonWithChildWidget");
+    assert_eq!(hit_debug_text, format!("entity={}", item_entity.to_bits()));
+}
+
+#[test]
+fn plugin_auto_registers_badge_and_progress_bar_components() {
+    let mut app = App::new();
+    app.add_plugins(PicusPlugin);
+
+    let root = app.world_mut().spawn((UiRoot, crate::UiFlexColumn)).id();
+    app.world_mut()
+        .spawn((crate::UiBadge::new("Beta"), ChildOf(root)));
+    app.world_mut()
+        .spawn((crate::UiProgressBar::determinate(0.5), ChildOf(root)));
+
+    app.update();
+
+    let stats = app.world().resource::<crate::UiSynthesisStats>();
+    assert_eq!(stats.unhandled_count, 0);
+}
+
+#[test]
 fn handle_global_overlay_clicks_closes_overlay_on_outside_click_without_suppression() {
     let mut app = App::new();
     app.add_plugins(PicusPlugin);

@@ -6,8 +6,9 @@ use masonry::{
     core::keyboard::{Key, NamedKey},
     core::{
         AccessCtx, AccessEvent, ChildrenIds, EventCtx, HasProperty, LayoutCtx, MeasureCtx,
-        PaintCtx, PointerButton, PointerButtonEvent, PointerEvent, PropertiesMut, PropertiesRef,
-        Property, RegisterCtx, TextEvent, Update, UpdateCtx, Widget, WidgetMut, WidgetPod,
+        NewWidget, PaintCtx, PointerButton, PointerButtonEvent, PointerEvent, PropertiesMut,
+        PropertiesRef, Property, RegisterCtx, TextEvent, Update, UpdateCtx, Widget, WidgetMut,
+        WidgetPod,
     },
     kurbo::Size,
     layout::{LayoutSize, LenReq, SizeDef},
@@ -19,6 +20,7 @@ use vello::Scene;
 use crate::{
     events::{UiEvent, push_global_ui_event},
     styling::UiInteractionEvent,
+    widgets::HitTransparentWidget,
 };
 
 /// Internal action used to force Xilem driver ticks for ECS button state changes.
@@ -31,7 +33,7 @@ pub enum EcsButtonWidgetAction {
 pub struct EcsButtonWidget<A> {
     entity: Entity,
     action: A,
-    label: WidgetPod<Label>,
+    label: WidgetPod<HitTransparentWidget>,
     hovered: bool,
     pressed: bool,
 }
@@ -44,7 +46,8 @@ impl<A> EcsButtonWidget<A> {
         Self {
             entity,
             action,
-            label: Label::new(label).with_auto_id().to_pod(),
+            label: NewWidget::new(HitTransparentWidget::new(Label::new(label).with_auto_id()))
+                .to_pod(),
             hovered: false,
             pressed: false,
         }
@@ -69,7 +72,10 @@ where
     }
 
     pub fn set_label(this: &mut WidgetMut<'_, Self>, label: impl Into<masonry::core::ArcStr>) {
-        Label::set_text(&mut this.ctx.get_mut(&mut this.widget.label), label);
+        let mut wrapper = this.ctx.get_mut(&mut this.widget.label);
+        let mut child = HitTransparentWidget::child_mut(&mut wrapper);
+        let mut label_widget = child.downcast::<Label>();
+        Label::set_text(&mut label_widget, label);
     }
 
     fn push_action(&self) {

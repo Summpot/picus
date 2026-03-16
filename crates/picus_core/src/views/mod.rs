@@ -46,7 +46,9 @@ pub use entity_scope_view::entity_scope;
 pub use opaque_hitbox_view::{OpaqueHitboxView, opaque_hitbox, opaque_hitbox_for_entity};
 pub use scroll_portal_view::{ScrollPortalView, scroll_portal};
 pub use xilem_masonry::view::{
+    badge as xilem_badge, badge_count as xilem_badge_count, badge_text as xilem_badge_text,
     button as xilem_button, button_any_pointer as xilem_button_any_pointer,
-    checkbox as xilem_checkbox, slider as xilem_slider, switch as xilem_switch,
-    text_button as xilem_text_button, text_input as xilem_text_input,
+    checkbox as xilem_checkbox, image as xilem_image, progress_bar as xilem_progress_bar,
+    slider as xilem_slider, switch as xilem_switch, text_button as xilem_text_button,
+    text_input as xilem_text_input, zstack as xilem_zstack,
 };

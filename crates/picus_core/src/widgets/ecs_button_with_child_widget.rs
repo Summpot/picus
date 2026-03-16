@@ -6,8 +6,9 @@ use masonry::{
     core::keyboard::{Key, NamedKey},
     core::{
         AccessCtx, AccessEvent, ChildrenIds, EventCtx, HasProperty, LayoutCtx, MeasureCtx,
-        PaintCtx, PointerButton, PointerButtonEvent, PointerEvent, PropertiesMut, PropertiesRef,
-        Property, RegisterCtx, TextEvent, Update, UpdateCtx, Widget, WidgetMut, WidgetPod,
+        NewWidget, PaintCtx, PointerButton, PointerButtonEvent, PointerEvent, PropertiesMut,
+        PropertiesRef, Property, RegisterCtx, TextEvent, Update, UpdateCtx, Widget, WidgetMut,
+        WidgetPod,
     },
     kurbo::{Axis, Size},
     layout::{LayoutSize, LenReq, SizeDef},
@@ -18,14 +19,14 @@ use vello::Scene;
 use crate::{
     events::{UiEvent, push_global_ui_event},
     styling::UiInteractionEvent,
-    widgets::EcsButtonWidgetAction,
+    widgets::{EcsButtonWidgetAction, HitTransparentWidget},
 };
 
 /// Masonry button widget that hosts an arbitrary child while dispatching typed ECS actions.
 pub struct EcsButtonWithChildWidget<A> {
     entity: Entity,
     action: A,
-    child: WidgetPod<dyn Widget>,
+    child: WidgetPod<HitTransparentWidget>,
     hovered: bool,
     pressed: bool,
 }
@@ -42,7 +43,7 @@ impl<A> EcsButtonWithChildWidget<A> {
         Self {
             entity,
             action,
-            child: child.erased().to_pod(),
+            child: NewWidget::new(HitTransparentWidget::new(child)).to_pod(),
             hovered: false,
             pressed: false,
         }
@@ -66,7 +67,7 @@ where
         this.widget.action = action;
     }
 
-    pub fn child_mut<'t>(this: &'t mut WidgetMut<'_, Self>) -> WidgetMut<'t, dyn Widget> {
+    pub fn child_mut<'t>(this: &'t mut WidgetMut<'_, Self>) -> WidgetMut<'t, HitTransparentWidget> {
         this.ctx.get_mut(&mut this.widget.child)
     }
 

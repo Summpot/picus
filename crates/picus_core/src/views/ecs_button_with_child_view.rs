@@ -2,7 +2,7 @@ use bevy_ecs::entity::Entity;
 use xilem_core::{MessageCtx, MessageResult, Mut, View, ViewMarker};
 use xilem_masonry::{Pod, ViewCtx, WidgetView};
 
-use crate::widgets::{EcsButtonWidgetAction, EcsButtonWithChildWidget};
+use crate::widgets::{EcsButtonWidgetAction, EcsButtonWithChildWidget, HitTransparentWidget};
 
 /// ECS-dispatched button view that accepts an arbitrary child widget view.
 #[must_use = "View values do nothing unless returned into the synthesized UI tree."]
@@ -72,7 +72,8 @@ where
 
         EcsButtonWithChildWidget::set_action(&mut element, self.action.clone());
 
-        let mut child = EcsButtonWithChildWidget::child_mut(&mut element);
+        let mut child_wrapper = EcsButtonWithChildWidget::child_mut(&mut element);
+        let mut child = HitTransparentWidget::child_mut(&mut child_wrapper);
         self.child
             .rebuild(&prev.child, view_state, ctx, child.downcast(), app_state);
     }
@@ -84,7 +85,8 @@ where
         mut element: Mut<'_, Self::Element>,
     ) {
         {
-            let mut child = EcsButtonWithChildWidget::child_mut(&mut element);
+            let mut child_wrapper = EcsButtonWithChildWidget::child_mut(&mut element);
+            let mut child = HitTransparentWidget::child_mut(&mut child_wrapper);
             self.child.teardown(view_state, ctx, child.downcast());
         }
         ctx.teardown_action_source(element);
@@ -98,7 +100,8 @@ where
         app_state: &mut (),
     ) -> MessageResult<()> {
         if !message.remaining_path().is_empty() {
-            let mut child = EcsButtonWithChildWidget::child_mut(&mut element);
+            let mut child_wrapper = EcsButtonWithChildWidget::child_mut(&mut element);
+            let mut child = HitTransparentWidget::child_mut(&mut child_wrapper);
             return self
                 .child
                 .message(view_state, message, child.downcast(), app_state);

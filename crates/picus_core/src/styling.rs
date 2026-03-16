@@ -687,10 +687,12 @@ pub fn register_builtin_style_type_aliases(world: &mut World) {
     registry.register_type_aliases::<UiFlexRow>();
     registry.register_type_aliases::<UiLabel>();
     registry.register_type_aliases::<UiButton>();
+    registry.register_type_aliases::<UiBadge>();
     registry.register_type_aliases::<UiCheckbox>();
     registry.register_type_aliases::<UiSlider>();
     registry.register_type_aliases::<UiSwitch>();
     registry.register_type_aliases::<UiTextInput>();
+    registry.register_type_aliases::<UiProgressBar>();
     registry.register_type_aliases::<UiDialog>();
     registry.register_type_aliases::<UiComboBox>();
     registry.register_type_aliases::<UiDropdownMenu>();
