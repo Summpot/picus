@@ -1,6 +1,6 @@
 # pixiv_client
 
-A desktop Pixiv client MVP built with `picus`.
+A desktop Pixiv client MVP built with `picus_core`.
 
 It demonstrates:
 

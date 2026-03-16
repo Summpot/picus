@@ -5,7 +5,7 @@ use std::{
 };
 use tokio::time;
 
-use picus::{
+use picus_core::{
     AppPicusExt, PicusPlugin, ProjectionCtx, StyleClass, UiEventQueue, UiRoot, UiThemePicker,
     UiView, apply_label_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
@@ -397,13 +397,13 @@ fn drain_timer_events_and_tick(world: &mut World) {
     }
 }
 
-picus::impl_ui_component_template!(TimerRootView, project_timer_root);
-picus::impl_ui_component_template!(TimerTitle, project_timer_title);
-picus::impl_ui_component_template!(TimerDialView, project_timer_dial);
-picus::impl_ui_component_template!(TimerElapsedRow, project_timer_elapsed_row);
-picus::impl_ui_component_template!(TimerProgressRow, project_timer_progress_row);
-picus::impl_ui_component_template!(TimerDurationRow, project_timer_duration_row);
-picus::impl_ui_component_template!(TimerUiComponentsRow, project_timer_ui_components_row,);
+picus_core::impl_ui_component_template!(TimerRootView, project_timer_root);
+picus_core::impl_ui_component_template!(TimerTitle, project_timer_title);
+picus_core::impl_ui_component_template!(TimerDialView, project_timer_dial);
+picus_core::impl_ui_component_template!(TimerElapsedRow, project_timer_elapsed_row);
+picus_core::impl_ui_component_template!(TimerProgressRow, project_timer_progress_row);
+picus_core::impl_ui_component_template!(TimerDurationRow, project_timer_duration_row);
+picus_core::impl_ui_component_template!(TimerUiComponentsRow, project_timer_ui_components_row,);
 
 fn build_bevy_timer_app() -> App {
     init_logging();
@@ -439,7 +439,7 @@ mod tests {
 
     #[test]
     fn embedded_timer_theme_ron_parses() {
-        picus::parse_stylesheet_ron(include_str!("../assets/themes/timer.ron"))
+        picus_core::parse_stylesheet_ron(include_str!("../assets/themes/timer.ron"))
             .expect("embedded timer stylesheet should parse");
     }
 

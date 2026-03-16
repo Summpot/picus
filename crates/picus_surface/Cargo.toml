@@ -1,0 +1,11 @@
+[package]
+name = "picus_surface"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+bevy_window.workspace = true
+pollster = "0.4"
+tracing.workspace = true
+vello.workspace = true

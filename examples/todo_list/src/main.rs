@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use picus::{
+use picus_core::{
     AppPicusExt, PicusPlugin, ProjectionCtx, StyleClass, UiEventQueue, UiRoot, UiThemePicker,
     UiView, apply_label_style, apply_text_input_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
@@ -9,13 +9,13 @@ use picus::{
         prelude::*,
     },
     button, checkbox, emit_ui_action, resolve_style, resolve_style_for_classes,
-    resolve_style_for_entity_classes, run_app, text_input,
+    resolve_style_for_entity_classes, run_app,
     xilem::{
         InsertNewline,
         masonry::layout::Length,
         view::{
             FlexExt as _, FlexSpacer, MainAxisAlignment, flex_col, flex_row, label, sized_box,
-            virtual_scroll,
+            text_input as xilem_text_input, virtual_scroll,
         },
         winit::error::EventLoopError,
     },
@@ -108,17 +108,20 @@ fn project_todo_input_area(_: &TodoInputArea, ctx: ProjectionCtx<'_>) -> UiView 
         resolve_style_for_entity_classes(ctx.world, ctx.entity, ["todo.add-button"]);
 
     let draft = ctx.world.resource::<DraftTodo>().0.clone();
+    let input_entity = ctx.entity;
     let entity_for_enter = ctx.entity;
 
     Arc::new(apply_widget_style(
         flex_row((
             apply_text_input_style(
-                text_input(ctx.entity, draft, TodoEvent::SetDraft)
-                    .placeholder("What needs to be done?")
-                    .insert_newline(InsertNewline::OnShiftEnter)
-                    .on_enter(move |_, _| {
-                        emit_ui_action(entity_for_enter, TodoEvent::SubmitDraft);
-                    }),
+                xilem_text_input(draft, move |_, value| {
+                    emit_ui_action(input_entity, TodoEvent::SetDraft(value));
+                })
+                .placeholder("What needs to be done?")
+                .insert_newline(InsertNewline::OnShiftEnter)
+                .on_enter(move |_, _| {
+                    emit_ui_action(entity_for_enter, TodoEvent::SubmitDraft);
+                }),
                 &input_style,
             )
             .flex(1.0),
@@ -378,13 +381,13 @@ fn drain_todo_events_and_mutate_world(world: &mut World) {
     }
 }
 
-picus::impl_ui_component_template!(TodoRootView, project_todo_root);
-picus::impl_ui_component_template!(TodoHeader, project_todo_header);
-picus::impl_ui_component_template!(TodoInputArea, project_todo_input_area);
-picus::impl_ui_component_template!(TodoListContainer, project_todo_list_container);
-picus::impl_ui_component_template!(TodoItem, project_todo_item);
-picus::impl_ui_component_template!(TodoFilterBar, project_filter_bar);
-picus::impl_ui_component_template!(FilterToggle, project_filter_toggle);
+picus_core::impl_ui_component_template!(TodoRootView, project_todo_root);
+picus_core::impl_ui_component_template!(TodoHeader, project_todo_header);
+picus_core::impl_ui_component_template!(TodoInputArea, project_todo_input_area);
+picus_core::impl_ui_component_template!(TodoListContainer, project_todo_list_container);
+picus_core::impl_ui_component_template!(TodoItem, project_todo_item);
+picus_core::impl_ui_component_template!(TodoFilterBar, project_filter_bar);
+picus_core::impl_ui_component_template!(FilterToggle, project_filter_toggle);
 
 fn build_bevy_todo_app() -> App {
     init_logging();
@@ -416,7 +419,7 @@ fn main() -> Result<(), EventLoopError> {
 mod tests {
     #[test]
     fn embedded_todo_theme_ron_parses() {
-        picus::parse_stylesheet_ron(include_str!("../assets/themes/todo_list.ron"))
+        picus_core::parse_stylesheet_ron(include_str!("../assets/themes/todo_list.ron"))
             .expect("embedded todo_list stylesheet should parse");
     }
 }

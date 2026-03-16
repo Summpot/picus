@@ -2,7 +2,7 @@ use std::sync::OnceLock;
 
 use tracing_subscriber::{EnvFilter, fmt};
 
-const DEFAULT_LOG_FILTER: &str = "info,wgpu_core=warn,wgpu_hal=warn,wgpu_hal::vulkan=error,bevy_render=warn,bevy_app=warn,masonry::widget=info,xilem_core=info,xilem_masonry=info,xilem_masonry::masonry_root=info,picus=debug";
+const DEFAULT_LOG_FILTER: &str = "info,wgpu_core=warn,wgpu_hal=warn,wgpu_hal::vulkan=error,bevy_render=warn,bevy_app=warn,masonry::widget=info,xilem_core=info,xilem_masonry=info,xilem_masonry::masonry_root=info,picus_core=debug";
 
 static LOGGING_INITIALIZED: OnceLock<()> = OnceLock::new();
 

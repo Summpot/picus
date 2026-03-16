@@ -17,8 +17,8 @@ bevy_embedded_assets.workspace = true
 bevy_ecs.workspace = true
 bevy_image = { version = "0.18", default-features = false }
 bevy_text = { version = "0.18", default-features = false }
-picus-activation = { path = "../../crates/picus-activation" }
-picus = { path = "../../crates/picus" }
+picus_activation = { path = "../../crates/picus_activation" }
+picus_core = { path = "../../crates/picus_core" }
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 crossbeam-channel = "0.5"
 image = { version = "0.25", default-features = true }

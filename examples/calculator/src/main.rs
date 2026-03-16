@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use picus::{
+use picus_core::{
     AppPicusExt, PicusPlugin, ProjectionCtx, StyleClass, UiEventQueue, UiRoot, UiThemePicker,
     UiView, apply_label_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
@@ -491,11 +491,11 @@ fn drain_calc_events(world: &mut World) {
     }
 }
 
-picus::impl_ui_component_template!(CalcRoot, project_calc_root);
-picus::impl_ui_component_template!(CalcDisplayPanel, project_calc_display);
-picus::impl_ui_component_template!(CalcKeypad, project_calc_keypad);
-picus::impl_ui_component_template!(CalcButtonRow, project_calc_row);
-picus::impl_ui_component_template!(CalcButtonSpec, project_calc_button_component);
+picus_core::impl_ui_component_template!(CalcRoot, project_calc_root);
+picus_core::impl_ui_component_template!(CalcDisplayPanel, project_calc_display);
+picus_core::impl_ui_component_template!(CalcKeypad, project_calc_keypad);
+picus_core::impl_ui_component_template!(CalcButtonRow, project_calc_row);
+picus_core::impl_ui_component_template!(CalcButtonSpec, project_calc_button_component);
 
 fn build_bevy_calculator_app() -> App {
     init_logging();
@@ -525,11 +525,11 @@ fn main() -> Result<(), EventLoopError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use picus::bevy_ecs::schedule::Schedule;
+    use picus_core::bevy_ecs::schedule::Schedule;
 
     #[test]
     fn embedded_calculator_theme_ron_parses() {
-        picus::parse_stylesheet_ron(include_str!("../assets/themes/calculator.ron"))
+        picus_core::parse_stylesheet_ron(include_str!("../assets/themes/calculator.ron"))
             .expect("embedded calculator stylesheet should parse");
     }
 

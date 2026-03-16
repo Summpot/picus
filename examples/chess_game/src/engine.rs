@@ -1,3 +1,10 @@
+#![allow(
+    clippy::assertions_on_constants,
+    clippy::collapsible_if,
+    clippy::too_many_arguments,
+    clippy::upper_case_acronyms
+)]
+
 // cargo clippy -- -A clippy::collapsible_if -A unreachable_code -A dead_code -A clippy::upper_case_acronyms -A clippy::out_of_bounds_indexing -A clippy::overly_complex_bool_expr -A clippy::too_many_arguments -A clippy::assertions_on_constants
 //
 // The Salewski Chess Engine -- ported from Nim to Rust as a tiny excercise while learning the Rust language
@@ -286,7 +293,7 @@ pub fn new_game() -> Game {
     //set_board(&mut g, VOID_ID, BF, B8);
     //set_board(&mut g, VOID_ID, BG, B8);
 
-    if !true {
+    if false {
         println!("yyy");
         g.board = [0; 64];
         //set_board(&mut g, B_KING, BH, B3);
@@ -715,10 +722,6 @@ fn is_a_king(i: i8) -> bool {
     i == W_KING || i == B_KING
 }
 
-fn is_queen_or_king(i: i8) -> bool {
-    i == W_QUEEN || i == B_QUEEN || i == W_KING || i == B_KING
-}
-
 fn col_idx(c: Color) -> ColorIndex {
     (c as i8 + 1) >> 1
 }
@@ -956,7 +959,8 @@ fn much_faster_write_to_bit_buffer(g: &Game, c: Color) -> BitBuffer192 {
     result[0..CORE_BIT_BUFFER_SIZE].copy_from_slice(&collector[0..CORE_BIT_BUFFER_SIZE]);
     debug_assert!(result[22] == 0);
     debug_assert!(result[23] == 0);
-    if BIT_BUFFER_SIZE == HASH_BIT_BUFFER_SIZE {
+    #[cfg(feature = "salewskiChessDebug")]
+    {
         result[24..HASH_BIT_BUFFER_SIZE].copy_from_slice(&board_hash(g.board).to_le_bytes());
     } // sanity check with hash
     result
@@ -1593,7 +1597,6 @@ fn king_pos(g: &Game, c: Color) -> i8 {
 const V_RATIO: i64 = 8;
 
 const RANGE_EXTEND: bool = false; // depth extend based on distance of movement -- bad idea
-const SELECT_EXTEND: bool = false; // depth extend based on source and destination pieces
 const CASTLING_EXTEND: bool = true;
 const CAPTURE_EXTEND: bool = false; // depth extend for captures -- already covered by ddi array
 const EQUAL_CAPTURE_EXTEND: bool = true; // depth extend for captures of pieces with similar value -- might be a good idea
@@ -1923,13 +1926,13 @@ fn abeta(
             if !NO_EXTEND_AT_ALL && depth_0 > 0 && !g.is_endgame {
                 // EXTEND tests are not very cheap, so do then only in higher levels
                 // the following code is ordered so that v_depth_inc never is decreased, avoiding max() or lift() calls.
-                if false && SELECT_EXTEND {
+                if false {
                     // && SELECT_EXTEND {
                     // makes no sense in endgame
                     sdi = [0, 0, 0, 0, 0, 1, 1]; // source figure depth increase -- increase depth when king or queen is moved
                     ddi = [0, 0, 1, 1, 1, 2, 0]; // destination figure depth increase -- increase depth for fat captures
                 }
-                if false && is_queen_or_king(el.sf) && g.move_chain[cup as usize] == el.si {
+                if false {
                     // we use in_check() test for king and queen instead!
                     v_depth_inc = 1; // not 2, because sdi gives already +1
                 }
@@ -2227,7 +2230,7 @@ fn _check_mate_in(score: i64) -> i64 {
 }
 
 fn close_to_checkmate(score: i64) -> bool {
-    score > 17000 || score < -17000
+    !(-17000..=17000).contains(&score)
 }
 
 fn alphabeta(g: &mut Game, color: Color, depth: i64, ep_pos: i8) -> Move {

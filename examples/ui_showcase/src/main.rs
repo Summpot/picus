@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use bevy_embedded_assets::{EmbeddedAssetPlugin, PluginMode};
-use picus::{
+use picus_core::{
     AppI18n, AppPicusExt, BuiltinUiAction, HasTooltip, LocalizeText, PicusPlugin, ProjectionCtx,
     StyleClass, SyncAssetSource, SyncTextSource, ToastKind, UiButton, UiCheckbox,
     UiCheckboxChanged, UiColorPicker, UiColorPickerChanged, UiComboBox, UiComboBoxChanged,
@@ -30,34 +30,34 @@ use unic_langid::LanguageIdentifier;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ThemeMode {
-    FluentDark,
-    FluentLight,
-    FluentHighContrast,
+    Dark,
+    Light,
+    HighContrast,
 }
 
 impl ThemeMode {
     fn from_combo_value(value: &str) -> Option<Self> {
         match value {
-            "fluent_dark" => Some(Self::FluentDark),
-            "fluent_light" => Some(Self::FluentLight),
-            "fluent_high_contrast" => Some(Self::FluentHighContrast),
+            "fluent_dark" => Some(Self::Dark),
+            "fluent_light" => Some(Self::Light),
+            "fluent_high_contrast" => Some(Self::HighContrast),
             _ => None,
         }
     }
 
     const fn variant_name(self) -> &'static str {
         match self {
-            Self::FluentDark => "dark",
-            Self::FluentLight => "light",
-            Self::FluentHighContrast => "high-contrast",
+            Self::Dark => "dark",
+            Self::Light => "light",
+            Self::HighContrast => "high-contrast",
         }
     }
 
     const fn root_variant_class(self) -> &'static str {
         match self {
-            Self::FluentDark => "showcase.theme.fluent_dark",
-            Self::FluentLight => "showcase.theme.fluent_light",
-            Self::FluentHighContrast => "showcase.theme.fluent_high_contrast",
+            Self::Dark => "showcase.theme.fluent_dark",
+            Self::Light => "showcase.theme.fluent_light",
+            Self::HighContrast => "showcase.theme.fluent_high_contrast",
         }
     }
 }
@@ -72,7 +72,7 @@ impl Default for ShowcaseState {
     fn default() -> Self {
         Self {
             last_event: "Interact with any page to see events here.".to_string(),
-            theme: ThemeMode::FluentDark,
+            theme: ThemeMode::Dark,
         }
     }
 }
@@ -188,7 +188,7 @@ fn project_status_display(_: &StatusDisplay, ctx: ProjectionCtx<'_>) -> UiView {
 
 fn setup_showcase(mut commands: Commands) {
     let root = commands
-        .spawn((UiRoot, ShowcaseRoot, root_classes(ThemeMode::FluentDark)))
+        .spawn((UiRoot, ShowcaseRoot, root_classes(ThemeMode::Dark)))
         .id();
 
     commands.spawn((
@@ -735,7 +735,7 @@ fn setup_showcase(mut commands: Commands) {
 }
 
 fn ensure_showcase_default_theme_variant(world: &mut World) {
-    set_active_style_variant_by_name(world, ThemeMode::FluentDark.variant_name());
+    set_active_style_variant_by_name(world, ThemeMode::Dark.variant_name());
 }
 
 fn drain_showcase_events(world: &mut World) {
@@ -1028,8 +1028,8 @@ fn set_showcase_page(world: &mut World, rt: ShowcaseRuntime, page: usize) {
     }
 }
 
-picus::impl_ui_component_template!(ShowcaseRoot, project_showcase_root);
-picus::impl_ui_component_template!(StatusDisplay, project_status_display);
+picus_core::impl_ui_component_template!(ShowcaseRoot, project_showcase_root);
+picus_core::impl_ui_component_template!(StatusDisplay, project_status_display);
 
 fn build_showcase_app() -> App {
     init_logging();
@@ -1040,7 +1040,7 @@ fn build_showcase_app() -> App {
             mode: PluginMode::ReplaceDefault,
         },
         AssetPlugin::default(),
-        TextPlugin::default(),
+        TextPlugin,
         PicusPlugin,
     ))
     .load_style_sheet_ron(include_str!("../assets/themes/ui_showcase.ron"))
@@ -1091,7 +1091,7 @@ fn main() -> Result<(), EventLoopError> {
 mod tests {
     #[test]
     fn embedded_showcase_theme_ron_parses() {
-        picus::parse_stylesheet_ron(include_str!("../assets/themes/ui_showcase.ron"))
+        picus_core::parse_stylesheet_ron(include_str!("../assets/themes/ui_showcase.ron"))
             .expect("embedded ui_showcase stylesheet should parse");
     }
 

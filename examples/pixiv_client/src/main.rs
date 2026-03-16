@@ -2,6 +2,6 @@
 
 mod app;
 
-fn main() -> std::result::Result<(), picus::xilem::winit::error::EventLoopError> {
+fn main() -> std::result::Result<(), picus_core::xilem::winit::error::EventLoopError> {
     app::run()
 }

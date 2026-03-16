@@ -4,7 +4,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use picus::{
+use picus_core::{
     AppPicusExt, PicusPlugin, ProjectionCtx, StyleClass, UiEventQueue, UiRoot, UiThemePicker,
     UiView, apply_label_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
@@ -609,12 +609,12 @@ fn project_chess_ui_components_panel(_: &ChessUiComponentsPanel, ctx: Projection
     let game_res = ctx.world.resource::<ChessGameResource>();
     let ui = ctx.world.resource::<ChessUiResource>();
     let flow = ctx.world.resource::<ChessFlowResource>();
-    build_chess_ui_components_view(ctx.world, &game_res, &ui, &flow, ctx.entity)
+    build_chess_ui_components_view(ctx.world, game_res, ui, flow, ctx.entity)
 }
 
 fn project_chess_board_panel(_: &ChessBoardPanel, ctx: ProjectionCtx<'_>) -> UiView {
     let ui = ctx.world.resource::<ChessUiResource>();
-    build_chess_board_view(ctx.world, &ui, ctx.entity)
+    build_chess_board_view(ctx.world, ui, ctx.entity)
 }
 
 fn setup_chess_world(mut commands: Commands) {
@@ -644,9 +644,9 @@ fn drain_events_and_tick(world: &mut World) {
     });
 }
 
-picus::impl_ui_component_template!(ChessRootView, project_chess_root);
-picus::impl_ui_component_template!(ChessUiComponentsPanel, project_chess_ui_components_panel,);
-picus::impl_ui_component_template!(ChessBoardPanel, project_chess_board_panel);
+picus_core::impl_ui_component_template!(ChessRootView, project_chess_root);
+picus_core::impl_ui_component_template!(ChessUiComponentsPanel, project_chess_ui_components_panel,);
+picus_core::impl_ui_component_template!(ChessBoardPanel, project_chess_board_panel);
 
 fn build_bevy_chess_app() -> App {
     init_logging();
@@ -724,7 +724,7 @@ fn piece_unicode(piece: ColoredPiece) -> &'static str {
 fn chess_piece_font_family() -> &'static str {
     #[cfg(target_os = "macos")]
     {
-        return "Apple Symbols";
+        "Apple Symbols"
     }
 
     #[cfg(target_os = "windows")]
@@ -751,7 +751,7 @@ fn main() -> Result<(), EventLoopError> {
 mod tests {
     #[test]
     fn embedded_chess_theme_ron_parses() {
-        picus::parse_stylesheet_ron(include_str!("../assets/themes/chess_game.ron"))
+        picus_core::parse_stylesheet_ron(include_str!("../assets/themes/chess_game.ron"))
             .expect("embedded chess stylesheet should parse");
     }
 }

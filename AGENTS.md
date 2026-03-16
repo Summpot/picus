@@ -12,6 +12,7 @@ This document defines how automated agents (and humans operating like them) shou
 2. **Keep the project test-first**
    - Add/adjust tests for behavior changes.
    - Ensure `cargo test` passes before finishing.
+   - Eliminate all warnings before finishing; compiler and Clippy warnings are required follow-up work, not optional cleanup.
 
 3. **Rust dependency hygiene**
    - After adding a new Rust dependency (new crate in `Cargo.toml`), check whether `cargo upgrade` is available.
@@ -47,3 +48,4 @@ If a change affects public behavior (config schema, admin endpoints, tunnel prot
 
 - `cargo test`
 - `cargo fmt` (when Rust code changes)
+- `cargo clippy --all-targets --all-features -- -D warnings` (when Rust code changes)

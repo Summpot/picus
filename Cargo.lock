@@ -260,7 +260,7 @@ dependencies = [
  "clipboard-win",
  "image",
  "log",
- "objc2 0.6.3",
+ "objc2 0.6.4",
  "objc2-app-kit 0.3.2",
  "objc2-core-foundation",
  "objc2-core-graphics",
@@ -1263,7 +1263,7 @@ version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cdeb9d870516001442e364c5220d3574d2da8dc765554b4a617230d33fa58ef5"
 dependencies = [
- "objc2 0.6.3",
+ "objc2 0.6.4",
 ]
 
 [[package]]
@@ -1817,7 +1817,7 @@ dependencies = [
  "bitflags 2.11.0",
  "block2 0.6.2",
  "libc",
- "objc2 0.6.3",
+ "objc2 0.6.4",
 ]
 
 [[package]]
@@ -2049,7 +2049,7 @@ name = "example_async_downloader"
 version = "0.1.0"
 dependencies = [
  "bevy_ecs",
- "picus",
+ "picus_core",
  "reqwest",
  "shared_utils",
  "tokio",
@@ -2061,7 +2061,7 @@ name = "example_calculator"
 version = "0.1.0"
 dependencies = [
  "bevy_ecs",
- "picus",
+ "picus_core",
  "shared_utils",
  "tracing-subscriber",
 ]
@@ -2072,7 +2072,7 @@ version = "0.1.0"
 dependencies = [
  "bevy_ecs",
  "num-traits",
- "picus",
+ "picus_core",
  "shared_utils",
  "tracing-subscriber",
 ]
@@ -2083,7 +2083,7 @@ version = "0.1.0"
 dependencies = [
  "bevy_ecs",
  "masonry",
- "picus",
+ "picus_core",
  "shared_utils",
  "tracing-subscriber",
 ]
@@ -2093,7 +2093,7 @@ name = "example_overlay_hit_routing"
 version = "0.1.0"
 dependencies = [
  "bevy_ecs",
- "picus",
+ "picus_core",
  "shared_utils",
  "tracing-subscriber",
 ]
@@ -2115,8 +2115,8 @@ dependencies = [
  "image",
  "lucide-icons",
  "md5",
- "picus",
- "picus-activation",
+ "picus_activation",
+ "picus_core",
  "reqwest",
  "serde",
  "serde_json",
@@ -2132,7 +2132,7 @@ name = "example_timer"
 version = "0.1.0"
 dependencies = [
  "bevy_ecs",
- "picus",
+ "picus_core",
  "shared_utils",
  "tokio",
  "tracing-subscriber",
@@ -2143,7 +2143,7 @@ name = "example_todo_list"
 version = "0.1.0"
 dependencies = [
  "bevy_ecs",
- "picus",
+ "picus_core",
  "shared_utils",
  "tracing-subscriber",
 ]
@@ -2154,7 +2154,7 @@ version = "0.1.0"
 dependencies = [
  "bevy_ecs",
  "bevy_embedded_assets",
- "picus",
+ "picus_core",
  "shared_utils",
  "tracing",
  "tracing-subscriber",
@@ -2348,7 +2348,7 @@ dependencies = [
  "icu_locale_core",
  "linebender_resource_handle",
  "memmap2",
- "objc2 0.6.3",
+ "objc2 0.6.4",
  "objc2-core-foundation",
  "objc2-core-text",
  "objc2-foundation 0.3.2",
@@ -3777,9 +3777,9 @@ dependencies = [
 
 [[package]]
 name = "objc2"
-version = "0.6.3"
+version = "0.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b7c2599ce0ec54857b29ce62166b0ed9b4f6f1a70ccc9a71165b6154caca8c05"
+checksum = "3a12a8ed07aefc768292f076dc3ac8c48f3781c8f2d5851dd3d98950e8c5a89f"
 dependencies = [
  "objc2-encode",
 ]
@@ -3808,7 +3808,7 @@ checksum = "d49e936b501e5c5bf01fda3a9452ff86dc3ea98ad5f283e1455153142d97518c"
 dependencies = [
  "bitflags 2.11.0",
  "block2 0.6.2",
- "objc2 0.6.3",
+ "objc2 0.6.4",
  "objc2-core-graphics",
  "objc2-foundation 0.3.2",
 ]
@@ -3857,7 +3857,7 @@ checksum = "2a180dd8642fa45cdb7dd721cd4c11b1cadd4929ce112ebd8b9f5803cc79d536"
 dependencies = [
  "bitflags 2.11.0",
  "dispatch2",
- "objc2 0.6.3",
+ "objc2 0.6.4",
 ]
 
 [[package]]
@@ -3868,7 +3868,7 @@ checksum = "e022c9d066895efa1345f8e33e584b9f958da2fd4cd116792e15e07e4720a807"
 dependencies = [
  "bitflags 2.11.0",
  "dispatch2",
- "objc2 0.6.3",
+ "objc2 0.6.4",
  "objc2-core-foundation",
  "objc2-io-surface",
 ]
@@ -3933,7 +3933,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e3e0adef53c21f888deb4fa59fc59f7eb17404926ee8a6f59f5df0fd7f9f3272"
 dependencies = [
  "bitflags 2.11.0",
- "objc2 0.6.3",
+ "objc2 0.6.4",
  "objc2-core-foundation",
 ]
 
@@ -3944,7 +3944,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "180788110936d59bab6bd83b6060ffdfffb3b922ba1396b312ae795e1de9d81d"
 dependencies = [
  "bitflags 2.11.0",
- "objc2 0.6.3",
+ "objc2 0.6.4",
  "objc2-core-foundation",
 ]
 
@@ -4185,7 +4185,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5be167a7af36ee22fe3115051bc51f6e6c7054c9348e28deb4f49bd6f705a315"
 
 [[package]]
-name = "picus"
+name = "picus_activation"
+version = "0.1.0"
+dependencies = [
+ "app-single-instance",
+ "block2 0.6.2",
+ "ipc-channel",
+ "objc2 0.6.4",
+ "objc2-app-kit 0.3.2",
+ "objc2-foundation 0.3.2",
+ "plist",
+ "serde",
+ "winreg",
+]
+
+[[package]]
+name = "picus_core"
 version = "0.1.0"
 dependencies = [
  "bevy_a11y",
@@ -4207,7 +4222,7 @@ dependencies = [
  "lucide-icons",
  "masonry",
  "num-traits",
- "picus-surface",
+ "picus_surface",
  "reqwest",
  "rfd",
  "ron",
@@ -4223,18 +4238,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "picus-activation"
-version = "0.1.0"
-dependencies = [
- "app-single-instance",
- "ipc-channel",
- "plist",
- "serde",
- "winreg",
-]
-
-[[package]]
-name = "picus-surface"
+name = "picus_surface"
 version = "0.1.0"
 dependencies = [
  "bevy_window",
@@ -4861,7 +4865,7 @@ dependencies = [
  "js-sys",
  "libc",
  "log",
- "objc2 0.6.3",
+ "objc2 0.6.4",
  "objc2-app-kit 0.3.2",
  "objc2-core-foundation",
  "objc2-foundation 0.3.2",
@@ -5250,7 +5254,7 @@ name = "shared_utils"
 version = "0.1.0"
 dependencies = [
  "bevy_ecs",
- "picus",
+ "picus_core",
  "tracing-subscriber",
 ]
 
@@ -5755,9 +5759,9 @@ checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 
 [[package]]
 name = "tokio"
-version = "1.49.0"
+version = "1.50.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "72a2903cd7736441aac9df9d7688bd0ce48edccaadf181c3b90be801e81d3d86"
+checksum = "27ad5e34374e03cfffefc301becb44e9dc3c17584f414349ebe29ed26661822d"
 dependencies = [
  "bytes",
  "libc",
@@ -6610,7 +6614,7 @@ dependencies = [
  "jni",
  "log",
  "ndk-context",
- "objc2 0.6.3",
+ "objc2 0.6.4",
  "objc2-foundation 0.3.2",
  "url",
  "web-sys",

@@ -5,9 +5,9 @@ use std::{
     time::{Duration, Instant},
 };
 
-use picus::{
+use picus_core::{
     AppPicusExt, PicusPlugin, ProjectionCtx, StyleClass, UiDialog, UiEventQueue, UiRoot,
-    UiThemePicker, UiView, apply_label_style, apply_text_input_style, apply_widget_style,
+    UiThemePicker, UiView, apply_label_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
     bevy_ecs::{hierarchy::ChildOf, prelude::*},
     bevy_tasks::{IoTaskPool, TaskPoolBuilder},
@@ -126,7 +126,7 @@ fn spawn_download_modal(world: &mut World, message: String) {
 fn ensure_io_task_pool() {
     IoTaskPool::get_or_init(|| {
         TaskPoolBuilder::new()
-            .thread_name("picus IO Task Pool".to_string())
+            .thread_name("picus_core IO Task Pool".to_string())
             .build()
     });
 }
@@ -137,7 +137,7 @@ fn url_file_name(url: &str) -> String {
         .and_then(|parsed| {
             parsed
                 .path_segments()
-                .and_then(|segments| segments.filter(|seg| !seg.is_empty()).next_back())
+                .and_then(|mut segments| segments.rfind(|seg| !seg.is_empty()))
                 .map(ToString::to_string)
         })
         .filter(|name| !name.is_empty())
@@ -331,7 +331,7 @@ fn project_download_url_row(_: &DownloadUrlRow, ctx: ProjectionCtx<'_>) -> UiVie
     Arc::new(apply_widget_style(
         flex_row((
             apply_label_style(label("URL:"), &status_style),
-            apply_text_input_style(
+            apply_widget_style(
                 text_input(ctx.entity, state.url.clone(), DownloadEvent::SetUrl)
                     .placeholder(DEFAULT_URL),
                 &input_style,
@@ -411,7 +411,7 @@ fn project_download_progress_panel(_: &DownloadProgressPanel, ctx: ProjectionCtx
         .unwrap_or_else(|| "Target: (not started)".to_string());
 
     Arc::new(flex_col((
-        progress_bar(progress_value(&state)).into_any_flex(),
+        progress_bar(progress_value(state)).into_any_flex(),
         apply_label_style(label(progress_text), &status_style).into_any_flex(),
         apply_label_style(label(target_text), &status_style).into_any_flex(),
         apply_label_style(label(state.status.clone()), &status_style).into_any_flex(),
@@ -546,12 +546,12 @@ fn drain_download_events(world: &mut World) {
     }
 }
 
-picus::impl_ui_component_template!(DownloadRootView, project_download_root);
-picus::impl_ui_component_template!(DownloadTitle, project_download_title);
-picus::impl_ui_component_template!(DownloadUrlRow, project_download_url_row);
-picus::impl_ui_component_template!(DownloadActionRow, project_download_action_row);
-picus::impl_ui_component_template!(DownloadDialogModeRow, project_download_dialog_mode_row,);
-picus::impl_ui_component_template!(DownloadProgressPanel, project_download_progress_panel);
+picus_core::impl_ui_component_template!(DownloadRootView, project_download_root);
+picus_core::impl_ui_component_template!(DownloadTitle, project_download_title);
+picus_core::impl_ui_component_template!(DownloadUrlRow, project_download_url_row);
+picus_core::impl_ui_component_template!(DownloadActionRow, project_download_action_row);
+picus_core::impl_ui_component_template!(DownloadDialogModeRow, project_download_dialog_mode_row,);
+picus_core::impl_ui_component_template!(DownloadProgressPanel, project_download_progress_panel);
 
 fn build_async_downloader_app() -> App {
     init_logging();
@@ -584,7 +584,7 @@ fn main() -> Result<(), EventLoopError> {
 mod tests {
     #[test]
     fn embedded_async_downloader_theme_ron_parses() {
-        picus::parse_stylesheet_ron(include_str!("../assets/themes/async_downloader.ron"))
+        picus_core::parse_stylesheet_ron(include_str!("../assets/themes/async_downloader.ron"))
             .expect("embedded async_downloader stylesheet should parse");
     }
 }

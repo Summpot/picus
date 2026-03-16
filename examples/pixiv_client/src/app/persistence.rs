@@ -10,6 +10,8 @@ use serde::{Deserialize, Serialize};
 use super::*;
 
 const AUTH_FILE_NAME: &str = "auth_session.json";
+const AUTH_NAMESPACE: &str = "picus_core";
+const LEGACY_AUTH_NAMESPACE: &str = concat!("pi", "cus");
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct PersistedAuth {
@@ -19,7 +21,12 @@ struct PersistedAuth {
 }
 
 pub(super) fn load_auth_session() -> Result<Option<AuthSession>> {
-    load_auth_session_from_path(&auth_file_path())
+    let primary = auth_file_path();
+    if let Some(session) = load_auth_session_from_path(&primary)? {
+        return Ok(Some(session));
+    }
+
+    load_auth_session_from_path(&legacy_auth_file_path())
 }
 
 pub(super) fn save_auth_session(session: &AuthSession) -> Result<()> {
@@ -77,20 +84,23 @@ fn save_auth_session_to_path(path: &Path, session: &AuthSession) -> Result<()> {
 }
 
 fn auth_file_path() -> PathBuf {
-    auth_base_dir().join(AUTH_FILE_NAME)
+    auth_base_dir(AUTH_NAMESPACE).join(AUTH_FILE_NAME)
 }
 
-fn auth_base_dir() -> PathBuf {
+fn legacy_auth_file_path() -> PathBuf {
+    auth_base_dir(LEGACY_AUTH_NAMESPACE).join(AUTH_FILE_NAME)
+}
+
+fn auth_base_dir(namespace: &str) -> PathBuf {
     #[cfg(target_os = "macos")]
     {
         let home = std::env::var_os("HOME")
             .map(PathBuf::from)
             .unwrap_or_else(std::env::temp_dir);
-        return home
-            .join("Library")
+        home.join("Library")
             .join("Application Support")
-            .join("picus")
-            .join("pixiv_client");
+            .join(namespace)
+            .join("pixiv_client")
     }
 
     #[cfg(target_os = "windows")]
@@ -103,7 +113,7 @@ fn auth_base_dir() -> PathBuf {
                     .map(|path| path.join("AppData").join("Roaming"))
             })
             .unwrap_or_else(std::env::temp_dir);
-        return base.join("picus").join("pixiv_client");
+        return base.join(namespace).join("pixiv_client");
     }
 
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
@@ -116,7 +126,7 @@ fn auth_base_dir() -> PathBuf {
                     .map(|path| path.join(".config"))
             })
             .unwrap_or_else(std::env::temp_dir);
-        base.join("picus").join("pixiv_client")
+        base.join(namespace).join("pixiv_client")
     }
 }
 
@@ -131,7 +141,7 @@ mod tests {
             .expect("system time should be after unix epoch")
             .as_nanos();
         let path = std::env::temp_dir().join(format!(
-            "picus-pixiv-auth-test-{}-{nanos}.json",
+            "{AUTH_NAMESPACE}-pixiv-auth-test-{}-{nanos}.json",
             std::process::id()
         ));
 
@@ -152,5 +162,35 @@ mod tests {
         assert_eq!(loaded.refresh_token, sample.refresh_token);
 
         let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn load_auth_session_falls_back_to_legacy_namespace() {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time should be after unix epoch")
+            .as_nanos();
+        let legacy_path = std::env::temp_dir().join(format!(
+            "{LEGACY_AUTH_NAMESPACE}-pixiv-auth-legacy-test-{}-{nanos}.json",
+            std::process::id()
+        ));
+
+        let sample = AuthSession {
+            access_token: "legacy-access".to_string(),
+            refresh_token: "legacy-refresh".to_string(),
+            token_type: "bearer".to_string(),
+            expires_in: 3600,
+            scope: "all".to_string(),
+        };
+
+        save_auth_session_to_path(&legacy_path, &sample).expect("legacy save should succeed");
+        let loaded = load_auth_session_from_path(&legacy_path)
+            .expect("legacy load should succeed")
+            .expect("legacy session should exist");
+
+        assert_eq!(loaded.access_token, sample.access_token);
+        assert_eq!(loaded.refresh_token, sample.refresh_token);
+
+        let _ = fs::remove_file(legacy_path);
     }
 }

@@ -13,13 +13,20 @@ use bevy_image::Image as BevyImage;
 use bevy_text::TextPlugin;
 use crossbeam_channel::{Receiver, Sender, unbounded};
 use lucide_icons::Icon as LucideIcon;
-use picus::{
+#[cfg(target_os = "macos")]
+use picus_activation::MacosBundleConfig;
+use picus_activation::{
+    ActivationConfig, ActivationService, BootstrapOutcome, ProtocolRegistration, bootstrap,
+};
+#[cfg(test)]
+use picus_core::bevy_app::PreUpdate;
+use picus_core::{
     AppI18n, AppPicusExt, LUCIDE_FONT_FAMILY, OverlayConfig, OverlayPlacement, OverlayState,
     PicusPlugin, ProjectionCtx, ResolvedStyle, StyleClass, StyleSheet, StyleValue, SyncAssetSource,
     SyncTextSource, UiComboBox, UiComboBoxChanged, UiComboOption, UiEventQueue, UiRoot,
     UiTextInput, UiTextInputChanged, UiThemePicker, UiView, apply_direct_widget_style,
     apply_label_style, apply_widget_style,
-    bevy_app::{App, PreUpdate, Startup, Update},
+    bevy_app::{App, Startup, Update},
     bevy_ecs::{hierarchy::ChildOf, prelude::*},
     bevy_tasks::{AsyncComputeTaskPool, IoTaskPool, TaskPool},
     bevy_tween::{
@@ -43,11 +50,6 @@ use picus::{
         },
         winit::{dpi::LogicalSize, error::EventLoopError},
     },
-};
-#[cfg(target_os = "macos")]
-use picus_activation::MacosBundleConfig;
-use picus_activation::{
-    ActivationConfig, ActivationService, BootstrapOutcome, ProtocolRegistration, bootstrap,
 };
 use pixiv_client::{
     AuthSession, DecodedImageRgba, IdpUrlResponse, Illust, PixivApiClient, PixivContentKind,
@@ -164,19 +166,14 @@ fn sync_font_stack_for_locale(sheet: &mut StyleSheet, stack: Option<&[String]>) 
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 enum NavTab {
+    #[default]
     Home,
     Rankings,
     Manga,
     Novels,
     Search,
-}
-
-impl Default for NavTab {
-    fn default() -> Self {
-        Self::Home
-    }
 }
 
 #[derive(Resource, Debug, Clone, Default)]
@@ -287,7 +284,7 @@ struct OverlayTag {
     text: String,
 }
 
-#[derive(Component, Debug, Clone)]
+#[derive(Component, Debug, Clone, Default)]
 struct IllustVisual {
     thumb_ui: Option<ImageData>,
     avatar_ui: Option<ImageData>,
@@ -295,19 +292,6 @@ struct IllustVisual {
     thumb_handle: Option<Handle<BevyImage>>,
     avatar_handle: Option<Handle<BevyImage>>,
     high_res_handle: Option<Handle<BevyImage>>,
-}
-
-impl Default for IllustVisual {
-    fn default() -> Self {
-        Self {
-            thumb_ui: None,
-            avatar_ui: None,
-            high_res_ui: None,
-            thumb_handle: None,
-            avatar_handle: None,
-            high_res_handle: None,
-        }
-    }
 }
 
 #[derive(Component, Debug, Clone, Copy, PartialEq)]
@@ -344,6 +328,7 @@ enum ImageKind {
 enum AppAction {
     ToggleSidebar,
     SetTab(NavTab),
+    #[allow(dead_code)]
     SetSearchText(String),
     SubmitSearch,
     OpenIllust(Entity),
@@ -826,17 +811,17 @@ fn setup_styles(mut sheet: ResMut<StyleSheet>, i18n: Option<Res<AppI18n>>) {
     sync_font_stack_for_locale(&mut sheet, font_stack.as_deref());
 }
 
-picus::impl_ui_component_template!(PixivRoot, project_root);
-picus::impl_ui_component_template!(PixivSidebar, project_sidebar);
-picus::impl_ui_component_template!(PixivMainColumn, project_main_column);
-picus::impl_ui_component_template!(PixivAuthPanel, project_auth_panel);
-picus::impl_ui_component_template!(PixivResponsePanel, project_response_panel);
-picus::impl_ui_component_template!(PixivSearchPanel, project_search_panel);
-picus::impl_ui_component_template!(PixivHomeFeed, project_home_feed);
-picus::impl_ui_component_template!(PixivIllustCard, project_illust_card);
-picus::impl_ui_component_template!(PixivDetailOverlay, project_detail_overlay);
-picus::impl_ui_component_template!(PixivOverlayTags, project_overlay_tags);
-picus::impl_ui_component_template!(OverlayTag, project_overlay_tag);
+picus_core::impl_ui_component_template!(PixivRoot, project_root);
+picus_core::impl_ui_component_template!(PixivSidebar, project_sidebar);
+picus_core::impl_ui_component_template!(PixivMainColumn, project_main_column);
+picus_core::impl_ui_component_template!(PixivAuthPanel, project_auth_panel);
+picus_core::impl_ui_component_template!(PixivResponsePanel, project_response_panel);
+picus_core::impl_ui_component_template!(PixivSearchPanel, project_search_panel);
+picus_core::impl_ui_component_template!(PixivHomeFeed, project_home_feed);
+picus_core::impl_ui_component_template!(PixivIllustCard, project_illust_card);
+picus_core::impl_ui_component_template!(PixivDetailOverlay, project_detail_overlay);
+picus_core::impl_ui_component_template!(PixivOverlayTags, project_overlay_tags);
+picus_core::impl_ui_component_template!(OverlayTag, project_overlay_tag);
 
 fn build_app(mut activation_service: Option<ActivationService>) -> App {
     ensure_task_pool_initialized();
@@ -858,7 +843,7 @@ fn build_app(mut activation_service: Option<ActivationService>) -> App {
             mode: PluginMode::ReplaceDefault,
         },
         AssetPlugin::default(),
-        TextPlugin::default(),
+        TextPlugin,
         PicusPlugin,
     ))
     .load_style_sheet_ron(include_str!("../assets/themes/pixiv_client.ron"))
@@ -916,8 +901,8 @@ fn build_app(mut activation_service: Option<ActivationService>) -> App {
         Update,
         (
             drain_ui_actions_and_dispatch
-                .after(picus::handle_widget_actions)
-                .after(picus::handle_overlay_actions),
+                .after(picus_core::handle_widget_actions)
+                .after(picus_core::handle_overlay_actions),
             poll_activation_messages,
             track_viewport_metrics,
             spawn_network_tasks,
@@ -956,7 +941,7 @@ pub fn run() -> std::result::Result<(), EventLoopError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use picus::bevy_ecs::schedule::Schedule;
+    use picus_core::bevy_ecs::schedule::Schedule;
 
     fn mock_illust(title: &str) -> Illust {
         Illust {
@@ -1363,7 +1348,7 @@ mod tests {
 
         world.resource::<UiEventQueue>().push_typed(
             search_input,
-            picus::WidgetUiAction::SetTextInput {
+            picus_core::WidgetUiAction::SetTextInput {
                 input: search_input,
                 value: "same-frame widget action".to_string(),
             },
@@ -1386,14 +1371,15 @@ mod tests {
 
     #[test]
     fn embedded_pixiv_theme_ron_parses() {
-        picus::parse_stylesheet_ron(include_str!("../assets/themes/pixiv_client.ron"))
+        picus_core::parse_stylesheet_ron(include_str!("../assets/themes/pixiv_client.ron"))
             .expect("embedded pixiv_client stylesheet should parse");
     }
 
     #[test]
     fn pixiv_primary_button_uses_neutral_fluent_tokens() {
-        let sheet = picus::parse_stylesheet_ron(include_str!("../assets/themes/pixiv_client.ron"))
-            .expect("embedded pixiv_client stylesheet should parse");
+        let sheet =
+            picus_core::parse_stylesheet_ron(include_str!("../assets/themes/pixiv_client.ron"))
+                .expect("embedded pixiv_client stylesheet should parse");
 
         let button = sheet
             .get_class_values("pixiv.button")
@@ -1403,15 +1389,15 @@ mod tests {
             .expect("pixiv.button.primary class should exist");
 
         let corner_radius = match button.layout.corner_radius.as_ref() {
-            Some(picus::StyleValue::Var(token)) => token.as_str(),
+            Some(picus_core::StyleValue::Var(token)) => token.as_str(),
             _ => panic!("pixiv.button corner_radius should come from a theme token"),
         };
         let primary_bg = match primary.colors.bg.as_ref() {
-            Some(picus::StyleValue::Var(token)) => token.as_str(),
+            Some(picus_core::StyleValue::Var(token)) => token.as_str(),
             _ => panic!("pixiv.button.primary bg should come from a theme token"),
         };
         let primary_border = match primary.colors.border.as_ref() {
-            Some(picus::StyleValue::Var(token)) => token.as_str(),
+            Some(picus_core::StyleValue::Var(token)) => token.as_str(),
             _ => panic!("pixiv.button.primary border should come from a theme token"),
         };
 
@@ -1422,19 +1408,20 @@ mod tests {
 
     #[test]
     fn pixiv_text_input_uses_neutral_fluent_tokens() {
-        let sheet = picus::parse_stylesheet_ron(include_str!("../assets/themes/pixiv_client.ron"))
-            .expect("embedded pixiv_client stylesheet should parse");
+        let sheet =
+            picus_core::parse_stylesheet_ron(include_str!("../assets/themes/pixiv_client.ron"))
+                .expect("embedded pixiv_client stylesheet should parse");
 
         let input = sheet
             .get_class_values("pixiv.text-input")
             .expect("pixiv.text-input class should exist");
 
         let bg = match input.colors.bg.as_ref() {
-            Some(picus::StyleValue::Var(token)) => token.as_str(),
+            Some(picus_core::StyleValue::Var(token)) => token.as_str(),
             _ => panic!("pixiv.text-input bg should come from a theme token"),
         };
         let border = match input.colors.border.as_ref() {
-            Some(picus::StyleValue::Var(token)) => token.as_str(),
+            Some(picus_core::StyleValue::Var(token)) => token.as_str(),
             _ => panic!("pixiv.text-input border should come from a theme token"),
         };
 
@@ -1444,30 +1431,31 @@ mod tests {
 
     #[test]
     fn pixiv_warn_button_uses_fluent_tokens() {
-        let sheet = picus::parse_stylesheet_ron(include_str!("../assets/themes/pixiv_client.ron"))
-            .expect("embedded pixiv_client stylesheet should parse");
+        let sheet =
+            picus_core::parse_stylesheet_ron(include_str!("../assets/themes/pixiv_client.ron"))
+                .expect("embedded pixiv_client stylesheet should parse");
         let warn = sheet
             .get_class_values("pixiv.button.warn")
             .expect("pixiv.button.warn class should exist");
 
         let bg = match warn.colors.bg.as_ref() {
-            Some(picus::StyleValue::Var(token)) => token.as_str(),
+            Some(picus_core::StyleValue::Var(token)) => token.as_str(),
             _ => panic!("pixiv.button.warn bg should come from a theme token"),
         };
         let hover_bg = match warn.colors.hover_bg.as_ref() {
-            Some(picus::StyleValue::Var(token)) => token.as_str(),
+            Some(picus_core::StyleValue::Var(token)) => token.as_str(),
             _ => panic!("pixiv.button.warn hover_bg should come from a theme token"),
         };
         let pressed_bg = match warn.colors.pressed_bg.as_ref() {
-            Some(picus::StyleValue::Var(token)) => token.as_str(),
+            Some(picus_core::StyleValue::Var(token)) => token.as_str(),
             _ => panic!("pixiv.button.warn pressed_bg should come from a theme token"),
         };
         let border = match warn.colors.border.as_ref() {
-            Some(picus::StyleValue::Var(token)) => token.as_str(),
+            Some(picus_core::StyleValue::Var(token)) => token.as_str(),
             _ => panic!("pixiv.button.warn border should come from a theme token"),
         };
         let text = match warn.colors.text.as_ref() {
-            Some(picus::StyleValue::Var(token)) => token.as_str(),
+            Some(picus_core::StyleValue::Var(token)) => token.as_str(),
             _ => panic!("pixiv.button.warn text should come from a theme token"),
         };
 
@@ -1481,7 +1469,7 @@ mod tests {
     #[test]
     fn sync_font_stack_for_locale_preserves_tokenized_fields() {
         let mut sheet =
-            picus::parse_stylesheet_ron(include_str!("../assets/themes/pixiv_client.ron"))
+            picus_core::parse_stylesheet_ron(include_str!("../assets/themes/pixiv_client.ron"))
                 .expect("embedded pixiv_client stylesheet should parse");
 
         // Pixiv sheet intentionally carries class rules with token refs but no local token map.
@@ -1495,13 +1483,13 @@ mod tests {
             .expect("pixiv.root class should exist");
 
         let padding_token = match root.layout.padding.as_ref() {
-            Some(picus::StyleValue::Var(token)) => token.as_str(),
+            Some(picus_core::StyleValue::Var(token)) => token.as_str(),
             _ => panic!("pixiv.root padding should remain tokenized"),
         };
         assert_eq!(padding_token, "space-lg");
 
         let font_family = match root.font_family.as_ref() {
-            Some(picus::StyleValue::Value(value)) => value,
+            Some(picus_core::StyleValue::Value(value)) => value,
             _ => panic!("font family should be written as a literal style value"),
         };
         assert_eq!(font_family, &stack);
@@ -1510,7 +1498,7 @@ mod tests {
             .get_class_values("pixiv.sidebar.button")
             .expect("pixiv.sidebar.button class should exist");
         let sidebar_font_family = match sidebar_button.font_family.as_ref() {
-            Some(picus::StyleValue::Value(value)) => value,
+            Some(picus_core::StyleValue::Value(value)) => value,
             _ => panic!("sidebar button font family should be written as a literal style value"),
         };
         assert_eq!(sidebar_font_family, &stack);

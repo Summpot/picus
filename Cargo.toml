@@ -1,9 +1,9 @@
 [workspace]
 resolver = "2"
 members = [
-	"crates/picus-surface",
-	"crates/picus-activation",
-	"crates/picus",
+	"crates/picus_surface",
+	"crates/picus_activation",
+	"crates/picus_core",
 	"examples/async_downloader",
 	"examples/calculator",
 	"examples/chess_game",
@@ -37,7 +37,7 @@ bevy_winit = { version = "0.18", default-features = false }
 bevy_tween = { version = "0.12", default-features = false }
 bevy_embedded_assets = "0.15.0"
 crossbeam-queue = "0.3"
-tokio = { version = "1.49", features = ["rt-multi-thread"] }
+tokio = { version = "1.50", features = ["rt-multi-thread"] }
 num-traits = "0.2"
 reqwest = { version = "0.13", default-features = false, features = ["blocking", "rustls"] }
 rfd = "0.17"
@@ -58,7 +58,7 @@ lucide-icons = "0.575.0"
 app-single-instance = "0.1.0"
 ipc-channel = "0.21.0"
 
-picus-surface = { path = "crates/picus-surface" }
+picus_surface = { path = "crates/picus_surface" }
 
 [patch.crates-io]
 bevy = { path = "third_party/bevy" }
