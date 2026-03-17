@@ -4,16 +4,15 @@ use super::{
 };
 use crate::{
     ecs::{
-        LocalizeText, PartSliderDecrease, PartSliderIncrease, PartSliderThumb, PartSliderTrack,
-        PartSwitchThumb, PartSwitchTrack, UiBadge, UiButton, UiCheckbox, UiLabel, UiProgressBar,
-        UiSlider, UiSwitch, UiTextInput,
+        LocalizeText, PartSwitchThumb, PartSwitchTrack, UiBadge, UiButton, UiCheckbox, UiLabel,
+        UiProgressBar, UiSlider, UiSwitch, UiTextInput,
     },
     i18n::resolve_localized_text,
     styling::{
         apply_direct_widget_style, apply_label_style, apply_widget_style, font_stack_from_style,
         resolve_style,
     },
-    views::{ecs_button_with_child, ecs_checkbox, ecs_text_input},
+    views::{ecs_button_with_child, ecs_checkbox, ecs_slider, ecs_text_input},
     widget_actions::WidgetUiAction,
 };
 use bevy_ecs::{hierarchy::Children, prelude::*};
@@ -146,42 +145,19 @@ pub(crate) fn project_checkbox(checkbox: &UiCheckbox, ctx: ProjectionCtx<'_>) ->
 
 pub(crate) fn project_slider(slider: &UiSlider, ctx: ProjectionCtx<'_>) -> UiView {
     let style = resolve_style(ctx.world, ctx.entity);
-    let parts = child_entity_views(&ctx);
-
-    let dec =
-        first_part_view::<PartSliderDecrease>(&ctx, &parts).unwrap_or_else(|| Arc::new(label("−")));
-    let track = first_part_view::<PartSliderTrack>(&ctx, &parts)
-        .unwrap_or_else(|| Arc::new(label(format!("{:.2}", slider.value))));
-    let thumb =
-        first_part_view::<PartSliderThumb>(&ctx, &parts).unwrap_or_else(|| Arc::new(label("●")));
-    let inc =
-        first_part_view::<PartSliderIncrease>(&ctx, &parts).unwrap_or_else(|| Arc::new(label("+")));
-
-    let content = flex_row(vec![
-        ecs_button_with_child(
+    Arc::new(apply_widget_style(
+        ecs_slider(
             ctx.entity,
-            WidgetUiAction::StepSlider {
+            slider.min,
+            slider.max,
+            slider.value,
+            move |value| WidgetUiAction::SetSliderValue {
                 slider: ctx.entity,
-                delta: -1.0,
+                value,
             },
-            dec,
-        )
-        .into_any_flex(),
-        track.into_any_flex(),
-        thumb.into_any_flex(),
-        ecs_button_with_child(
-            ctx.entity,
-            WidgetUiAction::StepSlider {
-                slider: ctx.entity,
-                delta: 1.0,
-            },
-            inc,
-        )
-        .into_any_flex(),
-    ])
-    .gap(Length::px(style.layout.gap.max(8.0)));
-
-    Arc::new(apply_widget_style(content, &style))
+        ),
+        &style,
+    ))
 }
 
 pub(crate) fn project_switch(switch_component: &UiSwitch, ctx: ProjectionCtx<'_>) -> UiView {

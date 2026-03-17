@@ -92,6 +92,7 @@ fn process_activation_uri(world: &mut World, uri: &str) {
     sync_bound_text_inputs(world);
 }
 
+#[cfg(not(target_os = "macos"))]
 pub(super) fn poll_activation_messages(world: &mut World) {
     let Some(mut activation) = world.get_resource_mut::<ActivationBridge>() else {
         return;
@@ -101,6 +102,20 @@ pub(super) fn poll_activation_messages(world: &mut World) {
     if let Ok(mut service) = activation.service.lock() {
         pending_uris.extend(service.drain_uris());
     }
+
+    for uri in pending_uris {
+        process_activation_uri(world, &uri);
+    }
+}
+
+#[cfg(target_os = "macos")]
+pub(super) fn poll_activation_messages(world: &mut World) {
+    let Some(mut activation) = world.get_non_send_resource_mut::<ActivationBridge>() else {
+        return;
+    };
+
+    let mut pending_uris = std::mem::take(&mut activation.startup_uris);
+    pending_uris.extend(activation.service.drain_uris());
 
     for uri in pending_uris {
         process_activation_uri(world, &uri);

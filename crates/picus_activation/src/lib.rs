@@ -1,17 +1,26 @@
 use std::{
     collections::HashSet,
-    fs, io,
+    io,
     path::PathBuf,
-    sync::mpsc::{self, Receiver, Sender},
-    thread,
+    sync::mpsc::{self, Receiver},
+};
+
+#[cfg(not(target_os = "macos"))]
+use std::sync::mpsc::Sender;
+
+#[cfg(not(target_os = "macos"))]
+use std::{
+    fs, thread,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 use app_single_instance::{PrimaryHandle, notify_if_running, start_primary};
+#[cfg(not(target_os = "macos"))]
 use ipc_channel::{
     IpcError, TryRecvError,
     ipc::{IpcOneShotServer, IpcSender, channel},
 };
+#[cfg(not(target_os = "macos"))]
 use serde::{Deserialize, Serialize};
 
 mod platform;
@@ -22,8 +31,11 @@ pub use platform::macos::{
     read_info_plist as read_macos_info_plist,
 };
 
+#[cfg(not(target_os = "macos"))]
 const IPC_CONNECT_RETRY_ATTEMPTS: usize = 120;
+#[cfg(not(target_os = "macos"))]
 const IPC_CONNECT_RETRY_DELAY: Duration = Duration::from_millis(50);
+#[cfg(not(target_os = "macos"))]
 const IPC_ACK_TIMEOUT: Duration = Duration::from_secs(2);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -72,6 +84,7 @@ pub struct MacosAppBundle {
     pub info_plist: MacosInfoPlist,
 }
 
+#[cfg(not(target_os = "macos"))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct ActivationForwardMessage {
     request_id: String,
@@ -79,6 +92,7 @@ struct ActivationForwardMessage {
     ack_sender: IpcSender<ActivationForwardAck>,
 }
 
+#[cfg(not(target_os = "macos"))]
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 enum ActivationForwardAck {
     Ack,
@@ -191,6 +205,8 @@ pub struct ActivationService {
     startup_uris: Vec<String>,
     receiver: Receiver<String>,
     _primary_handle: PrimaryHandle,
+    #[cfg(target_os = "macos")]
+    _macos_listener: platform::macos::MacosActivationListener,
 }
 
 impl ActivationService {
@@ -231,26 +247,55 @@ pub fn bootstrap(config: ActivationConfig) -> Result<BootstrapOutcome> {
     let should_exit_as_secondary = notify_if_running(&config.app_id);
 
     if should_exit_as_secondary {
-        return Ok(finalize_secondary_forward_result(forward_uris_to_primary(
-            &config.app_id,
-            &startup_uris,
-        )));
+        #[cfg(target_os = "macos")]
+        {
+            let _ = startup_uris;
+            return Ok(finalize_secondary_forward_result());
+        }
+
+        #[cfg(not(target_os = "macos"))]
+        {
+            return Ok(finalize_secondary_forward_result(forward_uris_to_primary(
+                &config.app_id,
+                &startup_uris,
+            )));
+        }
     }
 
-    let _ = cleanup_stale_ipc_endpoint(&config.app_id);
     let primary_handle = start_primary(&config.app_id, || {});
-
-    let thread_name = listener_thread_name(&config.app_id);
     let (sender, receiver) = mpsc::channel::<String>();
-    spawn_ipc_listener(&config.app_id, thread_name, sender)?;
 
-    Ok(BootstrapOutcome::Primary(ActivationService {
-        startup_uris,
-        receiver,
-        _primary_handle: primary_handle,
-    }))
+    #[cfg(target_os = "macos")]
+    {
+        let macos_listener = platform::macos::install_url_event_listener(sender)?;
+        Ok(BootstrapOutcome::Primary(ActivationService {
+            startup_uris,
+            receiver,
+            _primary_handle: primary_handle,
+            _macos_listener: macos_listener,
+        }))
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = cleanup_stale_ipc_endpoint(&config.app_id);
+        let thread_name = listener_thread_name(&config.app_id);
+        spawn_ipc_listener(&config.app_id, thread_name, sender)?;
+
+        Ok(BootstrapOutcome::Primary(ActivationService {
+            startup_uris,
+            receiver,
+            _primary_handle: primary_handle,
+        }))
+    }
 }
 
+#[cfg(target_os = "macos")]
+fn finalize_secondary_forward_result() -> BootstrapOutcome {
+    BootstrapOutcome::SecondaryForwarded
+}
+
+#[cfg(not(target_os = "macos"))]
 fn finalize_secondary_forward_result(forward_result: Result<()>) -> BootstrapOutcome {
     let _ = forward_result;
     BootstrapOutcome::SecondaryForwarded
@@ -379,6 +424,7 @@ fn resolve_protocol_registration(
     })
 }
 
+#[cfg(not(target_os = "macos"))]
 fn spawn_ipc_listener(app_id: &str, thread_name: String, sender: Sender<String>) -> Result<()> {
     let app_id = app_id.to_string();
 
@@ -397,6 +443,7 @@ fn spawn_ipc_listener(app_id: &str, thread_name: String, sender: Sender<String>)
     Ok(())
 }
 
+#[cfg(not(target_os = "macos"))]
 fn run_ipc_listener_cycle(app_id: &str, sender: &Sender<String>) -> io::Result<()> {
     let (server, server_name) = IpcOneShotServer::<ActivationForwardMessage>::new()?;
     publish_ipc_server_name(app_id, &server_name)?;
@@ -421,6 +468,7 @@ fn run_ipc_listener_cycle(app_id: &str, sender: &Sender<String>) -> io::Result<(
     Ok(())
 }
 
+#[cfg(not(target_os = "macos"))]
 fn cleanup_stale_ipc_endpoint(app_id: &str) -> io::Result<()> {
     let path = ipc_rendezvous_path_for_app(app_id);
 
@@ -431,6 +479,7 @@ fn cleanup_stale_ipc_endpoint(app_id: &str) -> io::Result<()> {
     }
 }
 
+#[cfg(not(target_os = "macos"))]
 fn forward_uris_to_primary(app_id: &str, uris: &[String]) -> Result<()> {
     if uris.is_empty() {
         return Ok(());
@@ -506,6 +555,7 @@ fn forward_uris_to_primary(app_id: &str, uris: &[String]) -> Result<()> {
     })))
 }
 
+#[cfg(not(target_os = "macos"))]
 fn publish_ipc_server_name(app_id: &str, server_name: &str) -> io::Result<()> {
     let path = ipc_rendezvous_path_for_app(app_id);
 
@@ -526,6 +576,7 @@ fn publish_ipc_server_name(app_id: &str, server_name: &str) -> io::Result<()> {
     }
 }
 
+#[cfg(not(target_os = "macos"))]
 fn load_ipc_server_name(app_id: &str) -> io::Result<Option<String>> {
     let path = ipc_rendezvous_path_for_app(app_id);
     match fs::read_to_string(path) {
@@ -542,11 +593,13 @@ fn load_ipc_server_name(app_id: &str) -> io::Result<Option<String>> {
     }
 }
 
+#[cfg(not(target_os = "macos"))]
 fn ipc_rendezvous_path_for_app(app_id: &str) -> PathBuf {
     let normalized = normalize_app_id(app_id);
     std::env::temp_dir().join(format!("{normalized}.activation.ipc-name"))
 }
 
+#[cfg(not(target_os = "macos"))]
 fn try_recv_error_to_io(error: TryRecvError) -> io::Error {
     match error {
         TryRecvError::IpcError(ipc_error) => ipc_error_to_io(ipc_error),
@@ -557,6 +610,7 @@ fn try_recv_error_to_io(error: TryRecvError) -> io::Error {
     }
 }
 
+#[cfg(not(target_os = "macos"))]
 fn ipc_error_to_io(error: IpcError) -> io::Error {
     match error {
         IpcError::Io(io_error) => io_error,
@@ -570,6 +624,7 @@ fn ipc_error_to_io(error: IpcError) -> io::Error {
     }
 }
 
+#[cfg(not(target_os = "macos"))]
 fn next_forward_request_id() -> String {
     let timestamp_nanos = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -587,6 +642,7 @@ fn validate_config(config: &ActivationConfig) -> Result<()> {
     Ok(())
 }
 
+#[cfg_attr(target_os = "macos", allow(dead_code))]
 fn normalize_app_id(app_id: &str) -> String {
     app_id
         .chars()
@@ -600,6 +656,7 @@ fn normalize_app_id(app_id: &str) -> String {
         .collect::<String>()
 }
 
+#[cfg(not(target_os = "macos"))]
 fn listener_thread_name(app_id: &str) -> String {
     format!("{}-activation-listener", normalize_app_id(app_id))
 }
@@ -660,6 +717,7 @@ mod tests {
         assert_eq!(registration.macos_bundle, Some(config));
     }
 
+    #[cfg(not(target_os = "macos"))]
     #[test]
     fn stale_ipc_endpoint_cleanup_removes_rendezvous_file() {
         let app_id = "bevy-xilem-activation-test-cleanup";
@@ -672,12 +730,28 @@ mod tests {
         assert!(!path.exists());
     }
 
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn secondary_forward_success_still_exits_secondary() {
+        let outcome = finalize_secondary_forward_result();
+        assert!(matches!(outcome, BootstrapOutcome::SecondaryForwarded));
+    }
+
+    #[cfg(not(target_os = "macos"))]
     #[test]
     fn secondary_forward_success_still_exits_secondary() {
         let outcome = finalize_secondary_forward_result(Ok(()));
         assert!(matches!(outcome, BootstrapOutcome::SecondaryForwarded));
     }
 
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn macos_secondary_exit_is_independent_from_ipc() {
+        let outcome = finalize_secondary_forward_result();
+        assert!(matches!(outcome, BootstrapOutcome::SecondaryForwarded));
+    }
+
+    #[cfg(not(target_os = "macos"))]
     #[test]
     fn secondary_forward_failure_still_exits_secondary() {
         let outcome = finalize_secondary_forward_result(Err(ActivationError::Io(io::Error::new(
@@ -736,6 +810,7 @@ mod tests {
         );
     }
 
+    #[cfg(not(target_os = "macos"))]
     #[test]
     fn forward_uris_to_primary_delivers_payload_with_receipt() {
         let short_nanos = SystemTime::now()

@@ -18,6 +18,7 @@ use bevy_ecs::{
     prelude::*,
 };
 use bevy_reflect::TypePath;
+use bevy_time::Time;
 use bevy_tween::{
     bevy_time_runner::{TimeContext, TimeRunner, TimeSpan},
     interpolate::Interpolator,
@@ -64,6 +65,17 @@ pub struct StyleDirty;
 pub struct InteractionState {
     pub hovered: bool,
     pub pressed: bool,
+}
+
+/// Delays entry into the hovered pseudo-class to reduce hover flicker.
+#[derive(Component, Debug, Clone, Copy, PartialEq)]
+pub(crate) struct HoverDebounce {
+    pub enter_delay_secs: f32,
+}
+
+#[derive(Component, Debug, Clone, Copy, Default, PartialEq)]
+pub(crate) struct PendingHoverState {
+    entered_at_secs: f64,
 }
 
 /// Consolidated inline style overrides.
@@ -2014,6 +2026,7 @@ fn clear_style_managed_tween(world: &mut World, entity: Entity) {
 
 /// Consume interaction events and synchronize [`InteractionState`].
 pub fn sync_ui_interaction_markers(world: &mut World) {
+    let now_secs = world.resource::<Time>().elapsed_secs_f64();
     let events = world
         .resource_mut::<UiEventQueue>()
         .drain_actions::<UiInteractionEvent>();
@@ -2030,9 +2043,27 @@ pub fn sync_ui_interaction_markers(world: &mut World) {
 
         let mut after = before;
         match event.action {
-            UiInteractionEvent::PointerEntered => after.hovered = true,
-            UiInteractionEvent::PointerLeft => after.hovered = false,
-            UiInteractionEvent::PointerPressed => after.pressed = true,
+            UiInteractionEvent::PointerEntered => {
+                if let Some(debounce) = world.get::<HoverDebounce>(event.entity)
+                    && debounce.enter_delay_secs > f32::EPSILON
+                {
+                    world.entity_mut(event.entity).insert(PendingHoverState {
+                        entered_at_secs: now_secs,
+                    });
+                    after.hovered = false;
+                } else {
+                    after.hovered = true;
+                }
+            }
+            UiInteractionEvent::PointerLeft => {
+                after.hovered = false;
+                world.entity_mut(event.entity).remove::<PendingHoverState>();
+            }
+            UiInteractionEvent::PointerPressed => {
+                after.pressed = true;
+                after.hovered = true;
+                world.entity_mut(event.entity).remove::<PendingHoverState>();
+            }
             UiInteractionEvent::PointerReleased => after.pressed = false,
         }
 
@@ -2040,6 +2071,32 @@ pub fn sync_ui_interaction_markers(world: &mut World) {
             world.entity_mut(event.entity).insert(after);
             world.entity_mut(event.entity).insert(StyleDirty);
         }
+    }
+}
+
+pub(crate) fn activate_debounced_hovers(
+    time: Res<Time>,
+    mut commands: Commands,
+    query: Query<(
+        Entity,
+        &HoverDebounce,
+        &PendingHoverState,
+        Option<&InteractionState>,
+    )>,
+) {
+    let now_secs = time.elapsed_secs_f64();
+
+    for (entity, debounce, pending, state) in &query {
+        if now_secs - pending.entered_at_secs < debounce.enter_delay_secs as f64 {
+            continue;
+        }
+
+        let mut next = state.copied().unwrap_or_default();
+        if !next.hovered {
+            next.hovered = true;
+            commands.entity(entity).insert((next, StyleDirty));
+        }
+        commands.entity(entity).remove::<PendingHoverState>();
     }
 }
 

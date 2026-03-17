@@ -1027,6 +1027,7 @@ fn sync_style_targets_restarts_tween_when_current_differs_but_target_unchanged()
 fn pointer_left_does_not_clear_pressed_marker() {
     let mut world = World::new();
     world.insert_resource(UiEventQueue::default());
+    world.insert_resource(bevy_time::Time::<()>::default());
 
     let entity = world
         .spawn((crate::InteractionState {
@@ -1046,6 +1047,71 @@ fn pointer_left_does_not_clear_pressed_marker() {
         .expect("interaction state should exist");
     assert!(!state.hovered);
     assert!(state.pressed);
+}
+
+#[test]
+fn debounced_hover_waits_before_setting_hovered_state() {
+    let mut world = World::new();
+    world.insert_resource(UiEventQueue::default());
+    world.insert_resource(bevy_time::Time::<()>::default());
+
+    let entity = world
+        .spawn((crate::styling::HoverDebounce {
+            enter_delay_secs: 0.05,
+        },))
+        .id();
+
+    world
+        .resource::<UiEventQueue>()
+        .push_typed(entity, crate::UiInteractionEvent::PointerEntered);
+
+    crate::sync_ui_interaction_markers(&mut world);
+
+    assert!(world.get::<crate::InteractionState>(entity).is_none());
+
+    world
+        .resource_mut::<bevy_time::Time<()>>()
+        .advance_by(Duration::from_millis(60));
+
+    let mut schedule = Schedule::default();
+    schedule.add_systems(crate::styling::activate_debounced_hovers);
+    schedule.run(&mut world);
+
+    let state = world
+        .get::<crate::InteractionState>(entity)
+        .expect("interaction state should exist after debounce elapses");
+    assert!(state.hovered);
+}
+
+#[test]
+fn direct_slider_action_updates_slider_state() {
+    let mut world = World::new();
+    world.insert_resource(UiEventQueue::default());
+
+    let slider = world
+        .spawn((crate::UiSlider::new(0.0, 100.0, 10.0).with_step(5.0),))
+        .id();
+
+    world.resource::<UiEventQueue>().push_typed(
+        slider,
+        crate::WidgetUiAction::SetSliderValue {
+            slider,
+            value: 42.0,
+        },
+    );
+
+    crate::handle_widget_actions(&mut world);
+
+    let slider_state = world
+        .get::<crate::UiSlider>(slider)
+        .expect("slider should exist");
+    assert_eq!(slider_state.value, 40.0);
+
+    let changed = world
+        .resource_mut::<UiEventQueue>()
+        .drain_actions::<crate::UiSliderChanged>();
+    assert_eq!(changed.len(), 1);
+    assert_eq!(changed[0].action.value, 40.0);
 }
 
 #[test]

@@ -32,6 +32,8 @@ pub enum WidgetUiAction {
     ToggleCheckbox { checkbox: Entity },
     /// Adjust slider value using step increments.
     StepSlider { slider: Entity, delta: f64 },
+    /// Set a slider value directly from a native slider interaction.
+    SetSliderValue { slider: Entity, value: f64 },
     /// Toggle a switch.
     ToggleSwitch { switch: Entity },
     /// Update text input contents.
@@ -88,6 +90,12 @@ fn clamp_scroll_offset_strict(scroll_view: &mut UiScrollView) {
 
     scroll_view.scroll_offset.x = scroll_view.scroll_offset.x.clamp(0.0, max_scroll_x);
     scroll_view.scroll_offset.y = scroll_view.scroll_offset.y.clamp(0.0, max_scroll_y);
+}
+
+fn quantize_slider_value(slider: &UiSlider, value: f64) -> f64 {
+    let step = slider.step.max(f64::EPSILON);
+    let steps = ((value - slider.min) / step).round();
+    (slider.min + steps * step).clamp(slider.min, slider.max)
 }
 
 fn find_ancestor_scroll_view(world: &World, mut entity: Entity) -> Option<Entity> {
@@ -330,8 +338,31 @@ pub fn handle_widget_actions(world: &mut World) {
 
                 if let Some(mut slider_state) = world.get_mut::<UiSlider>(slider) {
                     let step = slider_state.step.max(f64::EPSILON);
-                    let next = (slider_state.value + delta * step)
-                        .clamp(slider_state.min, slider_state.max);
+                    let next = quantize_slider_value(
+                        &slider_state,
+                        (slider_state.value + delta * step)
+                            .clamp(slider_state.min, slider_state.max),
+                    );
+                    if (next - slider_state.value).abs() > f64::EPSILON {
+                        slider_state.value = next;
+                        world.resource::<UiEventQueue>().push_typed(
+                            slider,
+                            UiSliderChanged {
+                                slider,
+                                value: next,
+                            },
+                        );
+                    }
+                }
+            }
+
+            WidgetUiAction::SetSliderValue { slider, value } => {
+                if world.get_entity(slider).is_err() {
+                    continue;
+                }
+
+                if let Some(mut slider_state) = world.get_mut::<UiSlider>(slider) {
+                    let next = quantize_slider_value(&slider_state, value);
                     if (next - slider_state.value).abs() > f64::EPSILON {
                         slider_state.value = next;
                         world.resource::<UiEventQueue>().push_typed(

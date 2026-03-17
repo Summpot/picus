@@ -805,6 +805,9 @@
     (
       selector: And([Class("overlay.dropdown.item"), PseudoClass(Hovered)]),
       setter: (
+        layout: (
+          scale: 1.015,
+        ),
         colors: (
           bg: Var("surface-overlay-item-hover"),
         ),

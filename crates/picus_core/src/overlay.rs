@@ -268,6 +268,9 @@ fn spawn_dropdown_items(world: &mut World, dropdown_entity: Entity, combo_entity
                 dropdown: dropdown_entity,
                 index,
             },
+            crate::styling::HoverDebounce {
+                enter_delay_secs: 0.06,
+            },
             crate::StyleClass(classes),
             ChildOf(dropdown_entity),
         ));

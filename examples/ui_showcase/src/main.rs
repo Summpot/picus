@@ -11,7 +11,7 @@ use picus_core::{
     UiSliderChanged, UiSpinner, UiSplitPane, UiTabBar, UiTabChanged, UiTable, UiTextInput,
     UiTextInputChanged, UiToast, UiTreeNode, UiTreeNodeToggled, UiView, apply_label_style,
     apply_widget_style,
-    bevy_app::{App, PreUpdate, Startup},
+    bevy_app::{App, Startup, Update},
     bevy_asset::AssetPlugin,
     bevy_ecs::{hierarchy::ChildOf, prelude::*},
     bevy_math::Vec2,
@@ -1076,7 +1076,12 @@ fn build_showcase_app() -> App {
         Startup,
         (setup_showcase, ensure_showcase_default_theme_variant),
     )
-    .add_systems(PreUpdate, drain_showcase_events);
+    .add_systems(
+        Update,
+        drain_showcase_events
+            .after(picus_core::handle_widget_actions)
+            .after(picus_core::handle_overlay_actions),
+    );
 
     app
 }

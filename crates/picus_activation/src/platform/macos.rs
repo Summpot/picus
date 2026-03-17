@@ -12,9 +12,13 @@ use block2::RcBlock;
 #[cfg(target_os = "macos")]
 use objc2::rc::Retained;
 #[cfg(target_os = "macos")]
+use objc2::runtime::AnyObject;
+#[cfg(target_os = "macos")]
+use objc2::{DefinedClass, MainThreadMarker, MainThreadOnly, class, define_class, msg_send, sel};
+#[cfg(target_os = "macos")]
 use objc2_app_kit::NSWorkspace;
 #[cfg(target_os = "macos")]
-use objc2_foundation::{NSBundle, NSError, NSString, NSURL};
+use objc2_foundation::{NSBundle, NSError, NSObject, NSObjectProtocol, NSString, NSURL};
 #[cfg(target_os = "macos")]
 use plist::{Dictionary, Value};
 
@@ -26,6 +30,125 @@ use crate::{
 
 #[cfg(target_os = "macos")]
 const DEFAULT_HANDLER_COMPLETION_WAIT: Duration = Duration::from_secs(1);
+#[cfg(target_os = "macos")]
+const K_INTERNET_EVENT_CLASS: u32 = four_cc(*b"GURL");
+#[cfg(target_os = "macos")]
+const K_AE_GET_URL: u32 = four_cc(*b"GURL");
+#[cfg(target_os = "macos")]
+const KEY_DIRECT_OBJECT: u32 = four_cc(*b"----");
+
+#[cfg(target_os = "macos")]
+const fn four_cc(code: [u8; 4]) -> u32 {
+    u32::from_be_bytes(code)
+}
+
+#[cfg(target_os = "macos")]
+#[derive(Debug)]
+struct ActivationUrlEventHandlerIvars {
+    sender: std::sync::mpsc::Sender<String>,
+}
+
+#[cfg(target_os = "macos")]
+define_class!(
+    #[unsafe(super(NSObject))]
+    #[thread_kind = MainThreadOnly]
+    #[derive(Debug)]
+    #[ivars = ActivationUrlEventHandlerIvars]
+    struct ActivationUrlEventHandler;
+
+    unsafe impl NSObjectProtocol for ActivationUrlEventHandler {}
+
+    impl ActivationUrlEventHandler {
+        #[unsafe(method(handleGetURLEvent:withReplyEvent:))]
+        fn handle_get_url_event(&self, event: &AnyObject, _reply_event: &AnyObject) {
+            if let Some(uri) = extract_url_string_from_apple_event(event) {
+                let _ = self.ivars().sender.send(uri);
+            }
+        }
+    }
+);
+
+#[cfg(target_os = "macos")]
+impl ActivationUrlEventHandler {
+    fn new(sender: std::sync::mpsc::Sender<String>, mtm: MainThreadMarker) -> Retained<Self> {
+        let this = Self::alloc(mtm).set_ivars(ActivationUrlEventHandlerIvars { sender });
+        unsafe { msg_send![super(this), init] }
+    }
+}
+
+#[cfg(target_os = "macos")]
+#[derive(Debug)]
+pub(crate) struct MacosActivationListener {
+    _handler: Retained<ActivationUrlEventHandler>,
+}
+
+#[cfg(target_os = "macos")]
+impl Drop for MacosActivationListener {
+    fn drop(&mut self) {
+        unsafe {
+            let manager: *mut AnyObject =
+                msg_send![class!(NSAppleEventManager), sharedAppleEventManager];
+            if !manager.is_null() {
+                let (): () = msg_send![
+                    manager,
+                    removeEventHandlerForEventClass: K_INTERNET_EVENT_CLASS,
+                    andEventID: K_AE_GET_URL
+                ];
+            }
+        }
+    }
+}
+
+#[cfg(target_os = "macos")]
+pub(crate) fn install_url_event_listener(
+    sender: std::sync::mpsc::Sender<String>,
+) -> Result<MacosActivationListener> {
+    let mtm = MainThreadMarker::new().ok_or_else(|| {
+        ActivationError::Platform(
+            "macOS activation Apple Event listener must be installed on the main thread"
+                .to_string(),
+        )
+    })?;
+    let handler = ActivationUrlEventHandler::new(sender, mtm);
+
+    unsafe {
+        let manager: *mut AnyObject =
+            msg_send![class!(NSAppleEventManager), sharedAppleEventManager];
+        if manager.is_null() {
+            return Err(ActivationError::Platform(
+                "NSAppleEventManager sharedAppleEventManager returned nil".to_string(),
+            ));
+        }
+
+        let (): () = msg_send![
+            manager,
+            setEventHandler: &*handler,
+            andSelector: sel!(handleGetURLEvent:withReplyEvent:),
+            forEventClass: K_INTERNET_EVENT_CLASS,
+            andEventID: K_AE_GET_URL
+        ];
+    }
+
+    Ok(MacosActivationListener { _handler: handler })
+}
+
+#[cfg(target_os = "macos")]
+fn extract_url_string_from_apple_event(event: &AnyObject) -> Option<String> {
+    unsafe {
+        let descriptor: *mut AnyObject =
+            msg_send![event, paramDescriptorForKeyword: KEY_DIRECT_OBJECT];
+        if descriptor.is_null() {
+            return None;
+        }
+
+        let string: *mut NSString = msg_send![descriptor, stringValue];
+        if string.is_null() {
+            return None;
+        }
+
+        Some((&*string).to_string())
+    }
+}
 
 #[cfg(target_os = "macos")]
 pub(crate) fn register(protocol: &ResolvedProtocolRegistration) -> Result<()> {
