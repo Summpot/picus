@@ -33,6 +33,7 @@ const OVERLAY_ANCHOR_GAP: f64 = 4.0;
 const DROPDOWN_MAX_VIEWPORT_HEIGHT: f64 = 300.0;
 const DIALOG_SURFACE_MIN_WIDTH: f64 = 240.0;
 const DIALOG_SURFACE_MAX_WIDTH: f64 = 400.0;
+const DROPDOWN_ITEM_HOVER_ENTER_DELAY_SECS: f32 = 0.015;
 
 /// Internal overlay actions emitted by built-in floating UI projectors.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -269,7 +270,7 @@ fn spawn_dropdown_items(world: &mut World, dropdown_entity: Entity, combo_entity
                 index,
             },
             crate::styling::HoverDebounce {
-                enter_delay_secs: 0.06,
+                enter_delay_secs: DROPDOWN_ITEM_HOVER_ENTER_DELAY_SECS,
             },
             crate::StyleClass(classes),
             ChildOf(dropdown_entity),

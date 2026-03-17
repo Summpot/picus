@@ -45,7 +45,7 @@ use picus_core::{
         style::Style as _,
         view::{
             CrossAxisAlignment, FlexExt as _, MainAxisAlignment, flex_col, flex_row, image, label,
-            portal, sized_box, virtual_scroll,
+            sized_box, virtual_scroll,
         },
         winit::{dpi::LogicalSize, error::EventLoopError},
     },
@@ -130,6 +130,20 @@ mod tests {
 
         assert!(collapsed_columns >= expanded_columns);
         assert!(collapsed_card_width >= expanded_card_width);
+    }
+
+    #[test]
+    fn feed_scroll_viewport_reserves_space_for_optional_panels() {
+        let (base_width, base_height) =
+            ui::compute_feed_scroll_viewport_size(1360.0, 860.0, false, false, false);
+        let (_, search_height) =
+            ui::compute_feed_scroll_viewport_size(1360.0, 860.0, false, true, false);
+        let (_, response_height) =
+            ui::compute_feed_scroll_viewport_size(1360.0, 860.0, false, false, true);
+
+        assert!(base_width >= state::CARD_MIN_WIDTH);
+        assert!(search_height < base_height);
+        assert!(response_height < base_height);
     }
 
     #[test]

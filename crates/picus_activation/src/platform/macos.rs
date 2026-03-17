@@ -441,12 +441,12 @@ fn remove_path_if_exists(path: &Path) -> Result<()> {
 
 #[cfg(target_os = "macos")]
 fn create_symlink_or_copy(source: &Path, dest: &Path) -> Result<()> {
-    // macOS TCC (Transparency, Consent, and Control) protects folders like 
+    // macOS TCC (Transparency, Consent, and Control) protects folders like
     // ~/Documents, ~/Desktop, and ~/Downloads.
-    // If we use a symlink, Launch Services resolves the symlink and tries to read 
+    // If we use a symlink, Launch Services resolves the symlink and tries to read
     // the executable from the protected folder, causing a permission prompt.
     // To avoid this, we hard-link or copy the executable instead.
-    
+
     if fs::hard_link(source, dest).is_ok() {
         return Ok(());
     }
@@ -457,7 +457,7 @@ fn create_symlink_or_copy(source: &Path, dest: &Path) -> Result<()> {
             source, dest
         ))
     })?;
-    
+
     Ok(())
 }
 

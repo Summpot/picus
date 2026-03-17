@@ -130,17 +130,28 @@ pub(crate) fn project_badge(badge_component: &UiBadge, ctx: ProjectionCtx<'_>) -
 
 pub(crate) fn project_checkbox(checkbox: &UiCheckbox, ctx: ProjectionCtx<'_>) -> UiView {
     let style = resolve_style(ctx.world, ctx.entity);
-    Arc::new(apply_direct_widget_style(
-        ecs_checkbox(
-            ctx.entity,
-            checkbox.label.clone(),
-            checkbox.checked,
-            move |_| WidgetUiAction::ToggleCheckbox {
-                checkbox: ctx.entity,
-            },
-        ),
-        &style,
-    ))
+
+    let mut checkbox_view = ecs_checkbox(
+        ctx.entity,
+        checkbox.label.clone(),
+        checkbox.checked,
+        move |checked| WidgetUiAction::SetCheckbox {
+            checkbox: ctx.entity,
+            checked,
+        },
+    )
+    .text_size(style.text.size);
+
+    if let Some(font_stack) = font_stack_from_style(&style) {
+        checkbox_view = checkbox_view.font(font_stack);
+    }
+    if let Some(text_color) = style.colors.text {
+        checkbox_view = checkbox_view
+            .text_color(text_color)
+            .checkmark_color(text_color);
+    }
+
+    Arc::new(apply_direct_widget_style(checkbox_view, &style))
 }
 
 pub(crate) fn project_slider(slider: &UiSlider, ctx: ProjectionCtx<'_>) -> UiView {

@@ -1115,6 +1115,35 @@ fn direct_slider_action_updates_slider_state() {
 }
 
 #[test]
+fn direct_checkbox_action_sets_checkbox_state() {
+    let mut world = World::new();
+    world.insert_resource(UiEventQueue::default());
+
+    let checkbox = world.spawn((crate::UiCheckbox::new("demo", false),)).id();
+
+    world.resource::<UiEventQueue>().push_typed(
+        checkbox,
+        crate::WidgetUiAction::SetCheckbox {
+            checkbox,
+            checked: true,
+        },
+    );
+
+    crate::handle_widget_actions(&mut world);
+
+    let checkbox_state = world
+        .get::<crate::UiCheckbox>(checkbox)
+        .expect("checkbox should exist");
+    assert!(checkbox_state.checked);
+
+    let changed = world
+        .resource_mut::<UiEventQueue>()
+        .drain_actions::<crate::UiCheckboxChanged>();
+    assert_eq!(changed.len(), 1);
+    assert!(changed[0].action.checked);
+}
+
+#[test]
 fn sync_style_targets_keeps_unmanaged_tween_anim() {
     let mut world = World::new();
 

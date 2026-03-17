@@ -1,5 +1,10 @@
 use super::*;
 
+use picus_core::UiScrollView;
+use picus_core::bevy_math::Vec2;
+
+use super::actions::sync_feed_scroll_viewport;
+
 #[cfg(target_os = "macos")]
 pub(super) fn pixiv_macos_bundle_config() -> MacosBundleConfig {
     MacosBundleConfig::new(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("Info.plist"))
@@ -313,7 +318,16 @@ pub(super) fn setup(mut commands: Commands, i18n: Res<AppI18n>) {
     commands.insert_resource(ui_components);
     commands.queue(sync_bound_text_inputs);
 
-    let home_feed = commands.spawn((PixivHomeFeed, ChildOf(main_column))).id();
+    let feed_scroll = commands
+        .spawn((
+            UiScrollView::new(Vec2::new(1100.0, 520.0), Vec2::new(1100.0, 1400.0))
+                .with_vertical_scrollbar(true)
+                .with_horizontal_scrollbar(false),
+            ChildOf(main_column),
+        ))
+        .id();
+
+    let home_feed = commands.spawn((PixivHomeFeed, ChildOf(feed_scroll))).id();
 
     commands.queue(move |world: &mut World| {
         let detail_overlay = spawn_in_overlay_root(
@@ -338,6 +352,7 @@ pub(super) fn setup(mut commands: Commands, i18n: Res<AppI18n>) {
             .id();
 
         world.insert_resource(PixivUiTree {
+            feed_scroll,
             home_feed,
             overlay_tags,
         });
@@ -462,6 +477,7 @@ pub(super) fn build_app(mut activation_service: Option<ActivationService>) -> Ap
                 .after(picus_core::handle_overlay_actions),
             poll_activation_messages,
             track_viewport_metrics,
+            sync_feed_scroll_viewport,
             spawn_network_tasks,
             apply_network_results,
             spawn_image_tasks,

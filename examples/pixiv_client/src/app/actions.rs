@@ -1,5 +1,10 @@
 use super::*;
 
+use picus_core::UiScrollView;
+use picus_core::bevy_math::Vec2;
+
+use super::ui;
+
 fn open_in_system_browser(url: &str) -> Result<()> {
     if webbrowser::open(url).is_ok() {
         return Ok(());
@@ -405,6 +410,36 @@ pub(super) fn track_viewport_metrics(
     for event in resize_events.read() {
         viewport.width = event.width;
         viewport.height = event.height;
+    }
+}
+
+pub(super) fn sync_feed_scroll_viewport(
+    tree: Option<Res<PixivUiTree>>,
+    viewport: Res<ViewportMetrics>,
+    ui_state: Res<UiState>,
+    response_panel: Res<ResponsePanelState>,
+    mut scroll_views: Query<&mut UiScrollView>,
+) {
+    let Some(tree) = tree else {
+        return;
+    };
+
+    let Ok(mut feed_scroll) = scroll_views.get_mut(tree.feed_scroll) else {
+        return;
+    };
+
+    let (feed_width, feed_height) = ui::compute_feed_scroll_viewport_size(
+        viewport.width as f64,
+        viewport.height as f64,
+        ui_state.sidebar_collapsed,
+        ui_state.active_tab == NavTab::Search,
+        !response_panel.content.trim().is_empty(),
+    );
+
+    let next_viewport = Vec2::new(feed_width as f32, feed_height as f32);
+    if feed_scroll.viewport_size != next_viewport {
+        feed_scroll.viewport_size = next_viewport;
+        feed_scroll.clamp_scroll_offset();
     }
 }
 

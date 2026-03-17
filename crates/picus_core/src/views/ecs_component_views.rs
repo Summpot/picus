@@ -6,14 +6,12 @@ use masonry::{
     parley::Alignment as TextAlign,
     parley::StyleProperty,
     parley::style::FontStack,
-    properties::{ContentColor, DisabledContentColor, PlaceholderColor},
-    widgets::{self, RadioButtonSelected, TextAction},
+    properties::{CheckmarkColor, ContentColor, DisabledContentColor, PlaceholderColor},
+    widgets::{self, CheckboxToggled, RadioButtonSelected, TextAction},
 };
 use vello::peniko::Color;
 use xilem_core::{MessageCtx, MessageResult, Mut, View, ViewMarker};
-use xilem_masonry::view::{
-    Button, Checkbox, Label, Slider, Switch, checkbox, slider, switch, text_button,
-};
+use xilem_masonry::view::{Button, Label, Slider, Switch, slider, switch, text_button};
 use xilem_masonry::{Pod, ViewCtx};
 
 use crate::events::emit_ui_action;
@@ -43,14 +41,173 @@ pub fn ecs_checkbox<A, F>(
     label: impl Into<ArcStr>,
     checked: bool,
     map_action: F,
-) -> Checkbox<(), (), impl Fn(&mut (), bool) + Send + Sync + 'static>
+) -> EcsCheckboxView<A>
 where
     A: Send + Sync + 'static,
     F: Fn(bool) -> A + Send + Sync + 'static,
 {
-    checkbox(label, checked, move |_, value| {
-        emit_ui_action(entity, map_action(value));
-    })
+    EcsCheckboxView {
+        entity,
+        label: label.into(),
+        checked,
+        map_action: Box::new(map_action),
+        text_size: masonry::theme::TEXT_SIZE_NORMAL,
+        font: FontStack::List(Cow::Borrowed(&[])),
+        text_color: None,
+        checkmark_color: None,
+        disabled: false,
+    }
+}
+
+type EcsCheckboxCallback<A> = Box<dyn Fn(bool) -> A + Send + Sync + 'static>;
+
+/// ECS-dispatching checkbox view with label/checkmark styling support.
+#[must_use = "View values do nothing unless returned into the synthesized UI tree."]
+pub struct EcsCheckboxView<A> {
+    entity: Entity,
+    label: ArcStr,
+    checked: bool,
+    map_action: EcsCheckboxCallback<A>,
+    text_size: f32,
+    font: FontStack<'static>,
+    text_color: Option<Color>,
+    checkmark_color: Option<Color>,
+    disabled: bool,
+}
+
+impl<A> EcsCheckboxView<A>
+where
+    A: Send + Sync + 'static,
+{
+    #[doc(alias = "font_size")]
+    pub fn text_size(mut self, text_size: f32) -> Self {
+        self.text_size = text_size;
+        self
+    }
+
+    pub fn font(mut self, font: impl Into<FontStack<'static>>) -> Self {
+        self.font = font.into();
+        self
+    }
+
+    pub fn text_color(mut self, color: Color) -> Self {
+        self.text_color = Some(color);
+        self
+    }
+
+    pub fn checkmark_color(mut self, color: Color) -> Self {
+        self.checkmark_color = Some(color);
+        self
+    }
+
+    pub fn disabled(mut self, disabled: bool) -> Self {
+        self.disabled = disabled;
+        self
+    }
+}
+
+impl<A> ViewMarker for EcsCheckboxView<A> where A: Send + Sync + 'static {}
+
+impl<A> View<(), (), ViewCtx> for EcsCheckboxView<A>
+where
+    A: Send + Sync + 'static,
+{
+    type Element = Pod<widgets::Checkbox>;
+    type ViewState = ();
+
+    fn build(&self, ctx: &mut ViewCtx, _: &mut ()) -> (Self::Element, Self::ViewState) {
+        let label = widgets::Label::new(self.label.clone())
+            .with_style(StyleProperty::FontSize(self.text_size))
+            .with_style(StyleProperty::FontStack(self.font.clone()));
+
+        let label = if let Some(color) = self.text_color {
+            NewWidget::new_with_props(label, ContentColor::new(color))
+        } else {
+            NewWidget::new(label)
+        };
+
+        let element = ctx.with_action_widget(|ctx| {
+            let mut pod = ctx.create_pod(widgets::Checkbox::from_label(self.checked, label));
+            pod.new_widget.options.disabled = self.disabled;
+            if let Some(color) = self.checkmark_color {
+                pod.new_widget.properties.insert(CheckmarkColor { color });
+            }
+            pod
+        });
+
+        (element, ())
+    }
+
+    fn rebuild(
+        &self,
+        prev: &Self,
+        (): &mut Self::ViewState,
+        _ctx: &mut ViewCtx,
+        mut element: Mut<'_, Self::Element>,
+        _: &mut (),
+    ) {
+        if prev.disabled != self.disabled {
+            element.ctx.set_disabled(self.disabled);
+        }
+        if prev.label != self.label {
+            widgets::Checkbox::set_text(&mut element, self.label.clone());
+        }
+        if prev.checked != self.checked {
+            widgets::Checkbox::set_checked(&mut element, self.checked);
+        }
+
+        let mut label = widgets::Checkbox::label_mut(&mut element);
+        if prev.text_size != self.text_size {
+            widgets::Label::insert_style(&mut label, StyleProperty::FontSize(self.text_size));
+        }
+        if prev.font != self.font {
+            widgets::Label::insert_style(&mut label, StyleProperty::FontStack(self.font.clone()));
+        }
+        if prev.text_color != self.text_color {
+            if let Some(color) = self.text_color {
+                label.insert_prop(ContentColor::new(color));
+            } else {
+                label.remove_prop::<ContentColor>();
+            }
+        }
+        drop(label);
+        if prev.checkmark_color != self.checkmark_color {
+            if let Some(color) = self.checkmark_color {
+                element.insert_prop(CheckmarkColor { color });
+            } else {
+                element.remove_prop::<CheckmarkColor>();
+            }
+        }
+    }
+
+    fn teardown(
+        &self,
+        (): &mut Self::ViewState,
+        ctx: &mut ViewCtx,
+        element: Mut<'_, Self::Element>,
+    ) {
+        ctx.teardown_action_source(element);
+    }
+
+    fn message(
+        &self,
+        (): &mut Self::ViewState,
+        message: &mut MessageCtx,
+        _element: Mut<'_, Self::Element>,
+        _app_state: &mut (),
+    ) -> MessageResult<()> {
+        debug_assert!(
+            message.remaining_path().is_empty(),
+            "id path should be empty in EcsCheckboxView::message"
+        );
+        match message.take_message::<CheckboxToggled>() {
+            Some(checked) => {
+                emit_ui_action(self.entity, (self.map_action)(checked.0));
+                MessageResult::Action(())
+            }
+            None => MessageResult::Stale,
+        }
+    }
 }
 
 /// ECS-dispatching radio button backed by Masonry's native `RadioButton` widget.
@@ -71,6 +228,7 @@ where
         text_size: masonry::theme::TEXT_SIZE_NORMAL,
         font: FontStack::List(Cow::Borrowed(&[])),
         text_color: None,
+        checkmark_color: None,
         disabled: false,
     }
 }
@@ -85,6 +243,7 @@ pub struct EcsRadioButtonView<A> {
     text_size: f32,
     font: FontStack<'static>,
     text_color: Option<Color>,
+    checkmark_color: Option<Color>,
     disabled: bool,
 }
 
@@ -105,6 +264,11 @@ where
 
     pub fn text_color(mut self, color: Color) -> Self {
         self.text_color = Some(color);
+        self
+    }
+
+    pub fn checkmark_color(mut self, color: Color) -> Self {
+        self.checkmark_color = Some(color);
         self
     }
 }
@@ -132,6 +296,9 @@ where
         let element = ctx.with_action_widget(|ctx| {
             let mut pod = ctx.create_pod(widgets::RadioButton::from_label(self.checked, label));
             pod.new_widget.options.disabled = self.disabled;
+            if let Some(color) = self.checkmark_color {
+                pod.new_widget.properties.insert(CheckmarkColor { color });
+            }
             pod
         });
         (element, ())
@@ -167,6 +334,14 @@ where
                 label.insert_prop(ContentColor::new(color));
             } else {
                 label.remove_prop::<ContentColor>();
+            }
+        }
+        drop(label);
+        if prev.checkmark_color != self.checkmark_color {
+            if let Some(color) = self.checkmark_color {
+                element.insert_prop(CheckmarkColor { color });
+            } else {
+                element.remove_prop::<CheckmarkColor>();
             }
         }
     }

@@ -805,9 +805,6 @@
     (
       selector: And([Class("overlay.dropdown.item"), PseudoClass(Hovered)]),
       setter: (
-        layout: (
-          scale: 1.015,
-        ),
         colors: (
           bg: Var("surface-overlay-item-hover"),
         ),
@@ -817,7 +814,7 @@
       selector: And([Class("overlay.dropdown.item"), PseudoClass(Pressed)]),
       setter: (
         layout: (
-          scale: 0.98,
+          scale: 0.992,
         ),
         colors: (
           bg: Var("surface-overlay-item-pressed"),
@@ -1150,12 +1147,13 @@
       selector: Class("widget.tab.selected-pipe"),
       setter: (
         layout: (
-          border_width: 2.0,
+          border_width: 3.0,
           corner_radius: Var("radius-sm"),
         ),
         colors: (
           bg: Var("accent-primary"),
         ),
+        transition: Var("duration-fast"),
       ),
     ),
 

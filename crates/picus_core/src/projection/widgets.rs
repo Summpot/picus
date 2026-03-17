@@ -10,8 +10,8 @@ use masonry::layout::{Dim, Length};
 use xilem::Color;
 use xilem::style::Style as _;
 use xilem_masonry::view::{
-    FlexExt as _, flex_col, flex_row, label, radio_group as xilem_radio_group, sized_box, spinner,
-    split, transformed, zstack,
+    FlexExt as _, MainAxisAlignment, flex_col, flex_row, label, radio_group as xilem_radio_group,
+    sized_box, spinner, split, transformed, zstack,
 };
 
 use crate::{
@@ -400,6 +400,7 @@ pub(crate) fn project_radio_group(radio_group: &UiRadioGroup, ctx: ProjectionCtx
         .iter()
         .enumerate()
         .map(|(i, opt)| {
+            let radio_color = item_style.colors.text.or(style.colors.text);
             let mut btn = ecs_radio_button(
                 ctx.entity,
                 WidgetUiAction::SelectRadioItem {
@@ -417,6 +418,9 @@ pub(crate) fn project_radio_group(radio_group: &UiRadioGroup, ctx: ProjectionCtx
 
             if let Some(text_color) = item_style.colors.text.or(style.colors.text) {
                 btn = btn.text_color(text_color);
+            }
+            if let Some(checkmark_color) = radio_color {
+                btn = btn.checkmark_color(checkmark_color);
             }
 
             apply_direct_widget_style(btn, &item_style).into_any_flex()
@@ -476,8 +480,9 @@ pub(crate) fn project_tab_bar(tab_bar: &UiTabBar, ctx: ProjectionCtx<'_>) -> UiV
     let pipe_height = if pipe_style.layout.border_width > 0.0 {
         pipe_style.layout.border_width
     } else {
-        2.0
+        3.0
     };
+    let pipe_width = 28.0;
 
     let headers = tab_bar
         .tabs
@@ -490,36 +495,43 @@ pub(crate) fn project_tab_bar(tab_bar: &UiTabBar, ctx: ProjectionCtx<'_>) -> UiV
             } else {
                 &header_style
             };
-            let btn = ecs_button(
-                ctx.entity,
-                WidgetUiAction::SelectTab {
-                    bar: ctx.entity,
-                    index: i,
-                },
-                tab_label.clone(),
+            let label_view = apply_label_style(label(tab_label.clone()), s);
+            let styled_btn = apply_direct_widget_style(
+                ecs_button_with_child(
+                    ctx.entity,
+                    WidgetUiAction::SelectTab {
+                        bar: ctx.entity,
+                        index: i,
+                    },
+                    label_view,
+                ),
+                s,
             );
-            let styled_btn = apply_direct_widget_style(btn, s);
 
-            // Build a column with the button + an accent-colored bottom pipe
-            // for the active tab (Fluent-style selected indicator).
-            if is_active {
-                let pipe = sized_box(label(""))
-                    .width(Dim::Stretch)
-                    .height(Dim::Fixed(Length::px(pipe_height)))
-                    .background(pipe_color);
-                flex_col(vec![styled_btn.into_any_flex(), pipe.into_any_flex()])
-                    .gap(Length::px(0.0))
-                    .into_any_flex()
+            let mut indicator_style = pipe_style.clone();
+            indicator_style.transition = Some(crate::StyleTransition { duration: 0.12 });
+            indicator_style.layout.scale = if is_active { 1.0 } else { 0.45 };
+            indicator_style.colors.bg = Some(if is_active {
+                pipe_color
             } else {
-                // Inactive: spacer at the bottom matching pipe height for alignment.
-                let spacer = sized_box(label(""))
-                    .width(Dim::Stretch)
-                    .height(Dim::Fixed(Length::px(pipe_height)))
-                    .background(Color::TRANSPARENT);
-                flex_col(vec![styled_btn.into_any_flex(), spacer.into_any_flex()])
-                    .gap(Length::px(0.0))
-                    .into_any_flex()
-            }
+                pipe_color.with_alpha(0.0)
+            });
+
+            let indicator = flex_row(vec![
+                apply_widget_style(
+                    sized_box(label(""))
+                        .width(Dim::Fixed(Length::px(pipe_width)))
+                        .height(Dim::Fixed(Length::px(pipe_height))),
+                    &indicator_style,
+                )
+                .into_any_flex(),
+            ])
+            .main_axis_alignment(MainAxisAlignment::Center)
+            .width(Dim::Stretch);
+
+            flex_col(vec![styled_btn.into_any_flex(), indicator.into_any_flex()])
+                .gap(Length::px(0.0))
+                .into_any_flex()
         })
         .collect::<Vec<_>>();
 
@@ -822,7 +834,11 @@ pub(crate) fn project_tooltip(tooltip: &UiTooltip, ctx: ProjectionCtx<'_>) -> Ui
 
 pub(crate) fn project_spinner(sp: &UiSpinner, ctx: ProjectionCtx<'_>) -> UiView {
     let style = resolve_style(ctx.world, ctx.entity);
-    let spin_view = spinner();
+    let spin_view: UiView = if let Some(color) = style.colors.text {
+        Arc::new(spinner().color(color))
+    } else {
+        Arc::new(spinner())
+    };
 
     if let Some(lbl) = &sp.label {
         let label_view = apply_label_style(label(lbl.clone()), &style);

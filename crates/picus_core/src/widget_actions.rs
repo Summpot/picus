@@ -30,6 +30,8 @@ pub enum WidgetUiAction {
     ToggleTreeNode { node: Entity },
     /// Toggle a checkbox.
     ToggleCheckbox { checkbox: Entity },
+    /// Set a checkbox to an explicit checked state.
+    SetCheckbox { checkbox: Entity, checked: bool },
     /// Adjust slider value using step increments.
     StepSlider { slider: Entity, delta: f64 },
     /// Set a slider value directly from a native slider interaction.
@@ -320,6 +322,30 @@ pub fn handle_widget_actions(world: &mut World) {
                     if let Some(mut checkbox_state) = world.get_mut::<UiCheckbox>(checkbox) {
                         checkbox_state.checked = !checkbox_state.checked;
                         Some(checkbox_state.checked)
+                    } else {
+                        None
+                    };
+
+                if let Some(checked) = changed {
+                    world
+                        .resource::<UiEventQueue>()
+                        .push_typed(checkbox, UiCheckboxChanged { checkbox, checked });
+                }
+            }
+
+            WidgetUiAction::SetCheckbox { checkbox, checked } => {
+                if world.get_entity(checkbox).is_err() {
+                    continue;
+                }
+
+                let changed =
+                    if let Some(mut checkbox_state) = world.get_mut::<UiCheckbox>(checkbox) {
+                        if checkbox_state.checked == checked {
+                            None
+                        } else {
+                            checkbox_state.checked = checked;
+                            Some(checked)
+                        }
                     } else {
                         None
                     };

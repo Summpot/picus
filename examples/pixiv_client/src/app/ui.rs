@@ -1,7 +1,52 @@
 use super::*;
 
+use picus_core::{
+    UiScrollView,
+    bevy_math::Vec2,
+    xilem::{
+        masonry::layout::UnitPoint,
+        view::{transformed, zstack},
+    },
+};
+
+const FEED_OVERSCAN_Y: f64 = 240.0;
+const FEED_BASE_CHROME_HEIGHT: f64 = 332.0;
+const FEED_SEARCH_PANEL_HEIGHT: f64 = 56.0;
+const FEED_RESPONSE_PANEL_SPACING: f64 = 18.0;
+
 fn empty_ui() -> UiView {
     Arc::new(label(""))
+}
+
+pub(super) fn compute_feed_scroll_viewport_size(
+    viewport_width: f64,
+    viewport_height: f64,
+    sidebar_collapsed: bool,
+    search_visible: bool,
+    response_visible: bool,
+) -> (f64, f64) {
+    let sidebar_width = if sidebar_collapsed {
+        SIDEBAR_COLLAPSED_WIDTH
+    } else {
+        SIDEBAR_EXPANDED_WIDTH
+    };
+
+    let feed_width = (viewport_width - sidebar_width - 64.0).max(CARD_MIN_WIDTH);
+
+    let mut feed_height = viewport_height - FEED_BASE_CHROME_HEIGHT;
+    if search_visible {
+        feed_height -= FEED_SEARCH_PANEL_HEIGHT;
+    }
+    if response_visible {
+        feed_height -= RESPONSE_PANEL_HEIGHT + FEED_RESPONSE_PANEL_SPACING;
+    }
+
+    (feed_width, feed_height.max(240.0))
+}
+
+fn feed_parent_scroll_view(world: &World, entity: Entity) -> Option<UiScrollView> {
+    let parent = world.get::<ChildOf>(entity)?.parent();
+    world.get::<UiScrollView>(parent).copied()
 }
 
 pub(super) fn compute_feed_layout(viewport_width: f64, sidebar_collapsed: bool) -> (usize, f64) {
@@ -285,16 +330,27 @@ pub(super) fn project_main_column(_: &PixivMainColumn, ctx: ProjectionCtx<'_>) -
 
     let mut children = Vec::new();
     children.push(apply_label_style(label(ui.status_line.clone()), &root_style).into_any_flex());
-    children.extend(ctx.children.into_iter().map(|child| child.into_any_flex()));
 
-    Arc::new(
-        portal(
-            flex_col(children)
-                .cross_axis_alignment(CrossAxisAlignment::Stretch)
-                .width(Dim::Stretch),
-        )
-        .dims(Dim::Stretch),
-    )
+    let mut projected_children = ctx.children.into_iter().collect::<Vec<_>>();
+    let feed_scroll = projected_children.pop();
+
+    children.extend(
+        projected_children
+            .into_iter()
+            .map(|child| child.into_any_flex()),
+    );
+
+    if let Some(feed_scroll) = feed_scroll {
+        children.push(feed_scroll.flex(1.0).into_any_flex());
+    }
+
+    Arc::new(apply_widget_style(
+        flex_col(children)
+            .cross_axis_alignment(CrossAxisAlignment::Stretch)
+            .width(Dim::Stretch)
+            .height(Dim::Stretch),
+        &root_style,
+    ))
 }
 
 pub(super) fn project_auth_panel(_: &PixivAuthPanel, ctx: ProjectionCtx<'_>) -> UiView {
@@ -464,8 +520,16 @@ pub(super) fn project_home_feed(_: &PixivHomeFeed, ctx: ProjectionCtx<'_>) -> Ui
 
     let ui = ctx.world.resource::<UiState>();
     let viewport = ctx.world.resource::<ViewportMetrics>();
-    let (columns, _) = compute_feed_layout(viewport.width as f64, ui.sidebar_collapsed);
+    let (columns, card_width) = compute_feed_layout(viewport.width as f64, ui.sidebar_collapsed);
     let columns = columns.max(1);
+    let content_width =
+        columns as f64 * card_width + CARD_ROW_GAP * columns.saturating_sub(1) as f64;
+    let scroll_view = feed_parent_scroll_view(ctx.world, ctx.entity);
+    let (visible_start, visible_end) = scroll_view
+        .map(UiScrollView::visible_rect)
+        .unwrap_or((Vec2::ZERO, Vec2::new(f32::MAX, f32::MAX)));
+    let visible_min_y = visible_start.y as f64 - FEED_OVERSCAN_Y;
+    let visible_max_y = visible_end.y as f64 + FEED_OVERSCAN_Y;
 
     let child_entities = ctx
         .world
@@ -474,10 +538,10 @@ pub(super) fn project_home_feed(_: &PixivHomeFeed, ctx: ProjectionCtx<'_>) -> Ui
         .unwrap_or_default();
 
     let mut column_heights = vec![0.0_f64; columns];
-    let mut column_views = vec![Vec::<UiView>::new(); columns];
+    let mut visible_cards = Vec::<UiView>::new();
 
     for (entity, child_view) in child_entities.into_iter().zip(ctx.children.into_iter()) {
-        let estimated_height = estimate_illust_card_height(ctx.world, entity, CARD_BASE_WIDTH);
+        let estimated_height = estimate_illust_card_height(ctx.world, entity, card_width);
         let target_column = column_heights
             .iter()
             .enumerate()
@@ -485,30 +549,28 @@ pub(super) fn project_home_feed(_: &PixivHomeFeed, ctx: ProjectionCtx<'_>) -> Ui
             .map(|(index, _)| index)
             .unwrap_or(0);
 
+        let x = target_column as f64 * (card_width + CARD_ROW_GAP);
+        let y = column_heights[target_column];
+
         column_heights[target_column] += estimated_height + CARD_ROW_GAP;
-        column_views[target_column].push(child_view);
+
+        if y + estimated_height >= visible_min_y && y <= visible_max_y {
+            visible_cards.push(Arc::new(transformed(child_view).translate((x, y))));
+        }
     }
 
-    let columns_ui = column_views
-        .into_iter()
-        .map(|items| {
-            flex_col(
-                items
-                    .into_iter()
-                    .map(|item| item.into_any_flex())
-                    .collect::<Vec<_>>(),
-            )
-            .cross_axis_alignment(CrossAxisAlignment::Center)
-            .gap(Length::px(CARD_ROW_GAP))
-            .into_any_flex()
-        })
-        .collect::<Vec<_>>();
+    let content_height = column_heights.into_iter().fold(0.0_f64, f64::max);
+    let content_height = (content_height - CARD_ROW_GAP).max(1.0);
 
     Arc::new(
-        flex_row(columns_ui)
-            .cross_axis_alignment(CrossAxisAlignment::Start)
-            .gap(Length::px(CARD_ROW_GAP))
-            .width(Dim::Stretch),
+        sized_box(
+            zstack(visible_cards)
+                .alignment(UnitPoint::TOP_LEFT)
+                .width(Dim::Fixed(Length::px(content_width.max(card_width))))
+                .height(Dim::Fixed(Length::px(content_height))),
+        )
+        .width(Dim::Fixed(Length::px(content_width.max(card_width))))
+        .height(Dim::Fixed(Length::px(content_height))),
     )
 }
 
