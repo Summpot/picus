@@ -441,29 +441,24 @@ fn remove_path_if_exists(path: &Path) -> Result<()> {
 
 #[cfg(target_os = "macos")]
 fn create_symlink_or_copy(source: &Path, dest: &Path) -> Result<()> {
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::symlink;
-
-        symlink(source, dest).map_err(|error| {
-            ActivationError::Platform(format!(
-                "failed to symlink executable from {:?} to {:?}: {error}",
-                source, dest
-            ))
-        })?;
+    // macOS TCC (Transparency, Consent, and Control) protects folders like 
+    // ~/Documents, ~/Desktop, and ~/Downloads.
+    // If we use a symlink, Launch Services resolves the symlink and tries to read 
+    // the executable from the protected folder, causing a permission prompt.
+    // To avoid this, we hard-link or copy the executable instead.
+    
+    if fs::hard_link(source, dest).is_ok() {
         return Ok(());
     }
 
-    #[allow(unreachable_code)]
-    {
-        fs::copy(source, dest).map_err(|error| {
-            ActivationError::Platform(format!(
-                "failed to copy executable from {:?} to {:?}: {error}",
-                source, dest
-            ))
-        })?;
-        Ok(())
-    }
+    fs::copy(source, dest).map_err(|error| {
+        ActivationError::Platform(format!(
+            "failed to copy executable from {:?} to {:?}: {error}",
+            source, dest
+        ))
+    })?;
+    
+    Ok(())
 }
 
 #[cfg(target_os = "macos")]
