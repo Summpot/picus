@@ -1,37 +1,45 @@
-# picus_core
+# picus
 
-`picus_core` connects **Bevy ECS** with a **retained Xilem/Masonry UI runtime**.
-
-You describe UI from ECS components (via projectors), handle user interactions through a typed queue, and let `picus_core` synthesize/rebuild the widget tree each frame.
+A Bevy-first UI framework that connects ECS state management with a retained Xilem/Masonry runtime.
 
 ---
 
-## Features
+## What is picus?
 
-- Bevy-first update loop and scheduling
-- ECS-driven UI projection (`Component -> UiView`)
-- Typed UI action queue (`UiEventQueue`) for interaction handling
-- Explicit Masonry/Vello paint pass in `Last` (render + present without Bevy render plugins)
-- Ergonomic ECS UI component helpers (`button`, `checkbox`, `slider`, `text_input`, ...)
-- Built-in synchronous i18n/l10n via `AppI18n` + `LocalizeText`
-- Bevy-native run helpers (`run_app*`) that configure the primary window and auto-enable Bevy's native window plugins (`AccessibilityPlugin` + `InputPlugin` + `WindowPlugin` + `WinitPlugin`) before `App::run()`
+**picus** is a workspace for building desktop user interfaces with Rust. It combines Bevy's ECS architecture with Xilem/Masonry's retained widget tree model, giving you:
+
+- Declarative UI defined through ECS components
+- Explicit, typed event handling
+- A powerful styling system with CSS-like cascades
+- Built-in internationalization support
+- Cross-platform window management
+
+The workspace currently contains three crates:
+
+- **picus_core** — the main UI framework (this is the crate you depend on)
+- **picus_surface** — Vello rendering bridge for window surfaces
+- **picus_activation** — deep linking and single-instance support
+
+This README covers the `picus_core` crate, which provides the complete UI framework experience. The companion crates handle specialized platform integration.
 
 ---
 
 ## Installation
 
-Add only `picus_core` to your dependencies:
+Add `picus_core` to your `Cargo.toml`:
 
 ```toml
 [dependencies]
 picus_core = "0.1"
 ```
 
-If you are using this repository workspace layout, keep path dependencies from the workspace root.
+If you're working with this workspace directly, use path dependencies from the repository root.
 
 ---
 
 ## Quick start
+
+Here's a minimal counter app that demonstrates the core pattern:
 
 ```rust,no_run
 use std::sync::Arc;
@@ -98,153 +106,114 @@ fn main() -> Result<(), EventLoopError> {
 }
 ```
 
----
+The pattern is straightforward:
 
-## Styling system (brief)
-
-`picus_core` includes an ECS-driven, CSS-like styling pipeline:
-
-- define class rules in `StyleSheet`
-- attach classes to entities with `StyleClass`
-- resolve/apply styles in projectors with helper functions
-- configure hover/pressed + transition colors for smooth interaction feedback
-
-Minimal setup sketch:
-
-```rust,no_run
-use picus_core::{
-    ColorStyle, LayoutStyle, StyleClass, StyleSetter, StyleSheet, StyleTransition, TextStyle,
-    apply_label_style, apply_widget_style, resolve_style,
-    bevy_ecs::prelude::*,
-    xilem::{Color, view::{flex_col, label}},
-};
-
-fn setup_styles(mut sheet: ResMut<StyleSheet>) {
-    sheet.set_class(
-        "demo.button",
-        StyleSetter {
-            layout: LayoutStyle {
-                padding: Some(8.0),
-                corner_radius: Some(8.0),
-                border_width: Some(0.0),
-                ..LayoutStyle::default()
-            },
-            colors: ColorStyle {
-                bg: Some(Color::from_rgb8(0x25, 0x63, 0xEB)),
-                hover_bg: Some(Color::from_rgb8(0x1D, 0x4E, 0xD8)),
-                pressed_bg: Some(Color::from_rgb8(0x1E, 0x40, 0xAF)),
-                text: Some(Color::WHITE),
-                ..ColorStyle::default()
-            },
-            text: TextStyle { size: Some(16.0) },
-            transition: Some(StyleTransition { duration: 0.15 }),
-        },
-    );
-}
-
-fn project_demo(entity: Entity, world: &World) -> impl picus_core::xilem_masonry::WidgetView<(), ()> {
-    let style = resolve_style(world, entity);
-    apply_widget_style(
-        flex_col((apply_label_style(label("Hello styled UI"), &style),)),
-        &style,
-    )
-}
-
-fn spawn_demo(mut commands: Commands) {
-    commands.spawn(StyleClass(vec!["demo.button".to_string()]));
-}
-```
-
-For the full guide (cascade rules, projector patterns, transitions, caveats), see [`STYLING.md`](./STYLING.md).
+1. Define a component type that implements `UiComponentTemplate`
+2. In `project()`, return a Xilem/Masonry view built from the entity
+3. Spawn the component with `UiRoot` to attach it to the UI tree
+4. Handle typed events from `UiEventQueue` in your systems
+5. Run with `run_app_with_window_options` or `run_app`
 
 ---
 
-## Reusable custom view helper
+## Features
 
-You can wrap repeated UI patterns as reusable helper functions that return a typed view.
+- **Bevy-native scheduling** — runs entirely within Bevy's update loop, no separate event loop
+- **ECS-driven projection** — map components to widget views via `UiComponentTemplate`
+- **Typed action queue** — `UiEventQueue` provides type-safe event handling without closures
+- **Explicit rendering pass** — Vello paint in `Last` stage, no Bevy render graph needed
+- **Built-in components** — buttons, checkboxes, sliders, text inputs, dialogs, scroll views, and more
+- **Styling engine** — CSS-like cascade with class selectors, inline overrides, and smooth transitions
+- **Internationalization** — synchronous `AppI18n` with `LocalizeText` component
+- **Overlay system** — dialogs, tooltips, dropdowns, toasts with automatic placement
+- **Helper utilities** — `run_app()` auto-configures window plugins for desktop apps
 
-```rust,no_run
-use bevy_ecs::entity::Entity;
-use picus_core::{button_with_child, xilem::view::label};
+---
 
-#[derive(Debug, Clone)]
-enum TodoAction {
-    Add,
-    Remove,
-}
+## Workspace crates
 
-fn accent_action_button(
-    entity: Entity,
-    action: TodoAction,
-    text: &'static str,
-) -> impl picus_core::xilem_masonry::WidgetView<(), ()> {
-    button_with_child(entity, action, label(text))
-        .padding(8.0)
-        .corner_radius(10.0)
-        .background_color(picus_core::xilem::Color::from_rgb8(0x00, 0x8d, 0xdd))
-}
-```
+### picus_core (primary)
 
-Use it in projectors just like built-in UI components:
+The main framework crate. It provides:
 
-```rust,no_run
-# use std::sync::Arc;
-# use picus_core::{ProjectionCtx, UiView};
-# #[derive(Debug, Clone)] enum TodoAction { Add }
-# fn accent_action_button(
-#     entity: picus_core::bevy_ecs::entity::Entity,
-#     action: TodoAction,
-#     text: &'static str,
-# ) -> impl picus_core::xilem_masonry::WidgetView<(), ()> {
-#     picus_core::button_with_child(entity, action, picus_core::xilem::view::label(text))
-# }
-fn project_toolbar(ctx: ProjectionCtx<'_>) -> UiView {
-    Arc::new(accent_action_button(ctx.entity, TodoAction::Add, "Add task"))
-}
+- The `PicusPlugin` that wires all core systems
+- UI component library and registration API
+- Styling system with selector-based rules
+- Overlay and modal management
+- Font and i18n bridges
+- Run helpers for desktop applications
+
+**This is the crate most users depend on.**
+
+### picus_surface
+
+A low-level bridge that attaches a Vello renderer to an external Bevy window. `picus_core` uses this internally for the `Last` paint pass. You typically won't interact with this crate directly unless you're customizing the rendering pipeline.
+
+### picus_activation
+
+Handles deep linking, single-instance enforcement, and custom URI protocol registration. Useful for applications that need to respond to custom URL schemes or ensure only one instance runs at a time. Like `picus_surface`, this is an implementation detail for most users.
+
+---
+
+## Examples
+
+The workspace includes several example applications:
+
+| App | Cargo package | Description |
+|-----|---------------|-------------|
+| `ui_showcase` | `example_ui_showcase` | Component gallery with theming and localization |
+| `chess_game` | `example_chess_game` | Full chess UI with embedded engine |
+| `async_downloader` | `example_async_downloader` | Async operations with progress UI |
+| `calculator` | `example_calculator` | Standard calculator interface |
+| `timer` | `example_timer` | Countdown timer with start/stop controls |
+| `todo_list` | `example_todo_list` | Task management with add/remove |
+| `game_2048` | `example_game_2048` | Classic 2048 game implementation |
+| `overlay_hit_routing` | `example_overlay_hit_routing` | Overlay interaction patterns |
+| `pixiv_client` | `example_pixiv_client` | Image browsing application |
+
+Run any example from the repository root:
+
+```bash
+cargo run -p example_ui_showcase
 ```
 
 ---
 
-## API naming conventions
+## Styling system
 
-`picus_core` exports two UI component groups:
+`picus_core` includes a complete styling pipeline inspired by CSS:
 
-- **ECS action adapters** (recommended): `button`, `checkbox`, `slider`, `switch`, `text_button`, `text_input`
-- **Original xilem widgets** with `xilem_` prefix: `xilem_button`, `xilem_checkbox`, ...
+- Define rules in a `StyleSheet` resource (loaded from RON files or set directly)
+- Attach classes to entities with `StyleClass`
+- Resolve styles in projectors using helper functions
+- Support for hover/pressed states and smooth color transitions
 
-Legacy `ecs_*` names are still available for compatibility.
+See [STYLING.md](./STYLING.md) for the full guide on selectors, cascade rules, and transition configuration.
+
+---
+
+## API conventions
+
+The crate exports two families of UI components:
+
+- **ECS adapters** (recommended) — `button`, `checkbox`, `slider`, `switch`, `text_button`, `text_input` — these emit typed actions directly into `UiEventQueue`
+- **Raw Xilem widgets** — `xilem_button`, `xilem_checkbox`, etc. — for cases where you need the original widget without ECS integration
+
+Legacy `ecs_*` names remain for backward compatibility.
 
 ---
 
 ## Event handling model
 
+The framework follows a clear pipeline each frame:
+
 1. UI components emit typed actions into `UiEventQueue`
-2. A Bevy system drains typed actions in `PreUpdate`
-3. Your app mutates ECS state/resources
-4. `picus_core` synthesizes and rebuilds UI in `PostUpdate`
-5. `picus_core` paints/presents the retained Masonry scene in `Last`
+2. Your systems drain those actions in `PreUpdate`
+3. You mutate ECS state/resources based on events
+4. `picus_core` synthesizes the widget tree in `PostUpdate`
+5. The retained Masonry scene is painted and presented in `Last`
 
-This keeps interaction handling explicit and ECS-friendly.
-
----
-
-## Included examples
-
-- `ui_showcase` (components + theming + localization/CJK in one app)
-- `chess_game` (UI + embedded engine module)
-- `async_downloader`
-- `calculator`
-- `timer`
-- `todo_list`
-- `game_2048`
-- `overlay_hit_routing`
-- `pixiv_client`
-
-Run an example workspace crate from repository root:
-
-```bash
-cargo run -p example_ui_showcase
-```
+This keeps interaction handling explicit and fully ECS-compatible.
 
 ---
 
