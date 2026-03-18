@@ -1,4 +1,5 @@
 use super::*;
+use picus_core::{UiScrollView, bevy_math::Vec2};
 
 fn summarize_error(details: &str) -> String {
     let first = details
@@ -19,6 +20,92 @@ fn is_downloadable_image_url(url: &str) -> bool {
     trimmed.starts_with("https://") || trimmed.starts_with("http://")
 }
 
+fn feed_generation_for_command(cmd: &NetworkCommand) -> Option<u64> {
+    match cmd {
+        NetworkCommand::FetchHome { generation }
+        | NetworkCommand::FetchRanking { generation }
+        | NetworkCommand::FetchManga { generation }
+        | NetworkCommand::FetchNovels { generation } => Some(*generation),
+        NetworkCommand::Search { generation, .. }
+        | NetworkCommand::FetchNext { generation, .. } => Some(*generation),
+        NetworkCommand::DiscoverIdp
+        | NetworkCommand::ExchangeCode { .. }
+        | NetworkCommand::Refresh { .. }
+        | NetworkCommand::Bookmark { .. } => None,
+    }
+}
+
+fn access_token(auth: &AuthState) -> Result<String> {
+    auth.session
+        .as_ref()
+        .map(|session| session.access_token.clone())
+        .ok_or_else(|| anyhow::anyhow!("not authenticated"))
+}
+
+fn fetch_next_payload(
+    client: &PixivApiClient,
+    token: &str,
+    source: NavTab,
+    url: &str,
+) -> Result<PixivResponse> {
+    match source {
+        NavTab::Novels => client.fetch_novel_page(token, url),
+        _ => client.fetch_page_json::<PixivResponse>(token, url),
+    }
+}
+
+fn preferred_thumbnail_url(illust: &Illust) -> Option<String> {
+    [
+        illust.image_urls.medium.as_str(),
+        illust.image_urls.large.as_str(),
+        illust.image_urls.square_medium.as_str(),
+    ]
+    .into_iter()
+    .find(|url| is_downloadable_image_url(url))
+    .map(ToOwned::to_owned)
+}
+
+fn spawn_feed_card(
+    world: &mut World,
+    home_feed: Entity,
+    image_cmd_tx: &Sender<ImageCommand>,
+    illust: Illust,
+) -> Entity {
+    let open_thumbnail = world.spawn_empty().id();
+    let bookmark = world.spawn_empty().id();
+    let entity = world
+        .spawn((
+            PixivIllustCard,
+            illust.clone(),
+            IllustVisual::default(),
+            CardAnimState::default(),
+            IllustActionEntities {
+                open_thumbnail,
+                bookmark,
+            },
+            StyleClass(vec!["pixiv.card".to_string()]),
+            ChildOf(home_feed),
+        ))
+        .id();
+
+    if let Some(url) = preferred_thumbnail_url(&illust) {
+        let _ = image_cmd_tx.send(ImageCommand::Download {
+            entity,
+            kind: ImageKind::Thumb,
+            url,
+        });
+    }
+    if is_downloadable_image_url(&illust.user.profile_image_urls.medium) {
+        let _ = image_cmd_tx.send(ImageCommand::Download {
+            entity,
+            kind: ImageKind::Avatar,
+            url: illust.user.profile_image_urls.medium.clone(),
+        });
+    }
+
+    entity
+}
+
 pub(super) fn spawn_network_tasks(world: &mut World) {
     let cmd_rx = world.resource::<NetworkBridge>().cmd_rx.clone();
     let result_tx = world.resource::<NetworkBridge>().result_tx.clone();
@@ -29,15 +116,20 @@ pub(super) fn spawn_network_tasks(world: &mut World) {
         let client = client.clone();
         let auth = auth.clone();
         let result_tx = result_tx.clone();
+        let feed_generation = feed_generation_for_command(&cmd);
 
         AsyncComputeTaskPool::get()
             .spawn(async move {
                 let result = match run_network_command(&client, &auth, cmd) {
-                    Ok(r) => r,
+                    Ok(result) => result,
                     Err(err) => {
                         let details = err.to_string();
                         let summary = summarize_error(&details);
-                        NetworkResult::Error { summary, details }
+                        NetworkResult::Error {
+                            summary,
+                            details,
+                            feed_generation,
+                        }
                     }
                 };
                 let _ = result_tx.send(result);
@@ -84,72 +176,72 @@ fn run_network_command(
             let response = client.refresh_access_token(auth_token_url, &refresh_token)?;
             Ok(NetworkResult::Authenticated(response.into()))
         }
-        NetworkCommand::FetchHome => {
-            let token = auth
-                .session
-                .as_ref()
-                .map(|s| s.access_token.clone())
-                .ok_or_else(|| anyhow::anyhow!("not authenticated"))?;
+        NetworkCommand::FetchHome { generation } => {
+            let token = access_token(auth)?;
             let payload = client.recommended_illusts(&token)?;
             Ok(NetworkResult::FeedLoaded {
                 source: NavTab::Home,
                 payload,
+                generation,
+                append: false,
             })
         }
-        NetworkCommand::FetchRanking => {
-            let token = auth
-                .session
-                .as_ref()
-                .map(|s| s.access_token.clone())
-                .ok_or_else(|| anyhow::anyhow!("not authenticated"))?;
+        NetworkCommand::FetchRanking { generation } => {
+            let token = access_token(auth)?;
             let payload = client.ranking_illusts(&token, "day")?;
             Ok(NetworkResult::FeedLoaded {
                 source: NavTab::Rankings,
                 payload,
+                generation,
+                append: false,
             })
         }
-        NetworkCommand::FetchManga => {
-            let token = auth
-                .session
-                .as_ref()
-                .map(|s| s.access_token.clone())
-                .ok_or_else(|| anyhow::anyhow!("not authenticated"))?;
+        NetworkCommand::FetchManga { generation } => {
+            let token = access_token(auth)?;
             let payload = client.recommended_manga(&token)?;
             Ok(NetworkResult::FeedLoaded {
                 source: NavTab::Manga,
                 payload,
+                generation,
+                append: false,
             })
         }
-        NetworkCommand::FetchNovels => {
-            let token = auth
-                .session
-                .as_ref()
-                .map(|s| s.access_token.clone())
-                .ok_or_else(|| anyhow::anyhow!("not authenticated"))?;
+        NetworkCommand::FetchNovels { generation } => {
+            let token = access_token(auth)?;
             let payload = client.recommended_novels(&token)?;
             Ok(NetworkResult::FeedLoaded {
                 source: NavTab::Novels,
                 payload,
+                generation,
+                append: false,
             })
         }
-        NetworkCommand::Search { word } => {
-            let token = auth
-                .session
-                .as_ref()
-                .map(|s| s.access_token.clone())
-                .ok_or_else(|| anyhow::anyhow!("not authenticated"))?;
+        NetworkCommand::Search { word, generation } => {
+            let token = access_token(auth)?;
             let payload = client.search_illusts(&token, &word)?;
             Ok(NetworkResult::FeedLoaded {
                 source: NavTab::Search,
                 payload,
+                generation,
+                append: false,
+            })
+        }
+        NetworkCommand::FetchNext {
+            source,
+            generation,
+            url,
+        } => {
+            let token = access_token(auth)?;
+            let payload = fetch_next_payload(client, &token, source, &url)?;
+            Ok(NetworkResult::FeedLoaded {
+                source,
+                payload,
+                generation,
+                append: true,
             })
         }
         NetworkCommand::Bookmark { illust_id } => {
-            let token = auth
-                .session
-                .as_ref()
-                .map(|s| s.access_token.clone())
-                .ok_or_else(|| anyhow::anyhow!("not authenticated"))?;
+            let token = access_token(auth)?;
             client.bookmark_illust(&token, illust_id)?;
             Ok(NetworkResult::BookmarkDone { illust_id })
         }
@@ -187,69 +279,91 @@ pub(super) fn apply_network_results(world: &mut World) {
                         session.refresh_token.clone();
                 }
 
+                let generation = begin_feed_request(world);
                 let _ = world
                     .resource::<NetworkBridge>()
                     .cmd_tx
-                    .send(NetworkCommand::FetchHome);
+                    .send(NetworkCommand::FetchHome { generation });
             }
-            NetworkResult::FeedLoaded { source, payload } => {
-                let home_feed = world.resource::<PixivUiTree>().home_feed;
+            NetworkResult::FeedLoaded {
+                source,
+                payload,
+                generation,
+                append,
+            } => {
+                let current_generation = world.resource::<FeedPagination>().generation;
+                if generation != current_generation {
+                    continue;
+                }
+
+                let tree = *world.resource::<PixivUiTree>();
                 world.resource_mut::<UiState>().active_tab = source;
-                let message = format!(
-                    "{} {} ({source:?})",
-                    tr(
-                        world,
-                        "pixiv.status.loaded_illustrations",
-                        "Loaded illustrations",
-                    ),
-                    payload.illusts.len()
-                );
-                set_status(world, message);
 
-                for entity in std::mem::take(&mut world.resource_mut::<FeedOrder>().0) {
-                    if world.get_entity(entity).is_ok() {
-                        world.entity_mut(entity).despawn();
+                let mut next_order = if append {
+                    std::mem::take(&mut world.resource_mut::<FeedOrder>().0)
+                } else {
+                    for entity in std::mem::take(&mut world.resource_mut::<FeedOrder>().0) {
+                        if world.get_entity(entity).is_ok() {
+                            world.entity_mut(entity).despawn();
+                        }
                     }
-                }
 
-                let mut new_order = Vec::new();
+                    if let Some(mut scroll_view) = world.get_mut::<UiScrollView>(tree.feed_scroll) {
+                        scroll_view.scroll_offset = Vec2::ZERO;
+                        scroll_view.clamp_scroll_offset();
+                    }
+
+                    Vec::new()
+                };
+                let mut seen_ids = if append {
+                    std::mem::take(&mut world.resource_mut::<FeedSeenIds>().0)
+                } else {
+                    world.resource_mut::<FeedSeenIds>().0.clear();
+                    std::mem::take(&mut world.resource_mut::<FeedSeenIds>().0)
+                };
+
+                let next_url = payload.next_url.clone();
+                let mut added = 0_usize;
                 for illust in payload.illusts {
-                    let open_thumbnail = world.spawn_empty().id();
-                    let bookmark = world.spawn_empty().id();
-                    let entity = world
-                        .spawn((
-                            PixivIllustCard,
-                            illust.clone(),
-                            IllustVisual::default(),
-                            CardAnimState::default(),
-                            IllustActionEntities {
-                                open_thumbnail,
-                                bookmark,
-                            },
-                            StyleClass(vec!["pixiv.card".to_string()]),
-                            ChildOf(home_feed),
-                        ))
-                        .id();
-
-                    if is_downloadable_image_url(&illust.image_urls.square_medium) {
-                        let _ = image_cmd_tx.send(ImageCommand::Download {
-                            entity,
-                            kind: ImageKind::Thumb,
-                            url: illust.image_urls.square_medium.clone(),
-                        });
-                    }
-                    if is_downloadable_image_url(&illust.user.profile_image_urls.medium) {
-                        let _ = image_cmd_tx.send(ImageCommand::Download {
-                            entity,
-                            kind: ImageKind::Avatar,
-                            url: illust.user.profile_image_urls.medium.clone(),
-                        });
+                    if !seen_ids.insert(illust.id) {
+                        continue;
                     }
 
-                    new_order.push(entity);
+                    let entity = spawn_feed_card(world, tree.home_feed, &image_cmd_tx, illust);
+                    next_order.push(entity);
+                    added += 1;
                 }
 
-                world.resource_mut::<FeedOrder>().0 = new_order;
+                world.resource_mut::<FeedOrder>().0 = next_order;
+                world.resource_mut::<FeedSeenIds>().0 = seen_ids;
+                {
+                    let mut pagination = world.resource_mut::<FeedPagination>();
+                    pagination.next_url = next_url;
+                    pagination.loading = false;
+                }
+
+                let message = if append {
+                    format!(
+                        "{} {} ({source:?})",
+                        tr(
+                            world,
+                            "pixiv.status.appended_illustrations",
+                            "Appended illustrations",
+                        ),
+                        added
+                    )
+                } else {
+                    format!(
+                        "{} {} ({source:?})",
+                        tr(
+                            world,
+                            "pixiv.status.loaded_illustrations",
+                            "Loaded illustrations",
+                        ),
+                        added
+                    )
+                };
+                set_status(world, message);
             }
             NetworkResult::BookmarkDone { illust_id } => {
                 set_status(
@@ -264,7 +378,19 @@ pub(super) fn apply_network_results(world: &mut World) {
                     ),
                 );
             }
-            NetworkResult::Error { summary, details } => {
+            NetworkResult::Error {
+                summary,
+                details,
+                feed_generation,
+            } => {
+                if let Some(feed_generation) = feed_generation {
+                    let current_generation = world.resource::<FeedPagination>().generation;
+                    if feed_generation != current_generation {
+                        continue;
+                    }
+                    world.resource_mut::<FeedPagination>().loading = false;
+                }
+
                 let status_message = format!(
                     "{}: {summary}",
                     tr(world, "pixiv.status.network_error", "Network error")

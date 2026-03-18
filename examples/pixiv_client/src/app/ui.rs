@@ -18,6 +18,167 @@ fn empty_ui() -> UiView {
     Arc::new(label(""))
 }
 
+#[derive(Debug, Clone)]
+pub(super) struct JustifiedRowItem {
+    pub index: usize,
+    pub x: f64,
+    pub width: f64,
+    #[allow(dead_code)]
+    pub aspect_ratio: f64,
+}
+
+#[derive(Debug, Clone)]
+pub(super) struct JustifiedRow {
+    pub y: f64,
+    pub height: f64,
+    #[allow(dead_code)]
+    pub width: f64,
+    #[allow(dead_code)]
+    pub justified: bool,
+    pub items: Vec<JustifiedRowItem>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub(super) struct JustifiedLayout {
+    pub rows: Vec<JustifiedRow>,
+    pub content_width: f64,
+    pub content_height: f64,
+}
+
+fn normalize_aspect_ratio(aspect_ratio: f64) -> f64 {
+    if aspect_ratio.is_finite() && aspect_ratio > 0.0 {
+        aspect_ratio.clamp(0.35, 3.2)
+    } else {
+        0.62
+    }
+}
+
+pub(super) fn illust_aspect_ratio(world: &World, entity: Entity) -> f64 {
+    if let Some(illust) = world.get::<Illust>(entity)
+        && illust.width > 0
+        && illust.height > 0
+    {
+        return normalize_aspect_ratio(illust.width as f64 / illust.height as f64);
+    }
+
+    if let Some(visual) = world.get::<IllustVisual>(entity)
+        && let Some(thumb) = visual.thumb_ui.as_ref()
+        && thumb.width > 0
+        && thumb.height > 0
+    {
+        return normalize_aspect_ratio(thumb.width as f64 / thumb.height as f64);
+    }
+
+    0.62
+}
+
+pub(super) fn compute_justified_layout(
+    aspect_ratios: &[f64],
+    available_width: f64,
+    target_row_height: f64,
+) -> JustifiedLayout {
+    let available_width = available_width.max(CARD_MIN_WIDTH);
+    let target_row_height = target_row_height.max(1.0);
+
+    let mut rows = Vec::new();
+    let mut row_indices = Vec::<usize>::new();
+    let mut row_aspects = Vec::<f64>::new();
+    let mut row_sum = 0.0_f64;
+    let mut y = 0.0_f64;
+
+    let push_row = |rows: &mut Vec<JustifiedRow>,
+                    indices: &[usize],
+                    aspects: &[f64],
+                    row_sum: f64,
+                    y: f64,
+                    justify: bool| {
+        if indices.is_empty() {
+            return 0.0;
+        }
+
+        let gaps = CARD_ROW_GAP * indices.len().saturating_sub(1) as f64;
+        let natural_width = row_sum * target_row_height + gaps;
+        let row_height = if justify {
+            ((available_width - gaps).max(1.0) / row_sum.max(f64::EPSILON)).max(1.0)
+        } else {
+            target_row_height
+        };
+        let row_width = if justify {
+            available_width
+        } else {
+            natural_width
+        };
+
+        let mut x = 0.0_f64;
+        let items = indices
+            .iter()
+            .zip(aspects.iter())
+            .map(|(&index, &aspect_ratio)| {
+                let width = row_height * aspect_ratio;
+                let item = JustifiedRowItem {
+                    index,
+                    x,
+                    width,
+                    aspect_ratio,
+                };
+                x += width + CARD_ROW_GAP;
+                item
+            })
+            .collect::<Vec<_>>();
+
+        rows.push(JustifiedRow {
+            y,
+            height: row_height,
+            width: row_width,
+            justified: justify,
+            items,
+        });
+
+        row_height
+    };
+
+    for (index, aspect_ratio) in aspect_ratios.iter().copied().enumerate() {
+        let aspect_ratio = normalize_aspect_ratio(aspect_ratio);
+        row_indices.push(index);
+        row_aspects.push(aspect_ratio);
+        row_sum += aspect_ratio;
+
+        let gaps = CARD_ROW_GAP * row_indices.len().saturating_sub(1) as f64;
+        let natural_width = row_sum * target_row_height + gaps;
+        if row_indices.len() > 1 && natural_width >= available_width {
+            let row_height = push_row(&mut rows, &row_indices, &row_aspects, row_sum, y, true);
+            y += row_height + CARD_ROW_GAP;
+            row_indices.clear();
+            row_aspects.clear();
+            row_sum = 0.0;
+        }
+    }
+
+    if !row_indices.is_empty() {
+        let gaps = CARD_ROW_GAP * row_indices.len().saturating_sub(1) as f64;
+        let natural_width = row_sum * target_row_height + gaps;
+        let fill_ratio = natural_width / available_width;
+        let justify_last = row_indices.len() > 1 && fill_ratio >= FEED_ORPHAN_ROW_WIDTH_THRESHOLD;
+        let row_height = push_row(
+            &mut rows,
+            &row_indices,
+            &row_aspects,
+            row_sum,
+            y,
+            justify_last,
+        );
+        y += row_height;
+    } else if y > 0.0 {
+        y -= CARD_ROW_GAP;
+    }
+
+    JustifiedLayout {
+        rows,
+        content_width: available_width,
+        content_height: y.max(1.0),
+    }
+}
+
 fn feed_available_width(viewport_width: f64, sidebar_collapsed: bool) -> f64 {
     let sidebar_width = if sidebar_collapsed {
         SIDEBAR_COLLAPSED_WIDTH
@@ -58,6 +219,7 @@ fn feed_ancestor_scroll_view(world: &World, mut entity: Entity) -> Option<UiScro
     }
 }
 
+#[cfg(test)]
 pub(super) fn compute_feed_layout_for_width(available_width: f64) -> (usize, f64) {
     let available_width = available_width.max(CARD_MIN_WIDTH);
     // Compute columns accounting for gaps: n <= (W + G) / (C + G)
@@ -91,6 +253,7 @@ pub(super) fn feed_layout_width(world: &World, entity: Entity) -> f64 {
         })
 }
 
+#[cfg(test)]
 pub(super) fn estimate_illust_card_height(
     world: &World,
     card_entity: Entity,
@@ -546,10 +709,6 @@ pub(super) fn project_home_feed(_: &PixivHomeFeed, ctx: ProjectionCtx<'_>) -> Ui
     }
 
     let available_width = feed_layout_width(ctx.world, ctx.entity);
-    let (columns, card_width) = compute_feed_layout_for_width(available_width);
-    let columns = columns.max(1);
-    let content_width =
-        columns as f64 * card_width + CARD_ROW_GAP * columns.saturating_sub(1) as f64;
     let scroll_view = feed_ancestor_scroll_view(ctx.world, ctx.entity);
     let (visible_start, visible_end) = scroll_view
         .map(UiScrollView::visible_rect)
@@ -563,40 +722,43 @@ pub(super) fn project_home_feed(_: &PixivHomeFeed, ctx: ProjectionCtx<'_>) -> Ui
         .map(|children| children.iter().collect::<Vec<_>>())
         .unwrap_or_default();
 
-    let mut column_heights = vec![0.0_f64; columns];
+    let child_views = child_entities
+        .into_iter()
+        .zip(ctx.children)
+        .collect::<Vec<_>>();
+    let aspect_ratios = child_views
+        .iter()
+        .map(|(entity, _)| illust_aspect_ratio(ctx.world, *entity))
+        .collect::<Vec<_>>();
+    let layout = compute_justified_layout(&aspect_ratios, available_width, FEED_TARGET_ROW_HEIGHT);
+
     let mut visible_cards = Vec::<UiView>::new();
+    for row in &layout.rows {
+        let row_bottom = row.y + row.height;
+        if row_bottom < visible_min_y || row.y > visible_max_y {
+            continue;
+        }
 
-    for (entity, child_view) in child_entities.into_iter().zip(ctx.children.into_iter()) {
-        let estimated_height = estimate_illust_card_height(ctx.world, entity, card_width);
-        let target_column = column_heights
-            .iter()
-            .enumerate()
-            .min_by(|(_, a), (_, b)| a.total_cmp(b))
-            .map(|(index, _)| index)
-            .unwrap_or(0);
-
-        let x = target_column as f64 * (card_width + CARD_ROW_GAP);
-        let y = column_heights[target_column];
-
-        column_heights[target_column] += estimated_height + CARD_ROW_GAP;
-
-        if y + estimated_height >= visible_min_y && y <= visible_max_y {
-            visible_cards.push(Arc::new(transformed(child_view).translate((x, y))));
+        for item in &row.items {
+            let (_, child_view) = &child_views[item.index];
+            let tile: UiView = Arc::new(
+                sized_box(child_view.clone())
+                    .width(Dim::Fixed(Length::px(item.width)))
+                    .height(Dim::Fixed(Length::px(row.height))),
+            );
+            visible_cards.push(Arc::new(transformed(tile).translate((item.x, row.y))));
         }
     }
-
-    let content_height = column_heights.into_iter().fold(0.0_f64, f64::max);
-    let content_height = (content_height - CARD_ROW_GAP).max(1.0);
 
     Arc::new(
         sized_box(
             zstack(visible_cards)
                 .alignment(UnitPoint::TOP_LEFT)
-                .width(Dim::Fixed(Length::px(content_width.max(card_width))))
-                .height(Dim::Fixed(Length::px(content_height))),
+                .width(Dim::Fixed(Length::px(layout.content_width)))
+                .height(Dim::Fixed(Length::px(layout.content_height))),
         )
-        .width(Dim::Fixed(Length::px(content_width.max(card_width))))
-        .height(Dim::Fixed(Length::px(content_height))),
+        .width(Dim::Fixed(Length::px(layout.content_width)))
+        .height(Dim::Fixed(Length::px(layout.content_height))),
     )
 }
 
@@ -685,20 +847,6 @@ fn illust_author_overlay(
     ))
 }
 
-fn illust_stats_view(illust: &Illust, style: &ResolvedStyle) -> UiView {
-    let icon_color = style.colors.text.unwrap_or(Color::WHITE);
-    Arc::new(
-        flex_row((
-            lucide_icon(LucideIcon::Eye, 14.0, icon_color).into_any_flex(),
-            apply_label_style(label(illust.total_view.to_string()), style).into_any_flex(),
-            lucide_icon(LucideIcon::Heart, 14.0, icon_color).into_any_flex(),
-            apply_label_style(label(illust.total_bookmarks.to_string()), style).into_any_flex(),
-        ))
-        .cross_axis_alignment(CrossAxisAlignment::Center)
-        .gap(Length::px(6.0)),
-    )
-}
-
 pub(super) fn project_illust_card(_: &PixivIllustCard, ctx: ProjectionCtx<'_>) -> UiView {
     let Some(illust) = ctx.world.get::<Illust>(ctx.entity) else {
         return empty_ui();
@@ -728,21 +876,6 @@ pub(super) fn project_illust_card(_: &PixivIllustCard, ctx: ProjectionCtx<'_>) -
         action_entities.bookmark,
         ["pixiv.button", "pixiv.button.subtle"],
     );
-
-    let (_, card_width) = compute_feed_layout_for_width(feed_layout_width(ctx.world, ctx.entity));
-
-    let image_ratio = visual
-        .thumb_ui
-        .as_ref()
-        .map(|thumb| {
-            if thumb.width == 0 {
-                0.58
-            } else {
-                (thumb.height as f64 / thumb.width as f64).clamp(0.45, 1.45)
-            }
-        })
-        .unwrap_or(0.58);
-    let image_height = (card_width * image_ratio * anim.card_scale as f64).max(120.0);
     let heart_icon_color = subtle_button_style.colors.text.unwrap_or(Color::WHITE);
     let heart_icon = if illust.is_bookmarked {
         LucideIcon::Heart
@@ -758,7 +891,8 @@ pub(super) fn project_illust_card(_: &PixivIllustCard, ctx: ProjectionCtx<'_>) -
         ),
         &subtle_button_style,
     )))
-    .fixed_width(Length::px(40.0));
+    .fixed_width(Length::px(40.0))
+    .fixed_height(Length::px(32.0));
 
     let author_avatar = illust_avatar_view(&visual, &style);
     let hovered = ctx
@@ -768,38 +902,32 @@ pub(super) fn project_illust_card(_: &PixivIllustCard, ctx: ProjectionCtx<'_>) -
         .unwrap_or(false);
     let author_overlay = illust_author_overlay(&illust.user.name, author_avatar, &style, hovered);
 
+    let image_view = zstack(vec![
+        illust_thumbnail_view(ctx.world, illust, &visual),
+        author_overlay,
+    ])
+    .alignment(UnitPoint::BOTTOM_LEFT)
+    .dims(Dim::Stretch);
+
     let open_button_view = button_with_child(
         action_entities.open_thumbnail,
         AppAction::OpenIllust(ctx.entity),
-        zstack(vec![
-            illust_thumbnail_view(ctx.world, illust, &visual),
-            author_overlay,
-        ])
-        .alignment(UnitPoint::BOTTOM_LEFT)
-        .dims((Dim::Stretch, Length::px(image_height))),
+        image_view,
     )
     .padding(0.0)
     .border(Color::TRANSPARENT, 0.0)
     .background_color(Color::TRANSPARENT);
 
+    let heart_button: UiView = Arc::new(transformed(Arc::new(heart_button)).translate((-8.0, 8.0)));
+
     Arc::new(
-        sized_box(apply_widget_style(
-            flex_col(vec![
-                open_button_view.into_any_flex(),
-                apply_label_style(label(illust.title.clone()), &style).into_any_flex(),
-                flex_row((
-                    illust_stats_view(illust, &style).flex(1.0),
-                    heart_button.into_any_flex(),
-                ))
-                .cross_axis_alignment(CrossAxisAlignment::Center)
-                .main_axis_alignment(MainAxisAlignment::SpaceBetween)
-                .into_any_flex(),
-            ]),
-            &style,
-        ))
-        .fixed_width(Length::px(
-            (card_width * anim.card_scale as f64).max(CARD_MIN_WIDTH),
-        )),
+        sized_box(
+            zstack(vec![Arc::new(open_button_view), heart_button])
+                .alignment(UnitPoint::TOP_RIGHT)
+                .dims(Dim::Stretch),
+        )
+        .width(Dim::Stretch)
+        .height(Dim::Stretch),
     )
 }
 
@@ -977,5 +1105,35 @@ mod tests {
         // So expect 4 columns
         assert_eq!(cols, 4);
         assert!(card_w >= CARD_MIN_WIDTH);
+    }
+
+    #[test]
+    fn justified_layout_fills_non_orphan_rows() {
+        let layout = compute_justified_layout(&[1.4, 0.9, 1.2], 960.0, FEED_TARGET_ROW_HEIGHT);
+
+        assert_eq!(layout.rows.len(), 1);
+        assert!(layout.rows[0].justified);
+        assert!((layout.rows[0].width - 960.0).abs() < 1e-6);
+        assert!(layout.rows[0].height < FEED_TARGET_ROW_HEIGHT);
+    }
+
+    #[test]
+    fn justified_layout_keeps_sparse_last_row_ragged() {
+        let layout = compute_justified_layout(&[1.4, 1.1, 0.55], 700.0, FEED_TARGET_ROW_HEIGHT);
+
+        assert_eq!(layout.rows.len(), 2);
+        assert!(layout.rows[0].justified);
+        assert!(!layout.rows[1].justified);
+        assert!(layout.rows[1].width < 700.0 * FEED_ORPHAN_ROW_WIDTH_THRESHOLD);
+        assert!((layout.rows[1].height - FEED_TARGET_ROW_HEIGHT).abs() < 1e-6);
+    }
+
+    #[test]
+    fn justified_layout_uses_target_height_for_non_justified_tail() {
+        let layout = compute_justified_layout(&[0.8, 0.7], 1200.0, FEED_TARGET_ROW_HEIGHT);
+
+        assert_eq!(layout.rows.len(), 1);
+        assert!(!layout.rows[0].justified);
+        assert!((layout.rows[0].height - FEED_TARGET_ROW_HEIGHT).abs() < 1e-6);
     }
 }

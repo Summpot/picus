@@ -253,6 +253,10 @@ pub struct Illust {
     pub page_count: u32,
     #[serde(default)]
     pub meta_single_page: Option<MetaPageUrl>,
+    #[serde(default)]
+    pub width: u32,
+    #[serde(default)]
+    pub height: u32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -326,6 +330,8 @@ impl Novel {
             is_bookmarked: self.is_bookmarked,
             page_count: 1,
             meta_single_page: None,
+            width: 0,
+            height: 0,
         }
     }
 }
@@ -406,7 +412,7 @@ impl PixivApiClient {
         Self::decode_json_from_body(status, &body)
     }
 
-    fn decode_json_from_body<T: DeserializeOwned>(
+    pub fn decode_json_from_body<T: DeserializeOwned>(
         status: reqwest::StatusCode,
         body: &str,
     ) -> Result<T> {
@@ -508,6 +514,25 @@ impl PixivApiClient {
         );
         let req = self.app_headers(self.http.get(url), Some(access_token));
         let response = req.send().context("search illusts failed")?;
+        Self::decode_json(response)
+    }
+
+    pub fn fetch_page_json<T: DeserializeOwned>(&self, access_token: &str, url: &str) -> Result<T> {
+        let req = self.app_headers(self.http.get(url), Some(access_token));
+        let response = req
+            .send()
+            .with_context(|| format!("feed page fetch failed: {url}"))?;
+        Self::decode_json(response)
+    }
+
+    pub fn fetch_novel_page(&self, access_token: &str, next_url: &str) -> Result<PixivResponse> {
+        let payload = self.fetch_page_json::<NovelResponse>(access_token, next_url)?;
+        Ok(payload.into_pixiv_response())
+    }
+
+    pub fn fetch_next_page(&self, access_token: &str, next_url: &str) -> Result<PixivResponse> {
+        let req = self.app_headers(self.http.get(next_url), Some(access_token));
+        let response = req.send().context("fetch next page failed")?;
         Self::decode_json(response)
     }
 
@@ -676,6 +701,39 @@ mod tests {
 
         assert_eq!(parsed.illusts.len(), 1);
         assert_eq!(parsed.illusts[0].content_kind, PixivContentKind::Illust);
+        assert_eq!(parsed.illusts[0].width, 0);
+        assert_eq!(parsed.illusts[0].height, 0);
+    }
+
+    #[test]
+    fn illust_dimensions_are_parsed_when_present() {
+        let body = r#"{
+            "illusts": [{
+                "id": 1,
+                "title": "sample",
+                "width": 1920,
+                "height": 1080,
+                "image_urls": {
+                    "medium": "https://example.com/m.jpg",
+                    "large": "https://example.com/l.jpg",
+                    "square_medium": "https://example.com/s.jpg"
+                },
+                "user": {
+                    "id": 9,
+                    "name": "artist",
+                    "profile_image_urls": {
+                        "medium": "https://example.com/u.jpg"
+                    }
+                }
+            }]
+        }"#;
+
+        let parsed =
+            PixivApiClient::decode_json_from_body::<PixivResponse>(reqwest::StatusCode::OK, body)
+                .expect("illust response should parse");
+
+        assert_eq!(parsed.illusts[0].width, 1920);
+        assert_eq!(parsed.illusts[0].height, 1080);
     }
 
     #[test]
@@ -709,5 +767,8 @@ mod tests {
         assert_eq!(mapped.illusts[0].content_kind, PixivContentKind::Novel);
         assert_eq!(mapped.illusts[0].description.as_deref(), Some("story"));
         assert!(mapped.illusts[0].image_urls.square_medium.is_empty());
+        // width/height default to 0 for novels (no dimensions)
+        assert_eq!(mapped.illusts[0].width, 0);
+        assert_eq!(mapped.illusts[0].height, 0);
     }
 }

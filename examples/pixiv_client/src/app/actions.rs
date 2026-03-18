@@ -5,6 +5,27 @@ use picus_core::bevy_math::Vec2;
 
 use super::ui;
 
+fn queue_feed_command(world: &mut World, tab: NavTab) {
+    let generation = begin_feed_request(world);
+    let cmd = match tab {
+        NavTab::Home => NetworkCommand::FetchHome { generation },
+        NavTab::Rankings => NetworkCommand::FetchRanking { generation },
+        NavTab::Manga => NetworkCommand::FetchManga { generation },
+        NavTab::Novels => NetworkCommand::FetchNovels { generation },
+        NavTab::Search => return,
+    };
+
+    let _ = world.resource::<NetworkBridge>().cmd_tx.send(cmd);
+}
+
+fn queue_search_command(world: &mut World, word: String) {
+    let generation = begin_feed_request(world);
+    let _ = world
+        .resource::<NetworkBridge>()
+        .cmd_tx
+        .send(NetworkCommand::Search { word, generation });
+}
+
 fn open_in_system_browser(url: &str) -> Result<()> {
     if webbrowser::open(url).is_ok() {
         return Ok(());
@@ -103,14 +124,12 @@ pub(super) fn drain_ui_actions_and_dispatch(world: &mut World) {
                     ui.status_line = status_line;
                 }
 
-                let cmd = match tab {
-                    NavTab::Home => NetworkCommand::FetchHome,
-                    NavTab::Rankings => NetworkCommand::FetchRanking,
-                    NavTab::Manga => NetworkCommand::FetchManga,
-                    NavTab::Novels => NetworkCommand::FetchNovels,
-                    NavTab::Search => continue,
-                };
-                let _ = world.resource::<NetworkBridge>().cmd_tx.send(cmd);
+                if tab == NavTab::Search {
+                    cancel_feed_requests(world);
+                    continue;
+                }
+
+                queue_feed_command(world, tab);
             }
             AppAction::SetSearchText(value) => {
                 world.resource_mut::<UiState>().search_text = value;
@@ -135,10 +154,8 @@ pub(super) fn drain_ui_actions_and_dispatch(world: &mut World) {
                         query.trim()
                     ),
                 );
-                let _ = world
-                    .resource::<NetworkBridge>()
-                    .cmd_tx
-                    .send(NetworkCommand::Search { word: query });
+                world.resource_mut::<UiState>().active_tab = NavTab::Search;
+                queue_search_command(world, query);
             }
             AppAction::OpenIllust(entity) => {
                 world.resource_mut::<UiState>().selected_illust = Some(entity);
@@ -190,10 +207,15 @@ pub(super) fn drain_ui_actions_and_dispatch(world: &mut World) {
                     ui.search_text = tag.clone();
                     ui.active_tab = NavTab::Search;
                 }
-                let _ = world
-                    .resource::<NetworkBridge>()
-                    .cmd_tx
-                    .send(NetworkCommand::Search { word: tag });
+                set_status(
+                    world,
+                    format!(
+                        "{} ‘{}’…",
+                        tr(world, "pixiv.status.searching", "Searching for"),
+                        tag.trim()
+                    ),
+                );
+                queue_search_command(world, tag);
             }
             AppAction::CopyResponseBody => {
                 let body = world.resource::<ResponsePanelState>().content.clone();
@@ -447,6 +469,42 @@ pub(super) fn sync_feed_scroll_viewport(
     if feed_scroll.viewport_size != next_viewport {
         feed_scroll.viewport_size = next_viewport;
         feed_scroll.clamp_scroll_offset();
+    }
+}
+
+pub(super) fn request_next_feed_page(
+    tree: Option<Res<PixivUiTree>>,
+    ui_state: Res<UiState>,
+    network: Res<NetworkBridge>,
+    scroll_views: Query<&UiScrollView>,
+    mut pagination: ResMut<FeedPagination>,
+) {
+    let Some(tree) = tree else {
+        return;
+    };
+
+    if pagination.loading {
+        return;
+    }
+
+    let Some(next_url) = pagination.next_url.clone() else {
+        return;
+    };
+
+    let Ok(feed_scroll) = scroll_views.get(tree.feed_scroll) else {
+        return;
+    };
+
+    let remaining =
+        feed_scroll.content_size.y - (feed_scroll.scroll_offset.y + feed_scroll.viewport_size.y);
+    let preload_distance = feed_scroll.viewport_size.y * FEED_PRELOAD_VIEWPORTS;
+    if remaining <= preload_distance {
+        pagination.loading = true;
+        let _ = network.cmd_tx.send(NetworkCommand::FetchNext {
+            source: ui_state.active_tab,
+            generation: pagination.generation,
+            url: next_url,
+        });
     }
 }
 

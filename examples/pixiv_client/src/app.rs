@@ -111,7 +111,16 @@ mod tests {
             meta_single_page: None,
             content_kind: pixiv_client::PixivContentKind::Illust,
             description: None,
+            width: 800,
+            height: 600,
         }
+    }
+
+    fn mock_illust_with_id(id: u64) -> Illust {
+        let mut illust = mock_illust("sample");
+        illust.id = id;
+        illust.title = format!("illust-{id}");
+        illust
     }
 
     #[test]
@@ -260,6 +269,165 @@ mod tests {
             scroll.viewport_size,
             Vec2::new(expected_width as f32, expected_height as f32)
         );
+    }
+
+    #[test]
+    fn feed_results_append_without_duplicates_and_reset_scroll_on_replace() {
+        let mut world = World::new();
+        let feed_scroll = world.spawn(UiScrollView::default()).id();
+        let home_feed = world.spawn(PixivHomeFeed).id();
+        if let Some(mut scroll_view) = world.get_mut::<UiScrollView>(feed_scroll) {
+            scroll_view.scroll_offset = Vec2::new(0.0, 180.0);
+        }
+
+        world.insert_resource(AppI18n::new(parse_locale("en-US")));
+        world.insert_resource(PixivUiTree {
+            feed_scroll,
+            home_feed,
+            overlay_tags: Entity::PLACEHOLDER,
+        });
+        world.insert_resource(UiState::default());
+        world.insert_resource(FeedOrder::default());
+        world.insert_resource(FeedPagination {
+            next_url: None,
+            loading: true,
+            generation: 1,
+        });
+        world.insert_resource(FeedSeenIds::default());
+        world.insert_resource(ResponsePanelState::default());
+
+        let (cmd_tx, cmd_rx) = unbounded::<NetworkCommand>();
+        let (result_tx, result_rx) = unbounded::<NetworkResult>();
+        world.insert_resource(NetworkBridge {
+            cmd_tx,
+            cmd_rx,
+            result_tx: result_tx.clone(),
+            result_rx,
+        });
+
+        let (image_cmd_tx, image_cmd_rx) = unbounded::<ImageCommand>();
+        let (image_result_tx, image_result_rx) = unbounded::<ImageResult>();
+        world.insert_resource(ImageBridge {
+            cmd_tx: image_cmd_tx,
+            cmd_rx: image_cmd_rx,
+            result_tx: image_result_tx,
+            result_rx: image_result_rx,
+        });
+
+        result_tx
+            .send(NetworkResult::FeedLoaded {
+                source: NavTab::Home,
+                payload: PixivResponse {
+                    illusts: vec![mock_illust_with_id(1), mock_illust_with_id(2)],
+                    next_url: Some("page-2".to_string()),
+                },
+                generation: 1,
+                append: false,
+            })
+            .expect("initial feed result should send");
+        network::apply_network_results(&mut world);
+
+        let order = &world.resource::<FeedOrder>().0;
+        assert_eq!(order.len(), 2);
+        assert_eq!(world.resource::<FeedSeenIds>().0.len(), 2);
+        assert_eq!(
+            world.resource::<FeedPagination>().next_url.as_deref(),
+            Some("page-2")
+        );
+        assert!(!world.resource::<FeedPagination>().loading);
+        assert_eq!(
+            world
+                .get::<UiScrollView>(feed_scroll)
+                .expect("feed scroll should exist")
+                .scroll_offset,
+            Vec2::ZERO
+        );
+
+        world.resource_mut::<FeedPagination>().loading = true;
+        result_tx
+            .send(NetworkResult::FeedLoaded {
+                source: NavTab::Home,
+                payload: PixivResponse {
+                    illusts: vec![mock_illust_with_id(2), mock_illust_with_id(3)],
+                    next_url: None,
+                },
+                generation: 1,
+                append: true,
+            })
+            .expect("append feed result should send");
+        network::apply_network_results(&mut world);
+
+        let ids = world
+            .resource::<FeedOrder>()
+            .0
+            .iter()
+            .map(|entity| {
+                world
+                    .get::<Illust>(*entity)
+                    .expect("feed entity should keep illust")
+                    .id
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(ids, vec![1, 2, 3]);
+        assert_eq!(world.resource::<FeedSeenIds>().0.len(), 3);
+    }
+
+    #[test]
+    fn stale_feed_generation_is_ignored() {
+        let mut world = World::new();
+        let feed_scroll = world.spawn(UiScrollView::default()).id();
+        let home_feed = world.spawn(PixivHomeFeed).id();
+
+        world.insert_resource(AppI18n::new(parse_locale("en-US")));
+        world.insert_resource(PixivUiTree {
+            feed_scroll,
+            home_feed,
+            overlay_tags: Entity::PLACEHOLDER,
+        });
+        world.insert_resource(UiState::default());
+        world.insert_resource(FeedOrder::default());
+        world.insert_resource(FeedPagination {
+            next_url: None,
+            loading: true,
+            generation: 2,
+        });
+        world.insert_resource(FeedSeenIds::default());
+        world.insert_resource(ResponsePanelState::default());
+
+        let (cmd_tx, cmd_rx) = unbounded::<NetworkCommand>();
+        let (result_tx, result_rx) = unbounded::<NetworkResult>();
+        world.insert_resource(NetworkBridge {
+            cmd_tx,
+            cmd_rx,
+            result_tx: result_tx.clone(),
+            result_rx,
+        });
+
+        let (image_cmd_tx, image_cmd_rx) = unbounded::<ImageCommand>();
+        let (image_result_tx, image_result_rx) = unbounded::<ImageResult>();
+        world.insert_resource(ImageBridge {
+            cmd_tx: image_cmd_tx,
+            cmd_rx: image_cmd_rx,
+            result_tx: image_result_tx,
+            result_rx: image_result_rx,
+        });
+
+        result_tx
+            .send(NetworkResult::FeedLoaded {
+                source: NavTab::Home,
+                payload: PixivResponse {
+                    illusts: vec![mock_illust_with_id(99)],
+                    next_url: None,
+                },
+                generation: 1,
+                append: false,
+            })
+            .expect("stale feed result should send");
+        network::apply_network_results(&mut world);
+
+        assert!(world.resource::<FeedOrder>().0.is_empty());
+        assert!(world.resource::<FeedSeenIds>().0.is_empty());
+        assert!(world.resource::<FeedPagination>().loading);
     }
 
     #[test]
@@ -872,5 +1040,68 @@ mod tests {
             source.contains("LucideIcon"),
             "pixiv client should use lucide icons in app UI"
         );
+    }
+
+    #[test]
+    fn feed_pagination_initial_state_is_default() {
+        let pagination = FeedPagination::default();
+        assert!(pagination.next_url.is_none());
+        assert!(!pagination.loading);
+        assert_eq!(pagination.generation, 0);
+    }
+
+    #[test]
+    fn feed_seen_ids_deduplicates_illusts() {
+        let mut seen = FeedSeenIds::default();
+        assert!(seen.0.insert(1));
+        assert!(!seen.0.insert(1)); // duplicate
+        assert!(seen.0.contains(&1));
+    }
+
+    #[test]
+    fn network_command_fetch_next_exists() {
+        let cmd = NetworkCommand::FetchNext {
+            source: NavTab::Home,
+            generation: 3,
+            url: "https://example.com/next".to_string(),
+        };
+        match cmd {
+            NetworkCommand::FetchNext {
+                source,
+                generation,
+                url,
+            } => {
+                assert_eq!(source, NavTab::Home);
+                assert_eq!(generation, 3);
+                assert_eq!(url, "https://example.com/next");
+            }
+            _ => panic!("FetchNext variant should exist"),
+        }
+    }
+
+    #[test]
+    fn pixiv_response_contains_next_url_field() {
+        let json = r#"{
+            "illusts": [],
+            "next_url": "https://example.com/next"
+        }"#;
+        let parsed =
+            PixivApiClient::decode_json_from_body::<PixivResponse>(reqwest::StatusCode::OK, json)
+                .expect("should parse next_url");
+        assert_eq!(
+            parsed.next_url,
+            Some("https://example.com/next".to_string())
+        );
+    }
+
+    #[test]
+    fn pixiv_response_next_url_defaults_to_none() {
+        let json = r#"{
+            "illusts": []
+        }"#;
+        let parsed =
+            PixivApiClient::decode_json_from_body::<PixivResponse>(reqwest::StatusCode::OK, json)
+                .expect("should parse without next_url");
+        assert!(parsed.next_url.is_none());
     }
 }

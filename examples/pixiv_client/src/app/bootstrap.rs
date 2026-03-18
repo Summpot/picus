@@ -3,7 +3,7 @@ use super::*;
 use picus_core::UiScrollView;
 use picus_core::bevy_math::Vec2;
 
-use super::actions::sync_feed_scroll_viewport;
+use super::actions::{request_next_feed_page, sync_feed_scroll_viewport};
 
 #[cfg(target_os = "macos")]
 pub(super) fn pixiv_macos_bundle_config() -> MacosBundleConfig {
@@ -177,6 +177,8 @@ pub(super) fn setup(mut commands: Commands, i18n: Res<AppI18n>) {
         ..AuthState::default()
     });
     commands.insert_resource(FeedOrder::default());
+    commands.insert_resource(FeedPagination::default());
+    commands.insert_resource(FeedSeenIds::default());
     commands.insert_resource(OverlayTags::default());
     commands.insert_resource(ResponsePanelState::default());
     commands.insert_resource(ViewportMetrics::default());
@@ -478,6 +480,7 @@ pub(super) fn build_app(mut activation_service: Option<ActivationService>) -> Ap
             poll_activation_messages,
             track_viewport_metrics,
             sync_feed_scroll_viewport,
+            request_next_feed_page,
             spawn_network_tasks,
             apply_network_results,
             spawn_image_tasks,

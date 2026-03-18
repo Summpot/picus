@@ -2,10 +2,14 @@ use super::*;
 
 pub(super) const CARD_MIN_WIDTH: f64 = 260.0;
 pub(super) const CARD_ROW_GAP: f64 = 6.0;
+#[cfg(test)]
 pub(super) const MAX_CARD_COLUMNS: usize = 6;
 pub(super) const SIDEBAR_EXPANDED_WIDTH: f64 = 208.0;
 pub(super) const SIDEBAR_COLLAPSED_WIDTH: f64 = 100.0;
 pub(super) const RESPONSE_PANEL_HEIGHT: f64 = 180.0;
+pub(super) const FEED_TARGET_ROW_HEIGHT: f64 = 280.0;
+pub(super) const FEED_ORPHAN_ROW_WIDTH_THRESHOLD: f64 = 0.5;
+pub(super) const FEED_PRELOAD_VIEWPORTS: f32 = 1.5;
 pub(super) const PIXIV_AUTH_TOKEN_FALLBACK: &str = "https://oauth.secure.pixiv.net/auth/token";
 pub(super) const PIXIV_WEB_REDIRECT_FALLBACK: &str =
     "https://app-api.pixiv.net/web/v1/users/auth/pixiv/callback";
@@ -115,6 +119,31 @@ pub(super) struct AuthState {
 
 #[derive(Resource, Default)]
 pub(super) struct FeedOrder(pub Vec<Entity>);
+
+#[derive(Resource, Default)]
+pub(super) struct FeedPagination {
+    pub next_url: Option<String>,
+    pub loading: bool,
+    pub generation: u64,
+}
+
+#[derive(Resource, Default)]
+pub(super) struct FeedSeenIds(pub std::collections::HashSet<u64>);
+
+pub(super) fn begin_feed_request(world: &mut World) -> u64 {
+    let mut pagination = world.resource_mut::<FeedPagination>();
+    pagination.generation = pagination.generation.saturating_add(1);
+    pagination.loading = true;
+    pagination.next_url = None;
+    pagination.generation
+}
+
+pub(super) fn cancel_feed_requests(world: &mut World) {
+    let mut pagination = world.resource_mut::<FeedPagination>();
+    pagination.generation = pagination.generation.saturating_add(1);
+    pagination.loading = false;
+    pagination.next_url = None;
+}
 
 #[derive(Resource, Default)]
 pub(super) struct OverlayTags(pub Vec<Entity>);
@@ -265,14 +294,37 @@ pub(super) enum AppAction {
 #[derive(Debug, Clone)]
 pub(super) enum NetworkCommand {
     DiscoverIdp,
-    ExchangeCode { code: String, code_verifier: String },
-    Refresh { refresh_token: String },
-    FetchHome,
-    FetchRanking,
-    FetchManga,
-    FetchNovels,
-    Search { word: String },
-    Bookmark { illust_id: u64 },
+    ExchangeCode {
+        code: String,
+        code_verifier: String,
+    },
+    Refresh {
+        refresh_token: String,
+    },
+    FetchHome {
+        generation: u64,
+    },
+    FetchRanking {
+        generation: u64,
+    },
+    FetchManga {
+        generation: u64,
+    },
+    FetchNovels {
+        generation: u64,
+    },
+    Search {
+        word: String,
+        generation: u64,
+    },
+    FetchNext {
+        source: NavTab,
+        generation: u64,
+        url: String,
+    },
+    Bookmark {
+        illust_id: u64,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -282,6 +334,8 @@ pub(super) enum NetworkResult {
     FeedLoaded {
         source: NavTab,
         payload: PixivResponse,
+        generation: u64,
+        append: bool,
     },
     BookmarkDone {
         illust_id: u64,
@@ -289,6 +343,7 @@ pub(super) enum NetworkResult {
     Error {
         summary: String,
         details: String,
+        feed_generation: Option<u64>,
     },
 }
 
