@@ -36,7 +36,7 @@ use picus_core::{
         interpolation::EaseKind,
         tween::ComponentTween,
     },
-    bevy_window::WindowResized,
+    bevy_window::{PrimaryWindow, Window, WindowResized},
     button_with_child, resolve_style, resolve_style_for_classes, resolve_style_for_entity_classes,
     run_app_with_window_options, spawn_in_overlay_root,
     xilem::{
@@ -83,7 +83,7 @@ use ui::{
 #[cfg(test)]
 mod tests {
     use super::*;
-    use picus_core::bevy_ecs::schedule::Schedule;
+    use picus_core::{UiScrollView, bevy_ecs::schedule::Schedule, bevy_math::Vec2};
 
     fn mock_illust(title: &str) -> Illust {
         Illust {
@@ -147,6 +147,122 @@ mod tests {
     }
 
     #[test]
+    fn feed_layout_for_precomputed_width_matches_window_based_layout() {
+        let (feed_width, _) =
+            ui::compute_feed_scroll_viewport_size(1360.0, 860.0, false, false, false);
+
+        assert_eq!(
+            ui::compute_feed_layout_for_width(feed_width),
+            ui::compute_feed_layout(1360.0, false)
+        );
+    }
+
+    #[test]
+    fn feed_layout_width_prefers_ancestor_scroll_viewport() {
+        let mut world = World::new();
+        world.insert_resource(UiState::default());
+        world.insert_resource(ViewportMetrics {
+            width: 2400.0,
+            height: 1400.0,
+        });
+
+        let scroll = world
+            .spawn(UiScrollView::new(
+                Vec2::new(720.0, 480.0),
+                Vec2::new(720.0, 1600.0),
+            ))
+            .id();
+        let feed = world.spawn((PixivHomeFeed, ChildOf(scroll))).id();
+        let card = world.spawn((PixivIllustCard, ChildOf(feed))).id();
+
+        assert_eq!(ui::feed_layout_width(&world, feed), 720.0);
+        assert_eq!(ui::feed_layout_width(&world, card), 720.0);
+    }
+
+    #[test]
+    fn feed_layout_width_falls_back_to_window_metrics_without_scroll_ancestor() {
+        let mut world = World::new();
+        world.insert_resource(UiState::default());
+        world.insert_resource(ViewportMetrics {
+            width: 1800.0,
+            height: 1000.0,
+        });
+
+        let feed = world.spawn(PixivHomeFeed).id();
+        let (expected_width, _) =
+            ui::compute_feed_scroll_viewport_size(1800.0, 1000.0, false, false, false);
+
+        assert_eq!(ui::feed_layout_width(&world, feed), expected_width);
+    }
+
+    #[test]
+    fn sync_feed_scroll_viewport_uses_primary_window_dimensions() {
+        let mut world = World::new();
+        let feed_scroll = world.spawn(UiScrollView::default()).id();
+
+        world.insert_resource(PixivUiTree {
+            feed_scroll,
+            home_feed: Entity::PLACEHOLDER,
+            overlay_tags: Entity::PLACEHOLDER,
+        });
+        world.insert_resource(ViewportMetrics::default());
+        world.insert_resource(UiState::default());
+        world.insert_resource(ResponsePanelState::default());
+
+        let mut window = Window::default();
+        window.resolution.set(2560.0, 1440.0);
+        world.spawn((window, PrimaryWindow));
+
+        let mut schedule = Schedule::default();
+        schedule.add_systems(actions::sync_feed_scroll_viewport);
+        schedule.run(&mut world);
+
+        let (expected_width, expected_height) =
+            ui::compute_feed_scroll_viewport_size(2560.0, 1440.0, false, false, false);
+        let scroll = world
+            .get::<UiScrollView>(feed_scroll)
+            .expect("feed scroll should exist after sync");
+
+        assert_eq!(
+            scroll.viewport_size,
+            Vec2::new(expected_width as f32, expected_height as f32)
+        );
+    }
+
+    #[test]
+    fn sync_feed_scroll_viewport_falls_back_to_viewport_metrics_without_primary_window() {
+        let mut world = World::new();
+        let feed_scroll = world.spawn(UiScrollView::default()).id();
+
+        world.insert_resource(PixivUiTree {
+            feed_scroll,
+            home_feed: Entity::PLACEHOLDER,
+            overlay_tags: Entity::PLACEHOLDER,
+        });
+        world.insert_resource(ViewportMetrics {
+            width: 1920.0,
+            height: 1080.0,
+        });
+        world.insert_resource(UiState::default());
+        world.insert_resource(ResponsePanelState::default());
+
+        let mut schedule = Schedule::default();
+        schedule.add_systems(actions::sync_feed_scroll_viewport);
+        schedule.run(&mut world);
+
+        let (expected_width, expected_height) =
+            ui::compute_feed_scroll_viewport_size(1920.0, 1080.0, false, false, false);
+        let scroll = world
+            .get::<UiScrollView>(feed_scroll)
+            .expect("feed scroll should exist after sync");
+
+        assert_eq!(
+            scroll.viewport_size,
+            Vec2::new(expected_width as f32, expected_height as f32)
+        );
+    }
+
+    #[test]
     fn card_height_estimator_reflects_title_length() {
         let mut world = World::new();
 
@@ -166,6 +282,41 @@ mod tests {
         let long_h = ui::estimate_illust_card_height(&world, long, 280.0);
 
         assert!(long_h > short_h);
+    }
+
+    #[test]
+    fn card_height_estimator_handles_long_cjk_titles() {
+        let mut world = World::new();
+
+        let short = world
+            .spawn((mock_illust("短标题"), IllustVisual::default()))
+            .id();
+        let long = world
+            .spawn((
+                mock_illust("这是一段需要在卡片中换行展示的较长插画标题示例"),
+                IllustVisual::default(),
+            ))
+            .id();
+
+        let short_h = ui::estimate_illust_card_height(&world, short, 280.0);
+        let long_h = ui::estimate_illust_card_height(&world, long, 280.0);
+
+        assert!(long_h > short_h);
+    }
+
+    #[test]
+    fn card_height_estimator_uses_compact_footer_budget() {
+        let mut world = World::new();
+        let card = world
+            .spawn((mock_illust("short"), IllustVisual::default()))
+            .id();
+
+        let estimated = ui::estimate_illust_card_height(&world, card, 280.0);
+        let image_min = 280.0_f64 * 0.62_f64;
+        let image_height = image_min.max(120.0_f64);
+        let expected = image_height + 64.0_f64 + 18.0_f64;
+
+        assert!((estimated - expected).abs() < f64::EPSILON);
     }
 
     #[test]
@@ -583,6 +734,29 @@ mod tests {
 
         assert_eq!(bg, "surface-subtle");
         assert_eq!(border, "border-default");
+    }
+
+    #[test]
+    fn pixiv_card_uses_compact_spacing_tokens() {
+        let sheet =
+            picus_core::parse_stylesheet_ron(include_str!("../assets/themes/pixiv_client.ron"))
+                .expect("embedded pixiv_client stylesheet should parse");
+
+        let card = sheet
+            .get_class_values("pixiv.card")
+            .expect("pixiv.card class should exist");
+
+        let padding = match card.layout.padding.as_ref() {
+            Some(picus_core::StyleValue::Var(token)) => token.as_str(),
+            _ => panic!("pixiv.card padding should come from a theme token"),
+        };
+        let gap = match card.layout.gap.as_ref() {
+            Some(picus_core::StyleValue::Var(token)) => token.as_str(),
+            _ => panic!("pixiv.card gap should come from a theme token"),
+        };
+
+        assert_eq!(padding, "space-xs");
+        assert_eq!(gap, "space-xs");
     }
 
     #[test]

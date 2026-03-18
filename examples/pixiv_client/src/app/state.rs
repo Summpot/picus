@@ -1,7 +1,7 @@
 use super::*;
 
 pub(super) const CARD_MIN_WIDTH: f64 = 260.0;
-pub(super) const CARD_ROW_GAP: f64 = 10.0;
+pub(super) const CARD_ROW_GAP: f64 = 6.0;
 pub(super) const MAX_CARD_COLUMNS: usize = 6;
 pub(super) const SIDEBAR_EXPANDED_WIDTH: f64 = 208.0;
 pub(super) const SIDEBAR_COLLAPSED_WIDTH: f64 = 100.0;

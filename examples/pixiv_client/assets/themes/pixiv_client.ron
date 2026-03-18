@@ -225,8 +225,8 @@
       selector: Class("pixiv.card"),
       setter: (
         layout: (
-          padding: Var("space-sm"),
-          gap: Var("gap-sm"),
+          padding: Var("space-xs"),
+          gap: Var("space-xs"),
           border_width: Var("border-thin"),
           corner_radius: Var("radius-lg"),
         ),

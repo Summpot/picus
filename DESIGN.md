@@ -111,6 +111,7 @@ In addition, the core projector layer provides structural ECS markers such as `U
 Implemented as a logical ECS UI component projected through a Masonry portal view, with explicit scroll state (`scroll_offset`, `content_size`) and optional external scrollbar parts.
 
 - `PreUpdate` reads back portal geometry from Masonry and synchronizes ECS `viewport_size`/`content_size` each frame
+- `viewport_size` acts as an initial logical seed, but the live viewport geometry follows parent layout constraints in Masonry and is synchronized back into ECS every frame
 - `scroll_offset` is strictly clamped to physical bounds after drag/wheel/layout-sync updates
 - Wheel deltas are routed from deepest hit target outward and consumed by the first ancestor `UiScrollView` that can actually move, preventing boundary desync in nested scroll views
 

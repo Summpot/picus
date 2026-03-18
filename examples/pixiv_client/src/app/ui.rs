@@ -1,7 +1,7 @@
 use super::*;
 
 use picus_core::{
-    UiScrollView,
+    InteractionState, UiScrollView,
     bevy_math::Vec2,
     xilem::{
         masonry::layout::UnitPoint,
@@ -18,6 +18,16 @@ fn empty_ui() -> UiView {
     Arc::new(label(""))
 }
 
+fn feed_available_width(viewport_width: f64, sidebar_collapsed: bool) -> f64 {
+    let sidebar_width = if sidebar_collapsed {
+        SIDEBAR_COLLAPSED_WIDTH
+    } else {
+        SIDEBAR_EXPANDED_WIDTH
+    };
+
+    (viewport_width - sidebar_width - 64.0).max(CARD_MIN_WIDTH)
+}
+
 pub(super) fn compute_feed_scroll_viewport_size(
     viewport_width: f64,
     viewport_height: f64,
@@ -25,13 +35,7 @@ pub(super) fn compute_feed_scroll_viewport_size(
     search_visible: bool,
     response_visible: bool,
 ) -> (f64, f64) {
-    let sidebar_width = if sidebar_collapsed {
-        SIDEBAR_COLLAPSED_WIDTH
-    } else {
-        SIDEBAR_EXPANDED_WIDTH
-    };
-
-    let feed_width = (viewport_width - sidebar_width - 64.0).max(CARD_MIN_WIDTH);
+    let feed_width = feed_available_width(viewport_width, sidebar_collapsed);
 
     let mut feed_height = viewport_height - FEED_BASE_CHROME_HEIGHT;
     if search_visible {
@@ -44,24 +48,47 @@ pub(super) fn compute_feed_scroll_viewport_size(
     (feed_width, feed_height.max(240.0))
 }
 
-fn feed_parent_scroll_view(world: &World, entity: Entity) -> Option<UiScrollView> {
-    let parent = world.get::<ChildOf>(entity)?.parent();
-    world.get::<UiScrollView>(parent).copied()
+fn feed_ancestor_scroll_view(world: &World, mut entity: Entity) -> Option<UiScrollView> {
+    loop {
+        let parent = world.get::<ChildOf>(entity)?.parent();
+        if let Some(scroll_view) = world.get::<UiScrollView>(parent) {
+            return Some(*scroll_view);
+        }
+        entity = parent;
+    }
 }
 
-pub(super) fn compute_feed_layout(viewport_width: f64, sidebar_collapsed: bool) -> (usize, f64) {
-    let sidebar_width = if sidebar_collapsed {
-        SIDEBAR_COLLAPSED_WIDTH
-    } else {
-        SIDEBAR_EXPANDED_WIDTH
-    };
-
-    let available_width = (viewport_width - sidebar_width - 64.0).max(CARD_MIN_WIDTH);
-    let columns = ((available_width / CARD_MIN_WIDTH).floor() as usize).clamp(1, MAX_CARD_COLUMNS);
+pub(super) fn compute_feed_layout_for_width(available_width: f64) -> (usize, f64) {
+    let available_width = available_width.max(CARD_MIN_WIDTH);
+    // Compute columns accounting for gaps: n <= (W + G) / (C + G)
+    let columns = ((available_width + CARD_ROW_GAP) / (CARD_MIN_WIDTH + CARD_ROW_GAP))
+        .floor()
+        .clamp(1.0, MAX_CARD_COLUMNS as f64) as usize;
     let spacing = CARD_ROW_GAP * columns.saturating_sub(1) as f64;
-    let card_width = ((available_width - spacing) / columns as f64).max(180.0);
+    let card_width = ((available_width - spacing) / columns as f64).max(CARD_MIN_WIDTH);
 
     (columns, card_width)
+}
+
+#[cfg(test)]
+pub(super) fn compute_feed_layout(viewport_width: f64, sidebar_collapsed: bool) -> (usize, f64) {
+    compute_feed_layout_for_width(feed_available_width(viewport_width, sidebar_collapsed))
+}
+
+pub(super) fn feed_layout_width(world: &World, entity: Entity) -> f64 {
+    feed_ancestor_scroll_view(world, entity)
+        .map(|scroll_view| (scroll_view.viewport_size.x as f64).max(CARD_MIN_WIDTH))
+        .unwrap_or_else(|| {
+            let viewport_width = world
+                .get_resource::<ViewportMetrics>()
+                .map(|viewport| viewport.width as f64)
+                .unwrap_or(1360.0);
+            let sidebar_collapsed = world
+                .get_resource::<UiState>()
+                .map(|ui| ui.sidebar_collapsed)
+                .unwrap_or(false);
+            feed_available_width(viewport_width, sidebar_collapsed)
+        })
 }
 
 pub(super) fn estimate_illust_card_height(
@@ -90,7 +117,7 @@ pub(super) fn estimate_illust_card_height(
         .unwrap_or(24);
     let title_lines = (title_chars as f64 / 18.0).ceil().max(1.0);
 
-    image_height + 96.0 + title_lines * 18.0
+    image_height + 64.0 + title_lines * 18.0
 }
 
 fn button_from_style(
@@ -518,13 +545,12 @@ pub(super) fn project_home_feed(_: &PixivHomeFeed, ctx: ProjectionCtx<'_>) -> Ui
         ));
     }
 
-    let ui = ctx.world.resource::<UiState>();
-    let viewport = ctx.world.resource::<ViewportMetrics>();
-    let (columns, card_width) = compute_feed_layout(viewport.width as f64, ui.sidebar_collapsed);
+    let available_width = feed_layout_width(ctx.world, ctx.entity);
+    let (columns, card_width) = compute_feed_layout_for_width(available_width);
     let columns = columns.max(1);
     let content_width =
         columns as f64 * card_width + CARD_ROW_GAP * columns.saturating_sub(1) as f64;
-    let scroll_view = feed_parent_scroll_view(ctx.world, ctx.entity);
+    let scroll_view = feed_ancestor_scroll_view(ctx.world, ctx.entity);
     let (visible_start, visible_end) = scroll_view
         .map(UiScrollView::visible_rect)
         .unwrap_or((Vec2::ZERO, Vec2::new(f32::MAX, f32::MAX)));
@@ -619,11 +645,44 @@ fn illust_avatar_view(visual: &IllustVisual, style: &ResolvedStyle) -> UiView {
     }
 }
 
-fn illust_author_row(author: &str, avatar: UiView, style: &ResolvedStyle) -> UiView {
-    Arc::new(flex_row((
-        avatar.into_any_flex(),
-        apply_label_style(label(author.to_string()), style).into_any_flex(),
-    )))
+fn illust_author_overlay(
+    author: &str,
+    avatar: UiView,
+    style: &ResolvedStyle,
+    hovered: bool,
+) -> UiView {
+    if !hovered {
+        return empty_ui();
+    }
+
+    let overlay_colors = picus_core::ResolvedColorStyle {
+        bg: Some(Color::from_rgba8(0, 0, 0, 180)),
+        text: style.colors.text,
+        border: None,
+    };
+
+    let overlay_style = picus_core::ResolvedStyle {
+        colors: overlay_colors,
+        layout: style.layout,
+        text: style.text,
+        font_family: style.font_family.clone(),
+        box_shadow: None,
+        transition: None,
+    };
+
+    Arc::new(apply_widget_style(
+        flex_row((
+            sized_box(avatar)
+                .fixed_width(Length::px(20.0))
+                .fixed_height(Length::px(20.0))
+                .into_any_flex(),
+            apply_label_style(label(author.to_string()), &overlay_style).into_any_flex(),
+        ))
+        .cross_axis_alignment(CrossAxisAlignment::Center)
+        .padding(4.0)
+        .dims((Dim::Stretch, Dim::Fixed(Length::px(32.0)))),
+        &overlay_style,
+    ))
 }
 
 fn illust_stats_view(illust: &Illust, style: &ResolvedStyle) -> UiView {
@@ -670,9 +729,7 @@ pub(super) fn project_illust_card(_: &PixivIllustCard, ctx: ProjectionCtx<'_>) -
         ["pixiv.button", "pixiv.button.subtle"],
     );
 
-    let ui = ctx.world.resource::<UiState>();
-    let viewport = ctx.world.resource::<ViewportMetrics>();
-    let (_, card_width) = compute_feed_layout(viewport.width as f64, ui.sidebar_collapsed);
+    let (_, card_width) = compute_feed_layout_for_width(feed_layout_width(ctx.world, ctx.entity));
 
     let image_ratio = visual
         .thumb_ui
@@ -701,36 +758,48 @@ pub(super) fn project_illust_card(_: &PixivIllustCard, ctx: ProjectionCtx<'_>) -
         ),
         &subtle_button_style,
     )))
-    .fixed_width(Length::px(46.0));
+    .fixed_width(Length::px(40.0));
+
+    let author_avatar = illust_avatar_view(&visual, &style);
+    let hovered = ctx
+        .world
+        .get::<InteractionState>(action_entities.open_thumbnail)
+        .map(|state| state.hovered)
+        .unwrap_or(false);
+    let author_overlay = illust_author_overlay(&illust.user.name, author_avatar, &style, hovered);
+
+    let open_button_view = button_with_child(
+        action_entities.open_thumbnail,
+        AppAction::OpenIllust(ctx.entity),
+        zstack(vec![
+            illust_thumbnail_view(ctx.world, illust, &visual),
+            author_overlay,
+        ])
+        .alignment(UnitPoint::BOTTOM_LEFT)
+        .dims((Dim::Stretch, Length::px(image_height))),
+    )
+    .padding(0.0)
+    .border(Color::TRANSPARENT, 0.0)
+    .background_color(Color::TRANSPARENT);
 
     Arc::new(
         sized_box(apply_widget_style(
             flex_col(vec![
-                button_with_child(
-                    action_entities.open_thumbnail,
-                    AppAction::OpenIllust(ctx.entity),
-                    sized_box(illust_thumbnail_view(ctx.world, illust, &visual))
-                        .dims((Dim::Stretch, Length::px(image_height))),
-                )
-                .padding(0.0)
-                .border(Color::TRANSPARENT, 0.0)
-                .background_color(Color::TRANSPARENT)
-                .into_any_flex(),
+                open_button_view.into_any_flex(),
                 apply_label_style(label(illust.title.clone()), &style).into_any_flex(),
-                illust_author_row(
-                    &illust.user.name,
-                    illust_avatar_view(&visual, &style),
-                    &style,
-                )
+                flex_row((
+                    illust_stats_view(illust, &style).flex(1.0),
+                    heart_button.into_any_flex(),
+                ))
+                .cross_axis_alignment(CrossAxisAlignment::Center)
+                .main_axis_alignment(MainAxisAlignment::SpaceBetween)
                 .into_any_flex(),
-                illust_stats_view(illust, &style).into_any_flex(),
-                flex_row((heart_button.into_any_flex(),))
-                    .main_axis_alignment(MainAxisAlignment::End)
-                    .into_any_flex(),
             ]),
             &style,
         ))
-        .fixed_width(Length::px((card_width * anim.card_scale as f64).max(180.0))),
+        .fixed_width(Length::px(
+            (card_width * anim.card_scale as f64).max(CARD_MIN_WIDTH),
+        )),
     )
 }
 
@@ -848,4 +917,65 @@ pub(super) fn project_overlay_tag(tag: &OverlayTag, ctx: ProjectionCtx<'_>) -> U
         tag.text.clone(),
         &style,
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_compute_feed_layout_for_width_thresholds() {
+        // Test with width exactly CARD_MIN_WIDTH
+        let (cols, card_w) = compute_feed_layout_for_width(CARD_MIN_WIDTH);
+        assert_eq!(cols, 1);
+        assert!(
+            (card_w - CARD_MIN_WIDTH).abs() < 1e-6,
+            "card_width should be CARD_MIN_WIDTH, got {}",
+            card_w
+        );
+
+        // Compute threshold for 2 columns: 2*CARD_MIN_WIDTH + CARD_ROW_GAP
+        let threshold_2 = 2.0 * CARD_MIN_WIDTH + CARD_ROW_GAP;
+
+        // Just below threshold should give 1 column
+        let (cols, card_w) = compute_feed_layout_for_width(threshold_2 - 0.1);
+        assert_eq!(cols, 1);
+        assert!(card_w >= CARD_MIN_WIDTH);
+
+        // Exactly at threshold should give 2 columns
+        let (cols, card_w) = compute_feed_layout_for_width(threshold_2);
+        assert_eq!(cols, 2);
+        assert!(card_w >= CARD_MIN_WIDTH);
+
+        // Just above threshold
+        let (cols, card_w) = compute_feed_layout_for_width(threshold_2 + 50.0);
+        assert_eq!(cols, 2);
+        assert!(card_w >= CARD_MIN_WIDTH);
+
+        // Threshold for 3 columns: 3*CARD_MIN_WIDTH + 2*CARD_ROW_GAP
+        let threshold_3 = 3.0 * CARD_MIN_WIDTH + 2.0 * CARD_ROW_GAP;
+        let (cols, card_w) = compute_feed_layout_for_width(threshold_3);
+        assert_eq!(cols, 3);
+        assert!(card_w >= CARD_MIN_WIDTH);
+
+        // Test max columns clamp
+        let huge_width = 10000.0;
+        let (cols, card_w) = compute_feed_layout_for_width(huge_width);
+        assert_eq!(cols, MAX_CARD_COLUMNS);
+        assert!(card_w >= CARD_MIN_WIDTH);
+    }
+
+    #[test]
+    fn test_compute_feed_layout_integration() {
+        // Test that feed_available_width and compute_feed_layout work together
+        let viewport_width = 1360.0;
+        let sidebar_collapsed = false;
+        let (cols, card_w) = compute_feed_layout(viewport_width, sidebar_collapsed);
+        // Expected: feed_available_width = viewport_width - SIDEBAR_EXPANDED_WIDTH - 64.0
+        // = 1360 - 208 - 64 = 1088
+        // Then columns = floor((1088 + 6) / (260 + 6)) = floor(1094/266) = floor(4.11) = 4
+        // So expect 4 columns
+        assert_eq!(cols, 4);
+        assert!(card_w >= CARD_MIN_WIDTH);
+    }
 }

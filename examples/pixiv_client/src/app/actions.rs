@@ -418,6 +418,7 @@ pub(super) fn sync_feed_scroll_viewport(
     viewport: Res<ViewportMetrics>,
     ui_state: Res<UiState>,
     response_panel: Res<ResponsePanelState>,
+    primary_window: Query<&Window, With<PrimaryWindow>>,
     mut scroll_views: Query<&mut UiScrollView>,
 ) {
     let Some(tree) = tree else {
@@ -428,9 +429,15 @@ pub(super) fn sync_feed_scroll_viewport(
         return;
     };
 
+    let (viewport_width, viewport_height) = primary_window
+        .iter()
+        .next()
+        .map(|window| (window.width() as f64, window.height() as f64))
+        .unwrap_or((viewport.width as f64, viewport.height as f64));
+
     let (feed_width, feed_height) = ui::compute_feed_scroll_viewport_size(
-        viewport.width as f64,
-        viewport.height as f64,
+        viewport_width,
+        viewport_height,
         ui_state.sidebar_collapsed,
         ui_state.active_tab == NavTab::Search,
         !response_panel.content.trim().is_empty(),

@@ -10,8 +10,8 @@ use masonry::layout::{Dim, Length};
 use xilem::Color;
 use xilem::style::Style as _;
 use xilem_masonry::view::{
-    FlexExt as _, MainAxisAlignment, flex_col, flex_row, label, radio_group as xilem_radio_group,
-    sized_box, spinner, split, transformed, zstack,
+    CrossAxisAlignment, FlexExt as _, MainAxisAlignment, flex_col, flex_row, label,
+    radio_group as xilem_radio_group, sized_box, spinner, split, transformed, zstack,
 };
 
 use crate::{
@@ -236,7 +236,8 @@ pub(crate) fn project_scroll_view(scroll_view: &UiScrollView, ctx: ProjectionCtx
         flex_col(vec![label("").into_any_flex()])
     } else {
         flex_col(content_views)
-    };
+    }
+    .cross_axis_alignment(CrossAxisAlignment::Start);
 
     let portal = scroll_portal(
         content_view,
@@ -255,7 +256,7 @@ pub(crate) fn project_scroll_view(scroll_view: &UiScrollView, ctx: ProjectionCtx
 
     let viewport_surface = apply_widget_style(
         sized_box(portal)
-            .width(Dim::Fixed(Length::px(viewport_w)))
+            .width(Dim::Stretch)
             .height(Dim::Fixed(Length::px(viewport_h))),
         &viewport_style,
     );
@@ -358,7 +359,7 @@ pub(crate) fn project_scroll_view(scroll_view: &UiScrollView, ctx: ProjectionCtx
         None
     };
 
-    let mut top_row = vec![viewport_surface.into_any_flex()];
+    let mut top_row = vec![viewport_surface.flex(1.0).into_any_flex()];
     if let Some(vertical_bar) = vertical_bar_view {
         top_row.push(vertical_bar);
     }

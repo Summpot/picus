@@ -2,6 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use bevy_ecs::{
     bundle::Bundle,
+    component::Mutable,
     entity::Entity,
     hierarchy::{ChildOf, Children},
     message::MessageCursor,
@@ -235,19 +236,34 @@ fn despawn_entity_tree(world: &mut World, entity: Entity) {
     let _ = world.despawn(entity);
 }
 
+fn despawn_overlay_entity(world: &mut World, entity: Entity) {
+    despawn_entity_tree(world, entity);
+    remove_overlay_from_stack(world, entity);
+}
+
+fn close_anchored_overlay<T: Component<Mutability = Mutable>>(
+    world: &mut World,
+    overlay_entity: Entity,
+    anchor: Option<Entity>,
+    reset_owner: impl FnOnce(&mut T),
+) {
+    despawn_overlay_entity(world, overlay_entity);
+
+    if let Some(anchor) = anchor
+        && let Some(mut owner) = world.get_mut::<T>(anchor)
+    {
+        reset_owner(&mut owner);
+    }
+}
+
 fn close_dropdown(world: &mut World, dropdown_entity: Entity) {
     let anchor = world
         .get::<AnchoredTo>(dropdown_entity)
         .map(|anchored| anchored.0);
 
-    despawn_entity_tree(world, dropdown_entity);
-    remove_overlay_from_stack(world, dropdown_entity);
-
-    if let Some(anchor) = anchor
-        && let Some(mut combo_box) = world.get_mut::<UiComboBox>(anchor)
-    {
+    close_anchored_overlay::<UiComboBox>(world, dropdown_entity, anchor, |combo_box| {
         combo_box.is_open = false;
-    }
+    });
 }
 
 fn spawn_dropdown_items(world: &mut World, dropdown_entity: Entity, combo_entity: Entity) {
@@ -283,13 +299,40 @@ fn close_theme_picker_menu(world: &mut World, panel_entity: Entity) {
         .get::<UiThemePickerMenu>(panel_entity)
         .map(|panel| panel.anchor);
 
-    despawn_entity_tree(world, panel_entity);
-    remove_overlay_from_stack(world, panel_entity);
-
-    if let Some(anchor) = anchor
-        && let Some(mut picker) = world.get_mut::<UiThemePicker>(anchor)
-    {
+    close_anchored_overlay::<UiThemePicker>(world, panel_entity, anchor, |picker| {
         picker.is_open = false;
+    });
+}
+
+fn ensure_overlay_components(
+    world: &mut World,
+    entity: Entity,
+    config: OverlayConfig,
+    state: OverlayState,
+    anchor_rect: Option<OverlayAnchorRect>,
+) {
+    let needs_config = world.get::<OverlayConfig>(entity).is_none();
+    let needs_state = world.get::<OverlayState>(entity).is_none();
+    let needs_position = world.get::<OverlayComputedPosition>(entity).is_none();
+    let needs_anchor_rect =
+        anchor_rect.is_some() && world.get::<OverlayAnchorRect>(entity).is_none();
+
+    if !(needs_config || needs_state || needs_position || needs_anchor_rect) {
+        return;
+    }
+
+    let mut entity_mut = world.entity_mut(entity);
+    if needs_config {
+        entity_mut.insert(config);
+    }
+    if needs_state {
+        entity_mut.insert(state);
+    }
+    if needs_position {
+        entity_mut.insert(OverlayComputedPosition::default());
+    }
+    if needs_anchor_rect && let Some(anchor_rect) = anchor_rect {
+        entity_mut.insert(anchor_rect);
     }
 }
 
@@ -319,24 +362,20 @@ pub fn ensure_overlay_defaults(world: &mut World) {
     };
 
     for dialog in dialogs {
-        if world.get::<OverlayConfig>(dialog).is_none() {
-            world.entity_mut(dialog).insert(OverlayConfig {
+        ensure_overlay_components(
+            world,
+            dialog,
+            OverlayConfig {
                 placement: OverlayPlacement::Center,
                 anchor: None,
                 auto_flip: false,
-            });
-        }
-        if world.get::<OverlayState>(dialog).is_none() {
-            world.entity_mut(dialog).insert(OverlayState {
+            },
+            OverlayState {
                 is_modal: true,
                 anchor: None,
-            });
-        }
-        if world.get::<OverlayComputedPosition>(dialog).is_none() {
-            world
-                .entity_mut(dialog)
-                .insert(OverlayComputedPosition::default());
-        }
+            },
+            None,
+        );
     }
 
     let dropdowns = {
@@ -353,32 +392,20 @@ pub fn ensure_overlay_defaults(world: &mut World) {
     };
 
     for (dropdown, anchor) in dropdowns {
-        if world.get::<OverlayConfig>(dropdown).is_none() {
-            world.entity_mut(dropdown).insert(OverlayConfig {
+        ensure_overlay_components(
+            world,
+            dropdown,
+            OverlayConfig {
                 placement: OverlayPlacement::BottomStart,
                 anchor,
                 auto_flip: true,
-            });
-        }
-
-        if world.get::<OverlayState>(dropdown).is_none() {
-            world.entity_mut(dropdown).insert(OverlayState {
+            },
+            OverlayState {
                 is_modal: false,
                 anchor,
-            });
-        }
-
-        if world.get::<OverlayComputedPosition>(dropdown).is_none() {
-            world
-                .entity_mut(dropdown)
-                .insert(OverlayComputedPosition::default());
-        }
-
-        if world.get::<OverlayAnchorRect>(dropdown).is_none() {
-            world
-                .entity_mut(dropdown)
-                .insert(OverlayAnchorRect::default());
-        }
+            },
+            Some(OverlayAnchorRect::default()),
+        );
     }
 
     let menu_panels = {
@@ -390,29 +417,20 @@ pub fn ensure_overlay_defaults(world: &mut World) {
     };
 
     for (panel_entity, anchor) in menu_panels {
-        if world.get::<OverlayConfig>(panel_entity).is_none() {
-            world.entity_mut(panel_entity).insert(OverlayConfig {
+        ensure_overlay_components(
+            world,
+            panel_entity,
+            OverlayConfig {
                 placement: OverlayPlacement::BottomStart,
                 anchor: Some(anchor),
                 auto_flip: true,
-            });
-        }
-        if world.get::<OverlayState>(panel_entity).is_none() {
-            world.entity_mut(panel_entity).insert(OverlayState {
+            },
+            OverlayState {
                 is_modal: false,
                 anchor: Some(anchor),
-            });
-        }
-        if world.get::<OverlayComputedPosition>(panel_entity).is_none() {
-            world
-                .entity_mut(panel_entity)
-                .insert(OverlayComputedPosition::default());
-        }
-        if world.get::<OverlayAnchorRect>(panel_entity).is_none() {
-            world
-                .entity_mut(panel_entity)
-                .insert(OverlayAnchorRect::default());
-        }
+            },
+            Some(OverlayAnchorRect::default()),
+        );
     }
 
     let theme_picker_panels = {
@@ -424,29 +442,20 @@ pub fn ensure_overlay_defaults(world: &mut World) {
     };
 
     for (panel_entity, anchor) in theme_picker_panels {
-        if world.get::<OverlayConfig>(panel_entity).is_none() {
-            world.entity_mut(panel_entity).insert(OverlayConfig {
+        ensure_overlay_components(
+            world,
+            panel_entity,
+            OverlayConfig {
                 placement: OverlayPlacement::BottomEnd,
                 anchor: Some(anchor),
                 auto_flip: true,
-            });
-        }
-        if world.get::<OverlayState>(panel_entity).is_none() {
-            world.entity_mut(panel_entity).insert(OverlayState {
+            },
+            OverlayState {
                 is_modal: false,
                 anchor: Some(anchor),
-            });
-        }
-        if world.get::<OverlayComputedPosition>(panel_entity).is_none() {
-            world
-                .entity_mut(panel_entity)
-                .insert(OverlayComputedPosition::default());
-        }
-        if world.get::<OverlayAnchorRect>(panel_entity).is_none() {
-            world
-                .entity_mut(panel_entity)
-                .insert(OverlayAnchorRect::default());
-        }
+            },
+            Some(OverlayAnchorRect::default()),
+        );
     }
 
     let color_picker_panels = {
@@ -458,29 +467,20 @@ pub fn ensure_overlay_defaults(world: &mut World) {
     };
 
     for (panel_entity, anchor) in color_picker_panels {
-        if world.get::<OverlayConfig>(panel_entity).is_none() {
-            world.entity_mut(panel_entity).insert(OverlayConfig {
+        ensure_overlay_components(
+            world,
+            panel_entity,
+            OverlayConfig {
                 placement: OverlayPlacement::BottomStart,
                 anchor: Some(anchor),
                 auto_flip: true,
-            });
-        }
-        if world.get::<OverlayState>(panel_entity).is_none() {
-            world.entity_mut(panel_entity).insert(OverlayState {
+            },
+            OverlayState {
                 is_modal: false,
                 anchor: Some(anchor),
-            });
-        }
-        if world.get::<OverlayComputedPosition>(panel_entity).is_none() {
-            world
-                .entity_mut(panel_entity)
-                .insert(OverlayComputedPosition::default());
-        }
-        if world.get::<OverlayAnchorRect>(panel_entity).is_none() {
-            world
-                .entity_mut(panel_entity)
-                .insert(OverlayAnchorRect::default());
-        }
+            },
+            Some(OverlayAnchorRect::default()),
+        );
     }
 
     let date_picker_panels = {
@@ -492,29 +492,20 @@ pub fn ensure_overlay_defaults(world: &mut World) {
     };
 
     for (panel_entity, anchor) in date_picker_panels {
-        if world.get::<OverlayConfig>(panel_entity).is_none() {
-            world.entity_mut(panel_entity).insert(OverlayConfig {
+        ensure_overlay_components(
+            world,
+            panel_entity,
+            OverlayConfig {
                 placement: OverlayPlacement::BottomStart,
                 anchor: Some(anchor),
                 auto_flip: true,
-            });
-        }
-        if world.get::<OverlayState>(panel_entity).is_none() {
-            world.entity_mut(panel_entity).insert(OverlayState {
+            },
+            OverlayState {
                 is_modal: false,
                 anchor: Some(anchor),
-            });
-        }
-        if world.get::<OverlayComputedPosition>(panel_entity).is_none() {
-            world
-                .entity_mut(panel_entity)
-                .insert(OverlayComputedPosition::default());
-        }
-        if world.get::<OverlayAnchorRect>(panel_entity).is_none() {
-            world
-                .entity_mut(panel_entity)
-                .insert(OverlayAnchorRect::default());
-        }
+            },
+            Some(OverlayAnchorRect::default()),
+        );
     }
 
     let tooltips = {
@@ -526,32 +517,20 @@ pub fn ensure_overlay_defaults(world: &mut World) {
     };
 
     for (tooltip_entity, anchor) in tooltips {
-        if world.get::<OverlayConfig>(tooltip_entity).is_none() {
-            world.entity_mut(tooltip_entity).insert(OverlayConfig {
+        ensure_overlay_components(
+            world,
+            tooltip_entity,
+            OverlayConfig {
                 placement: OverlayPlacement::Top,
                 anchor: Some(anchor),
                 auto_flip: true,
-            });
-        }
-        if world.get::<OverlayState>(tooltip_entity).is_none() {
-            world.entity_mut(tooltip_entity).insert(OverlayState {
+            },
+            OverlayState {
                 is_modal: false,
                 anchor: Some(anchor),
-            });
-        }
-        if world
-            .get::<OverlayComputedPosition>(tooltip_entity)
-            .is_none()
-        {
-            world
-                .entity_mut(tooltip_entity)
-                .insert(OverlayComputedPosition::default());
-        }
-        if world.get::<OverlayAnchorRect>(tooltip_entity).is_none() {
-            world
-                .entity_mut(tooltip_entity)
-                .insert(OverlayAnchorRect::default());
-        }
+            },
+            Some(OverlayAnchorRect::default()),
+        );
     }
 
     let toasts = {
@@ -570,24 +549,20 @@ pub fn ensure_overlay_defaults(world: &mut World) {
     };
 
     for (toast_entity, duration_secs, placement, auto_flip) in toasts {
-        if world.get::<OverlayConfig>(toast_entity).is_none() {
-            world.entity_mut(toast_entity).insert(OverlayConfig {
+        ensure_overlay_components(
+            world,
+            toast_entity,
+            OverlayConfig {
                 placement,
                 anchor: None,
                 auto_flip,
-            });
-        }
-        if world.get::<OverlayState>(toast_entity).is_none() {
-            world.entity_mut(toast_entity).insert(OverlayState {
+            },
+            OverlayState {
                 is_modal: false,
                 anchor: None,
-            });
-        }
-        if world.get::<OverlayComputedPosition>(toast_entity).is_none() {
-            world
-                .entity_mut(toast_entity)
-                .insert(OverlayComputedPosition::default());
-        }
+            },
+            None,
+        );
 
         if duration_secs > 0.0 {
             if world.get::<AutoDismiss>(toast_entity).is_none() {
@@ -678,39 +653,27 @@ fn collect_date_picker_panels_for_picker(world: &mut World, anchor: Entity) -> V
 
 fn close_menu_panel(world: &mut World, panel_entity: Entity) {
     let anchor = world.get::<UiMenuItemPanel>(panel_entity).map(|p| p.anchor);
-    despawn_entity_tree(world, panel_entity);
-    remove_overlay_from_stack(world, panel_entity);
-    if let Some(anchor) = anchor
-        && let Some(mut item) = world.get_mut::<UiMenuBarItem>(anchor)
-    {
+    close_anchored_overlay::<UiMenuBarItem>(world, panel_entity, anchor, |item| {
         item.is_open = false;
-    }
+    });
 }
 
 fn close_color_picker_panel(world: &mut World, panel_entity: Entity) {
     let anchor = world
         .get::<UiColorPickerPanel>(panel_entity)
         .map(|p| p.anchor);
-    despawn_entity_tree(world, panel_entity);
-    remove_overlay_from_stack(world, panel_entity);
-    if let Some(anchor) = anchor
-        && let Some(mut picker) = world.get_mut::<UiColorPicker>(anchor)
-    {
+    close_anchored_overlay::<UiColorPicker>(world, panel_entity, anchor, |picker| {
         picker.is_open = false;
-    }
+    });
 }
 
 fn close_date_picker_panel(world: &mut World, panel_entity: Entity) {
     let anchor = world
         .get::<UiDatePickerPanel>(panel_entity)
         .map(|p| p.anchor);
-    despawn_entity_tree(world, panel_entity);
-    remove_overlay_from_stack(world, panel_entity);
-    if let Some(anchor) = anchor
-        && let Some(mut picker) = world.get_mut::<UiDatePicker>(anchor)
-    {
+    close_anchored_overlay::<UiDatePicker>(world, panel_entity, anchor, |picker| {
         picker.is_open = false;
-    }
+    });
 }
 
 fn close_overlay_entity(world: &mut World, overlay_entity: Entity) {
@@ -725,8 +688,7 @@ fn close_overlay_entity(world: &mut World, overlay_entity: Entity) {
     } else if world.get::<UiDatePickerPanel>(overlay_entity).is_some() {
         close_date_picker_panel(world, overlay_entity);
     } else {
-        despawn_entity_tree(world, overlay_entity);
-        remove_overlay_from_stack(world, overlay_entity);
+        despawn_overlay_entity(world, overlay_entity);
     }
 }
 
@@ -744,8 +706,7 @@ pub fn handle_overlay_actions(world: &mut World) {
         match event.action {
             OverlayUiAction::DismissDialog => {
                 if world.get::<UiDialog>(event.entity).is_some() {
-                    despawn_entity_tree(world, event.entity);
-                    remove_overlay_from_stack(world, event.entity);
+                    despawn_overlay_entity(world, event.entity);
                 }
             }
             OverlayUiAction::ToggleCombo => {

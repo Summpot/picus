@@ -1495,6 +1495,144 @@ fn overlay_actions_toggle_and_select_theme_picker() {
 }
 
 #[test]
+fn overlay_actions_toggle_and_select_color_picker() {
+    let mut world = World::new();
+    world.insert_resource(UiEventQueue::default());
+
+    let overlay_root = world.spawn((UiRoot, crate::UiOverlayRoot)).id();
+    let picker = world.spawn((crate::UiColorPicker::new(12, 34, 56),)).id();
+
+    world
+        .resource::<UiEventQueue>()
+        .push_typed(picker, crate::OverlayUiAction::ToggleColorPicker);
+
+    handle_overlay_actions(&mut world);
+
+    let mut panel_query = world.query::<(Entity, &crate::UiColorPickerPanel)>();
+    let panels = panel_query
+        .iter(&world)
+        .filter_map(|(entity, panel)| (panel.anchor == picker).then_some(entity))
+        .collect::<Vec<_>>();
+
+    assert_eq!(panels.len(), 1);
+    let panel = panels[0];
+    assert_eq!(
+        world
+            .get::<bevy_ecs::hierarchy::ChildOf>(panel)
+            .expect("color picker panel should be parented")
+            .parent(),
+        overlay_root
+    );
+    assert!(
+        world
+            .get::<crate::UiColorPicker>(picker)
+            .expect("color picker should exist")
+            .is_open
+    );
+
+    world.resource::<UiEventQueue>().push_typed(
+        panel,
+        crate::OverlayUiAction::SelectColorSwatch {
+            r: 200,
+            g: 100,
+            b: 50,
+        },
+    );
+
+    handle_overlay_actions(&mut world);
+
+    let picker_after = world
+        .get::<crate::UiColorPicker>(picker)
+        .expect("color picker should exist");
+    assert_eq!(
+        (picker_after.r, picker_after.g, picker_after.b),
+        (200, 100, 50)
+    );
+    assert!(!picker_after.is_open);
+    assert!(world.get_entity(panel).is_err());
+
+    let changed = world
+        .resource_mut::<UiEventQueue>()
+        .drain_actions::<crate::UiColorPickerChanged>();
+    assert_eq!(changed.len(), 1);
+    assert_eq!(changed[0].entity, picker);
+    assert_eq!(
+        (
+            changed[0].action.r,
+            changed[0].action.g,
+            changed[0].action.b
+        ),
+        (200, 100, 50)
+    );
+}
+
+#[test]
+fn overlay_actions_toggle_and_select_date_picker() {
+    let mut world = World::new();
+    world.insert_resource(UiEventQueue::default());
+
+    let overlay_root = world.spawn((UiRoot, crate::UiOverlayRoot)).id();
+    let picker = world.spawn((crate::UiDatePicker::new(2026, 3, 17),)).id();
+
+    world
+        .resource::<UiEventQueue>()
+        .push_typed(picker, crate::OverlayUiAction::ToggleDatePicker);
+
+    handle_overlay_actions(&mut world);
+
+    let mut panel_query = world.query::<(Entity, &crate::UiDatePickerPanel)>();
+    let panels = panel_query
+        .iter(&world)
+        .filter_map(|(entity, panel)| (panel.anchor == picker).then_some(entity))
+        .collect::<Vec<_>>();
+
+    assert_eq!(panels.len(), 1);
+    let panel = panels[0];
+    assert_eq!(
+        world
+            .get::<bevy_ecs::hierarchy::ChildOf>(panel)
+            .expect("date picker panel should be parented")
+            .parent(),
+        overlay_root
+    );
+    let panel_state = world
+        .get::<crate::UiDatePickerPanel>(panel)
+        .expect("date picker panel should exist");
+    assert_eq!(panel_state.view_year, 2026);
+    assert_eq!(panel_state.view_month, 3);
+    assert!(
+        world
+            .get::<crate::UiDatePicker>(picker)
+            .expect("date picker should exist")
+            .is_open
+    );
+
+    world
+        .resource::<UiEventQueue>()
+        .push_typed(panel, crate::OverlayUiAction::SelectDateDay { day: 29 });
+
+    handle_overlay_actions(&mut world);
+
+    let picker_after = world
+        .get::<crate::UiDatePicker>(picker)
+        .expect("date picker should exist");
+    assert_eq!(picker_after.year, 2026);
+    assert_eq!(picker_after.month, 3);
+    assert_eq!(picker_after.day, 29);
+    assert!(!picker_after.is_open);
+    assert!(world.get_entity(panel).is_err());
+
+    let changed = world
+        .resource_mut::<UiEventQueue>()
+        .drain_actions::<crate::UiDatePickerChanged>();
+    assert_eq!(changed.len(), 1);
+    assert_eq!(changed[0].entity, picker);
+    assert_eq!(changed[0].action.year, 2026);
+    assert_eq!(changed[0].action.month, 3);
+    assert_eq!(changed[0].action.day, 29);
+}
+
+#[test]
 /// On HiDPI displays, `Window::cursor_position` (logical) must still resolve to an
 /// inside-overlay retained hit after conversion to physical coordinates.
 fn overlay_click_inside_computed_overlay_position_not_dismissed_on_hidpi() {
@@ -1631,7 +1769,7 @@ fn reparent_overlay_entities_moves_toast_and_tooltip_to_overlay_root_and_tracks_
 }
 
 #[test]
-fn ensure_overlay_defaults_assigns_dialog_dropdown_and_toast_configs() {
+fn ensure_overlay_defaults_assigns_built_in_overlay_metadata() {
     let mut world = World::new();
     let combo = world
         .spawn((crate::UiComboBox::new(vec![crate::UiComboOption::new(
@@ -1641,6 +1779,42 @@ fn ensure_overlay_defaults_assigns_dialog_dropdown_and_toast_configs() {
     let dialog = world.spawn((crate::UiDialog::new("t", "b"),)).id();
     let dropdown = world
         .spawn((crate::UiDropdownMenu, crate::AnchoredTo(combo)))
+        .id();
+    let menu_item = world
+        .spawn((crate::UiMenuBarItem::new(
+            "File",
+            [crate::UiMenuItem::new("Open", "file.open")],
+        ),))
+        .id();
+    let menu_panel = world
+        .spawn((crate::UiMenuItemPanel { anchor: menu_item },))
+        .id();
+    let theme_picker = world.spawn((crate::UiThemePicker::fluent(),)).id();
+    let theme_panel = world
+        .spawn((crate::UiThemePickerMenu {
+            anchor: theme_picker,
+        },))
+        .id();
+    let color_picker = world.spawn((crate::UiColorPicker::new(12, 34, 56),)).id();
+    let color_panel = world
+        .spawn((crate::UiColorPickerPanel {
+            anchor: color_picker,
+        },))
+        .id();
+    let date_picker = world.spawn((crate::UiDatePicker::new(2026, 3, 17),)).id();
+    let date_panel = world
+        .spawn((crate::UiDatePickerPanel {
+            anchor: date_picker,
+            view_year: 2026,
+            view_month: 3,
+        },))
+        .id();
+    let tooltip_anchor = world.spawn_empty().id();
+    let tooltip = world
+        .spawn((crate::UiTooltip {
+            text: "Helpful tip".to_string(),
+            anchor: tooltip_anchor,
+        },))
         .id();
     let toast = world
         .spawn((crate::UiToast::new("Saved").with_duration(1.25),))
@@ -1660,72 +1834,162 @@ fn ensure_overlay_defaults_assigns_dialog_dropdown_and_toast_configs() {
 
     ensure_overlay_defaults(&mut world);
 
-    let dialog_config = world
-        .get::<crate::OverlayConfig>(dialog)
-        .expect("dialog should receive overlay config");
-    assert_eq!(dialog_config.placement, crate::OverlayPlacement::Center);
-    assert_eq!(dialog_config.anchor, None);
-    assert!(!dialog_config.auto_flip);
-    let dialog_state = world
-        .get::<crate::OverlayState>(dialog)
-        .expect("dialog should receive overlay state");
-    assert!(dialog_state.is_modal);
-    assert_eq!(dialog_state.anchor, None);
-    let dialog_position = world
-        .get::<crate::OverlayComputedPosition>(dialog)
-        .expect("dialog should receive computed position");
-    assert!(!dialog_position.is_positioned);
-
-    let dropdown_config = world
-        .get::<crate::OverlayConfig>(dropdown)
-        .expect("dropdown should receive overlay config");
-    assert_eq!(
-        dropdown_config.placement,
-        crate::OverlayPlacement::BottomStart
+    assert_overlay_defaults_for_entity(
+        &world,
+        dialog,
+        "dialog",
+        crate::OverlayConfig {
+            placement: crate::OverlayPlacement::Center,
+            anchor: None,
+            auto_flip: false,
+        },
+        crate::OverlayState {
+            is_modal: true,
+            anchor: None,
+        },
+        false,
     );
-    assert_eq!(dropdown_config.anchor, Some(combo));
-    assert!(dropdown_config.auto_flip);
-    let dropdown_state = world
-        .get::<crate::OverlayState>(dropdown)
-        .expect("dropdown should receive overlay state");
-    assert!(!dropdown_state.is_modal);
-    assert_eq!(dropdown_state.anchor, Some(combo));
-    let dropdown_position = world
-        .get::<crate::OverlayComputedPosition>(dropdown)
-        .expect("dropdown should receive computed position");
-    assert!(!dropdown_position.is_positioned);
-
-    let toast_config = world
-        .get::<crate::OverlayConfig>(toast)
-        .expect("toast should receive overlay config");
-    assert_eq!(toast_config.placement, crate::OverlayPlacement::BottomEnd);
-    assert_eq!(toast_config.anchor, None);
-    assert!(!toast_config.auto_flip);
-
-    let toast_state = world
-        .get::<crate::OverlayState>(toast)
-        .expect("toast should receive overlay state");
-    assert!(!toast_state.is_modal);
-    assert_eq!(toast_state.anchor, None);
-
-    let toast_position = world
-        .get::<crate::OverlayComputedPosition>(toast)
-        .expect("toast should receive computed position");
-    assert!(!toast_position.is_positioned);
+    assert_overlay_defaults_for_entity(
+        &world,
+        dropdown,
+        "dropdown",
+        crate::OverlayConfig {
+            placement: crate::OverlayPlacement::BottomStart,
+            anchor: Some(combo),
+            auto_flip: true,
+        },
+        crate::OverlayState {
+            is_modal: false,
+            anchor: Some(combo),
+        },
+        true,
+    );
+    assert_overlay_defaults_for_entity(
+        &world,
+        menu_panel,
+        "menu panel",
+        crate::OverlayConfig {
+            placement: crate::OverlayPlacement::BottomStart,
+            anchor: Some(menu_item),
+            auto_flip: true,
+        },
+        crate::OverlayState {
+            is_modal: false,
+            anchor: Some(menu_item),
+        },
+        true,
+    );
+    assert_overlay_defaults_for_entity(
+        &world,
+        theme_panel,
+        "theme picker panel",
+        crate::OverlayConfig {
+            placement: crate::OverlayPlacement::BottomEnd,
+            anchor: Some(theme_picker),
+            auto_flip: true,
+        },
+        crate::OverlayState {
+            is_modal: false,
+            anchor: Some(theme_picker),
+        },
+        true,
+    );
+    assert_overlay_defaults_for_entity(
+        &world,
+        color_panel,
+        "color picker panel",
+        crate::OverlayConfig {
+            placement: crate::OverlayPlacement::BottomStart,
+            anchor: Some(color_picker),
+            auto_flip: true,
+        },
+        crate::OverlayState {
+            is_modal: false,
+            anchor: Some(color_picker),
+        },
+        true,
+    );
+    assert_overlay_defaults_for_entity(
+        &world,
+        date_panel,
+        "date picker panel",
+        crate::OverlayConfig {
+            placement: crate::OverlayPlacement::BottomStart,
+            anchor: Some(date_picker),
+            auto_flip: true,
+        },
+        crate::OverlayState {
+            is_modal: false,
+            anchor: Some(date_picker),
+        },
+        true,
+    );
+    assert_overlay_defaults_for_entity(
+        &world,
+        tooltip,
+        "tooltip",
+        crate::OverlayConfig {
+            placement: crate::OverlayPlacement::Top,
+            anchor: Some(tooltip_anchor),
+            auto_flip: true,
+        },
+        crate::OverlayState {
+            is_modal: false,
+            anchor: Some(tooltip_anchor),
+        },
+        true,
+    );
+    assert_overlay_defaults_for_entity(
+        &world,
+        toast,
+        "toast",
+        crate::OverlayConfig {
+            placement: crate::OverlayPlacement::BottomEnd,
+            anchor: None,
+            auto_flip: false,
+        },
+        crate::OverlayState {
+            is_modal: false,
+            anchor: None,
+        },
+        false,
+    );
+    assert_overlay_defaults_for_entity(
+        &world,
+        custom_toast,
+        "custom toast",
+        crate::OverlayConfig {
+            placement: crate::OverlayPlacement::TopEnd,
+            anchor: None,
+            auto_flip: true,
+        },
+        crate::OverlayState {
+            is_modal: false,
+            anchor: None,
+        },
+        false,
+    );
+    assert_overlay_defaults_for_entity(
+        &world,
+        persistent_toast,
+        "persistent toast",
+        crate::OverlayConfig {
+            placement: crate::OverlayPlacement::BottomEnd,
+            anchor: None,
+            auto_flip: false,
+        },
+        crate::OverlayState {
+            is_modal: false,
+            anchor: None,
+        },
+        false,
+    );
 
     let dismiss = world
         .get::<crate::AutoDismiss>(toast)
         .expect("toast should receive auto-dismiss timer");
     assert_eq!(dismiss.timer.duration(), Duration::from_secs_f32(1.25));
 
-    let custom_toast_config = world
-        .get::<crate::OverlayConfig>(custom_toast)
-        .expect("custom toast should receive overlay config");
-    assert_eq!(
-        custom_toast_config.placement,
-        crate::OverlayPlacement::TopEnd
-    );
-    assert!(custom_toast_config.auto_flip);
     assert!(world.get::<crate::AutoDismiss>(custom_toast).is_none());
 
     assert!(world.get::<crate::AutoDismiss>(persistent_toast).is_none());
@@ -1936,6 +2200,42 @@ fn open_combo_dropdown(app: &mut App, combo: Entity) -> Entity {
                 .then_some(entity)
         })
         .expect("combo toggle should create dropdown")
+}
+
+fn assert_overlay_defaults_for_entity(
+    world: &World,
+    entity: Entity,
+    label: &str,
+    expected_config: crate::OverlayConfig,
+    expected_state: crate::OverlayState,
+    expect_anchor_rect: bool,
+) {
+    let config = world
+        .get::<crate::OverlayConfig>(entity)
+        .unwrap_or_else(|| panic!("{label} should receive overlay config"));
+    assert_eq!(*config, expected_config);
+
+    let state = world
+        .get::<crate::OverlayState>(entity)
+        .unwrap_or_else(|| panic!("{label} should receive overlay state"));
+    assert_eq!(*state, expected_state);
+
+    let position = world
+        .get::<crate::OverlayComputedPosition>(entity)
+        .unwrap_or_else(|| panic!("{label} should receive computed position"));
+    assert_eq!(*position, crate::OverlayComputedPosition::default());
+
+    if expect_anchor_rect {
+        let anchor_rect = world
+            .get::<crate::OverlayAnchorRect>(entity)
+            .unwrap_or_else(|| panic!("{label} should receive overlay anchor rect"));
+        assert_eq!(*anchor_rect, crate::OverlayAnchorRect::default());
+    } else {
+        assert!(
+            world.get::<crate::OverlayAnchorRect>(entity).is_none(),
+            "{label} should not receive overlay anchor rect"
+        );
+    }
 }
 
 fn collect_widget_bounds_by_short_name(
@@ -3226,4 +3526,110 @@ fn scroll_view_geometry_sync_clamps_out_of_bounds_offset() {
     let max_y = (scroll.content_size.y - scroll.viewport_size.y).max(0.0);
     assert!(scroll.content_size.y < 2_000.0);
     assert!(scroll.scroll_offset.y <= max_y + f32::EPSILON);
+}
+
+#[test]
+fn scroll_view_geometry_sync_expands_viewport_width_to_parent_width() {
+    let mut app = App::new();
+    app.add_plugins(PicusPlugin);
+
+    let mut window = Window::default();
+    window.resolution.set(900.0, 640.0);
+    app.world_mut().spawn((window, PrimaryWindow));
+
+    let root = app.world_mut().spawn((UiRoot, crate::UiFlexColumn)).id();
+    let scroll_view = app
+        .world_mut()
+        .spawn((
+            crate::UiScrollView {
+                scroll_offset: bevy_math::Vec2::ZERO,
+                content_size: bevy_math::Vec2::new(200.0, 1_200.0),
+                viewport_size: bevy_math::Vec2::new(200.0, 220.0),
+                show_horizontal_scrollbar: false,
+                show_vertical_scrollbar: true,
+            },
+            ChildOf(root),
+        ))
+        .id();
+
+    app.world_mut().spawn((
+        crate::UiLabel::new("A short row that should not dictate viewport width"),
+        ChildOf(scroll_view),
+    ));
+
+    app.update();
+    app.update();
+
+    let scroll = app
+        .world()
+        .get::<crate::UiScrollView>(scroll_view)
+        .expect("scroll view should exist");
+
+    assert!(
+        scroll.viewport_size.x > 400.0,
+        "viewport width should stretch beyond the initial seed width, got {}",
+        scroll.viewport_size.x
+    );
+    assert_eq!(scroll.viewport_size.y, 220.0);
+}
+
+#[test]
+fn scroll_view_left_aligns_narrow_content_after_viewport_stretch() {
+    let mut app = App::new();
+    app.add_plugins(PicusPlugin);
+
+    let mut window = Window::default();
+    window.resolution.set(900.0, 640.0);
+    app.world_mut().spawn((window, PrimaryWindow));
+
+    let root = app.world_mut().spawn((UiRoot, crate::UiFlexColumn)).id();
+    let scroll_view = app
+        .world_mut()
+        .spawn((
+            crate::UiScrollView {
+                scroll_offset: bevy_math::Vec2::ZERO,
+                content_size: bevy_math::Vec2::new(200.0, 600.0),
+                viewport_size: bevy_math::Vec2::new(200.0, 220.0),
+                show_horizontal_scrollbar: false,
+                show_vertical_scrollbar: true,
+            },
+            ChildOf(root),
+        ))
+        .id();
+
+    app.world_mut().spawn((
+        crate::UiLabel::new("Left aligned scroll content"),
+        ChildOf(scroll_view),
+    ));
+
+    app.update();
+    app.update();
+
+    let runtime = app.world().non_send_resource::<crate::MasonryRuntime>();
+    let scroll_widget_id = runtime
+        .find_widget_id_for_entity_bits(scroll_view.to_bits(), true)
+        .or_else(|| runtime.find_widget_id_for_entity_bits(scroll_view.to_bits(), false))
+        .expect("scroll view should resolve to a Masonry widget");
+    let label_widget_id = find_widget_id_by_debug_text(
+        runtime.render_root.get_layer_root(0),
+        "Left aligned scroll content",
+    )
+    .expect("label widget should exist in render tree");
+
+    let scroll_widget = runtime
+        .render_root
+        .get_widget(scroll_widget_id)
+        .expect("scroll widget id should resolve");
+    let label_widget = runtime
+        .render_root
+        .get_widget(label_widget_id)
+        .expect("label widget id should resolve");
+
+    let scroll_x = scroll_widget.ctx().window_origin().x;
+    let label_x = label_widget.ctx().window_origin().x;
+
+    assert!(
+        (label_x - scroll_x).abs() <= 4.0,
+        "scroll content should start at the viewport left edge, got scroll_x={scroll_x}, label_x={label_x}"
+    );
 }
