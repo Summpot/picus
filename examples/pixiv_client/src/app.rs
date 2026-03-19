@@ -883,7 +883,33 @@ mod tests {
             .expect("respawned account menu should carry shared popover metadata");
 
         assert!(world.resource::<AuthState>().account_menu_open);
-        assert_eq!(popover.placement, OverlayPlacement::BottomEnd);
+        assert_eq!(popover.placement, OverlayPlacement::TopEnd);
+        assert!(popover.auto_flip_placement);
+        assert_eq!(popover.size_hint(), (132.0, 56.0));
+    }
+
+    #[test]
+    fn compact_author_name_keeps_short_names_and_ellipsizes_long_ones() {
+        assert_eq!(ui::compact_author_name("summpot"), "summpot");
+        assert_eq!(
+            ui::compact_author_name("a very long display name for an illustrator"),
+            "a very long display na…"
+        );
+        assert_eq!(
+            ui::compact_author_name("这是一位名字特别特别长的作者示例"),
+            "这是一位名字特别特别长的作者示例"
+        );
+    }
+
+    #[test]
+    fn author_overlay_routes_hits_back_to_thumbnail_entity() {
+        let ui_source = include_str!("app/ui.rs");
+
+        assert!(
+            ui_source.contains("opaque_hitbox_for_entity(")
+                && ui_source.contains("action_entities.open_thumbnail"),
+            "author overlay should route hover hits to the thumbnail entity"
+        );
     }
 
     #[test]

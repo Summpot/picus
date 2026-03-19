@@ -10,6 +10,9 @@ pub(super) fn pixiv_macos_bundle_config() -> MacosBundleConfig {
     MacosBundleConfig::new(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("Info.plist"))
 }
 
+const ACCOUNT_MENU_WIDTH_PX: f64 = 132.0;
+const ACCOUNT_MENU_HEIGHT_HINT_PX: f64 = 56.0;
+
 pub(super) fn ensure_task_pool_initialized() {
     let _ = IoTaskPool::get_or_init(TaskPool::new);
     let _ = AsyncComputeTaskPool::get_or_init(TaskPool::new);
@@ -79,6 +82,13 @@ fn auth_dialog_entity(world: &mut World) -> Option<Entity> {
 fn account_menu_entity(world: &mut World) -> Option<Entity> {
     let mut query = world.query_filtered::<Entity, With<PixivAccountMenu>>();
     query.iter(world).next()
+}
+
+pub(super) fn account_menu_popover(anchor: Entity) -> UiPopover {
+    UiPopover::new(anchor)
+        .with_placement(OverlayPlacement::TopEnd)
+        .with_auto_flip_placement(true)
+        .with_fixed_size(ACCOUNT_MENU_WIDTH_PX, ACCOUNT_MENU_HEIGHT_HINT_PX)
 }
 
 pub(super) fn dismiss_account_menu_overlay(world: &mut World) {
@@ -222,10 +232,7 @@ pub(super) fn ensure_account_menu_overlay(world: &mut World) {
                 "pixiv.auth.menu".to_string(),
             ]),
         ),
-        UiPopover::new(account_toggle)
-            .with_placement(OverlayPlacement::BottomEnd)
-            .with_auto_flip_placement(true)
-            .with_fixed_size(132.0, 40.0),
+        account_menu_popover(account_toggle),
     );
 }
 

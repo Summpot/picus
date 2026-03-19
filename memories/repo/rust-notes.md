@@ -1,2 +1,0 @@
-- `picus_activation` uses `objc2 = 0.6.4`; `define_class!` still needs `#[ivars = SomeType] struct Name;` syntax instead of newer inline `struct Name { ... }` ivars syntax.
-- macOS activation listener state is main-thread-only; examples that store `ActivationService` in ECS should use a non-send resource on macOS.

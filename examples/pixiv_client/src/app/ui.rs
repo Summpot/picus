@@ -19,22 +19,6 @@ fn empty_ui() -> UiView {
     Arc::new(label(""))
 }
 
-fn transparentize(color: Color) -> Color {
-    let rgba = color.to_rgba8();
-    Color::from_rgba8(rgba.r, rgba.g, rgba.b, 0)
-}
-
-fn hide_style_without_collapsing_layout(style: &mut ResolvedStyle) {
-    style.colors.bg = Some(style.colors.bg.map_or(Color::TRANSPARENT, transparentize));
-    style.colors.border = Some(
-        style
-            .colors
-            .border
-            .map_or(Color::TRANSPARENT, transparentize),
-    );
-    style.colors.text = Some(style.colors.text.map_or(Color::TRANSPARENT, transparentize));
-}
-
 #[derive(Debug, Clone)]
 pub(super) struct JustifiedRowItem {
     pub index: usize,
@@ -708,15 +692,17 @@ pub(super) fn project_account_menu(_: &PixivAccountMenu, ctx: ProjectionCtx<'_>)
         return empty_ui();
     }
 
-    let mut style = resolve_style(ctx.world, ctx.entity);
+    let style = resolve_style(ctx.world, ctx.entity);
     let computed_position = ctx
         .world
         .get::<OverlayComputedPosition>(ctx.entity)
         .copied()
         .unwrap_or_default();
+    
     if !computed_position.is_positioned {
-        hide_style_without_collapsing_layout(&mut style);
+        return empty_ui();
     }
+    
     let ui_components = *ctx.world.resource::<PixivUiComponents>();
     let menu_width = if computed_position.width > 1.0 {
         computed_position.width
@@ -733,12 +719,19 @@ pub(super) fn project_account_menu(_: &PixivAccountMenu, ctx: ProjectionCtx<'_>)
         ),
         &style,
     ))
-    .width(Dim::Fixed(Length::px(menu_width)));
+    .width(Dim::Stretch)
+    .height(Dim::Stretch);
 
-    Arc::new(
-        transformed(opaque_hitbox_for_entity(ctx.entity, menu_surface))
-            .translate((computed_position.x, computed_position.y)),
-    )
+    let scrollable_menu = picus_core::xilem::view::portal(menu_surface)
+        .dims((Length::px(menu_width), Length::px(computed_position.height.max(56.0))));
+
+    let dropdown_panel = transformed(opaque_hitbox_for_entity(
+        ctx.entity,
+        scrollable_menu,
+    ))
+    .translate((computed_position.x, computed_position.y));
+
+    Arc::new(dropdown_panel)
 }
 
 pub(super) fn project_response_panel(_: &PixivResponsePanel, ctx: ProjectionCtx<'_>) -> UiView {
@@ -954,6 +947,22 @@ fn auth_avatar_view(world: &World, size_px: f64, style: &ResolvedStyle) -> UiVie
     }
 }
 
+pub(super) fn compact_author_name(author: &str) -> String {
+    const MAX_AUTHOR_CHARS: usize = 22;
+
+    let mut compact = author
+        .chars()
+        .take(MAX_AUTHOR_CHARS + 1)
+        .collect::<String>();
+    if compact.chars().count() <= MAX_AUTHOR_CHARS {
+        return compact;
+    }
+
+    compact = compact.chars().take(MAX_AUTHOR_CHARS).collect();
+    compact.push('…');
+    compact
+}
+
 fn illust_author_overlay(author: &str, avatar: UiView, style: &ResolvedStyle) -> UiView {
     let overlay_colors = picus_core::ResolvedColorStyle {
         bg: Some(Color::from_rgba8(0, 0, 0, 180)),
@@ -1036,51 +1045,54 @@ pub(super) fn project_illust_card(_: &PixivIllustCard, ctx: ProjectionCtx<'_>) -
     .fixed_height(Length::px(32.0));
 
     let author_avatar = illust_avatar_view(&visual, &style);
+    
     let hovered = ctx
         .world
         .get::<InteractionState>(action_entities.open_thumbnail)
         .map(|state| state.hovered)
         .unwrap_or(false);
-    let author_overlay = if hovered {
+
+    let author_overlay: UiView = if hovered {
         Arc::new(
-            transformed(illust_author_overlay(
-                &illust.user.name,
+            illust_author_overlay(
+                &compact_author_name(&illust.user.name),
                 author_avatar,
                 &style,
-            ))
-            .translate((0.0, 0.0)),
-        ) as UiView
+            )
+        )
     } else {
         empty_ui()
     };
 
-    let image_view = zstack(vec![
-        illust_thumbnail_view(ctx.world, illust, &visual),
-        author_overlay,
-    ])
-    .alignment(UnitPoint::TOP_LEFT)
-    .dims(Dim::Stretch);
+    let image_view = sized_box(illust_thumbnail_view(ctx.world, illust, &visual))
+        .width(Dim::Stretch)
+        .height(Dim::Stretch);
 
-    let open_button_view = button_with_child(
-        action_entities.open_thumbnail,
-        AppAction::OpenIllust(ctx.entity),
-        image_view,
-    )
-    .padding(0.0)
-    .border(Color::TRANSPARENT, 0.0)
-    .background_color(Color::TRANSPARENT);
-
-    let heart_button: UiView = Arc::new(
-        transformed(opaque_hitbox_for_entity(
-            action_entities.bookmark,
-            heart_button,
-        ))
-        .translate((-8.0, 8.0)),
+    let image_with_overlay: UiView = Arc::new(
+        zstack(vec![Arc::new(image_view), author_overlay])
+            .alignment(UnitPoint::BOTTOM_LEFT)
+            .dims(Dim::Stretch),
     );
 
+    let open_button_view: UiView = Arc::new(
+        button_with_child(
+            action_entities.open_thumbnail,
+            AppAction::OpenIllust(ctx.entity),
+            image_with_overlay,
+        )
+        .padding(0.0)
+        .border(Color::TRANSPARENT, 0.0)
+        .background_color(Color::TRANSPARENT),
+    );
+
+    let heart_button_wrapper: UiView = Arc::new(
+        transformed(heart_button)
+            .translate((-8.0, 8.0)),
+    );
+    
     Arc::new(
         sized_box(
-            zstack(vec![Arc::new(open_button_view), heart_button])
+            zstack(vec![open_button_view, heart_button_wrapper])
                 .alignment(UnitPoint::TOP_RIGHT)
                 .dims(Dim::Stretch),
         )
