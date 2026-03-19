@@ -3,6 +3,7 @@ use super::*;
 use picus_core::{
     InteractionState, UiScrollView,
     bevy_math::Vec2,
+    opaque_hitbox_for_entity,
     xilem::{
         masonry::layout::UnitPoint,
         view::{transformed, zstack},
@@ -405,7 +406,7 @@ pub(super) fn project_root(_: &PixivRoot, ctx: ProjectionCtx<'_>) -> UiView {
             ))
             .main_axis_alignment(MainAxisAlignment::Start)
             .cross_axis_alignment(CrossAxisAlignment::Stretch)
-            .dims(Dim::Stretch)
+            .flex(1.0)
             .into_any_flex(),
         ])
         .cross_axis_alignment(CrossAxisAlignment::Stretch)
@@ -1050,11 +1051,7 @@ pub(super) fn project_illust_card(_: &PixivIllustCard, ctx: ProjectionCtx<'_>) -
         ["pixiv.button", "pixiv.button.subtle"],
     );
     let heart_icon_color = subtle_button_style.colors.text.unwrap_or(Color::WHITE);
-    let heart_icon = if illust.is_bookmarked {
-        LucideIcon::Heart
-    } else {
-        LucideIcon::HeartOff
-    };
+    let heart_icon = LucideIcon::Heart;
 
     let heart_button = sized_box(Arc::new(apply_direct_widget_style(
         button_with_child(
@@ -1091,7 +1088,13 @@ pub(super) fn project_illust_card(_: &PixivIllustCard, ctx: ProjectionCtx<'_>) -
     .border(Color::TRANSPARENT, 0.0)
     .background_color(Color::TRANSPARENT);
 
-    let heart_button: UiView = Arc::new(transformed(Arc::new(heart_button)).translate((-8.0, 8.0)));
+    let heart_button: UiView = Arc::new(
+        transformed(opaque_hitbox_for_entity(
+            action_entities.bookmark,
+            heart_button,
+        ))
+        .translate((-8.0, 8.0)),
+    );
 
     Arc::new(
         sized_box(

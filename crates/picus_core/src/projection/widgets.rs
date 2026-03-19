@@ -246,8 +246,8 @@ pub(crate) fn project_scroll_view(scroll_view: &UiScrollView, ctx: ProjectionCtx
             scroll_state.scroll_offset.y as f64,
         ),
     )
-    .constrain_horizontal(false)
-    .constrain_vertical(false)
+    .constrain_horizontal(!scroll_state.show_horizontal_scrollbar)
+    .constrain_vertical(!scroll_state.show_vertical_scrollbar)
     .content_must_fill(true);
 
     let viewport_style = viewport_part

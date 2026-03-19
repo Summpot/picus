@@ -3500,7 +3500,7 @@ fn scroll_view_geometry_sync_clamps_out_of_bounds_offset() {
         .world_mut()
         .spawn((
             crate::UiScrollView {
-                scroll_offset: bevy_math::Vec2::new(0.0, 4_000.0),
+                scroll_offset: bevy_math::Vec2::new(4_000.0, 4_000.0),
                 content_size: bevy_math::Vec2::new(320.0, 10_000.0),
                 viewport_size: bevy_math::Vec2::new(320.0, 220.0),
                 show_horizontal_scrollbar: false,
@@ -3524,6 +3524,7 @@ fn scroll_view_geometry_sync_clamps_out_of_bounds_offset() {
         .expect("scroll view should exist");
 
     let max_y = (scroll.content_size.y - scroll.viewport_size.y).max(0.0);
+    assert!(scroll.scroll_offset.x.abs() <= f32::EPSILON);
     assert!(scroll.content_size.y < 2_000.0);
     assert!(scroll.scroll_offset.y <= max_y + f32::EPSILON);
 }
