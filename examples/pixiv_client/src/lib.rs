@@ -75,13 +75,25 @@ pub fn build_browser_login_url(code_challenge: &str) -> Result<String> {
     Ok(url.into())
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
 pub struct AuthSession {
     pub access_token: String,
     pub refresh_token: String,
     pub token_type: String,
     pub expires_in: u64,
     pub scope: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
+pub struct AuthUserSummary {
+    #[serde(default)]
+    pub id: u64,
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub account: Option<String>,
+    #[serde(default)]
+    pub avatar_url: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -92,6 +104,13 @@ pub struct AuthTokenResponse {
     pub expires_in: u64,
     pub scope: String,
     pub user: Option<User>,
+}
+
+impl AuthTokenResponse {
+    #[must_use]
+    pub fn user_summary(&self) -> Option<AuthUserSummary> {
+        self.user.as_ref().map(AuthUserSummary::from)
+    }
 }
 
 impl From<AuthTokenResponse> for AuthSession {
@@ -210,6 +229,20 @@ pub struct User {
     #[serde(default)]
     pub account: Option<String>,
     pub profile_image_urls: ProfileImageUrls,
+}
+
+impl From<&User> for AuthUserSummary {
+    fn from(value: &User) -> Self {
+        let avatar_url = (!value.profile_image_urls.medium.trim().is_empty())
+            .then_some(value.profile_image_urls.medium.clone());
+
+        Self {
+            id: value.id,
+            name: value.name.clone(),
+            account: value.account.clone(),
+            avatar_url,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -672,6 +705,42 @@ mod tests {
         let user = parsed.user.expect("user should exist");
         assert_eq!(user.id, 33_239_622);
         assert_eq!(user.profile_image_urls.medium, "https://example.com/50.png");
+    }
+
+    #[test]
+    fn auth_token_response_exposes_minimal_user_summary() {
+        let body = r#"{
+            "access_token": "token",
+            "expires_in": 3600,
+            "token_type": "bearer",
+            "scope": "",
+            "refresh_token": "refresh",
+            "user": {
+                "profile_image_urls": {
+                    "px_50x50": "https://example.com/50.png"
+                },
+                "id": "33239622",
+                "name": "summpot",
+                "account": "user_knrk3528"
+            }
+        }"#;
+
+        let parsed = PixivApiClient::decode_json_from_body::<AuthTokenResponse>(
+            reqwest::StatusCode::OK,
+            body,
+        )
+        .expect("auth response should parse");
+
+        let summary = parsed.user_summary().expect("user summary should exist");
+        assert_eq!(
+            summary,
+            AuthUserSummary {
+                id: 33_239_622,
+                name: "summpot".to_string(),
+                account: Some("user_knrk3528".to_string()),
+                avatar_url: Some("https://example.com/50.png".to_string()),
+            }
+        );
     }
 
     #[test]

@@ -90,20 +90,54 @@ fn spawn_feed_card(
 
     if let Some(url) = preferred_thumbnail_url(&illust) {
         let _ = image_cmd_tx.send(ImageCommand::Download {
-            entity,
+            target: ImageTarget::Illust(entity),
             kind: ImageKind::Thumb,
             url,
         });
     }
     if is_downloadable_image_url(&illust.user.profile_image_urls.medium) {
         let _ = image_cmd_tx.send(ImageCommand::Download {
-            entity,
+            target: ImageTarget::Illust(entity),
             kind: ImageKind::Avatar,
             url: illust.user.profile_image_urls.medium.clone(),
         });
     }
 
     entity
+}
+
+fn queue_auth_avatar_download(world: &mut World, user_summary: Option<&AuthUserSummary>) {
+    let next_url = user_summary
+        .and_then(|summary| summary.avatar_url.as_ref())
+        .filter(|url| is_downloadable_image_url(url))
+        .cloned();
+
+    let already_requested = world
+        .get_resource::<AuthAvatarVisual>()
+        .and_then(|visual| visual.requested_url.clone());
+
+    if already_requested == next_url {
+        return;
+    }
+
+    if let Some(mut visual) = world.get_resource_mut::<AuthAvatarVisual>() {
+        *visual = AuthAvatarVisual {
+            requested_url: next_url.clone(),
+            ..AuthAvatarVisual::default()
+        };
+    }
+
+    let Some(url) = next_url else {
+        return;
+    };
+
+    if let Some(image_bridge) = world.get_resource::<ImageBridge>() {
+        let _ = image_bridge.cmd_tx.send(ImageCommand::Download {
+            target: ImageTarget::AuthAvatar,
+            kind: ImageKind::Avatar,
+            url,
+        });
+    }
 }
 
 pub(super) fn spawn_network_tasks(world: &mut World) {
@@ -165,7 +199,11 @@ fn run_network_command(
                 &code,
                 redirect_uri,
             )?;
-            Ok(NetworkResult::Authenticated(response.into()))
+            let user_summary = response.user_summary();
+            Ok(NetworkResult::Authenticated {
+                session: response.into(),
+                user_summary,
+            })
         }
         NetworkCommand::Refresh { refresh_token } => {
             let auth_token_url = auth
@@ -174,7 +212,11 @@ fn run_network_command(
                 .map(|value| value.auth_token_url.as_str())
                 .unwrap_or(PIXIV_AUTH_TOKEN_FALLBACK);
             let response = client.refresh_access_token(auth_token_url, &refresh_token)?;
-            Ok(NetworkResult::Authenticated(response.into()))
+            let user_summary = response.user_summary();
+            Ok(NetworkResult::Authenticated {
+                session: response.into(),
+                user_summary,
+            })
         }
         NetworkCommand::FetchHome { generation } => {
             let token = access_token(auth)?;
@@ -248,6 +290,40 @@ fn run_network_command(
     }
 }
 
+pub(super) fn apply_authenticated_session(
+    world: &mut World,
+    session: AuthSession,
+    user_summary: Option<AuthUserSummary>,
+) -> Option<AuthUserSummary> {
+    let resolved_user_summary = {
+        let mut auth = world.resource_mut::<AuthState>();
+        let resolved_user_summary = user_summary.or_else(|| auth.user_summary.clone());
+        auth.session = Some(session.clone());
+        auth.user_summary = resolved_user_summary.clone();
+        auth.auth_code_input.clear();
+        auth.refresh_token_input = session.refresh_token.clone();
+        auth.login_dialog_open = false;
+        auth.account_menu_open = false;
+        resolved_user_summary
+    };
+
+    set_status_key(
+        world,
+        "pixiv.status.authenticated_loading_home",
+        "Authenticated. Loading home feed…",
+    );
+    *world.resource_mut::<ResponsePanelState>() = ResponsePanelState::default();
+    queue_auth_avatar_download(world, resolved_user_summary.as_ref());
+
+    let generation = begin_feed_request(world);
+    let _ = world
+        .resource::<NetworkBridge>()
+        .cmd_tx
+        .send(NetworkCommand::FetchHome { generation });
+
+    resolved_user_summary
+}
+
 pub(super) fn apply_network_results(world: &mut World) {
     let result_rx = world.resource::<NetworkBridge>().result_rx.clone();
     let image_cmd_tx = world.resource::<ImageBridge>().cmd_tx.clone();
@@ -255,35 +331,33 @@ pub(super) fn apply_network_results(world: &mut World) {
     while let Ok(result) = result_rx.try_recv() {
         match result {
             NetworkResult::IdpDiscovered(idp) => {
-                world.resource_mut::<AuthState>().idp_urls = Some(idp);
-                set_status_key(
-                    world,
-                    "pixiv.status.idp_discovered",
-                    "IdP endpoint discovered. Enter auth_code or refresh token.",
-                );
+                let should_announce = {
+                    let mut auth = world.resource_mut::<AuthState>();
+                    auth.idp_urls = Some(idp);
+                    auth.session.is_none()
+                };
+                if should_announce {
+                    set_status_key(
+                        world,
+                        "pixiv.status.idp_discovered",
+                        "IdP endpoint discovered. Enter auth_code or refresh token.",
+                    );
+                }
             }
-            NetworkResult::Authenticated(session) => {
-                world.resource_mut::<AuthState>().session = Some(session.clone());
-                if let Err(error) = super::persistence::save_auth_session(&session) {
+            NetworkResult::Authenticated {
+                session,
+                user_summary,
+            } => {
+                let resolved_user_summary =
+                    apply_authenticated_session(world, session.clone(), user_summary);
+                if let Err(error) =
+                    super::persistence::save_auth_state(&super::persistence::StoredAuthState {
+                        session,
+                        user_summary: resolved_user_summary,
+                    })
+                {
                     eprintln!("pixiv credential persist failed: {error}");
                 }
-                set_status_key(
-                    world,
-                    "pixiv.status.authenticated_loading_home",
-                    "Authenticated. Loading home feed…",
-                );
-                *world.resource_mut::<ResponsePanelState>() = ResponsePanelState::default();
-
-                if world.resource::<AuthState>().refresh_token_input.is_empty() {
-                    world.resource_mut::<AuthState>().refresh_token_input =
-                        session.refresh_token.clone();
-                }
-
-                let generation = begin_feed_request(world);
-                let _ = world
-                    .resource::<NetworkBridge>()
-                    .cmd_tx
-                    .send(NetworkCommand::FetchHome { generation });
             }
             NetworkResult::FeedLoaded {
                 source,
@@ -423,15 +497,15 @@ pub(super) fn spawn_image_tasks(world: &mut World) {
         AsyncComputeTaskPool::get()
             .spawn(async move {
                 let result = match cmd {
-                    ImageCommand::Download { entity, kind, url } => {
+                    ImageCommand::Download { target, kind, url } => {
                         match client.download_image_rgba8(&url) {
                             Ok(decoded) => ImageResult::Loaded {
-                                entity,
+                                target,
                                 kind,
                                 decoded,
                             },
                             Err(err) => ImageResult::Failed {
-                                entity,
+                                target,
                                 kind,
                                 error: err.to_string(),
                             },
@@ -451,14 +525,10 @@ pub(super) fn apply_image_results(world: &mut World) {
     while let Ok(result) = result_rx.try_recv() {
         match result {
             ImageResult::Loaded {
-                entity,
+                target,
                 kind,
                 decoded,
             } => {
-                if world.get_entity(entity).is_err() {
-                    continue;
-                }
-
                 let DecodedImageRgba {
                     width,
                     height,
@@ -477,7 +547,7 @@ pub(super) fn apply_image_results(world: &mut World) {
                     set_status(
                         world,
                         format!(
-                            "{} {entity:?}",
+                            "{} ({target:?})",
                             tr(
                                 world,
                                 "pixiv.status.image_decode_buffer_mismatch",
@@ -495,29 +565,43 @@ pub(super) fn apply_image_results(world: &mut World) {
 
                 let handle = world.resource_mut::<Assets<BevyImage>>().add(bevy_image);
 
-                let mut visual = world
-                    .get::<IllustVisual>(entity)
-                    .cloned()
-                    .unwrap_or_default();
-                match kind {
-                    ImageKind::Thumb => {
-                        visual.thumb_ui = Some(ui_data);
-                        visual.thumb_handle = Some(handle);
+                match target {
+                    ImageTarget::Illust(entity) => {
+                        if world.get_entity(entity).is_err() {
+                            continue;
+                        }
+
+                        let mut visual = world
+                            .get::<IllustVisual>(entity)
+                            .cloned()
+                            .unwrap_or_default();
+                        match kind {
+                            ImageKind::Thumb => {
+                                visual.thumb_ui = Some(ui_data);
+                                visual.thumb_handle = Some(handle);
+                            }
+                            ImageKind::Avatar => {
+                                visual.avatar_ui = Some(ui_data);
+                                visual.avatar_handle = Some(handle);
+                            }
+                            ImageKind::HighRes => {
+                                visual.high_res_ui = Some(ui_data);
+                                visual.high_res_handle = Some(handle);
+                            }
+                        }
+
+                        world.entity_mut(entity).insert(visual);
                     }
-                    ImageKind::Avatar => {
-                        visual.avatar_ui = Some(ui_data);
-                        visual.avatar_handle = Some(handle);
-                    }
-                    ImageKind::HighRes => {
-                        visual.high_res_ui = Some(ui_data);
-                        visual.high_res_handle = Some(handle);
+                    ImageTarget::AuthAvatar => {
+                        if let Some(mut visual) = world.get_resource_mut::<AuthAvatarVisual>() {
+                            visual.avatar_ui = Some(ui_data);
+                            visual.avatar_handle = Some(handle);
+                        }
                     }
                 }
-
-                world.entity_mut(entity).insert(visual);
             }
             ImageResult::Failed {
-                entity,
+                target,
                 kind,
                 error,
             } => {
@@ -526,7 +610,11 @@ pub(super) fn apply_image_results(world: &mut World) {
                     ImageKind::Avatar => "avatar",
                     ImageKind::HighRes => "high-res",
                 };
-                if world.get_entity(entity).is_ok() {
+                let should_report = match target {
+                    ImageTarget::Illust(entity) => world.get_entity(entity).is_ok(),
+                    ImageTarget::AuthAvatar => true,
+                };
+                if should_report {
                     set_status(
                         world,
                         format!(

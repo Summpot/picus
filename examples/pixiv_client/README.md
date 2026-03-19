@@ -30,7 +30,7 @@ From workspace root:
 ### Option A: Open browser directly (recommended)
 
 1. Launch the app.
-2. Click **Open Browser Login**.
+2. Click the **Login** button at the bottom of the sidebar to open the auth dialog, then click **Open Browser Login**.
    - The app will auto-generate a PKCE `code_verifier` (or reuse your current one).
    - Your default browser opens Pixiv login page.
    - The login URL follows official Android flow:
@@ -40,6 +40,7 @@ From workspace root:
    - If callback opens `pixiv://account/login?code=...&via=login`, the running app receives it automatically and starts token exchange.
 5. If your browser does not hand off the callback automatically, copy the `code` value (or the full callback URL) manually and click **Login (auth_code)**.
 6. (Optional) Save and use the refresh token with **Refresh Token** later.
+7. After you are logged in, the bottom of the sidebar shows your Pixiv avatar. Click it to open the account menu and log out.
 
 ### Credential persistence
 

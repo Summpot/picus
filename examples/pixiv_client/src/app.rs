@@ -51,8 +51,9 @@ use picus_core::{
     },
 };
 use pixiv_client::{
-    AuthSession, DecodedImageRgba, IdpUrlResponse, Illust, PixivApiClient, PixivContentKind,
-    PixivResponse, build_browser_login_url, generate_pkce_code_verifier, pkce_s256_challenge,
+    AuthSession, AuthUserSummary, DecodedImageRgba, IdpUrlResponse, Illust, PixivApiClient,
+    PixivContentKind, PixivResponse, build_browser_login_url, generate_pkce_code_verifier,
+    pkce_s256_challenge,
 };
 use reqwest::Url;
 use shared_utils::init_logging;
@@ -75,9 +76,10 @@ use activation::poll_activation_messages;
 pub(crate) use bootstrap::run;
 use network::{apply_image_results, apply_network_results, spawn_image_tasks, spawn_network_tasks};
 use ui::{
-    project_auth_panel, project_detail_overlay, project_home_feed, project_illust_card,
-    project_main_column, project_overlay_tag, project_overlay_tags, project_response_panel,
-    project_root, project_search_panel, project_sidebar,
+    project_account_menu, project_auth_dialog, project_auth_panel, project_detail_overlay,
+    project_home_feed, project_illust_card, project_main_column, project_overlay_tag,
+    project_overlay_tags, project_response_panel, project_root, project_search_panel,
+    project_sidebar,
 };
 
 #[cfg(test)]
@@ -121,6 +123,25 @@ mod tests {
         illust.id = id;
         illust.title = format!("illust-{id}");
         illust
+    }
+
+    fn mock_auth_session() -> AuthSession {
+        AuthSession {
+            access_token: "access-token".to_string(),
+            refresh_token: "refresh-token".to_string(),
+            token_type: "bearer".to_string(),
+            expires_in: 3600,
+            scope: "all".to_string(),
+        }
+    }
+
+    fn mock_user_summary() -> AuthUserSummary {
+        AuthUserSummary {
+            id: 33_239_622,
+            name: "summpot".to_string(),
+            account: Some("user_knrk3528".to_string()),
+            avatar_url: Some("https://example.com/avatar.png".to_string()),
+        }
     }
 
     #[test]
@@ -505,6 +526,10 @@ mod tests {
         world.insert_resource(PixivUiComponents {
             toggle_sidebar: Entity::PLACEHOLDER,
             locale_combo,
+            auth_dialog_toggle: Entity::PLACEHOLDER,
+            auth_dialog_close: Entity::PLACEHOLDER,
+            account_menu_toggle: Entity::PLACEHOLDER,
+            logout: Entity::PLACEHOLDER,
             code_verifier_input: Entity::PLACEHOLDER,
             auth_code_input: Entity::PLACEHOLDER,
             refresh_token_input: Entity::PLACEHOLDER,
@@ -566,6 +591,305 @@ mod tests {
     }
 
     #[test]
+    fn authenticated_session_updates_auth_state_and_queues_home_feed() {
+        let mut world = World::new();
+        world.insert_resource(AppI18n::new(parse_locale("en-US")));
+        world.insert_resource(UiState::default());
+        world.insert_resource(AuthState {
+            auth_code_input: "callback-code".to_string(),
+            refresh_token_input: "stale-refresh".to_string(),
+            login_dialog_open: true,
+            account_menu_open: true,
+            ..AuthState::default()
+        });
+        world.insert_resource(ResponsePanelState {
+            title: "Last response".to_string(),
+            content: "details".to_string(),
+        });
+        world.insert_resource(FeedPagination::default());
+
+        let (cmd_tx, cmd_rx) = unbounded::<NetworkCommand>();
+        let (result_tx, result_rx) = unbounded::<NetworkResult>();
+        world.insert_resource(NetworkBridge {
+            cmd_tx,
+            cmd_rx: cmd_rx.clone(),
+            result_tx,
+            result_rx,
+        });
+
+        let session = mock_auth_session();
+        let user_summary = mock_user_summary();
+        let resolved_user_summary = network::apply_authenticated_session(
+            &mut world,
+            session.clone(),
+            Some(user_summary.clone()),
+        );
+
+        assert_eq!(resolved_user_summary, Some(user_summary.clone()));
+
+        let auth = world.resource::<AuthState>();
+        assert_eq!(auth.session.as_ref(), Some(&session));
+        assert_eq!(auth.user_summary.as_ref(), Some(&user_summary));
+        assert_eq!(auth.refresh_token_input, session.refresh_token);
+        assert!(auth.auth_code_input.is_empty());
+        assert!(!auth.login_dialog_open);
+        assert!(!auth.account_menu_open);
+
+        let response_panel = world.resource::<ResponsePanelState>();
+        assert!(response_panel.title.is_empty());
+        assert!(response_panel.content.is_empty());
+
+        let pagination = world.resource::<FeedPagination>();
+        assert!(pagination.loading);
+        assert_eq!(pagination.generation, 1);
+
+        let queued = cmd_rx
+            .try_recv()
+            .expect("home feed request should be queued");
+        match queued {
+            NetworkCommand::FetchHome { generation } => assert_eq!(generation, 1),
+            other => panic!("expected FetchHome after auth, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn authenticated_session_preserves_existing_user_summary_when_refresh_has_none() {
+        let mut world = World::new();
+        world.insert_resource(AppI18n::new(parse_locale("en-US")));
+        world.insert_resource(UiState::default());
+        world.insert_resource(AuthState {
+            user_summary: Some(mock_user_summary()),
+            ..AuthState::default()
+        });
+        world.insert_resource(ResponsePanelState::default());
+        world.insert_resource(FeedPagination::default());
+
+        let (cmd_tx, cmd_rx) = unbounded::<NetworkCommand>();
+        let (result_tx, result_rx) = unbounded::<NetworkResult>();
+        world.insert_resource(NetworkBridge {
+            cmd_tx,
+            cmd_rx: cmd_rx.clone(),
+            result_tx,
+            result_rx,
+        });
+
+        let resolved_user_summary =
+            network::apply_authenticated_session(&mut world, mock_auth_session(), None);
+
+        assert_eq!(resolved_user_summary, Some(mock_user_summary()));
+        assert_eq!(
+            world.resource::<AuthState>().user_summary,
+            Some(mock_user_summary())
+        );
+        assert!(matches!(
+            cmd_rx
+                .try_recv()
+                .expect("home feed request should be queued"),
+            NetworkCommand::FetchHome { .. }
+        ));
+    }
+
+    #[test]
+    fn clear_authenticated_runtime_resets_logout_sensitive_state() {
+        let mut world = World::new();
+        let feed_scroll = world.spawn(UiScrollView::default()).id();
+        let home_feed = world.spawn(PixivHomeFeed).id();
+        let overlay_parent = world.spawn_empty().id();
+        let feed_card = world
+            .spawn((mock_illust_with_id(7), ChildOf(home_feed)))
+            .id();
+        let overlay_tag = world
+            .spawn((
+                OverlayTag {
+                    text: "tag-a".to_string(),
+                },
+                ChildOf(overlay_parent),
+            ))
+            .id();
+        let selected_illust = world.spawn(mock_illust_with_id(8)).id();
+
+        if let Some(mut scroll_view) = world.get_mut::<UiScrollView>(feed_scroll) {
+            scroll_view.scroll_offset = Vec2::new(0.0, 220.0);
+        }
+
+        world.insert_resource(PixivUiTree {
+            feed_scroll,
+            home_feed,
+            overlay_tags: overlay_parent,
+        });
+        world.insert_resource(UiState {
+            active_tab: NavTab::Search,
+            selected_illust: Some(selected_illust),
+            ..UiState::default()
+        });
+        world.insert_resource(AuthState {
+            session: Some(mock_auth_session()),
+            user_summary: Some(mock_user_summary()),
+            code_verifier_input: "verifier".to_string(),
+            auth_code_input: "code".to_string(),
+            refresh_token_input: "refresh".to_string(),
+            login_dialog_open: true,
+            account_menu_open: true,
+            ..AuthState::default()
+        });
+        world.insert_resource(FeedOrder(vec![feed_card]));
+        world.insert_resource(FeedSeenIds(std::collections::HashSet::from([7])));
+        world.insert_resource(FeedPagination {
+            next_url: Some("https://example.com/next".to_string()),
+            loading: true,
+            generation: 4,
+        });
+        world.insert_resource(OverlayTags(vec![overlay_tag]));
+        world.insert_resource(ResponsePanelState {
+            title: "Error".to_string(),
+            content: "details".to_string(),
+        });
+
+        actions::clear_authenticated_runtime(&mut world);
+
+        let auth = world.resource::<AuthState>();
+        assert!(auth.session.is_none());
+        assert!(auth.user_summary.is_none());
+        assert!(auth.code_verifier_input.is_empty());
+        assert!(auth.auth_code_input.is_empty());
+        assert!(auth.refresh_token_input.is_empty());
+        assert!(!auth.login_dialog_open);
+        assert!(!auth.account_menu_open);
+
+        let ui = world.resource::<UiState>();
+        assert_eq!(ui.active_tab, NavTab::Home);
+        assert!(ui.selected_illust.is_none());
+
+        assert!(world.resource::<FeedOrder>().0.is_empty());
+        assert!(world.resource::<FeedSeenIds>().0.is_empty());
+        let pagination = world.resource::<FeedPagination>();
+        assert_eq!(pagination.generation, 5);
+        assert!(!pagination.loading);
+        assert!(pagination.next_url.is_none());
+        assert!(world.resource::<OverlayTags>().0.is_empty());
+        assert!(world.get_entity(feed_card).is_err());
+        assert!(world.get_entity(overlay_tag).is_err());
+        assert_eq!(
+            world
+                .get::<UiScrollView>(feed_scroll)
+                .expect("feed scroll should exist")
+                .scroll_offset,
+            Vec2::ZERO
+        );
+        assert!(world.resource::<ResponsePanelState>().title.is_empty());
+        assert!(world.resource::<ResponsePanelState>().content.is_empty());
+    }
+
+    #[test]
+    fn auth_visibility_actions_toggle_dialog_and_account_menu() {
+        let mut world = World::new();
+        world.insert_resource(UiEventQueue::default());
+        world.insert_resource(UiState::default());
+        world.insert_resource(AuthState::default());
+        world.insert_resource(PixivUiComponents {
+            toggle_sidebar: Entity::PLACEHOLDER,
+            locale_combo: Entity::PLACEHOLDER,
+            auth_dialog_toggle: Entity::PLACEHOLDER,
+            auth_dialog_close: Entity::PLACEHOLDER,
+            account_menu_toggle: Entity::PLACEHOLDER,
+            logout: Entity::PLACEHOLDER,
+            code_verifier_input: Entity::PLACEHOLDER,
+            auth_code_input: Entity::PLACEHOLDER,
+            refresh_token_input: Entity::PLACEHOLDER,
+            search_input: Entity::PLACEHOLDER,
+            home_tab: Entity::PLACEHOLDER,
+            rankings_tab: Entity::PLACEHOLDER,
+            manga_tab: Entity::PLACEHOLDER,
+            novels_tab: Entity::PLACEHOLDER,
+            search_tab: Entity::PLACEHOLDER,
+            open_browser_login: Entity::PLACEHOLDER,
+            exchange_auth_code: Entity::PLACEHOLDER,
+            refresh_token: Entity::PLACEHOLDER,
+            search_submit: Entity::PLACEHOLDER,
+            copy_response: Entity::PLACEHOLDER,
+            clear_response: Entity::PLACEHOLDER,
+            close_overlay: Entity::PLACEHOLDER,
+        });
+
+        world
+            .resource::<UiEventQueue>()
+            .push_typed(Entity::PLACEHOLDER, AppAction::ToggleLoginDialog);
+        drain_ui_actions_and_dispatch(&mut world);
+        assert!(world.resource::<AuthState>().login_dialog_open);
+
+        {
+            let mut auth = world.resource_mut::<AuthState>();
+            auth.session = Some(mock_auth_session());
+        }
+        world
+            .resource::<UiEventQueue>()
+            .push_typed(Entity::PLACEHOLDER, AppAction::ToggleAccountMenu);
+        drain_ui_actions_and_dispatch(&mut world);
+
+        let auth = world.resource::<AuthState>();
+        assert!(!auth.login_dialog_open);
+        assert!(auth.account_menu_open);
+    }
+
+    #[test]
+    fn idp_discovery_does_not_replace_authenticated_status_line() {
+        let mut world = World::new();
+        world.insert_resource(AppI18n::new(parse_locale("en-US")));
+        world.insert_resource(UiState {
+            status_line: "Authenticated. Loading home feed…".to_string(),
+            ..UiState::default()
+        });
+        world.insert_resource(AuthState {
+            session: Some(mock_auth_session()),
+            ..AuthState::default()
+        });
+        world.insert_resource(FeedOrder::default());
+        world.insert_resource(FeedPagination::default());
+        world.insert_resource(FeedSeenIds::default());
+        world.insert_resource(ResponsePanelState::default());
+
+        let (cmd_tx, cmd_rx) = unbounded::<NetworkCommand>();
+        let (result_tx, result_rx) = unbounded::<NetworkResult>();
+        world.insert_resource(NetworkBridge {
+            cmd_tx,
+            cmd_rx,
+            result_tx: result_tx.clone(),
+            result_rx,
+        });
+
+        let (image_cmd_tx, image_cmd_rx) = unbounded::<ImageCommand>();
+        let (image_result_tx, image_result_rx) = unbounded::<ImageResult>();
+        world.insert_resource(ImageBridge {
+            cmd_tx: image_cmd_tx,
+            cmd_rx: image_cmd_rx,
+            result_tx: image_result_tx,
+            result_rx: image_result_rx,
+        });
+
+        result_tx
+            .send(NetworkResult::IdpDiscovered(IdpUrlResponse {
+                auth_token_url: "https://example.com/auth".to_string(),
+                auth_token_redirect_url: "pixiv://account/login".to_string(),
+            }))
+            .expect("idp result should send");
+
+        network::apply_network_results(&mut world);
+
+        assert_eq!(
+            world.resource::<UiState>().status_line,
+            "Authenticated. Loading home feed…"
+        );
+        assert_eq!(
+            world
+                .resource::<AuthState>()
+                .idp_urls
+                .as_ref()
+                .map(|value| value.auth_token_url.as_str()),
+            Some("https://example.com/auth")
+        );
+    }
+
+    #[test]
     fn info_plist_keeps_expected_bundle_identifier() {
         let plist = include_str!("../Info.plist");
         assert!(
@@ -582,6 +906,10 @@ mod tests {
         app.insert_resource(PixivUiComponents {
             toggle_sidebar: Entity::PLACEHOLDER,
             locale_combo: Entity::PLACEHOLDER,
+            auth_dialog_toggle: Entity::PLACEHOLDER,
+            auth_dialog_close: Entity::PLACEHOLDER,
+            account_menu_toggle: Entity::PLACEHOLDER,
+            logout: Entity::PLACEHOLDER,
             code_verifier_input: Entity::PLACEHOLDER,
             auth_code_input: Entity::PLACEHOLDER,
             refresh_token_input: Entity::PLACEHOLDER,
@@ -636,6 +964,28 @@ mod tests {
             .get::<OverlayState>(overlay_parent)
             .expect("detail overlay should carry OverlayState");
         assert!(overlay_state.is_modal);
+        let auth_dialog = world
+            .query_filtered::<Entity, With<PixivAuthDialog>>()
+            .iter(&world)
+            .next()
+            .expect("auth dialog overlay should exist");
+        assert!(
+            world.get::<OverlayState>(auth_dialog).is_some(),
+            "auth dialog should be configured as an overlay"
+        );
+        let account_menu = world
+            .query_filtered::<Entity, With<PixivAccountMenu>>()
+            .iter(&world)
+            .next()
+            .expect("account menu overlay should exist");
+        let account_menu_overlay = world
+            .get::<OverlayConfig>(account_menu)
+            .expect("account menu should have overlay placement configured");
+        assert_eq!(account_menu_overlay.placement, OverlayPlacement::BottomEnd);
+        assert_eq!(
+            account_menu_overlay.anchor,
+            Some(ui_components.account_menu_toggle)
+        );
         assert!(
             world
                 .get::<UiComboBox>(ui_components.locale_combo)
@@ -697,6 +1047,31 @@ mod tests {
     }
 
     #[test]
+    fn pixiv_auth_locale_keys_exist_in_all_bundles() {
+        let locales = [
+            include_str!("../assets/locales/en-US/main.ftl"),
+            include_str!("../assets/locales/zh-CN/main.ftl"),
+            include_str!("../assets/locales/ja-JP/main.ftl"),
+        ];
+
+        for content in locales {
+            for key in [
+                "pixiv-auth-title",
+                "pixiv-auth-close",
+                "pixiv-auth-show-login",
+                "pixiv-auth-logout",
+                "pixiv-status-activation-code-missing",
+                "pixiv-status-activation-verifier-missing",
+                "pixiv-status-activation-exchange-started",
+                "pixiv-status-logged-out",
+                "pixiv-status-logout-persist-clear-failed",
+            ] {
+                assert!(content.contains(key), "locale bundle missing `{key}`");
+            }
+        }
+    }
+
+    #[test]
     fn text_input_events_and_programmatic_updates_stay_in_sync() {
         let mut world = World::new();
         world.insert_resource(UiEventQueue::default());
@@ -721,6 +1096,10 @@ mod tests {
         world.insert_resource(PixivUiComponents {
             toggle_sidebar: Entity::PLACEHOLDER,
             locale_combo: Entity::PLACEHOLDER,
+            auth_dialog_toggle: Entity::PLACEHOLDER,
+            auth_dialog_close: Entity::PLACEHOLDER,
+            account_menu_toggle: Entity::PLACEHOLDER,
+            logout: Entity::PLACEHOLDER,
             code_verifier_input,
             auth_code_input,
             refresh_token_input,
@@ -803,6 +1182,10 @@ mod tests {
         world.insert_resource(PixivUiComponents {
             toggle_sidebar: Entity::PLACEHOLDER,
             locale_combo: Entity::PLACEHOLDER,
+            auth_dialog_toggle: Entity::PLACEHOLDER,
+            auth_dialog_close: Entity::PLACEHOLDER,
+            account_menu_toggle: Entity::PLACEHOLDER,
+            logout: Entity::PLACEHOLDER,
             code_verifier_input,
             auth_code_input,
             refresh_token_input,
@@ -962,6 +1345,26 @@ mod tests {
         assert_eq!(pressed_bg, "surface-overlay-item-pressed");
         assert_eq!(border, "status-error-border");
         assert_eq!(text, "text-primary");
+    }
+
+    #[test]
+    fn pixiv_auth_overlay_classes_exist() {
+        let sheet =
+            picus_core::parse_stylesheet_ron(include_str!("../assets/themes/pixiv_client.ron"))
+                .expect("embedded pixiv_client stylesheet should parse");
+
+        for class_name in [
+            "pixiv.sidebar.footer",
+            "pixiv.auth.dialog",
+            "pixiv.auth.dialog.title",
+            "pixiv.auth.menu",
+            "pixiv.auth.menu.secondary",
+        ] {
+            assert!(
+                sheet.get_class_values(class_name).is_some(),
+                "{class_name} class should exist"
+            );
+        }
     }
 
     #[test]

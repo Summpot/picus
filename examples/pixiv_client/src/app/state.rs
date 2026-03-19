@@ -72,8 +72,12 @@ pub(super) fn sync_font_stack_for_locale(sheet: &mut StyleSheet, stack: Option<&
         "pixiv.root",
         "pixiv.sidebar",
         "pixiv.sidebar.title",
+        "pixiv.sidebar.footer",
         "pixiv.sidebar.button",
-        "pixiv.auth-panel",
+        "pixiv.auth.dialog",
+        "pixiv.auth.dialog.title",
+        "pixiv.auth.menu",
+        "pixiv.auth.menu.secondary",
         "pixiv.text-input",
         "pixiv.button",
         "pixiv.primary-btn",
@@ -112,9 +116,19 @@ pub(super) struct UiState {
 pub(super) struct AuthState {
     pub idp_urls: Option<IdpUrlResponse>,
     pub session: Option<AuthSession>,
+    pub user_summary: Option<AuthUserSummary>,
     pub code_verifier_input: String,
     pub auth_code_input: String,
     pub refresh_token_input: String,
+    pub login_dialog_open: bool,
+    pub account_menu_open: bool,
+}
+
+#[derive(Resource, Debug, Clone, Default)]
+pub(super) struct AuthAvatarVisual {
+    pub avatar_ui: Option<ImageData>,
+    pub avatar_handle: Option<Handle<BevyImage>>,
+    pub requested_url: Option<String>,
 }
 
 #[derive(Resource, Default)]
@@ -173,6 +187,10 @@ impl Default for ViewportMetrics {
 pub(super) struct PixivUiComponents {
     pub toggle_sidebar: Entity,
     pub locale_combo: Entity,
+    pub auth_dialog_toggle: Entity,
+    pub auth_dialog_close: Entity,
+    pub account_menu_toggle: Entity,
+    pub logout: Entity,
     pub code_verifier_input: Entity,
     pub auth_code_input: Entity,
     pub refresh_token_input: Entity,
@@ -209,6 +227,12 @@ pub(super) struct PixivMainColumn;
 
 #[derive(Component, Debug, Clone, Copy)]
 pub(super) struct PixivAuthPanel;
+
+#[derive(Component, Debug, Clone, Copy)]
+pub(super) struct PixivAuthDialog;
+
+#[derive(Component, Debug, Clone, Copy)]
+pub(super) struct PixivAccountMenu;
 
 #[derive(Component, Debug, Clone, Copy)]
 pub(super) struct PixivResponsePanel;
@@ -273,6 +297,12 @@ pub(super) enum ImageKind {
     HighRes,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum ImageTarget {
+    Illust(Entity),
+    AuthAvatar,
+}
+
 #[derive(Debug, Clone)]
 pub(super) enum AppAction {
     ToggleSidebar,
@@ -286,9 +316,12 @@ pub(super) enum AppAction {
     SearchByTag(String),
     CopyResponseBody,
     ClearResponseBody,
+    ToggleLoginDialog,
+    ToggleAccountMenu,
     OpenBrowserLogin,
     ExchangeAuthCode,
     RefreshToken,
+    Logout,
 }
 
 #[derive(Debug, Clone)]
@@ -330,7 +363,10 @@ pub(super) enum NetworkCommand {
 #[derive(Debug, Clone)]
 pub(super) enum NetworkResult {
     IdpDiscovered(IdpUrlResponse),
-    Authenticated(AuthSession),
+    Authenticated {
+        session: AuthSession,
+        user_summary: Option<AuthUserSummary>,
+    },
     FeedLoaded {
         source: NavTab,
         payload: PixivResponse,
@@ -350,7 +386,7 @@ pub(super) enum NetworkResult {
 #[derive(Debug, Clone)]
 pub(super) enum ImageCommand {
     Download {
-        entity: Entity,
+        target: ImageTarget,
         kind: ImageKind,
         url: String,
     },
@@ -359,12 +395,12 @@ pub(super) enum ImageCommand {
 #[derive(Debug, Clone)]
 pub(super) enum ImageResult {
     Loaded {
-        entity: Entity,
+        target: ImageTarget,
         kind: ImageKind,
         decoded: DecodedImageRgba,
     },
     Failed {
-        entity: Entity,
+        target: ImageTarget,
         kind: ImageKind,
         error: String,
     },

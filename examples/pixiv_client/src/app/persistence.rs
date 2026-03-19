@@ -13,27 +13,40 @@ const AUTH_FILE_NAME: &str = "auth_session.json";
 const AUTH_NAMESPACE: &str = "picus_core";
 const LEGACY_AUTH_NAMESPACE: &str = concat!("pi", "cus");
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct StoredAuthState {
+    pub session: AuthSession,
+    pub user_summary: Option<AuthUserSummary>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct PersistedAuth {
     version: u8,
     saved_at_epoch_seconds: u64,
     session: AuthSession,
+    #[serde(default)]
+    user_summary: Option<AuthUserSummary>,
 }
 
-pub(super) fn load_auth_session() -> Result<Option<AuthSession>> {
+pub(super) fn load_auth_state() -> Result<Option<StoredAuthState>> {
     let primary = auth_file_path();
-    if let Some(session) = load_auth_session_from_path(&primary)? {
-        return Ok(Some(session));
+    if let Some(auth) = load_auth_state_from_path(&primary)? {
+        return Ok(Some(auth));
     }
 
-    load_auth_session_from_path(&legacy_auth_file_path())
+    load_auth_state_from_path(&legacy_auth_file_path())
 }
 
-pub(super) fn save_auth_session(session: &AuthSession) -> Result<()> {
-    save_auth_session_to_path(&auth_file_path(), session)
+pub(super) fn save_auth_state(auth: &StoredAuthState) -> Result<()> {
+    save_auth_state_to_path(&auth_file_path(), auth)
 }
 
-fn load_auth_session_from_path(path: &Path) -> Result<Option<AuthSession>> {
+pub(super) fn clear_auth_state() -> Result<()> {
+    clear_auth_state_at_path(&auth_file_path())?;
+    clear_auth_state_at_path(&legacy_auth_file_path())
+}
+
+fn load_auth_state_from_path(path: &Path) -> Result<Option<StoredAuthState>> {
     let raw = match fs::read_to_string(path) {
         Ok(raw) => raw,
         Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
@@ -46,10 +59,13 @@ fn load_auth_session_from_path(path: &Path) -> Result<Option<AuthSession>> {
     let persisted: PersistedAuth = serde_json::from_str(&raw)
         .with_context(|| format!("failed to parse auth session json `{}`", path.display()))?;
 
-    Ok(Some(persisted.session))
+    Ok(Some(StoredAuthState {
+        session: persisted.session,
+        user_summary: persisted.user_summary,
+    }))
 }
 
-fn save_auth_session_to_path(path: &Path, session: &AuthSession) -> Result<()> {
+fn save_auth_state_to_path(path: &Path, auth: &StoredAuthState) -> Result<()> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).with_context(|| {
             format!(
@@ -60,12 +76,13 @@ fn save_auth_session_to_path(path: &Path, session: &AuthSession) -> Result<()> {
     }
 
     let payload = PersistedAuth {
-        version: 1,
+        version: 2,
         saved_at_epoch_seconds: SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map(|duration| duration.as_secs())
             .unwrap_or_default(),
-        session: session.clone(),
+        session: auth.session.clone(),
+        user_summary: auth.user_summary.clone(),
     };
 
     let serialized = serde_json::to_string_pretty(&payload)
@@ -81,6 +98,15 @@ fn save_auth_session_to_path(path: &Path, session: &AuthSession) -> Result<()> {
     }
 
     Ok(())
+}
+
+fn clear_auth_state_at_path(path: &Path) -> Result<()> {
+    match fs::remove_file(path) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error)
+            .with_context(|| format!("failed to clear auth session file `{}`", path.display())),
+    }
 }
 
 fn auth_file_path() -> PathBuf {
@@ -135,7 +161,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn auth_session_round_trip_works() {
+    fn auth_state_round_trip_preserves_user_summary() {
         let nanos = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("system time should be after unix epoch")
@@ -145,27 +171,34 @@ mod tests {
             std::process::id()
         ));
 
-        let sample = AuthSession {
-            access_token: "access".to_string(),
-            refresh_token: "refresh".to_string(),
-            token_type: "bearer".to_string(),
-            expires_in: 3600,
-            scope: "all".to_string(),
+        let sample = StoredAuthState {
+            session: AuthSession {
+                access_token: "access".to_string(),
+                refresh_token: "refresh".to_string(),
+                token_type: "bearer".to_string(),
+                expires_in: 3600,
+                scope: "all".to_string(),
+            },
+            user_summary: Some(AuthUserSummary {
+                id: 99,
+                name: "summpot".to_string(),
+                account: Some("user_knrk3528".to_string()),
+                avatar_url: Some("https://example.com/avatar.png".to_string()),
+            }),
         };
 
-        save_auth_session_to_path(&path, &sample).expect("save should succeed");
-        let loaded = load_auth_session_from_path(&path)
+        save_auth_state_to_path(&path, &sample).expect("save should succeed");
+        let loaded = load_auth_state_from_path(&path)
             .expect("load should succeed")
-            .expect("session should exist");
+            .expect("auth state should exist");
 
-        assert_eq!(loaded.access_token, sample.access_token);
-        assert_eq!(loaded.refresh_token, sample.refresh_token);
+        assert_eq!(loaded, sample);
 
         let _ = fs::remove_file(path);
     }
 
     #[test]
-    fn load_auth_session_falls_back_to_legacy_namespace() {
+    fn load_auth_state_accepts_legacy_payload_without_user_summary() {
         let nanos = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("system time should be after unix epoch")
@@ -175,22 +208,58 @@ mod tests {
             std::process::id()
         ));
 
-        let sample = AuthSession {
-            access_token: "legacy-access".to_string(),
-            refresh_token: "legacy-refresh".to_string(),
-            token_type: "bearer".to_string(),
-            expires_in: 3600,
-            scope: "all".to_string(),
-        };
+        let legacy_payload = r#"{
+            "version": 1,
+            "saved_at_epoch_seconds": 123,
+            "session": {
+                "access_token": "legacy-access",
+                "refresh_token": "legacy-refresh",
+                "token_type": "bearer",
+                "expires_in": 3600,
+                "scope": "all"
+            }
+        }"#;
 
-        save_auth_session_to_path(&legacy_path, &sample).expect("legacy save should succeed");
-        let loaded = load_auth_session_from_path(&legacy_path)
+        fs::write(&legacy_path, legacy_payload).expect("legacy payload should write");
+        let loaded = load_auth_state_from_path(&legacy_path)
             .expect("legacy load should succeed")
-            .expect("legacy session should exist");
+            .expect("legacy auth state should exist");
 
-        assert_eq!(loaded.access_token, sample.access_token);
-        assert_eq!(loaded.refresh_token, sample.refresh_token);
+        assert_eq!(loaded.session.access_token, "legacy-access");
+        assert_eq!(loaded.session.refresh_token, "legacy-refresh");
+        assert!(loaded.user_summary.is_none());
 
         let _ = fs::remove_file(legacy_path);
+    }
+
+    #[test]
+    fn clear_auth_state_removes_persisted_file() {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time should be after unix epoch")
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!(
+            "{AUTH_NAMESPACE}-pixiv-auth-clear-test-{}-{nanos}.json",
+            std::process::id()
+        ));
+
+        let sample = StoredAuthState {
+            session: AuthSession {
+                access_token: "access".to_string(),
+                refresh_token: "refresh".to_string(),
+                token_type: "bearer".to_string(),
+                expires_in: 3600,
+                scope: "all".to_string(),
+            },
+            user_summary: None,
+        };
+
+        save_auth_state_to_path(&path, &sample).expect("save should succeed");
+        clear_auth_state_at_path(&path).expect("clear should succeed");
+        assert!(
+            load_auth_state_from_path(&path)
+                .expect("load after clear should succeed")
+                .is_none()
+        );
     }
 }

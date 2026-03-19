@@ -5,6 +5,65 @@ use picus_core::bevy_math::Vec2;
 
 use super::ui;
 
+pub(super) fn clear_authenticated_runtime(world: &mut World) {
+    let feed_entities = world
+        .get_resource_mut::<FeedOrder>()
+        .map(|mut order| std::mem::take(&mut order.0))
+        .unwrap_or_default();
+    for entity in feed_entities {
+        if world.get_entity(entity).is_ok() {
+            world.entity_mut(entity).despawn();
+        }
+    }
+
+    if world.get_resource::<OverlayTags>().is_some() {
+        clear_overlay_tags(world);
+    }
+
+    if let Some(mut seen_ids) = world.get_resource_mut::<FeedSeenIds>() {
+        seen_ids.0.clear();
+    }
+
+    if let Some(mut pagination) = world.get_resource_mut::<FeedPagination>() {
+        pagination.generation = pagination.generation.saturating_add(1);
+        pagination.loading = false;
+        pagination.next_url = None;
+    }
+
+    let feed_scroll = world
+        .get_resource::<PixivUiTree>()
+        .map(|tree| tree.feed_scroll);
+    if let Some(feed_scroll) = feed_scroll
+        && let Some(mut scroll_view) = world.get_mut::<UiScrollView>(feed_scroll)
+    {
+        scroll_view.scroll_offset = Vec2::ZERO;
+        scroll_view.clamp_scroll_offset();
+    }
+
+    if let Some(mut ui) = world.get_resource_mut::<UiState>() {
+        ui.active_tab = NavTab::Home;
+        ui.selected_illust = None;
+    }
+
+    if let Some(mut auth) = world.get_resource_mut::<AuthState>() {
+        auth.session = None;
+        auth.user_summary = None;
+        auth.code_verifier_input.clear();
+        auth.auth_code_input.clear();
+        auth.refresh_token_input.clear();
+        auth.login_dialog_open = false;
+        auth.account_menu_open = false;
+    }
+
+    if let Some(mut avatar) = world.get_resource_mut::<AuthAvatarVisual>() {
+        *avatar = AuthAvatarVisual::default();
+    }
+
+    if let Some(mut response_panel) = world.get_resource_mut::<ResponsePanelState>() {
+        *response_panel = ResponsePanelState::default();
+    }
+}
+
 fn queue_feed_command(world: &mut World, tab: NavTab) {
     let generation = begin_feed_request(world);
     let cmd = match tab {
@@ -174,7 +233,7 @@ pub(super) fn drain_ui_actions_and_dispatch(world: &mut World) {
                                 .resource::<ImageBridge>()
                                 .cmd_tx
                                 .send(ImageCommand::Download {
-                                    entity,
+                                    target: ImageTarget::Illust(entity),
                                     kind: ImageKind::HighRes,
                                     url: high_res,
                                 });
@@ -255,10 +314,36 @@ pub(super) fn drain_ui_actions_and_dispatch(world: &mut World) {
                     "Response panel cleared.",
                 );
             }
+            AppAction::ToggleLoginDialog => {
+                let is_authenticated = world.resource::<AuthState>().session.is_some();
+                if is_authenticated {
+                    continue;
+                }
+
+                let mut auth = world.resource_mut::<AuthState>();
+                auth.login_dialog_open = !auth.login_dialog_open;
+                if auth.login_dialog_open {
+                    auth.account_menu_open = false;
+                }
+            }
+            AppAction::ToggleAccountMenu => {
+                let is_authenticated = world.resource::<AuthState>().session.is_some();
+                if !is_authenticated {
+                    continue;
+                }
+
+                let mut auth = world.resource_mut::<AuthState>();
+                auth.account_menu_open = !auth.account_menu_open;
+                if auth.account_menu_open {
+                    auth.login_dialog_open = false;
+                }
+            }
             AppAction::OpenBrowserLogin => {
                 let (idp_urls, verifier) = {
                     let mut auth = world.resource_mut::<AuthState>();
                     let idp_urls = auth.idp_urls.clone();
+                    auth.login_dialog_open = true;
+                    auth.account_menu_open = false;
 
                     if auth.code_verifier_input.trim().is_empty() {
                         auth.code_verifier_input = generate_pkce_code_verifier();
@@ -356,6 +441,31 @@ pub(super) fn drain_ui_actions_and_dispatch(world: &mut World) {
                     .resource::<NetworkBridge>()
                     .cmd_tx
                     .send(NetworkCommand::Refresh { refresh_token });
+            }
+            AppAction::Logout => {
+                clear_authenticated_runtime(world);
+                match super::persistence::clear_auth_state() {
+                    Ok(()) => {
+                        set_status_key(
+                            world,
+                            "pixiv.status.logged_out",
+                            "Logged out. Saved Pixiv auth was cleared.",
+                        );
+                    }
+                    Err(err) => {
+                        set_status(
+                            world,
+                            format!(
+                                "{}: {err}",
+                                tr(
+                                    world,
+                                    "pixiv.status.logout_persist_clear_failed",
+                                    "Logged out locally, but clearing saved auth failed"
+                                )
+                            ),
+                        );
+                    }
+                }
             }
         }
     }

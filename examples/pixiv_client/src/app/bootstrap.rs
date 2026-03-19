@@ -134,13 +134,17 @@ pub(super) fn sync_bound_text_inputs(world: &mut World) {
 pub(super) fn setup(mut commands: Commands, i18n: Res<AppI18n>) {
     ensure_task_pool_initialized();
 
-    let restored_session = persistence::load_auth_session()
+    let restored_auth = persistence::load_auth_state()
         .map_err(|error| {
             eprintln!("pixiv credential restore failed: {error}");
             error
         })
         .ok()
         .flatten();
+    let restored_session = restored_auth.as_ref().map(|auth| auth.session.clone());
+    let restored_user_summary = restored_auth
+        .as_ref()
+        .and_then(|auth| auth.user_summary.clone());
 
     let (cmd_tx, cmd_rx) = unbounded::<NetworkCommand>();
     let (result_tx, result_rx) = unbounded::<NetworkResult>();
@@ -161,7 +165,7 @@ pub(super) fn setup(mut commands: Commands, i18n: Res<AppI18n>) {
     });
 
     commands.insert_resource(UiState {
-        status_line: if restored_session.is_some() {
+        status_line: if restored_auth.is_some() {
             "Booting Pixiv MVP… restored saved credentials, refreshing token…".to_string()
         } else {
             "Booting Pixiv MVP…".to_string()
@@ -170,6 +174,7 @@ pub(super) fn setup(mut commands: Commands, i18n: Res<AppI18n>) {
     });
     commands.insert_resource(AuthState {
         session: restored_session.clone(),
+        user_summary: restored_user_summary,
         refresh_token_input: restored_session
             .as_ref()
             .map(|session| session.refresh_token.clone())
@@ -183,6 +188,7 @@ pub(super) fn setup(mut commands: Commands, i18n: Res<AppI18n>) {
     commands.insert_resource(ResponsePanelState::default());
     commands.insert_resource(ViewportMetrics::default());
     commands.insert_resource(PixivApiClient::default());
+    commands.insert_resource(AuthAvatarVisual::default());
     commands.insert_resource(Assets::<BevyImage>::default());
 
     let mut ui_components = PixivUiComponents {
@@ -194,6 +200,19 @@ pub(super) fn setup(mut commands: Commands, i18n: Res<AppI18n>) {
             &mut commands,
             &["pixiv.button", "pixiv.button.sidebar"],
         ),
+        auth_dialog_toggle: spawn_ui_component_entity(
+            &mut commands,
+            &["pixiv.button", "pixiv.button.primary"],
+        ),
+        auth_dialog_close: spawn_ui_component_entity(
+            &mut commands,
+            &["pixiv.button", "pixiv.button.subtle"],
+        ),
+        account_menu_toggle: spawn_ui_component_entity(
+            &mut commands,
+            &["pixiv.button", "pixiv.button.subtle"],
+        ),
+        logout: spawn_ui_component_entity(&mut commands, &["pixiv.button", "pixiv.button.warn"]),
         code_verifier_input: Entity::PLACEHOLDER,
         auth_code_input: Entity::PLACEHOLDER,
         refresh_token_input: Entity::PLACEHOLDER,
@@ -287,27 +306,38 @@ pub(super) fn setup(mut commands: Commands, i18n: Res<AppI18n>) {
         .entity(ui_components.locale_combo)
         .insert((locale_combo, ChildOf(sidebar)));
 
-    let main_column = commands.spawn((PixivMainColumn, ChildOf(root))).id();
-
-    let auth_panel = commands
+    let _auth_panel = commands
         .spawn((
             PixivAuthPanel,
-            StyleClass(vec!["pixiv.auth-panel".to_string()]),
-            ChildOf(main_column),
+            StyleClass(vec!["pixiv.sidebar.footer".to_string()]),
+            ChildOf(sidebar),
         ))
         .id();
+
+    let auth_dialog = commands
+        .spawn((
+            PixivAuthDialog,
+            StyleClass(vec![
+                "pixiv.overlay".to_string(),
+                "pixiv.auth.dialog".to_string(),
+            ]),
+        ))
+        .id();
+
+    let main_column = commands.spawn((PixivMainColumn, ChildOf(root))).id();
+
     commands.spawn((PixivResponsePanel, ChildOf(main_column)));
     let search_panel = commands
         .spawn((PixivSearchPanel, ChildOf(main_column)))
         .id();
 
     ui_components.code_verifier_input =
-        spawn_bound_text_input(&mut commands, auth_panel, "", "PKCE code_verifier");
+        spawn_bound_text_input(&mut commands, auth_dialog, "", "PKCE code_verifier");
     ui_components.auth_code_input =
-        spawn_bound_text_input(&mut commands, auth_panel, "", "Auth code");
+        spawn_bound_text_input(&mut commands, auth_dialog, "", "Auth code");
     ui_components.refresh_token_input = spawn_bound_text_input(
         &mut commands,
-        auth_panel,
+        auth_dialog,
         restored_session
             .as_ref()
             .map(|session| session.refresh_token.clone())
@@ -331,7 +361,30 @@ pub(super) fn setup(mut commands: Commands, i18n: Res<AppI18n>) {
 
     let home_feed = commands.spawn((PixivHomeFeed, ChildOf(feed_scroll))).id();
 
+    let restored_avatar_url = restored_auth
+        .as_ref()
+        .and_then(|auth| auth.user_summary.as_ref())
+        .and_then(|summary| summary.avatar_url.clone())
+        .filter(|url| url.starts_with("https://") || url.starts_with("http://"));
+
+    let account_toggle = ui_components.account_menu_toggle;
+
     commands.queue(move |world: &mut World| {
+        let overlay_root = picus_core::ensure_overlay_root_entity(world);
+
+        world.entity_mut(auth_dialog).insert((
+            ChildOf(overlay_root),
+            OverlayState {
+                is_modal: true,
+                anchor: None,
+            },
+            OverlayConfig {
+                placement: OverlayPlacement::Center,
+                anchor: None,
+                auto_flip: false,
+            },
+        ));
+
         let detail_overlay = spawn_in_overlay_root(
             world,
             (
@@ -352,6 +405,38 @@ pub(super) fn setup(mut commands: Commands, i18n: Res<AppI18n>) {
         let overlay_tags = world
             .spawn((PixivOverlayTags, ChildOf(detail_overlay)))
             .id();
+
+        let _ = spawn_in_overlay_root(
+            world,
+            (
+                PixivAccountMenu,
+                StyleClass(vec![
+                    "pixiv.overlay".to_string(),
+                    "pixiv.auth.menu".to_string(),
+                ]),
+                OverlayState {
+                    is_modal: false,
+                    anchor: Some(account_toggle),
+                },
+                OverlayConfig {
+                    placement: OverlayPlacement::BottomEnd,
+                    anchor: Some(account_toggle),
+                    auto_flip: true,
+                },
+            ),
+        );
+
+        if let Some(url) = restored_avatar_url.clone() {
+            world.resource_mut::<AuthAvatarVisual>().requested_url = Some(url.clone());
+            let _ = world
+                .resource::<ImageBridge>()
+                .cmd_tx
+                .send(ImageCommand::Download {
+                    target: ImageTarget::AuthAvatar,
+                    kind: ImageKind::Avatar,
+                    url,
+                });
+        }
 
         world.insert_resource(PixivUiTree {
             feed_scroll,
@@ -382,6 +467,8 @@ picus_core::impl_ui_component_template!(PixivRoot, project_root);
 picus_core::impl_ui_component_template!(PixivSidebar, project_sidebar);
 picus_core::impl_ui_component_template!(PixivMainColumn, project_main_column);
 picus_core::impl_ui_component_template!(PixivAuthPanel, project_auth_panel);
+picus_core::impl_ui_component_template!(PixivAuthDialog, project_auth_dialog);
+picus_core::impl_ui_component_template!(PixivAccountMenu, project_account_menu);
 picus_core::impl_ui_component_template!(PixivResponsePanel, project_response_panel);
 picus_core::impl_ui_component_template!(PixivSearchPanel, project_search_panel);
 picus_core::impl_ui_component_template!(PixivHomeFeed, project_home_feed);
@@ -462,6 +549,8 @@ pub(super) fn build_app(mut activation_service: Option<ActivationService>) -> Ap
     .register_ui_component::<PixivSidebar>()
     .register_ui_component::<PixivMainColumn>()
     .register_ui_component::<PixivAuthPanel>()
+    .register_ui_component::<PixivAuthDialog>()
+    .register_ui_component::<PixivAccountMenu>()
     .register_ui_component::<PixivResponsePanel>()
     .register_ui_component::<PixivSearchPanel>()
     .register_ui_component::<PixivHomeFeed>()

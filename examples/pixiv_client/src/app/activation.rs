@@ -67,6 +67,7 @@ fn process_activation_uri(world: &mut World, uri: &str) {
 
     let code_verifier = world.resource::<AuthState>().code_verifier_input.clone();
     if code_verifier.trim().is_empty() {
+        world.resource_mut::<AuthState>().login_dialog_open = true;
         set_status_key(
             world,
             "pixiv.status.activation_verifier_missing",

@@ -313,6 +313,8 @@ The workspace currently includes these example members from `Cargo.toml`:
 - `todo_list`
 - `ui_showcase`
 
+The `pixiv_client` example currently exposes authentication through a sidebar-footer login entry that opens a modal overlay dialog for Pixiv OAuth inputs. Once authenticated, the same sidebar footer switches to an avatar-based account trigger with a compact logout menu.
+
 ## 15. Plugin System
 
 `PicusPlugin` wires the entire framework:

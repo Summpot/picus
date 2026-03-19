@@ -112,6 +112,77 @@
       ),
     ),
     (
+      selector: Class("pixiv.sidebar.footer"),
+      setter: (
+        layout: (
+          padding: Var("space-xs"),
+          gap: Var("gap-sm"),
+          border_width: Var("border-thin"),
+          corner_radius: Var("radius-lg"),
+        ),
+        colors: (
+          bg: Var("surface-subtle"),
+          border: Var("border-default"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("pixiv.auth.dialog"),
+      setter: (
+        layout: (
+          padding: Var("space-lg"),
+          gap: Var("gap-md"),
+          border_width: Var("border-thin"),
+          corner_radius: Var("radius-lg"),
+        ),
+        colors: (
+          bg: Var("surface-overlay"),
+          border: Var("border-default"),
+          text: Var("text-primary"),
+        ),
+        box_shadow: Var("shadow-ui-component"),
+      ),
+    ),
+    (
+      selector: Class("pixiv.auth.dialog.title"),
+      setter: (
+        text: (
+          size: 16.0,
+        ),
+        colors: (
+          text: Var("text-primary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("pixiv.auth.menu"),
+      setter: (
+        layout: (
+          padding: Var("space-md"),
+          gap: Var("gap-sm"),
+          border_width: Var("border-thin"),
+          corner_radius: Var("radius-lg"),
+        ),
+        colors: (
+          bg: Var("surface-overlay"),
+          border: Var("border-default"),
+          text: Var("text-primary"),
+        ),
+        box_shadow: Var("shadow-ui-component"),
+      ),
+    ),
+    (
+      selector: Class("pixiv.auth.menu.secondary"),
+      setter: (
+        text: (
+          size: Var("text-sm"),
+        ),
+        colors: (
+          text: Var("text-secondary"),
+        ),
+      ),
+    ),
+    (
       selector: Class("pixiv.text-input"),
       setter: (
         layout: (

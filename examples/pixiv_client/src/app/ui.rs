@@ -10,7 +10,7 @@ use picus_core::{
 };
 
 const FEED_OVERSCAN_Y: f64 = 240.0;
-const FEED_BASE_CHROME_HEIGHT: f64 = 332.0;
+const FEED_BASE_CHROME_HEIGHT: f64 = 164.0;
 const FEED_SEARCH_PANEL_HEIGHT: f64 = 56.0;
 const FEED_RESPONSE_PANEL_SPACING: f64 = 18.0;
 
@@ -422,6 +422,7 @@ pub(super) fn project_sidebar(_: &PixivSidebar, ctx: ProjectionCtx<'_>) -> UiVie
     let title_style = resolve_style_for_classes(ctx.world, ["pixiv.sidebar.title"]);
     let mut sidebar_children = ctx.children.into_iter();
     let locale_combo_view = sidebar_children.next().unwrap_or_else(empty_ui);
+    let auth_panel_view = sidebar_children.next().unwrap_or_else(empty_ui);
 
     let mut items = Vec::new();
     items.push(
@@ -507,9 +508,17 @@ pub(super) fn project_sidebar(_: &PixivSidebar, ctx: ProjectionCtx<'_>) -> UiVie
     }
 
     Arc::new(apply_widget_style(
-        flex_col(items)
-            .cross_axis_alignment(CrossAxisAlignment::Start)
-            .width(Dim::Stretch),
+        flex_col(vec![
+            flex_col(items)
+                .cross_axis_alignment(CrossAxisAlignment::Start)
+                .width(Dim::Stretch)
+                .into_any_flex(),
+            empty_ui().flex(1.0).into_any_flex(),
+            auth_panel_view.into_any_flex(),
+        ])
+        .cross_axis_alignment(CrossAxisAlignment::Stretch)
+        .width(Dim::Stretch)
+        .height(Dim::Stretch),
         &style,
     ))
 }
@@ -545,8 +554,72 @@ pub(super) fn project_main_column(_: &PixivMainColumn, ctx: ProjectionCtx<'_>) -
 
 pub(super) fn project_auth_panel(_: &PixivAuthPanel, ctx: ProjectionCtx<'_>) -> UiView {
     let style = resolve_style(ctx.world, ctx.entity);
-    let text_style = resolve_style_for_classes(ctx.world, ["pixiv.root"]);
     let auth = ctx.world.resource::<AuthState>();
+    let ui = ctx.world.resource::<UiState>();
+    let ui_components = *ctx.world.resource::<PixivUiComponents>();
+    let compact = ui.sidebar_collapsed;
+
+    let trigger: UiView = if auth.session.is_some() {
+        let button_style = resolve_style(ctx.world, ui_components.account_menu_toggle);
+        let label_text = auth
+            .user_summary
+            .as_ref()
+            .map(|summary| summary.name.clone())
+            .filter(|value| !value.trim().is_empty())
+            .unwrap_or_else(|| tr(ctx.world, "pixiv.auth.account", "Account"));
+        let content: UiView = if compact {
+            auth_avatar_view(ctx.world, 24.0, &button_style)
+        } else {
+            Arc::new(
+                flex_row((
+                    auth_avatar_view(ctx.world, 24.0, &button_style).into_any_flex(),
+                    apply_label_style(label(label_text), &button_style).into_any_flex(),
+                    lucide_icon(
+                        LucideIcon::ChevronDown,
+                        14.0,
+                        button_style.colors.text.unwrap_or(Color::WHITE),
+                    )
+                    .into_any_flex(),
+                ))
+                .cross_axis_alignment(CrossAxisAlignment::Center)
+                .gap(Length::px(8.0)),
+            )
+        };
+
+        Arc::new(apply_direct_widget_style(
+            button_with_child(
+                ui_components.account_menu_toggle,
+                AppAction::ToggleAccountMenu,
+                content,
+            ),
+            &button_style,
+        ))
+    } else {
+        action_button(
+            ctx.world,
+            ui_components.auth_dialog_toggle,
+            AppAction::ToggleLoginDialog,
+            tr(ctx.world, "pixiv.auth.show_login", "Login"),
+        )
+    };
+
+    Arc::new(apply_widget_style(
+        flex_col(vec![trigger.into_any_flex()])
+            .cross_axis_alignment(CrossAxisAlignment::Stretch)
+            .width(Dim::Stretch),
+        &style,
+    ))
+}
+
+pub(super) fn project_auth_dialog(_: &PixivAuthDialog, ctx: ProjectionCtx<'_>) -> UiView {
+    let auth = ctx.world.resource::<AuthState>();
+    if auth.session.is_some() || !auth.login_dialog_open {
+        return empty_ui();
+    }
+
+    let style = resolve_style(ctx.world, ctx.entity);
+    let title_style = resolve_style_for_classes(ctx.world, ["pixiv.auth.dialog.title"]);
+    let text_style = resolve_style_for_classes(ctx.world, ["pixiv.root"]);
     let ui_components = *ctx.world.resource::<PixivUiComponents>();
     let mut children = ctx.children.into_iter();
     let code_verifier_input = children.next().unwrap_or_else(empty_ui);
@@ -559,58 +632,139 @@ pub(super) fn project_auth_panel(_: &PixivAuthPanel, ctx: ProjectionCtx<'_>) -> 
         .map(std::borrow::ToOwned::to_owned)
         .unwrap_or_else(|| tr(ctx.world, "pixiv.auth.loading", "loading…"));
 
-    let rows = vec![
-        apply_label_style(
-            label(format!(
-                "{} {}",
-                tr(ctx.world, "pixiv.auth.endpoint", "Auth endpoint:"),
-                auth_endpoint
-            )),
-            &text_style,
-        )
-        .into_any_flex(),
-        sized_box(code_verifier_input)
-            .width(Dim::Stretch)
-            .into_any_flex(),
-        sized_box(auth_code_input)
-            .width(Dim::Stretch)
-            .into_any_flex(),
-        action_button(
-            ctx.world,
-            ui_components.open_browser_login,
-            AppAction::OpenBrowserLogin,
-            tr(
-                ctx.world,
-                "pixiv.auth.open_browser_login",
-                "Open Browser Login",
-            ),
-        )
-        .into_any_flex(),
-        action_button(
-            ctx.world,
-            ui_components.exchange_auth_code,
-            AppAction::ExchangeAuthCode,
-            tr(ctx.world, "pixiv.auth.login_auth_code", "Login (auth_code)"),
-        )
-        .into_any_flex(),
-        sized_box(refresh_token_input)
-            .width(Dim::Stretch)
-            .into_any_flex(),
-        action_button(
-            ctx.world,
-            ui_components.refresh_token,
-            AppAction::RefreshToken,
-            tr(ctx.world, "pixiv.auth.refresh_token", "Refresh Token"),
-        )
-        .into_any_flex(),
-    ];
-
-    Arc::new(apply_widget_style(
-        flex_col(rows)
+    Arc::new(
+        sized_box(apply_widget_style(
+            flex_col(vec![
+                flex_row((
+                    apply_label_style(
+                        label(tr(ctx.world, "pixiv.auth.title", "Pixiv Login")),
+                        &title_style,
+                    )
+                    .flex(1.0),
+                    action_button(
+                        ctx.world,
+                        ui_components.auth_dialog_close,
+                        AppAction::ToggleLoginDialog,
+                        tr(ctx.world, "pixiv.auth.close", "Close"),
+                    )
+                    .into_any_flex(),
+                ))
+                .cross_axis_alignment(CrossAxisAlignment::Center)
+                .into_any_flex(),
+                apply_label_style(
+                    label(format!(
+                        "{} {}",
+                        tr(ctx.world, "pixiv.auth.endpoint", "Auth endpoint:"),
+                        auth_endpoint
+                    )),
+                    &text_style,
+                )
+                .into_any_flex(),
+                sized_box(code_verifier_input)
+                    .width(Dim::Stretch)
+                    .into_any_flex(),
+                sized_box(auth_code_input)
+                    .width(Dim::Stretch)
+                    .into_any_flex(),
+                flex_row((
+                    action_button(
+                        ctx.world,
+                        ui_components.open_browser_login,
+                        AppAction::OpenBrowserLogin,
+                        tr(
+                            ctx.world,
+                            "pixiv.auth.open_browser_login",
+                            "Open Browser Login",
+                        ),
+                    )
+                    .flex(1.0),
+                    action_button(
+                        ctx.world,
+                        ui_components.exchange_auth_code,
+                        AppAction::ExchangeAuthCode,
+                        tr(ctx.world, "pixiv.auth.login_auth_code", "Login (auth_code)"),
+                    )
+                    .flex(1.0),
+                ))
+                .gap(Length::px(10.0))
+                .into_any_flex(),
+                sized_box(refresh_token_input)
+                    .width(Dim::Stretch)
+                    .into_any_flex(),
+                action_button(
+                    ctx.world,
+                    ui_components.refresh_token,
+                    AppAction::RefreshToken,
+                    tr(ctx.world, "pixiv.auth.refresh_token", "Refresh Token"),
+                )
+                .into_any_flex(),
+            ])
             .cross_axis_alignment(CrossAxisAlignment::Stretch)
             .width(Dim::Stretch),
-        &style,
-    ))
+            &style,
+        ))
+        .fixed_width(Length::px(460.0)),
+    )
+}
+
+pub(super) fn project_account_menu(_: &PixivAccountMenu, ctx: ProjectionCtx<'_>) -> UiView {
+    let auth = ctx.world.resource::<AuthState>();
+    if auth.session.is_none() || !auth.account_menu_open {
+        return empty_ui();
+    }
+
+    let style = resolve_style(ctx.world, ctx.entity);
+    let text_style = resolve_style_for_classes(ctx.world, ["pixiv.root"]);
+    let secondary_style = resolve_style_for_classes(ctx.world, ["pixiv.auth.menu.secondary"]);
+    let ui_components = *ctx.world.resource::<PixivUiComponents>();
+    let display_name = auth
+        .user_summary
+        .as_ref()
+        .map(|summary| summary.name.clone())
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or_else(|| tr(ctx.world, "pixiv.auth.account", "Account"));
+    let account_line = auth
+        .user_summary
+        .as_ref()
+        .and_then(|summary| summary.account.as_ref())
+        .map(|account| format!("@{account}"))
+        .unwrap_or_else(|| {
+            tr(
+                ctx.world,
+                "pixiv.auth.account_summary_pending",
+                "Account summary pending",
+            )
+        });
+
+    Arc::new(
+        sized_box(apply_widget_style(
+            flex_col(vec![
+                flex_row((
+                    auth_avatar_view(ctx.world, 36.0, &style).into_any_flex(),
+                    flex_col(vec![
+                        apply_label_style(label(display_name), &text_style).into_any_flex(),
+                        apply_label_style(label(account_line), &secondary_style).into_any_flex(),
+                    ])
+                    .cross_axis_alignment(CrossAxisAlignment::Start)
+                    .into_any_flex(),
+                ))
+                .cross_axis_alignment(CrossAxisAlignment::Center)
+                .gap(Length::px(10.0))
+                .into_any_flex(),
+                action_button(
+                    ctx.world,
+                    ui_components.logout,
+                    AppAction::Logout,
+                    tr(ctx.world, "pixiv.auth.logout", "Logout"),
+                )
+                .into_any_flex(),
+            ])
+            .cross_axis_alignment(CrossAxisAlignment::Stretch)
+            .width(Dim::Stretch),
+            &style,
+        ))
+        .fixed_width(Length::px(240.0)),
+    )
 }
 
 pub(super) fn project_response_panel(_: &PixivResponsePanel, ctx: ProjectionCtx<'_>) -> UiView {
@@ -802,6 +956,25 @@ fn illust_avatar_view(visual: &IllustVisual, style: &ResolvedStyle) -> UiView {
         lucide_icon(
             LucideIcon::User,
             18.0,
+            style.colors.text.unwrap_or(Color::WHITE),
+        )
+    }
+}
+
+fn auth_avatar_view(world: &World, size_px: f64, style: &ResolvedStyle) -> UiView {
+    if let Some(image_data) = world
+        .get_resource::<AuthAvatarVisual>()
+        .and_then(|visual| visual.avatar_ui.clone())
+    {
+        Arc::new(
+            sized_box(image(image_data))
+                .fixed_height(Length::px(size_px))
+                .fixed_width(Length::px(size_px)),
+        )
+    } else {
+        lucide_icon(
+            LucideIcon::User,
+            size_px * 0.72,
             style.colors.text.unwrap_or(Color::WHITE),
         )
     }
