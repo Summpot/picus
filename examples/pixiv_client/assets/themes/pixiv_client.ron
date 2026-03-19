@@ -132,7 +132,7 @@
         layout: (
           padding: Var("space-lg"),
           gap: Var("gap-md"),
-          border_width: Var("border-thin"),
+          border_width: 2.0,
           corner_radius: Var("radius-lg"),
         ),
         colors: (

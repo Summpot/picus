@@ -4,6 +4,7 @@ pub mod dropdown;
 pub mod elements;
 pub mod layout;
 pub mod overlay;
+pub mod popover;
 pub mod theme_picker;
 pub mod utils;
 pub mod widgets;
@@ -13,9 +14,9 @@ pub use core::*;
 use crate::ecs::{
     UiBadge, UiButton, UiCheckbox, UiColorPicker, UiColorPickerPanel, UiComboBox, UiDatePicker,
     UiDatePickerPanel, UiDialog, UiDropdownMenu, UiFlexColumn, UiFlexRow, UiGroupBox, UiLabel,
-    UiMenuBar, UiMenuBarItem, UiMenuItemPanel, UiOverlayRoot, UiProgressBar, UiRadioGroup, UiRoot,
-    UiScrollView, UiSlider, UiSpinner, UiSplitPane, UiSwitch, UiTabBar, UiTable, UiTextInput,
-    UiThemePicker, UiThemePickerMenu, UiToast, UiTooltip, UiTreeNode,
+    UiMenuBar, UiMenuBarItem, UiMenuItemPanel, UiOverlayRoot, UiPopover, UiProgressBar,
+    UiRadioGroup, UiRoot, UiScrollView, UiSlider, UiSpinner, UiSplitPane, UiSwitch, UiTabBar,
+    UiTable, UiTextInput, UiThemePicker, UiThemePickerMenu, UiToast, UiTooltip, UiTreeNode,
 };
 
 /// Register non-UI-component foundational projectors.
@@ -44,6 +45,7 @@ pub fn register_builtin_projectors(registry: &mut UiProjectorRegistry) {
         .register_component::<UiTextInput>(elements::project_text_input)
         .register_component::<UiProgressBar>(elements::project_progress_bar)
         .register_component::<UiDialog>(dialog::project_dialog)
+        .register_component::<UiPopover>(popover::project_popover)
         .register_component::<UiComboBox>(dropdown::project_combo_box)
         .register_component::<UiDropdownMenu>(dropdown::project_dropdown_menu)
         .register_component::<UiRadioGroup>(widgets::project_radio_group)

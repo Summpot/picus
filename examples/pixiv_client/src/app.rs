@@ -848,6 +848,45 @@ mod tests {
     }
 
     #[test]
+    fn toggle_account_menu_respawns_overlay_when_missing() {
+        let mut world = World::new();
+        world.insert_resource(AppI18n::new(parse_locale("en-US")));
+        world.insert_resource(UiEventQueue::default());
+        let mut schedule = Schedule::default();
+        schedule.add_systems(setup);
+        schedule.run(&mut world);
+
+        world.resource_mut::<AuthState>().session = Some(mock_auth_session());
+
+        world
+            .resource::<UiEventQueue>()
+            .push_typed(Entity::PLACEHOLDER, AppAction::ToggleAccountMenu);
+        drain_ui_actions_and_dispatch(&mut world);
+
+        let account_menu = world
+            .query_filtered::<Entity, With<PixivAccountMenu>>()
+            .iter(&world)
+            .next()
+            .expect("account menu overlay should exist after opening");
+        world.entity_mut(account_menu).despawn();
+
+        world.resource_mut::<AuthState>().account_menu_open = true;
+        ensure_account_menu_overlay(&mut world);
+
+        let respawned = world
+            .query_filtered::<Entity, With<PixivAccountMenu>>()
+            .iter(&world)
+            .next()
+            .expect("account menu overlay should respawn when reopened");
+        let popover = world
+            .get::<picus_core::UiPopover>(respawned)
+            .expect("respawned account menu should carry shared popover metadata");
+
+        assert!(world.resource::<AuthState>().account_menu_open);
+        assert_eq!(popover.placement, OverlayPlacement::BottomEnd);
+    }
+
+    #[test]
     fn idp_discovery_does_not_replace_authenticated_status_line() {
         let mut world = World::new();
         world.insert_resource(AppI18n::new(parse_locale("en-US")));
@@ -987,18 +1026,13 @@ mod tests {
                 .is_none(),
             "auth dialog overlay should be spawned on demand"
         );
-        let account_menu = world
-            .query_filtered::<Entity, With<PixivAccountMenu>>()
-            .iter(&world)
-            .next()
-            .expect("account menu overlay should exist");
-        let account_menu_overlay = world
-            .get::<OverlayConfig>(account_menu)
-            .expect("account menu should have overlay placement configured");
-        assert_eq!(account_menu_overlay.placement, OverlayPlacement::BottomEnd);
-        assert_eq!(
-            account_menu_overlay.anchor,
-            Some(ui_components.account_menu_toggle)
+        assert!(
+            world
+                .query_filtered::<Entity, With<PixivAccountMenu>>()
+                .iter(&world)
+                .next()
+                .is_none(),
+            "account menu overlay should be spawned on demand"
         );
         assert!(
             world
@@ -1031,6 +1065,14 @@ mod tests {
         let mut schedule = Schedule::default();
         schedule.add_systems(setup);
         schedule.run(&mut world);
+
+        {
+            let mut auth = world.resource_mut::<AuthState>();
+            auth.session = None;
+            auth.user_summary = None;
+            auth.login_dialog_open = false;
+            auth.account_menu_open = false;
+        }
 
         world
             .resource::<UiEventQueue>()
@@ -1070,6 +1112,14 @@ mod tests {
         let mut schedule = Schedule::default();
         schedule.add_systems(setup);
         schedule.run(&mut world);
+
+        {
+            let mut auth = world.resource_mut::<AuthState>();
+            auth.session = None;
+            auth.user_summary = None;
+            auth.login_dialog_open = false;
+            auth.account_menu_open = false;
+        }
 
         world
             .resource::<UiEventQueue>()

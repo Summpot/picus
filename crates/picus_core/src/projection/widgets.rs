@@ -35,6 +35,7 @@ use crate::{
 };
 
 use super::core::{ProjectionCtx, UiView};
+use super::popover::popover_geometry;
 use super::utils::{VectorIcon, hide_style_without_collapsing_layout, vector_icon};
 
 // ---------------------------------------------------------------------------
@@ -789,13 +790,6 @@ pub(crate) fn project_menu_item_panel(_: &UiMenuItemPanel, ctx: ProjectionCtx<'_
 // ---------------------------------------------------------------------------
 
 pub(crate) fn project_tooltip(tooltip: &UiTooltip, ctx: ProjectionCtx<'_>) -> UiView {
-    let computed_pos = ctx
-        .world
-        .get::<OverlayComputedPosition>(ctx.entity)
-        .copied()
-        .unwrap_or_default();
-    let pos = (computed_pos.x, computed_pos.y);
-
     let mut style = default_panel_style(ctx.world, "overlay.tooltip");
     if style.colors.bg.is_none() {
         style.colors.bg = Some(Color::from_rgb8(0x2B, 0x2B, 0x2B));
@@ -810,23 +804,18 @@ pub(crate) fn project_tooltip(tooltip: &UiTooltip, ctx: ProjectionCtx<'_>) -> Ui
         style.layout.corner_radius = 4.0;
     }
 
-    if !computed_pos.is_positioned {
-        hide_style_without_collapsing_layout(&mut style);
-    }
-
-    let tooltip_width = if computed_pos.width > 1.0 {
-        computed_pos.width
-    } else {
-        96.0
-    };
+    let computed_pos = popover_geometry(ctx.world, ctx.entity, (96.0, 28.0), &mut [&mut style]);
 
     let text_lbl = apply_label_style(label(tooltip.text.clone()), &style);
     let panel = apply_widget_style(
-        sized_box(text_lbl).width(Dim::Fixed(Length::px(tooltip_width))),
+        sized_box(text_lbl).width(Dim::Fixed(Length::px(computed_pos.width))),
         &style,
     );
 
-    Arc::new(transformed(opaque_hitbox_for_entity(ctx.entity, panel)).translate(pos))
+    Arc::new(
+        transformed(opaque_hitbox_for_entity(ctx.entity, panel))
+            .translate((computed_pos.x, computed_pos.y)),
+    )
 }
 
 // ---------------------------------------------------------------------------

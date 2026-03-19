@@ -118,7 +118,7 @@ pub mod prelude {
         UiDropdownItem, UiDropdownMenu, UiDropdownPlacement, UiEvent, UiEventQueue, UiFlexColumn,
         UiFlexRow, UiGroupBox, UiInteractionEvent, UiLabel, UiMenuBar, UiMenuBarItem, UiMenuItem,
         UiMenuItemPanel, UiMenuItemSelected, UiOverlayRoot, UiPointerEvent, UiPointerHitEvent,
-        UiPointerPhase, UiProgressBar, UiProjector, UiProjectorRegistry, UiRadioGroup,
+        UiPointerPhase, UiPopover, UiProgressBar, UiProjector, UiProjectorRegistry, UiRadioGroup,
         UiRadioGroupChanged, UiRoot, UiScrollView, UiScrollViewChanged, UiSlider, UiSliderChanged,
         UiSpinner, UiSplitPane, UiSwitch, UiSwitchChanged, UiSynthesisStats, UiTabBar,
         UiTabChanged, UiTable, UiTextInput, UiTextInputChanged, UiThemePicker,
@@ -134,12 +134,13 @@ pub mod prelude {
         register_builtin_style_type_aliases, register_builtin_ui_components,
         resolve_localized_text, resolve_style, resolve_style_for_classes,
         resolve_style_for_entity_classes, run_app, run_app_with_window_options, slider,
-        spawn_in_overlay_root, sync_dropdown_positions, sync_fonts_to_xilem,
-        sync_overlay_positions, sync_overlay_stack_lifecycle, synthesize_roots,
-        synthesize_roots_with_stats, synthesize_ui, synthesize_world, text_button, text_input,
-        tick_auto_dismiss, tick_toasts, xilem_badge, xilem_badge_count, xilem_badge_text,
-        xilem_button, xilem_button_any_pointer, xilem_checkbox, xilem_image, xilem_progress_bar,
-        xilem_slider, xilem_switch, xilem_text_button, xilem_text_input, xilem_zstack,
+        spawn_in_overlay_root, spawn_popover_in_overlay_root, sync_dropdown_positions,
+        sync_fonts_to_xilem, sync_overlay_positions, sync_overlay_stack_lifecycle,
+        synthesize_roots, synthesize_roots_with_stats, synthesize_ui, synthesize_world,
+        text_button, text_input, tick_auto_dismiss, tick_toasts, xilem_badge, xilem_badge_count,
+        xilem_badge_text, xilem_button, xilem_button_any_pointer, xilem_checkbox, xilem_image,
+        xilem_progress_bar, xilem_slider, xilem_switch, xilem_text_button, xilem_text_input,
+        xilem_zstack,
     };
 
     pub use crate::{

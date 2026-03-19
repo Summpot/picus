@@ -9,7 +9,7 @@ use xilem_masonry::view::{
 
 use crate::{
     ActiveStyleVariant,
-    ecs::{OverlayAnchorRect, OverlayComputedPosition, UiThemePicker, UiThemePickerMenu},
+    ecs::{OverlayAnchorRect, UiThemePicker, UiThemePickerMenu},
     overlay::OverlayUiAction,
     styling::{
         apply_direct_widget_style, apply_flex_alignment, apply_label_style, apply_widget_style,
@@ -21,10 +21,8 @@ use crate::{
 use super::{
     core::{ProjectionCtx, UiView},
     dropdown::{estimate_dropdown_surface_width_px, estimate_dropdown_viewport_height_px},
-    utils::{
-        VectorIcon, app_i18n_font_stack, hide_style_without_collapsing_layout, translate_text,
-        vector_icon,
-    },
+    popover::popover_geometry,
+    utils::{VectorIcon, app_i18n_font_stack, translate_text, vector_icon},
 };
 
 fn selected_theme_index(world: &bevy_ecs::world::World, picker: &UiThemePicker) -> Option<usize> {
@@ -129,17 +127,6 @@ pub(crate) fn project_theme_picker_menu(
         .map(|anchor_rect| anchor_rect.width)
         .unwrap_or(40.0);
 
-    let computed_position = ctx
-        .world
-        .get::<OverlayComputedPosition>(ctx.entity)
-        .copied()
-        .unwrap_or_default();
-
-    if !computed_position.is_positioned {
-        hide_style_without_collapsing_layout(&mut menu_style);
-        hide_style_without_collapsing_layout(&mut item_style);
-    }
-
     let estimated_width = estimate_dropdown_surface_width_px(
         anchor_width.max(1.0),
         translated_options.iter().map(String::as_str),
@@ -154,16 +141,12 @@ pub(crate) fn project_theme_picker_menu(
         item_gap,
     );
 
-    let panel_width = if computed_position.width > 1.0 {
-        computed_position.width
-    } else {
-        estimated_width
-    };
-    let panel_height = if computed_position.height > 1.0 {
-        computed_position.height
-    } else {
-        estimated_height
-    };
+    let computed_position = popover_geometry(
+        ctx.world,
+        ctx.entity,
+        (estimated_width, estimated_height),
+        &mut [&mut menu_style, &mut item_style],
+    );
 
     let items = translated_options
         .into_iter()
@@ -202,7 +185,10 @@ pub(crate) fn project_theme_picker_menu(
         .width(Dim::Stretch)
         .gap(Length::px(item_gap)),
     )
-    .dims((Length::px(panel_width), Length::px(panel_height)));
+    .dims((
+        Length::px(computed_position.width),
+        Length::px(computed_position.height),
+    ));
 
     Arc::new(
         transformed(opaque_hitbox_for_entity(

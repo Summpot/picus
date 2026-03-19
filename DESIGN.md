@@ -100,7 +100,7 @@ The unifying trait is `UiComponentTemplate`:
 
 The built-in ECS UI components registered through `components/mod.rs` currently include:
 
-**Interactive controls:** `UiButton`, `UiCheckbox`, `UiSlider`, `UiSwitch`, `UiTextInput`, `UiComboBox` (with `UiDropdownMenu` and `UiDropdownItem`), `UiRadioGroup`, `UiTabBar`, `UiTreeNode`, `UiMenuBar`, `UiMenuBarItem`, `UiMenuItemPanel`, `UiColorPicker` (with `UiColorPickerPanel`), `UiDatePicker` (with `UiDatePickerPanel`), `UiThemePicker` (with `UiThemePickerMenu`)
+**Interactive controls:** `UiButton`, `UiCheckbox`, `UiSlider`, `UiSwitch`, `UiTextInput`, `UiComboBox` (with `UiDropdownMenu` and `UiDropdownItem`), `UiRadioGroup`, `UiTabBar`, `UiTreeNode`, `UiMenuBar`, `UiMenuBarItem`, `UiMenuItemPanel`, `UiColorPicker` (with `UiColorPickerPanel`), `UiDatePicker` (with `UiDatePickerPanel`), `UiThemePicker` (with `UiThemePickerMenu`), `UiPopover`
 
 **Display and container widgets:** `UiBadge`, `UiProgressBar`, `UiDialog`, `UiScrollView`, `UiTable`, `UiTooltip`, `UiSpinner`, `UiGroupBox`, `UiSplitPane`, `UiToast`
 
@@ -202,6 +202,7 @@ Style rules support token-aware values via `StyleValue::Var(String)`, allowing s
 
 - **Centralized Layering Model:** `OverlayStack` maintains top-most order. `sync_overlay_stack_lifecycle` keeps it pruned.
 - **Universal Placement Model:** `OverlayPlacement` handles Center/Top/Bottom/Left/Right and Start/End alignments. `sync_overlay_positions` calculates clamping and auto-flipping against screen edges.
+- **Shared anchored popover metadata:** `UiPopover` centralizes anchor/placement/auto-flip configuration for anchored floating surfaces so built-in dropdowns, tooltips, picker panels, and app-level popovers reuse the same placement path.
 - **Built-in Floating Widgets:** `UiDialog` (modal), `UiComboBox` (anchor), `UiDropdownMenu` (floating list), `UiTooltip` (hover-anchor), `UiToast` (default bottom-end placement, configurable placement/width/close-button), `UiMenuItemPanel`, `UiColorPickerPanel`, `UiDatePickerPanel`, `UiThemePickerMenu`
 - **FOUC prevention invariant:** overlay projectors must render with fully transparent resolved styles while `OverlayComputedPosition.is_positioned == false`, then become visible once synchronized placement is available.
 - **Generic temporary lifecycle:** `AutoDismiss { timer }` supports timer-driven teardown for temporary overlays (e.g., toasts).
@@ -293,6 +294,7 @@ The bridge is created from a `RawHandleWrapper` (Bevy's window handle wrapper) a
 `bootstrap(config)` returns `BootstrapOutcome::Primary(ActivationService)` or `BootstrapOutcome::SecondaryForwarded`.
 
 Primary instance receives:
+
 - `startup_uris` (URIs from command-line arguments at launch)
 - `drain_uris()` (subsequent activation URIs delivered via IPC/Apple Events)
 
@@ -313,7 +315,7 @@ The workspace currently includes these example members from `Cargo.toml`:
 - `todo_list`
 - `ui_showcase`
 
-The `pixiv_client` example currently exposes authentication through a sidebar-footer login entry that opens a modal overlay dialog for Pixiv OAuth inputs. Once authenticated, the same sidebar footer switches to an avatar-based account trigger with a compact logout menu.
+The `pixiv_client` example currently exposes authentication through a sidebar-footer login entry that opens a modal overlay dialog for Pixiv OAuth inputs. Once authenticated, the same sidebar footer switches to an avatar-based account trigger with a compact logout popover that reuses the shared anchored popover placement path.
 
 ## 15. Plugin System
 

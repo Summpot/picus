@@ -1,7 +1,7 @@
 use super::*;
 
-use picus_core::UiScrollView;
 use picus_core::bevy_math::Vec2;
+use picus_core::{UiPopover, UiScrollView, spawn_popover_in_overlay_root};
 
 use super::actions::{request_next_feed_page, sync_feed_scroll_viewport};
 
@@ -76,6 +76,19 @@ fn auth_dialog_entity(world: &mut World) -> Option<Entity> {
     query.iter(world).next()
 }
 
+fn account_menu_entity(world: &mut World) -> Option<Entity> {
+    let mut query = world.query_filtered::<Entity, With<PixivAccountMenu>>();
+    query.iter(world).next()
+}
+
+pub(super) fn dismiss_account_menu_overlay(world: &mut World) {
+    if let Some(entity) = account_menu_entity(world)
+        && world.get_entity(entity).is_ok()
+    {
+        world.entity_mut(entity).despawn();
+    }
+}
+
 pub(super) fn dismiss_auth_dialog_overlay(world: &mut World) {
     if let Some(entity) = auth_dialog_entity(world)
         && world.get_entity(entity).is_ok()
@@ -104,6 +117,16 @@ pub(super) fn reconcile_auth_dialog_overlay_state(world: &mut World) {
         ui_components.code_verifier_input = Entity::PLACEHOLDER;
         ui_components.auth_code_input = Entity::PLACEHOLDER;
         ui_components.refresh_token_input = Entity::PLACEHOLDER;
+    }
+}
+
+pub(super) fn reconcile_account_menu_overlay_state(world: &mut World) {
+    if account_menu_entity(world).is_some() {
+        return;
+    }
+
+    if let Some(mut auth) = world.get_resource_mut::<AuthState>() {
+        auth.account_menu_open = false;
     }
 }
 
@@ -168,6 +191,42 @@ pub(super) fn ensure_auth_dialog_overlay(world: &mut World) {
     }
 
     sync_bound_text_inputs(world);
+}
+
+pub(super) fn ensure_account_menu_overlay(world: &mut World) {
+    let should_show = world
+        .get_resource::<AuthState>()
+        .is_some_and(|auth| auth.session.is_some() && auth.account_menu_open);
+    if !should_show {
+        dismiss_account_menu_overlay(world);
+        return;
+    }
+
+    if account_menu_entity(world).is_some() {
+        return;
+    }
+
+    let Some(account_toggle) = world
+        .get_resource::<PixivUiComponents>()
+        .map(|ui| ui.account_menu_toggle)
+    else {
+        return;
+    };
+
+    let _ = spawn_popover_in_overlay_root(
+        world,
+        (
+            PixivAccountMenu,
+            StyleClass(vec![
+                "pixiv.overlay".to_string(),
+                "pixiv.auth.menu".to_string(),
+            ]),
+        ),
+        UiPopover::new(account_toggle)
+            .with_placement(OverlayPlacement::BottomEnd)
+            .with_auto_flip_placement(true)
+            .with_fixed_size(132.0, 40.0),
+    );
 }
 
 fn set_text_input_component_value(world: &mut World, entity: Entity, value: &str) {
@@ -454,8 +513,6 @@ pub(super) fn setup(mut commands: Commands, i18n: Res<AppI18n>) {
         .and_then(|summary| summary.avatar_url.clone())
         .filter(|url| url.starts_with("https://") || url.starts_with("http://"));
 
-    let account_toggle = ui_components.account_menu_toggle;
-
     commands.queue(move |world: &mut World| {
         let detail_overlay = spawn_in_overlay_root(
             world,
@@ -477,26 +534,6 @@ pub(super) fn setup(mut commands: Commands, i18n: Res<AppI18n>) {
         let overlay_tags = world
             .spawn((PixivOverlayTags, ChildOf(detail_overlay)))
             .id();
-
-        let _ = spawn_in_overlay_root(
-            world,
-            (
-                PixivAccountMenu,
-                StyleClass(vec![
-                    "pixiv.overlay".to_string(),
-                    "pixiv.auth.menu".to_string(),
-                ]),
-                OverlayState {
-                    is_modal: false,
-                    anchor: Some(account_toggle),
-                },
-                OverlayConfig {
-                    placement: OverlayPlacement::BottomEnd,
-                    anchor: Some(account_toggle),
-                    auto_flip: true,
-                },
-            ),
-        );
 
         if let Some(url) = restored_avatar_url.clone() {
             world.resource_mut::<AuthAvatarVisual>().requested_url = Some(url.clone());
@@ -647,6 +684,7 @@ pub(super) fn build_app(mut activation_service: Option<ActivationService>) -> Ap
             spawn_image_tasks,
             apply_image_results,
             reconcile_auth_dialog_overlay_state,
+            reconcile_account_menu_overlay_state,
         )
             .chain(),
     );

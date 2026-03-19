@@ -22,7 +22,7 @@ use crate::{
     UiColorPickerChanged, UiColorPickerPanel, UiComboBox, UiComboBoxChanged, UiDatePicker,
     UiDatePickerChanged, UiDatePickerPanel, UiDialog, UiDropdownItem, UiDropdownMenu, UiEventQueue,
     UiInteractionEvent, UiMenuBarItem, UiMenuItemPanel, UiMenuItemSelected, UiOverlayRoot,
-    UiPointerEvent, UiPointerHitEvent, UiRoot, UiThemePicker, UiThemePickerChanged,
+    UiPointerEvent, UiPointerHitEvent, UiPopover, UiRoot, UiThemePicker, UiThemePickerChanged,
     UiThemePickerMenu, UiToast, UiTooltip,
     events::UiEvent,
     runtime::MasonryRuntime,
@@ -205,6 +205,54 @@ pub fn spawn_in_overlay_root<B: Bundle>(world: &mut World, bundle: B) -> Entity 
     entity
 }
 
+fn ensure_popover_overlay_components(world: &mut World, entity: Entity, popover: UiPopover) {
+    if world.get::<AnchoredTo>(entity).is_none() {
+        world.entity_mut(entity).insert(AnchoredTo(popover.anchor));
+    }
+
+    ensure_overlay_components(
+        world,
+        entity,
+        OverlayConfig {
+            placement: popover.placement,
+            anchor: Some(popover.anchor),
+            auto_flip: popover.auto_flip_placement,
+        },
+        OverlayState {
+            is_modal: false,
+            anchor: Some(popover.anchor),
+        },
+        Some(OverlayAnchorRect::default()),
+    );
+}
+
+/// Spawn a generic anchored popover under the global overlay root.
+pub fn spawn_popover_in_overlay_root<B: Bundle>(
+    world: &mut World,
+    bundle: B,
+    popover: UiPopover,
+) -> Entity {
+    spawn_in_overlay_root(
+        world,
+        (
+            bundle,
+            popover,
+            AnchoredTo(popover.anchor),
+            OverlayState {
+                is_modal: false,
+                anchor: Some(popover.anchor),
+            },
+            OverlayAnchorRect::default(),
+            OverlayConfig {
+                placement: popover.placement,
+                anchor: Some(popover.anchor),
+                auto_flip: popover.auto_flip_placement,
+            },
+            OverlayComputedPosition::default(),
+        ),
+    )
+}
+
 fn collect_dropdowns_for_combo(world: &mut World, combo: Entity) -> Vec<Entity> {
     let mut query = world.query::<(Entity, &AnchoredTo, &UiDropdownMenu)>();
     query
@@ -224,7 +272,7 @@ fn collect_theme_picker_menus_for_picker(world: &mut World, picker: Entity) -> V
 fn despawn_entity_tree(world: &mut World, entity: Entity) {
     let children = world
         .get::<Children>(entity)
-        .map(|children| children.iter().collect::<Vec<_>>())
+        .map(|children| children.to_vec())
         .unwrap_or_default();
 
     for child in children {
@@ -392,20 +440,15 @@ pub fn ensure_overlay_defaults(world: &mut World) {
     };
 
     for (dropdown, anchor) in dropdowns {
-        ensure_overlay_components(
-            world,
-            dropdown,
-            OverlayConfig {
-                placement: OverlayPlacement::BottomStart,
-                anchor,
-                auto_flip: true,
-            },
-            OverlayState {
-                is_modal: false,
-                anchor,
-            },
-            Some(OverlayAnchorRect::default()),
-        );
+        if let Some(anchor) = anchor
+            && world.get::<UiPopover>(dropdown).is_none()
+        {
+            world.entity_mut(dropdown).insert(
+                UiPopover::new(anchor)
+                    .with_placement(OverlayPlacement::BottomStart)
+                    .with_auto_flip_placement(true),
+            );
+        }
     }
 
     let menu_panels = {
@@ -417,20 +460,13 @@ pub fn ensure_overlay_defaults(world: &mut World) {
     };
 
     for (panel_entity, anchor) in menu_panels {
-        ensure_overlay_components(
-            world,
-            panel_entity,
-            OverlayConfig {
-                placement: OverlayPlacement::BottomStart,
-                anchor: Some(anchor),
-                auto_flip: true,
-            },
-            OverlayState {
-                is_modal: false,
-                anchor: Some(anchor),
-            },
-            Some(OverlayAnchorRect::default()),
-        );
+        if world.get::<UiPopover>(panel_entity).is_none() {
+            world.entity_mut(panel_entity).insert(
+                UiPopover::new(anchor)
+                    .with_placement(OverlayPlacement::BottomStart)
+                    .with_auto_flip_placement(true),
+            );
+        }
     }
 
     let theme_picker_panels = {
@@ -442,20 +478,13 @@ pub fn ensure_overlay_defaults(world: &mut World) {
     };
 
     for (panel_entity, anchor) in theme_picker_panels {
-        ensure_overlay_components(
-            world,
-            panel_entity,
-            OverlayConfig {
-                placement: OverlayPlacement::BottomEnd,
-                anchor: Some(anchor),
-                auto_flip: true,
-            },
-            OverlayState {
-                is_modal: false,
-                anchor: Some(anchor),
-            },
-            Some(OverlayAnchorRect::default()),
-        );
+        if world.get::<UiPopover>(panel_entity).is_none() {
+            world.entity_mut(panel_entity).insert(
+                UiPopover::new(anchor)
+                    .with_placement(OverlayPlacement::BottomEnd)
+                    .with_auto_flip_placement(true),
+            );
+        }
     }
 
     let color_picker_panels = {
@@ -467,20 +496,13 @@ pub fn ensure_overlay_defaults(world: &mut World) {
     };
 
     for (panel_entity, anchor) in color_picker_panels {
-        ensure_overlay_components(
-            world,
-            panel_entity,
-            OverlayConfig {
-                placement: OverlayPlacement::BottomStart,
-                anchor: Some(anchor),
-                auto_flip: true,
-            },
-            OverlayState {
-                is_modal: false,
-                anchor: Some(anchor),
-            },
-            Some(OverlayAnchorRect::default()),
-        );
+        if world.get::<UiPopover>(panel_entity).is_none() {
+            world.entity_mut(panel_entity).insert(
+                UiPopover::new(anchor)
+                    .with_placement(OverlayPlacement::BottomStart)
+                    .with_auto_flip_placement(true),
+            );
+        }
     }
 
     let date_picker_panels = {
@@ -492,20 +514,13 @@ pub fn ensure_overlay_defaults(world: &mut World) {
     };
 
     for (panel_entity, anchor) in date_picker_panels {
-        ensure_overlay_components(
-            world,
-            panel_entity,
-            OverlayConfig {
-                placement: OverlayPlacement::BottomStart,
-                anchor: Some(anchor),
-                auto_flip: true,
-            },
-            OverlayState {
-                is_modal: false,
-                anchor: Some(anchor),
-            },
-            Some(OverlayAnchorRect::default()),
-        );
+        if world.get::<UiPopover>(panel_entity).is_none() {
+            world.entity_mut(panel_entity).insert(
+                UiPopover::new(anchor)
+                    .with_placement(OverlayPlacement::BottomStart)
+                    .with_auto_flip_placement(true),
+            );
+        }
     }
 
     let tooltips = {
@@ -517,20 +532,25 @@ pub fn ensure_overlay_defaults(world: &mut World) {
     };
 
     for (tooltip_entity, anchor) in tooltips {
-        ensure_overlay_components(
-            world,
-            tooltip_entity,
-            OverlayConfig {
-                placement: OverlayPlacement::Top,
-                anchor: Some(anchor),
-                auto_flip: true,
-            },
-            OverlayState {
-                is_modal: false,
-                anchor: Some(anchor),
-            },
-            Some(OverlayAnchorRect::default()),
-        );
+        if world.get::<UiPopover>(tooltip_entity).is_none() {
+            world.entity_mut(tooltip_entity).insert(
+                UiPopover::new(anchor)
+                    .with_placement(OverlayPlacement::Top)
+                    .with_auto_flip_placement(true),
+            );
+        }
+    }
+
+    let popovers = {
+        let mut query = world.query::<(Entity, &UiPopover)>();
+        query
+            .iter(world)
+            .map(|(entity, popover)| (entity, *popover))
+            .collect::<Vec<_>>()
+    };
+
+    for (entity, popover) in popovers {
+        ensure_popover_overlay_components(world, entity, popover);
     }
 
     let toasts = {
@@ -593,6 +613,7 @@ pub fn reparent_overlay_entities(world: &mut World) {
                 With<UiColorPickerPanel>,
                 With<UiDatePickerPanel>,
                 With<UiToast>,
+                With<UiPopover>,
                 With<UiTooltip>,
             )>,
             Without<UiOverlayRoot>,
@@ -731,23 +752,12 @@ pub fn handle_overlay_actions(world: &mut World) {
                 let placement = combo.dropdown_placement;
                 let auto_flip = combo.auto_flip_placement;
 
-                let dropdown = spawn_in_overlay_root(
+                let dropdown = spawn_popover_in_overlay_root(
                     world,
-                    (
-                        UiDropdownMenu,
-                        AnchoredTo(event.entity),
-                        OverlayState {
-                            is_modal: false,
-                            anchor: Some(event.entity),
-                        },
-                        OverlayAnchorRect::default(),
-                        OverlayConfig {
-                            placement,
-                            anchor: Some(event.entity),
-                            auto_flip,
-                        },
-                        OverlayComputedPosition::default(),
-                    ),
+                    UiDropdownMenu,
+                    UiPopover::new(event.entity)
+                        .with_placement(placement)
+                        .with_auto_flip_placement(auto_flip),
                 );
 
                 spawn_dropdown_items(world, dropdown, event.entity);
@@ -820,25 +830,14 @@ pub fn handle_overlay_actions(world: &mut World) {
                     continue;
                 }
 
-                spawn_in_overlay_root(
+                spawn_popover_in_overlay_root(
                     world,
-                    (
-                        UiThemePickerMenu {
-                            anchor: event.entity,
-                        },
-                        AnchoredTo(event.entity),
-                        OverlayState {
-                            is_modal: false,
-                            anchor: Some(event.entity),
-                        },
-                        OverlayAnchorRect::default(),
-                        OverlayConfig {
-                            placement: picker.dropdown_placement,
-                            anchor: Some(event.entity),
-                            auto_flip: picker.auto_flip_placement,
-                        },
-                        OverlayComputedPosition::default(),
-                    ),
+                    UiThemePickerMenu {
+                        anchor: event.entity,
+                    },
+                    UiPopover::new(event.entity)
+                        .with_placement(picker.dropdown_placement)
+                        .with_auto_flip_placement(picker.auto_flip_placement),
                 );
 
                 if let Some(mut theme_picker) = world.get_mut::<UiThemePicker>(event.entity) {
@@ -909,25 +908,14 @@ pub fn handle_overlay_actions(world: &mut World) {
                     continue;
                 }
 
-                spawn_in_overlay_root(
+                spawn_popover_in_overlay_root(
                     world,
-                    (
-                        UiMenuItemPanel {
-                            anchor: event.entity,
-                        },
-                        AnchoredTo(event.entity),
-                        OverlayState {
-                            is_modal: false,
-                            anchor: Some(event.entity),
-                        },
-                        OverlayAnchorRect::default(),
-                        OverlayConfig {
-                            placement: OverlayPlacement::BottomStart,
-                            anchor: Some(event.entity),
-                            auto_flip: true,
-                        },
-                        OverlayComputedPosition::default(),
-                    ),
+                    UiMenuItemPanel {
+                        anchor: event.entity,
+                    },
+                    UiPopover::new(event.entity)
+                        .with_placement(OverlayPlacement::BottomStart)
+                        .with_auto_flip_placement(true),
                 );
 
                 if let Some(mut item) = world.get_mut::<UiMenuBarItem>(event.entity) {
@@ -988,25 +976,14 @@ pub fn handle_overlay_actions(world: &mut World) {
                     continue;
                 }
 
-                spawn_in_overlay_root(
+                spawn_popover_in_overlay_root(
                     world,
-                    (
-                        UiColorPickerPanel {
-                            anchor: event.entity,
-                        },
-                        AnchoredTo(event.entity),
-                        OverlayState {
-                            is_modal: false,
-                            anchor: Some(event.entity),
-                        },
-                        OverlayAnchorRect::default(),
-                        OverlayConfig {
-                            placement: OverlayPlacement::BottomStart,
-                            anchor: Some(event.entity),
-                            auto_flip: true,
-                        },
-                        OverlayComputedPosition::default(),
-                    ),
+                    UiColorPickerPanel {
+                        anchor: event.entity,
+                    },
+                    UiPopover::new(event.entity)
+                        .with_placement(OverlayPlacement::BottomStart)
+                        .with_auto_flip_placement(true),
                 );
 
                 if let Some(mut picker) = world.get_mut::<UiColorPicker>(event.entity) {
@@ -1071,27 +1048,16 @@ pub fn handle_overlay_actions(world: &mut World) {
                     continue;
                 }
 
-                spawn_in_overlay_root(
+                spawn_popover_in_overlay_root(
                     world,
-                    (
-                        UiDatePickerPanel {
-                            anchor: event.entity,
-                            view_year: date_picker.year,
-                            view_month: date_picker.month,
-                        },
-                        AnchoredTo(event.entity),
-                        OverlayState {
-                            is_modal: false,
-                            anchor: Some(event.entity),
-                        },
-                        OverlayAnchorRect::default(),
-                        OverlayConfig {
-                            placement: OverlayPlacement::BottomStart,
-                            anchor: Some(event.entity),
-                            auto_flip: true,
-                        },
-                        OverlayComputedPosition::default(),
-                    ),
+                    UiDatePickerPanel {
+                        anchor: event.entity,
+                        view_year: date_picker.year,
+                        view_month: date_picker.month,
+                    },
+                    UiPopover::new(event.entity)
+                        .with_placement(OverlayPlacement::BottomStart)
+                        .with_auto_flip_placement(true),
                 );
 
                 if let Some(mut picker) = world.get_mut::<UiDatePicker>(event.entity) {
@@ -1554,6 +1520,10 @@ fn overlay_size_for_entity(
         let line_height = (style.text.size as f64 * 1.35).max(18.0);
         let height = (line_height + style.layout.padding * 2.0).max(28.0);
         return (width, height);
+    }
+
+    if let Some(popover) = world.get::<UiPopover>(entity) {
+        return popover.size_hint();
     }
 
     (240.0, 120.0)

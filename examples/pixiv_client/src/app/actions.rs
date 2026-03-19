@@ -63,6 +63,7 @@ pub(super) fn clear_authenticated_runtime(world: &mut World) {
         *response_panel = ResponsePanelState::default();
     }
 
+    dismiss_account_menu_overlay(world);
     dismiss_auth_dialog_overlay(world);
 }
 
@@ -346,6 +347,7 @@ pub(super) fn drain_ui_actions_and_dispatch(world: &mut World) {
                 if dialog_should_close {
                     dismiss_auth_dialog_overlay(world);
                 }
+                ensure_account_menu_overlay(world);
             }
             AppAction::OpenBrowserLogin => {
                 let (idp_urls, verifier) = {

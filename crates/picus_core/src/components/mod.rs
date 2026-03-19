@@ -14,6 +14,7 @@ mod date_picker;
 mod dialog;
 mod group_box;
 mod menu;
+mod popover;
 mod progress_bar;
 mod radio_group;
 mod scroll_view;
@@ -38,6 +39,7 @@ pub use date_picker::*;
 pub use dialog::*;
 pub use group_box::*;
 pub use menu::*;
+pub use popover::*;
 pub use progress_bar::*;
 pub use radio_group::*;
 pub use scroll_view::*;
@@ -138,6 +140,7 @@ pub fn register_builtin_ui_components(app: &mut App) {
         .register_ui_component::<text_input::UiTextInput>()
         .register_ui_component::<progress_bar::UiProgressBar>()
         .register_ui_component::<dialog::UiDialog>()
+        .register_ui_component::<popover::UiPopover>()
         .register_ui_component::<combo_box::UiComboBox>()
         .register_ui_component::<combo_box::UiDropdownMenu>()
         .register_ui_component::<combo_box::UiDropdownItem>()

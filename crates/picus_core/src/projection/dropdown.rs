@@ -1,8 +1,5 @@
 use crate::{
-    ecs::{
-        AnchoredTo, OverlayAnchorRect, OverlayComputedPosition, UiComboBox, UiDropdownItem,
-        UiDropdownMenu,
-    },
+    ecs::{AnchoredTo, OverlayAnchorRect, UiComboBox, UiDropdownItem, UiDropdownMenu},
     overlay::OverlayUiAction,
     styling::{
         apply_direct_widget_style, apply_flex_alignment, apply_label_style, apply_widget_style,
@@ -22,10 +19,8 @@ use crate::UiDropdownPlacement;
 
 use super::{
     core::{ProjectionCtx, UiView},
-    utils::{
-        VectorIcon, app_i18n_font_stack, estimate_text_width_px,
-        hide_style_without_collapsing_layout, translate_text, vector_icon,
-    },
+    popover::popover_geometry,
+    utils::{VectorIcon, app_i18n_font_stack, estimate_text_width_px, translate_text, vector_icon},
 };
 
 pub(crate) const DROPDOWN_MAX_VIEWPORT_HEIGHT: f64 = 300.0;
@@ -435,17 +430,6 @@ pub(crate) fn project_dropdown_menu(_: &UiDropdownMenu, ctx: ProjectionCtx<'_>) 
         .map(|anchor_rect| anchor_rect.width)
         .unwrap_or(160.0);
 
-    let computed_position = ctx
-        .world
-        .get::<OverlayComputedPosition>(ctx.entity)
-        .copied()
-        .unwrap_or_default();
-
-    if !computed_position.is_positioned {
-        hide_style_without_collapsing_layout(&mut menu_style);
-        hide_style_without_collapsing_layout(&mut item_style);
-    }
-
     let estimated_dropdown_width = estimate_dropdown_surface_width_px(
         anchor_width.max(1.0),
         translated_options.iter().map(String::as_str),
@@ -461,20 +445,12 @@ pub(crate) fn project_dropdown_menu(_: &UiDropdownMenu, ctx: ProjectionCtx<'_>) 
         item_gap,
     );
 
-    let dropdown_width = if computed_position.width > 1.0 {
-        computed_position.width
-    } else {
-        estimated_dropdown_width
-    };
-
-    let dropdown_height = if computed_position.height > 1.0 {
-        computed_position.height
-    } else {
-        estimated_dropdown_height
-    };
-
-    let dropdown_x = computed_position.x;
-    let dropdown_y = computed_position.y;
+    let computed_position = popover_geometry(
+        ctx.world,
+        ctx.entity,
+        (estimated_dropdown_width, estimated_dropdown_height),
+        &mut [&mut menu_style, &mut item_style],
+    );
 
     let items = if computed_position.is_positioned {
         ctx.children
@@ -493,13 +469,16 @@ pub(crate) fn project_dropdown_menu(_: &UiDropdownMenu, ctx: ProjectionCtx<'_>) 
         .width(Dim::Stretch)
         .gap(Length::px(item_gap)),
     )
-    .dims((Length::px(dropdown_width), Length::px(dropdown_height)));
+    .dims((
+        Length::px(computed_position.width),
+        Length::px(computed_position.height),
+    ));
 
     let dropdown_panel = transformed(opaque_hitbox_for_entity(
         ctx.entity,
         apply_widget_style(scrollable_menu, &menu_style),
     ))
-    .translate((dropdown_x, dropdown_y));
+    .translate((computed_position.x, computed_position.y));
 
     Arc::new(dropdown_panel)
 }
