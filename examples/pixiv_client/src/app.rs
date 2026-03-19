@@ -20,11 +20,11 @@ use picus_activation::{
 #[cfg(test)]
 use picus_core::bevy_app::PreUpdate;
 use picus_core::{
-    AppI18n, AppPicusExt, LUCIDE_FONT_FAMILY, OverlayConfig, OverlayPlacement, OverlayState,
-    PicusPlugin, ProjectionCtx, ResolvedStyle, StyleClass, StyleSheet, StyleValue, SyncAssetSource,
-    SyncTextSource, UiComboBox, UiComboBoxChanged, UiComboOption, UiEventQueue, UiRoot,
-    UiTextInput, UiTextInputChanged, UiThemePicker, UiView, apply_direct_widget_style,
-    apply_label_style, apply_widget_style,
+    AppI18n, AppPicusExt, LUCIDE_FONT_FAMILY, OverlayComputedPosition, OverlayConfig,
+    OverlayPlacement, OverlayState, PicusPlugin, ProjectionCtx, ResolvedStyle, StyleClass,
+    StyleSheet, StyleValue, SyncAssetSource, SyncTextSource, UiComboBox, UiComboBoxChanged,
+    UiComboOption, UiDialog, UiEventQueue, UiRoot, UiTextInput, UiTextInputChanged, UiThemePicker,
+    UiView, apply_direct_widget_style, apply_label_style, apply_widget_style,
     bevy_app::{App, Startup, Update},
     bevy_ecs::{hierarchy::ChildOf, prelude::*},
     bevy_tasks::{AsyncComputeTaskPool, IoTaskPool, TaskPool},
@@ -37,8 +37,8 @@ use picus_core::{
         tween::ComponentTween,
     },
     bevy_window::{PrimaryWindow, Window, WindowResized},
-    button_with_child, resolve_style, resolve_style_for_classes, resolve_style_for_entity_classes,
-    run_app_with_window_options, spawn_in_overlay_root,
+    button, button_with_child, resolve_style, resolve_style_for_classes,
+    resolve_style_for_entity_classes, run_app_with_window_options, spawn_in_overlay_root,
     xilem::{
         Color,
         masonry::layout::{Dim, Length},
@@ -76,7 +76,7 @@ use activation::poll_activation_messages;
 pub(crate) use bootstrap::run;
 use network::{apply_image_results, apply_network_results, spawn_image_tasks, spawn_network_tasks};
 use ui::{
-    project_account_menu, project_auth_dialog, project_auth_panel, project_detail_overlay,
+    project_account_menu, project_auth_dialog_form, project_auth_panel, project_detail_overlay,
     project_home_feed, project_illust_card, project_main_column, project_overlay_tag,
     project_overlay_tags, project_response_panel, project_root, project_search_panel,
     project_sidebar,
@@ -527,7 +527,6 @@ mod tests {
             toggle_sidebar: Entity::PLACEHOLDER,
             locale_combo,
             auth_dialog_toggle: Entity::PLACEHOLDER,
-            auth_dialog_close: Entity::PLACEHOLDER,
             account_menu_toggle: Entity::PLACEHOLDER,
             logout: Entity::PLACEHOLDER,
             code_verifier_input: Entity::PLACEHOLDER,
@@ -783,6 +782,7 @@ mod tests {
     #[test]
     fn auth_visibility_actions_toggle_dialog_and_account_menu() {
         let mut world = World::new();
+        world.insert_resource(AppI18n::new(parse_locale("en-US")));
         world.insert_resource(UiEventQueue::default());
         world.insert_resource(UiState::default());
         world.insert_resource(AuthState::default());
@@ -790,7 +790,6 @@ mod tests {
             toggle_sidebar: Entity::PLACEHOLDER,
             locale_combo: Entity::PLACEHOLDER,
             auth_dialog_toggle: Entity::PLACEHOLDER,
-            auth_dialog_close: Entity::PLACEHOLDER,
             account_menu_toggle: Entity::PLACEHOLDER,
             logout: Entity::PLACEHOLDER,
             code_verifier_input: Entity::PLACEHOLDER,
@@ -813,9 +812,26 @@ mod tests {
 
         world
             .resource::<UiEventQueue>()
-            .push_typed(Entity::PLACEHOLDER, AppAction::ToggleLoginDialog);
+            .push_typed(Entity::PLACEHOLDER, AppAction::OpenLoginDialog);
         drain_ui_actions_and_dispatch(&mut world);
         assert!(world.resource::<AuthState>().login_dialog_open);
+        assert!(
+            world
+                .query_filtered::<Entity, With<PixivAuthDialog>>()
+                .iter(&world)
+                .next()
+                .is_some()
+        );
+
+        dismiss_auth_dialog_overlay(&mut world);
+        world.resource_mut::<AuthState>().login_dialog_open = false;
+        assert!(
+            world
+                .query_filtered::<Entity, With<PixivAuthDialog>>()
+                .iter(&world)
+                .next()
+                .is_none()
+        );
 
         {
             let mut auth = world.resource_mut::<AuthState>();
@@ -907,7 +923,6 @@ mod tests {
             toggle_sidebar: Entity::PLACEHOLDER,
             locale_combo: Entity::PLACEHOLDER,
             auth_dialog_toggle: Entity::PLACEHOLDER,
-            auth_dialog_close: Entity::PLACEHOLDER,
             account_menu_toggle: Entity::PLACEHOLDER,
             logout: Entity::PLACEHOLDER,
             code_verifier_input: Entity::PLACEHOLDER,
@@ -964,14 +979,13 @@ mod tests {
             .get::<OverlayState>(overlay_parent)
             .expect("detail overlay should carry OverlayState");
         assert!(overlay_state.is_modal);
-        let auth_dialog = world
-            .query_filtered::<Entity, With<PixivAuthDialog>>()
-            .iter(&world)
-            .next()
-            .expect("auth dialog overlay should exist");
         assert!(
-            world.get::<OverlayState>(auth_dialog).is_some(),
-            "auth dialog should be configured as an overlay"
+            world
+                .query_filtered::<Entity, With<PixivAuthDialog>>()
+                .iter(&world)
+                .next()
+                .is_none(),
+            "auth dialog overlay should be spawned on demand"
         );
         let account_menu = world
             .query_filtered::<Entity, With<PixivAccountMenu>>()
@@ -991,6 +1005,46 @@ mod tests {
                 .get::<UiComboBox>(ui_components.locale_combo)
                 .is_some()
         );
+        assert_eq!(ui_components.code_verifier_input, Entity::PLACEHOLDER);
+        assert_eq!(ui_components.auth_code_input, Entity::PLACEHOLDER);
+        assert_eq!(ui_components.refresh_token_input, Entity::PLACEHOLDER);
+        assert!(
+            world
+                .get::<UiTextInput>(ui_components.search_input)
+                .is_some()
+        );
+        assert!(world.get_entity(ui_components.manga_tab).is_ok());
+        assert!(world.get_entity(ui_components.novels_tab).is_ok());
+        assert_eq!(
+            world
+                .get::<UiComboBox>(ui_components.locale_combo)
+                .and_then(UiComboBox::clamped_selected),
+            Some(0)
+        );
+    }
+
+    #[test]
+    fn open_login_dialog_spawns_built_in_auth_dialog_overlay_and_inputs() {
+        let mut world = World::new();
+        world.insert_resource(AppI18n::new(parse_locale("en-US")));
+        world.insert_resource(UiEventQueue::default());
+        let mut schedule = Schedule::default();
+        schedule.add_systems(setup);
+        schedule.run(&mut world);
+
+        world
+            .resource::<UiEventQueue>()
+            .push_typed(Entity::PLACEHOLDER, AppAction::OpenLoginDialog);
+        drain_ui_actions_and_dispatch(&mut world);
+
+        let dialog = world
+            .query_filtered::<Entity, With<PixivAuthDialog>>()
+            .iter(&world)
+            .next()
+            .expect("login dialog should spawn after clicking Login");
+        assert!(world.get::<UiDialog>(dialog).is_some());
+
+        let ui_components = *world.resource::<PixivUiComponents>();
         assert!(
             world
                 .get::<UiTextInput>(ui_components.code_verifier_input)
@@ -1006,19 +1060,37 @@ mod tests {
                 .get::<UiTextInput>(ui_components.refresh_token_input)
                 .is_some()
         );
-        assert!(
-            world
-                .get::<UiTextInput>(ui_components.search_input)
-                .is_some()
-        );
-        assert!(world.get_entity(ui_components.manga_tab).is_ok());
-        assert!(world.get_entity(ui_components.novels_tab).is_ok());
-        assert_eq!(
-            world
-                .get::<UiComboBox>(ui_components.locale_combo)
-                .and_then(UiComboBox::clamped_selected),
-            Some(0)
-        );
+    }
+
+    #[test]
+    fn dismissing_spawned_login_dialog_clears_open_state_and_input_handles() {
+        let mut world = World::new();
+        world.insert_resource(AppI18n::new(parse_locale("en-US")));
+        world.insert_resource(UiEventQueue::default());
+        let mut schedule = Schedule::default();
+        schedule.add_systems(setup);
+        schedule.run(&mut world);
+
+        world
+            .resource::<UiEventQueue>()
+            .push_typed(Entity::PLACEHOLDER, AppAction::OpenLoginDialog);
+        drain_ui_actions_and_dispatch(&mut world);
+
+        let dialog = world
+            .query_filtered::<Entity, With<PixivAuthDialog>>()
+            .iter(&world)
+            .next()
+            .expect("login dialog should spawn before dismissal");
+        world.entity_mut(dialog).despawn();
+
+        reconcile_auth_dialog_overlay_state(&mut world);
+
+        let auth = world.resource::<AuthState>();
+        assert!(!auth.login_dialog_open);
+        let ui_components = *world.resource::<PixivUiComponents>();
+        assert_eq!(ui_components.code_verifier_input, Entity::PLACEHOLDER);
+        assert_eq!(ui_components.auth_code_input, Entity::PLACEHOLDER);
+        assert_eq!(ui_components.refresh_token_input, Entity::PLACEHOLDER);
     }
 
     #[test]
@@ -1097,7 +1169,6 @@ mod tests {
             toggle_sidebar: Entity::PLACEHOLDER,
             locale_combo: Entity::PLACEHOLDER,
             auth_dialog_toggle: Entity::PLACEHOLDER,
-            auth_dialog_close: Entity::PLACEHOLDER,
             account_menu_toggle: Entity::PLACEHOLDER,
             logout: Entity::PLACEHOLDER,
             code_verifier_input,
@@ -1183,7 +1254,6 @@ mod tests {
             toggle_sidebar: Entity::PLACEHOLDER,
             locale_combo: Entity::PLACEHOLDER,
             auth_dialog_toggle: Entity::PLACEHOLDER,
-            auth_dialog_close: Entity::PLACEHOLDER,
             account_menu_toggle: Entity::PLACEHOLDER,
             logout: Entity::PLACEHOLDER,
             code_verifier_input,

@@ -56,6 +56,120 @@ fn spawn_bound_text_input(
         .id()
 }
 
+fn spawn_bound_text_input_world(
+    world: &mut World,
+    parent: Entity,
+    value: impl Into<String>,
+    placeholder: impl Into<String>,
+) -> Entity {
+    world
+        .spawn((
+            UiTextInput::new(value).with_placeholder(placeholder),
+            StyleClass(vec!["pixiv.text-input".to_string()]),
+            ChildOf(parent),
+        ))
+        .id()
+}
+
+fn auth_dialog_entity(world: &mut World) -> Option<Entity> {
+    let mut query = world.query_filtered::<Entity, With<PixivAuthDialog>>();
+    query.iter(world).next()
+}
+
+pub(super) fn dismiss_auth_dialog_overlay(world: &mut World) {
+    if let Some(entity) = auth_dialog_entity(world)
+        && world.get_entity(entity).is_ok()
+    {
+        world.entity_mut(entity).despawn();
+    }
+
+    if let Some(mut ui_components) = world.get_resource_mut::<PixivUiComponents>() {
+        ui_components.code_verifier_input = Entity::PLACEHOLDER;
+        ui_components.auth_code_input = Entity::PLACEHOLDER;
+        ui_components.refresh_token_input = Entity::PLACEHOLDER;
+    }
+}
+
+pub(super) fn reconcile_auth_dialog_overlay_state(world: &mut World) {
+    let has_dialog = auth_dialog_entity(world).is_some();
+    if has_dialog {
+        return;
+    }
+
+    if let Some(mut auth) = world.get_resource_mut::<AuthState>() {
+        auth.login_dialog_open = false;
+    }
+
+    if let Some(mut ui_components) = world.get_resource_mut::<PixivUiComponents>() {
+        ui_components.code_verifier_input = Entity::PLACEHOLDER;
+        ui_components.auth_code_input = Entity::PLACEHOLDER;
+        ui_components.refresh_token_input = Entity::PLACEHOLDER;
+    }
+}
+
+pub(super) fn ensure_auth_dialog_overlay(world: &mut World) {
+    let should_show = world
+        .get_resource::<AuthState>()
+        .is_some_and(|auth| auth.session.is_none() && auth.login_dialog_open);
+    if !should_show {
+        dismiss_auth_dialog_overlay(world);
+        return;
+    }
+
+    if auth_dialog_entity(world).is_some() {
+        sync_bound_text_inputs(world);
+        return;
+    }
+
+    let dialog = spawn_in_overlay_root(
+        world,
+        (
+            UiDialog::new(tr(world, "pixiv.auth.title", "Pixiv Login"), ""),
+            StyleClass(vec![
+                "pixiv.overlay".to_string(),
+                "pixiv.auth.dialog".to_string(),
+            ]),
+            PixivAuthDialog,
+        ),
+    );
+    let form = world.spawn((PixivAuthDialogForm, ChildOf(dialog))).id();
+
+    let code_verifier_input = spawn_bound_text_input_world(
+        world,
+        form,
+        "",
+        tr(world, "pixiv.auth.placeholder.pkce", "PKCE code_verifier"),
+    );
+    let auth_code_input = spawn_bound_text_input_world(
+        world,
+        form,
+        "",
+        tr(world, "pixiv.auth.placeholder.code", "Auth code"),
+    );
+    let refresh_token_seed = world
+        .get_resource::<AuthState>()
+        .map(|auth| auth.refresh_token_input.clone())
+        .unwrap_or_default();
+    let refresh_token_input = spawn_bound_text_input_world(
+        world,
+        form,
+        refresh_token_seed,
+        tr(
+            world,
+            "pixiv.auth.placeholder.refresh_token",
+            "Refresh token",
+        ),
+    );
+
+    if let Some(mut ui_components) = world.get_resource_mut::<PixivUiComponents>() {
+        ui_components.code_verifier_input = code_verifier_input;
+        ui_components.auth_code_input = auth_code_input;
+        ui_components.refresh_token_input = refresh_token_input;
+    }
+
+    sync_bound_text_inputs(world);
+}
+
 fn set_text_input_component_value(world: &mut World, entity: Entity, value: &str) {
     if let Some(mut input) = world.get_mut::<UiTextInput>(entity)
         && input.value != value
@@ -204,10 +318,6 @@ pub(super) fn setup(mut commands: Commands, i18n: Res<AppI18n>) {
             &mut commands,
             &["pixiv.button", "pixiv.button.primary"],
         ),
-        auth_dialog_close: spawn_ui_component_entity(
-            &mut commands,
-            &["pixiv.button", "pixiv.button.subtle"],
-        ),
         account_menu_toggle: spawn_ui_component_entity(
             &mut commands,
             &["pixiv.button", "pixiv.button.subtle"],
@@ -314,16 +424,6 @@ pub(super) fn setup(mut commands: Commands, i18n: Res<AppI18n>) {
         ))
         .id();
 
-    let auth_dialog = commands
-        .spawn((
-            PixivAuthDialog,
-            StyleClass(vec![
-                "pixiv.overlay".to_string(),
-                "pixiv.auth.dialog".to_string(),
-            ]),
-        ))
-        .id();
-
     let main_column = commands.spawn((PixivMainColumn, ChildOf(root))).id();
 
     commands.spawn((PixivResponsePanel, ChildOf(main_column)));
@@ -331,19 +431,6 @@ pub(super) fn setup(mut commands: Commands, i18n: Res<AppI18n>) {
         .spawn((PixivSearchPanel, ChildOf(main_column)))
         .id();
 
-    ui_components.code_verifier_input =
-        spawn_bound_text_input(&mut commands, auth_dialog, "", "PKCE code_verifier");
-    ui_components.auth_code_input =
-        spawn_bound_text_input(&mut commands, auth_dialog, "", "Auth code");
-    ui_components.refresh_token_input = spawn_bound_text_input(
-        &mut commands,
-        auth_dialog,
-        restored_session
-            .as_ref()
-            .map(|session| session.refresh_token.clone())
-            .unwrap_or_default(),
-        "Refresh token",
-    );
     ui_components.search_input =
         spawn_bound_text_input(&mut commands, search_panel, "", "Search illust keyword");
 
@@ -370,21 +457,6 @@ pub(super) fn setup(mut commands: Commands, i18n: Res<AppI18n>) {
     let account_toggle = ui_components.account_menu_toggle;
 
     commands.queue(move |world: &mut World| {
-        let overlay_root = picus_core::ensure_overlay_root_entity(world);
-
-        world.entity_mut(auth_dialog).insert((
-            ChildOf(overlay_root),
-            OverlayState {
-                is_modal: true,
-                anchor: None,
-            },
-            OverlayConfig {
-                placement: OverlayPlacement::Center,
-                anchor: None,
-                auto_flip: false,
-            },
-        ));
-
         let detail_overlay = spawn_in_overlay_root(
             world,
             (
@@ -467,7 +539,7 @@ picus_core::impl_ui_component_template!(PixivRoot, project_root);
 picus_core::impl_ui_component_template!(PixivSidebar, project_sidebar);
 picus_core::impl_ui_component_template!(PixivMainColumn, project_main_column);
 picus_core::impl_ui_component_template!(PixivAuthPanel, project_auth_panel);
-picus_core::impl_ui_component_template!(PixivAuthDialog, project_auth_dialog);
+picus_core::impl_ui_component_template!(PixivAuthDialogForm, project_auth_dialog_form);
 picus_core::impl_ui_component_template!(PixivAccountMenu, project_account_menu);
 picus_core::impl_ui_component_template!(PixivResponsePanel, project_response_panel);
 picus_core::impl_ui_component_template!(PixivSearchPanel, project_search_panel);
@@ -549,7 +621,7 @@ pub(super) fn build_app(mut activation_service: Option<ActivationService>) -> Ap
     .register_ui_component::<PixivSidebar>()
     .register_ui_component::<PixivMainColumn>()
     .register_ui_component::<PixivAuthPanel>()
-    .register_ui_component::<PixivAuthDialog>()
+    .register_ui_component::<PixivAuthDialogForm>()
     .register_ui_component::<PixivAccountMenu>()
     .register_ui_component::<PixivResponsePanel>()
     .register_ui_component::<PixivSearchPanel>()
@@ -574,6 +646,7 @@ pub(super) fn build_app(mut activation_service: Option<ActivationService>) -> Ap
             apply_network_results,
             spawn_image_tasks,
             apply_image_results,
+            reconcile_auth_dialog_overlay_state,
         )
             .chain(),
     );

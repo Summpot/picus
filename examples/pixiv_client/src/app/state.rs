@@ -188,7 +188,6 @@ pub(super) struct PixivUiComponents {
     pub toggle_sidebar: Entity,
     pub locale_combo: Entity,
     pub auth_dialog_toggle: Entity,
-    pub auth_dialog_close: Entity,
     pub account_menu_toggle: Entity,
     pub logout: Entity,
     pub code_verifier_input: Entity,
@@ -230,6 +229,9 @@ pub(super) struct PixivAuthPanel;
 
 #[derive(Component, Debug, Clone, Copy)]
 pub(super) struct PixivAuthDialog;
+
+#[derive(Component, Debug, Clone, Copy)]
+pub(super) struct PixivAuthDialogForm;
 
 #[derive(Component, Debug, Clone, Copy)]
 pub(super) struct PixivAccountMenu;
@@ -316,7 +318,7 @@ pub(super) enum AppAction {
     SearchByTag(String),
     CopyResponseBody,
     ClearResponseBody,
-    ToggleLoginDialog,
+    OpenLoginDialog,
     ToggleAccountMenu,
     OpenBrowserLogin,
     ExchangeAuthCode,

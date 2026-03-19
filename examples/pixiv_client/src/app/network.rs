@@ -312,6 +312,7 @@ pub(super) fn apply_authenticated_session(
         "pixiv.status.authenticated_loading_home",
         "Authenticated. Loading home feed…",
     );
+    dismiss_auth_dialog_overlay(world);
     *world.resource_mut::<ResponsePanelState>() = ResponsePanelState::default();
     queue_auth_avatar_download(world, resolved_user_summary.as_ref());
 

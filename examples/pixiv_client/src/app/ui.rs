@@ -19,6 +19,22 @@ fn empty_ui() -> UiView {
     Arc::new(label(""))
 }
 
+fn transparentize(color: Color) -> Color {
+    let rgba = color.to_rgba8();
+    Color::from_rgba8(rgba.r, rgba.g, rgba.b, 0)
+}
+
+fn hide_style_without_collapsing_layout(style: &mut ResolvedStyle) {
+    style.colors.bg = Some(style.colors.bg.map_or(Color::TRANSPARENT, transparentize));
+    style.colors.border = Some(
+        style
+            .colors
+            .border
+            .map_or(Color::TRANSPARENT, transparentize),
+    );
+    style.colors.text = Some(style.colors.text.map_or(Color::TRANSPARENT, transparentize));
+}
+
 #[derive(Debug, Clone)]
 pub(super) struct JustifiedRowItem {
     pub index: usize,
@@ -292,7 +308,7 @@ fn button_from_style(
 ) -> UiView {
     let label_text = label_text.into();
     Arc::new(apply_direct_widget_style(
-        button_with_child(entity, action, apply_label_style(label(label_text), style)),
+        button(entity, action, label_text),
         style,
     ))
 }
@@ -554,10 +570,10 @@ pub(super) fn project_main_column(_: &PixivMainColumn, ctx: ProjectionCtx<'_>) -
 }
 
 pub(super) fn project_auth_panel(_: &PixivAuthPanel, ctx: ProjectionCtx<'_>) -> UiView {
-    let style = resolve_style(ctx.world, ctx.entity);
     let auth = ctx.world.resource::<AuthState>();
     let ui = ctx.world.resource::<UiState>();
     let ui_components = *ctx.world.resource::<PixivUiComponents>();
+    let panel_style = resolve_style_for_classes(ctx.world, ["pixiv.sidebar.section"]);
     let compact = ui.sidebar_collapsed;
 
     let trigger: UiView = if auth.session.is_some() {
@@ -599,7 +615,7 @@ pub(super) fn project_auth_panel(_: &PixivAuthPanel, ctx: ProjectionCtx<'_>) -> 
         action_button(
             ctx.world,
             ui_components.auth_dialog_toggle,
-            AppAction::ToggleLoginDialog,
+            AppAction::OpenLoginDialog,
             tr(ctx.world, "pixiv.auth.show_login", "Login"),
         )
     };
@@ -608,20 +624,13 @@ pub(super) fn project_auth_panel(_: &PixivAuthPanel, ctx: ProjectionCtx<'_>) -> 
         flex_col(vec![trigger.into_any_flex()])
             .cross_axis_alignment(CrossAxisAlignment::Stretch)
             .width(Dim::Stretch),
-        &style,
+        &panel_style,
     ))
 }
 
-pub(super) fn project_auth_dialog(_: &PixivAuthDialog, ctx: ProjectionCtx<'_>) -> UiView {
+pub(super) fn project_auth_dialog_form(_: &PixivAuthDialogForm, ctx: ProjectionCtx<'_>) -> UiView {
     let auth = ctx.world.resource::<AuthState>();
-    if auth.session.is_some() || !auth.login_dialog_open {
-        return empty_ui();
-    }
-
-    let style = resolve_style(ctx.world, ctx.entity);
-    let title_style = resolve_style_for_classes(ctx.world, ["pixiv.auth.dialog.title"]);
     let text_style = resolve_style_for_classes(ctx.world, ["pixiv.root"]);
-    let ui_components = *ctx.world.resource::<PixivUiComponents>();
     let mut children = ctx.children.into_iter();
     let code_verifier_input = children.next().unwrap_or_else(empty_ui);
     let auth_code_input = children.next().unwrap_or_else(empty_ui);
@@ -632,79 +641,61 @@ pub(super) fn project_auth_dialog(_: &PixivAuthDialog, ctx: ProjectionCtx<'_>) -
         .map(|i| i.auth_token_url.as_str())
         .map(std::borrow::ToOwned::to_owned)
         .unwrap_or_else(|| tr(ctx.world, "pixiv.auth.loading", "loading…"));
+    let ui_components = *ctx.world.resource::<PixivUiComponents>();
 
     Arc::new(
-        sized_box(apply_widget_style(
-            flex_col(vec![
-                flex_row((
-                    apply_label_style(
-                        label(tr(ctx.world, "pixiv.auth.title", "Pixiv Login")),
-                        &title_style,
-                    )
-                    .flex(1.0),
-                    action_button(
-                        ctx.world,
-                        ui_components.auth_dialog_close,
-                        AppAction::ToggleLoginDialog,
-                        tr(ctx.world, "pixiv.auth.close", "Close"),
-                    )
-                    .into_any_flex(),
-                ))
-                .cross_axis_alignment(CrossAxisAlignment::Center)
+        flex_col(vec![
+            apply_label_style(
+                label(format!(
+                    "{} {}",
+                    tr(ctx.world, "pixiv.auth.endpoint", "Auth endpoint:"),
+                    auth_endpoint
+                )),
+                &text_style,
+            )
+            .into_any_flex(),
+            sized_box(code_verifier_input)
+                .width(Dim::Stretch)
                 .into_any_flex(),
-                apply_label_style(
-                    label(format!(
-                        "{} {}",
-                        tr(ctx.world, "pixiv.auth.endpoint", "Auth endpoint:"),
-                        auth_endpoint
-                    )),
-                    &text_style,
-                )
+            sized_box(auth_code_input)
+                .width(Dim::Stretch)
                 .into_any_flex(),
-                sized_box(code_verifier_input)
-                    .width(Dim::Stretch)
-                    .into_any_flex(),
-                sized_box(auth_code_input)
-                    .width(Dim::Stretch)
-                    .into_any_flex(),
-                flex_row((
-                    action_button(
-                        ctx.world,
-                        ui_components.open_browser_login,
-                        AppAction::OpenBrowserLogin,
-                        tr(
-                            ctx.world,
-                            "pixiv.auth.open_browser_login",
-                            "Open Browser Login",
-                        ),
-                    )
-                    .flex(1.0),
-                    action_button(
-                        ctx.world,
-                        ui_components.exchange_auth_code,
-                        AppAction::ExchangeAuthCode,
-                        tr(ctx.world, "pixiv.auth.login_auth_code", "Login (auth_code)"),
-                    )
-                    .flex(1.0),
-                ))
-                .gap(Length::px(10.0))
-                .into_any_flex(),
-                sized_box(refresh_token_input)
-                    .width(Dim::Stretch)
-                    .into_any_flex(),
+            flex_row((
                 action_button(
                     ctx.world,
-                    ui_components.refresh_token,
-                    AppAction::RefreshToken,
-                    tr(ctx.world, "pixiv.auth.refresh_token", "Refresh Token"),
+                    ui_components.open_browser_login,
+                    AppAction::OpenBrowserLogin,
+                    tr(
+                        ctx.world,
+                        "pixiv.auth.open_browser_login",
+                        "Open Browser Login",
+                    ),
                 )
+                .flex(1.0),
+                action_button(
+                    ctx.world,
+                    ui_components.exchange_auth_code,
+                    AppAction::ExchangeAuthCode,
+                    tr(ctx.world, "pixiv.auth.login_auth_code", "Login (auth_code)"),
+                )
+                .flex(1.0),
+            ))
+            .gap(Length::px(10.0))
+            .into_any_flex(),
+            sized_box(refresh_token_input)
+                .width(Dim::Stretch)
                 .into_any_flex(),
-            ])
-            .cross_axis_alignment(CrossAxisAlignment::Stretch)
-            .width(Dim::Stretch),
-            &style,
-        ))
-        .fixed_width(Length::px(460.0)),
+            action_button(
+                ctx.world,
+                ui_components.refresh_token,
+                AppAction::RefreshToken,
+                tr(ctx.world, "pixiv.auth.refresh_token", "Refresh Token"),
+            )
+            .into_any_flex(),
+        ])
+        .cross_axis_alignment(CrossAxisAlignment::Stretch)
+        .width(Dim::Stretch)
+        .gap(Length::px(10.0)),
     )
 }
 
@@ -714,57 +705,31 @@ pub(super) fn project_account_menu(_: &PixivAccountMenu, ctx: ProjectionCtx<'_>)
         return empty_ui();
     }
 
-    let style = resolve_style(ctx.world, ctx.entity);
-    let text_style = resolve_style_for_classes(ctx.world, ["pixiv.root"]);
-    let secondary_style = resolve_style_for_classes(ctx.world, ["pixiv.auth.menu.secondary"]);
+    let mut style = resolve_style(ctx.world, ctx.entity);
+    let computed_position = ctx
+        .world
+        .get::<OverlayComputedPosition>(ctx.entity)
+        .copied()
+        .unwrap_or_default();
+    if !computed_position.is_positioned {
+        hide_style_without_collapsing_layout(&mut style);
+    }
     let ui_components = *ctx.world.resource::<PixivUiComponents>();
-    let display_name = auth
-        .user_summary
-        .as_ref()
-        .map(|summary| summary.name.clone())
-        .filter(|value| !value.trim().is_empty())
-        .unwrap_or_else(|| tr(ctx.world, "pixiv.auth.account", "Account"));
-    let account_line = auth
-        .user_summary
-        .as_ref()
-        .and_then(|summary| summary.account.as_ref())
-        .map(|account| format!("@{account}"))
-        .unwrap_or_else(|| {
-            tr(
-                ctx.world,
-                "pixiv.auth.account_summary_pending",
-                "Account summary pending",
-            )
-        });
+
+    let menu_surface = sized_box(apply_widget_style(
+        action_button(
+            ctx.world,
+            ui_components.logout,
+            AppAction::Logout,
+            tr(ctx.world, "pixiv.auth.logout", "Logout"),
+        ),
+        &style,
+    ))
+    .fixed_width(Length::px(132.0));
 
     Arc::new(
-        sized_box(apply_widget_style(
-            flex_col(vec![
-                flex_row((
-                    auth_avatar_view(ctx.world, 36.0, &style).into_any_flex(),
-                    flex_col(vec![
-                        apply_label_style(label(display_name), &text_style).into_any_flex(),
-                        apply_label_style(label(account_line), &secondary_style).into_any_flex(),
-                    ])
-                    .cross_axis_alignment(CrossAxisAlignment::Start)
-                    .into_any_flex(),
-                ))
-                .cross_axis_alignment(CrossAxisAlignment::Center)
-                .gap(Length::px(10.0))
-                .into_any_flex(),
-                action_button(
-                    ctx.world,
-                    ui_components.logout,
-                    AppAction::Logout,
-                    tr(ctx.world, "pixiv.auth.logout", "Logout"),
-                )
-                .into_any_flex(),
-            ])
-            .cross_axis_alignment(CrossAxisAlignment::Stretch)
-            .width(Dim::Stretch),
-            &style,
-        ))
-        .fixed_width(Length::px(240.0)),
+        transformed(opaque_hitbox_for_entity(ctx.entity, menu_surface))
+            .translate((computed_position.x, computed_position.y)),
     )
 }
 
@@ -999,26 +964,32 @@ fn illust_author_overlay(
 
     let overlay_style = picus_core::ResolvedStyle {
         colors: overlay_colors,
-        layout: style.layout,
+        layout: Default::default(),
         text: style.text,
         font_family: style.font_family.clone(),
         box_shadow: None,
         transition: None,
     };
 
-    Arc::new(apply_widget_style(
-        flex_row((
-            sized_box(avatar)
-                .fixed_width(Length::px(20.0))
-                .fixed_height(Length::px(20.0))
-                .into_any_flex(),
-            apply_label_style(label(author.to_string()), &overlay_style).into_any_flex(),
+    Arc::new(
+        sized_box(apply_widget_style(
+            flex_row((
+                sized_box(avatar)
+                    .fixed_width(Length::px(20.0))
+                    .fixed_height(Length::px(20.0))
+                    .into_any_flex(),
+                apply_label_style(label(author.to_string()), &overlay_style)
+                    .flex(1.0)
+                    .into_any_flex(),
+            ))
+            .cross_axis_alignment(CrossAxisAlignment::Center)
+            .gap(Length::px(6.0))
+            .width(Dim::Stretch)
+            .height(Dim::Stretch),
+            &overlay_style,
         ))
-        .cross_axis_alignment(CrossAxisAlignment::Center)
-        .padding(4.0)
         .dims((Dim::Stretch, Dim::Fixed(Length::px(32.0)))),
-        &overlay_style,
-    ))
+    )
 }
 
 pub(super) fn project_illust_card(_: &PixivIllustCard, ctx: ProjectionCtx<'_>) -> UiView {
@@ -1076,7 +1047,7 @@ pub(super) fn project_illust_card(_: &PixivIllustCard, ctx: ProjectionCtx<'_>) -
         illust_thumbnail_view(ctx.world, illust, &visual),
         author_overlay,
     ])
-    .alignment(UnitPoint::BOTTOM_LEFT)
+    .alignment(UnitPoint::TOP_LEFT)
     .dims(Dim::Stretch);
 
     let open_button_view = button_with_child(

@@ -62,6 +62,8 @@ pub(super) fn clear_authenticated_runtime(world: &mut World) {
     if let Some(mut response_panel) = world.get_resource_mut::<ResponsePanelState>() {
         *response_panel = ResponsePanelState::default();
     }
+
+    dismiss_auth_dialog_overlay(world);
 }
 
 fn queue_feed_command(world: &mut World, tab: NavTab) {
@@ -314,17 +316,18 @@ pub(super) fn drain_ui_actions_and_dispatch(world: &mut World) {
                     "Response panel cleared.",
                 );
             }
-            AppAction::ToggleLoginDialog => {
+            AppAction::OpenLoginDialog => {
                 let is_authenticated = world.resource::<AuthState>().session.is_some();
                 if is_authenticated {
                     continue;
                 }
 
-                let mut auth = world.resource_mut::<AuthState>();
-                auth.login_dialog_open = !auth.login_dialog_open;
-                if auth.login_dialog_open {
+                {
+                    let mut auth = world.resource_mut::<AuthState>();
+                    auth.login_dialog_open = true;
                     auth.account_menu_open = false;
                 }
+                ensure_auth_dialog_overlay(world);
             }
             AppAction::ToggleAccountMenu => {
                 let is_authenticated = world.resource::<AuthState>().session.is_some();
@@ -332,10 +335,16 @@ pub(super) fn drain_ui_actions_and_dispatch(world: &mut World) {
                     continue;
                 }
 
-                let mut auth = world.resource_mut::<AuthState>();
-                auth.account_menu_open = !auth.account_menu_open;
-                if auth.account_menu_open {
-                    auth.login_dialog_open = false;
+                let dialog_should_close = {
+                    let mut auth = world.resource_mut::<AuthState>();
+                    auth.account_menu_open = !auth.account_menu_open;
+                    if auth.account_menu_open {
+                        auth.login_dialog_open = false;
+                    }
+                    auth.account_menu_open
+                };
+                if dialog_should_close {
+                    dismiss_auth_dialog_overlay(world);
                 }
             }
             AppAction::OpenBrowserLogin => {
