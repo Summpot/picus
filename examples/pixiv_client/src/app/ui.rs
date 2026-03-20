@@ -5,8 +5,8 @@ use picus_core::{
     bevy_math::Vec2,
     opaque_hitbox_for_entity,
     xilem::{
-        masonry::layout::UnitPoint,
-        view::{transformed, zstack},
+        masonry::{kurbo::Vec2 as KurboVec2, layout::UnitPoint, widgets::BadgePlacement},
+        view::{badged, transformed, zstack},
     },
 };
 
@@ -698,11 +698,11 @@ pub(super) fn project_account_menu(_: &PixivAccountMenu, ctx: ProjectionCtx<'_>)
         .get::<OverlayComputedPosition>(ctx.entity)
         .copied()
         .unwrap_or_default();
-    
+
     if !computed_position.is_positioned {
         return empty_ui();
     }
-    
+
     let ui_components = *ctx.world.resource::<PixivUiComponents>();
     let menu_width = if computed_position.width > 1.0 {
         computed_position.width
@@ -722,14 +722,13 @@ pub(super) fn project_account_menu(_: &PixivAccountMenu, ctx: ProjectionCtx<'_>)
     .width(Dim::Stretch)
     .height(Dim::Stretch);
 
-    let scrollable_menu = picus_core::xilem::view::portal(menu_surface)
-        .dims((Length::px(menu_width), Length::px(computed_position.height.max(56.0))));
+    let scrollable_menu = picus_core::xilem::view::portal(menu_surface).dims((
+        Length::px(menu_width),
+        Length::px(computed_position.height.max(56.0)),
+    ));
 
-    let dropdown_panel = transformed(opaque_hitbox_for_entity(
-        ctx.entity,
-        scrollable_menu,
-    ))
-    .translate((computed_position.x, computed_position.y));
+    let dropdown_panel = transformed(opaque_hitbox_for_entity(ctx.entity, scrollable_menu))
+        .translate((computed_position.x, computed_position.y));
 
     Arc::new(dropdown_panel)
 }
@@ -1045,24 +1044,37 @@ pub(super) fn project_illust_card(_: &PixivIllustCard, ctx: ProjectionCtx<'_>) -
     .fixed_height(Length::px(32.0));
 
     let author_avatar = illust_avatar_view(&visual, &style);
-    
+
     let hovered = ctx
         .world
         .get::<InteractionState>(action_entities.open_thumbnail)
         .map(|state| state.hovered)
-        .unwrap_or(false);
+        .unwrap_or(false)
+        || ctx
+            .world
+            .get::<InteractionState>(action_entities.bookmark)
+            .map(|state| state.hovered)
+            .unwrap_or(false);
 
-    let author_overlay: UiView = if hovered {
-        Arc::new(
-            illust_author_overlay(
-                &compact_author_name(&illust.user.name),
-                author_avatar,
-                &style,
-            )
+    let overlay_body: UiView = if hovered {
+        illust_author_overlay(
+            &compact_author_name(&illust.user.name),
+            author_avatar,
+            &style,
         )
     } else {
-        empty_ui()
+        Arc::new(
+            sized_box(empty_ui())
+                .width(Dim::Stretch)
+                .height(Dim::Fixed(Length::px(32.0))),
+        )
     };
+
+    let author_overlay: UiView = Arc::new(
+        sized_box(overlay_body)
+            .width(Dim::Stretch)
+            .height(Dim::Fixed(Length::px(32.0))),
+    );
 
     let image_view = sized_box(illust_thumbnail_view(ctx.world, illust, &visual))
         .width(Dim::Stretch)
@@ -1085,16 +1097,11 @@ pub(super) fn project_illust_card(_: &PixivIllustCard, ctx: ProjectionCtx<'_>) -
         .background_color(Color::TRANSPARENT),
     );
 
-    let heart_button_wrapper: UiView = Arc::new(
-        transformed(heart_button)
-            .translate((-8.0, 8.0)),
-    );
-    
     Arc::new(
         sized_box(
-            zstack(vec![open_button_view, heart_button_wrapper])
-                .alignment(UnitPoint::TOP_RIGHT)
-                .dims(Dim::Stretch),
+            badged(open_button_view, heart_button)
+                .placement(BadgePlacement::TopRight)
+                .offset(KurboVec2::new(-28.0, 24.0)),
         )
         .width(Dim::Stretch)
         .height(Dim::Stretch),

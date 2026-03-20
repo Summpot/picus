@@ -902,13 +902,65 @@ mod tests {
     }
 
     #[test]
-    fn author_overlay_routes_hits_back_to_thumbnail_entity() {
+    fn author_overlay_uses_noninteractive_sized_wrapper_inside_thumbnail_button() {
         let ui_source = include_str!("app/ui.rs");
 
         assert!(
-            ui_source.contains("opaque_hitbox_for_entity(")
-                && ui_source.contains("action_entities.open_thumbnail"),
-            "author overlay should route hover hits to the thumbnail entity"
+            ui_source.contains("let overlay_body: UiView = if hovered {")
+                && ui_source.contains(
+                    "let author_overlay: UiView = Arc::new(\n        sized_box(overlay_body)"
+                ),
+            "author overlay should stay a non-interactive sized layer inside the thumbnail button"
+        );
+    }
+
+    #[test]
+    fn card_hover_considers_thumbnail_and_bookmark_entities() {
+        let ui_source = include_str!("app/ui.rs");
+
+        assert!(
+            ui_source.contains("get::<InteractionState>(action_entities.open_thumbnail)")
+                && ui_source.contains("get::<InteractionState>(action_entities.bookmark)")
+                && ui_source.contains(".unwrap_or(false)\n        || ctx"),
+            "card hover should stay active when either thumbnail or bookmark is hovered"
+        );
+    }
+
+    #[test]
+    fn author_overlay_stays_inside_thumbnail_image_stack() {
+        let ui_source = include_str!("app/ui.rs");
+
+        assert!(
+            ui_source.contains("let image_with_overlay: UiView = Arc::new(")
+                && ui_source.contains("zstack(vec![Arc::new(image_view), author_overlay])")
+                && ui_source.contains("button_with_child(")
+                && ui_source.contains("image_with_overlay,"),
+            "author overlay should be painted inside the thumbnail image stack"
+        );
+    }
+
+    #[test]
+    fn author_overlay_wrapper_has_explicit_stack_dimensions() {
+        let ui_source = include_str!("app/ui.rs");
+
+        assert!(
+            ui_source.contains("let author_overlay: UiView = Arc::new(")
+                && ui_source.contains(".width(Dim::Stretch)")
+                && ui_source.contains(".height(Dim::Fixed(Length::px(32.0)))"),
+            "author overlay wrapper should keep explicit dimensions inside the zstack"
+        );
+    }
+
+    #[test]
+    fn heart_button_uses_badged_overlay_instead_of_translated_sibling_stack() {
+        let ui_source = include_str!("app/ui.rs");
+
+        assert!(
+            ui_source.contains("let heart_button = sized_box")
+                && ui_source.contains("badged(open_button_view, heart_button)")
+                && ui_source.contains(".placement(BadgePlacement::TopRight)")
+                && ui_source.contains(".offset(KurboVec2::new(-28.0, 24.0))"),
+            "heart button should be overlaid via badged placement instead of a translated sibling"
         );
     }
 
