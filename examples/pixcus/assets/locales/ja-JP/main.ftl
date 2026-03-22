@@ -52,6 +52,7 @@ pixiv-feed-novel-placeholder = 小説のカバー画像はありません
 pixiv-feed-open = 開く
 pixiv-feed-high-res-loading = 高解像度画像を読み込み中…
 
+pixiv-overlay-body = { "" }
 pixiv-overlay-close = 閉じる
 pixiv-overlay-title = イラスト詳細
 pixiv-overlay-author = 作者:
@@ -59,6 +60,17 @@ pixiv-overlay-views = 閲覧数
 pixiv-overlay-bookmarks = ブックマーク
 pixiv-overlay-comments = コメント
 pixiv-overlay-tags = タグ
+pixiv-overlay-artwork-info = 作品情報
+pixiv-overlay-author-info = 作者情報
+pixiv-overlay-image-info = 画像情報
+pixiv-overlay-image-info-unknown = サイズ不明
+pixiv-overlay-pages = ページ
+pixiv-overlay-caption = キャプション
+pixiv-overlay-description-empty = この作品にはキャプションがありません。
+pixiv-overlay-account-unknown = 公開アカウントなし
+pixiv-overlay-type-illust = イラスト
+pixiv-overlay-type-manga = マンガ
+pixiv-overlay-type-novel = 小説
 
 pixiv-status-sidebar-collapsed = サイドバーを折りたたみました
 pixiv-status-sidebar-expanded = サイドバーを展開しました

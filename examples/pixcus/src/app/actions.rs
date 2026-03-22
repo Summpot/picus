@@ -65,6 +65,7 @@ pub(super) fn clear_authenticated_runtime(world: &mut World) {
 
     dismiss_account_menu_overlay(world);
     dismiss_auth_dialog_overlay(world);
+    dismiss_detail_dialog_overlay(world);
 }
 
 fn queue_feed_command(world: &mut World, tab: NavTab) {
@@ -221,7 +222,6 @@ pub(super) fn drain_ui_actions_and_dispatch(world: &mut World) {
             }
             AppAction::OpenIllust(entity) => {
                 world.resource_mut::<UiState>().selected_illust = Some(entity);
-                prepare_overlay_tags(world, entity);
                 set_status_key(world, "pixiv.overlay.title", "Illustration details");
 
                 if let Some(illust) = world.get::<Illust>(entity) {
@@ -242,10 +242,6 @@ pub(super) fn drain_ui_actions_and_dispatch(world: &mut World) {
                                 });
                     }
                 }
-            }
-            AppAction::CloseIllust => {
-                world.resource_mut::<UiState>().selected_illust = None;
-                clear_overlay_tags(world);
             }
             AppAction::Bookmark(entity) => {
                 let illust_id = if let Some(mut illust) = world.get_mut::<Illust>(entity) {
@@ -329,6 +325,13 @@ pub(super) fn drain_ui_actions_and_dispatch(world: &mut World) {
                     auth.account_menu_open = false;
                 }
                 ensure_auth_dialog_overlay(world);
+            }
+            AppAction::DismissLoginDialog => {
+                {
+                    let mut auth = world.resource_mut::<AuthState>();
+                    auth.login_dialog_open = false;
+                }
+                dismiss_auth_dialog_overlay(world);
             }
             AppAction::ToggleAccountMenu => {
                 let is_authenticated = world.resource::<AuthState>().session.is_some();
@@ -452,6 +455,17 @@ pub(super) fn drain_ui_actions_and_dispatch(world: &mut World) {
                     .resource::<NetworkBridge>()
                     .cmd_tx
                     .send(NetworkCommand::Refresh { refresh_token });
+            }
+            AppAction::DismissDetailDialog => {
+                if let Some(mut ui) = world.get_resource_mut::<UiState>() {
+                    ui.selected_illust = None;
+                }
+
+                if world.get_resource::<OverlayTags>().is_some() {
+                    clear_overlay_tags(world);
+                }
+
+                dismiss_detail_dialog_overlay(world);
             }
             AppAction::Logout => {
                 clear_authenticated_runtime(world);
@@ -629,7 +643,7 @@ pub(super) fn request_next_feed_page(
     }
 }
 
-fn clear_overlay_tags(world: &mut World) {
+pub(super) fn clear_overlay_tags(world: &mut World) {
     let entities = std::mem::take(&mut world.resource_mut::<OverlayTags>().0);
     for entity in entities {
         if world.get_entity(entity).is_ok() {
@@ -638,7 +652,7 @@ fn clear_overlay_tags(world: &mut World) {
     }
 }
 
-fn prepare_overlay_tags(world: &mut World, illust_entity: Entity) {
+pub(super) fn prepare_overlay_tags(world: &mut World, illust_entity: Entity) {
     clear_overlay_tags(world);
 
     let tags_parent = world.resource::<PixivUiTree>().overlay_tags;

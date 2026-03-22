@@ -13,7 +13,7 @@ pub(super) const FEED_PRELOAD_VIEWPORTS: f32 = 1.5;
 pub(super) const PIXIV_AUTH_TOKEN_FALLBACK: &str = "https://oauth.secure.pixiv.net/auth/token";
 pub(super) const PIXIV_WEB_REDIRECT_FALLBACK: &str =
     "https://app-api.pixiv.net/web/v1/users/auth/pixiv/callback";
-pub(super) const PIXIV_ACTIVATION_APP_ID: &str = "bevy-xilem-example-pixiv-client";
+pub(super) const PIXIV_ACTIVATION_APP_ID: &str = "bevy-xilem-example-pixcus";
 
 pub(super) fn parse_locale(tag: &str) -> LanguageIdentifier {
     tag.parse()
@@ -84,6 +84,13 @@ pub(super) fn sync_font_stack_for_locale(sheet: &mut StyleSheet, stack: Option<&
         "pixiv.card",
         "pixiv.tag",
         "pixiv.overlay",
+        "pixiv.detail.dialog",
+        "pixiv.detail.hero",
+        "pixiv.detail.section",
+        "pixiv.detail.section.title",
+        "pixiv.detail.meta",
+        "pixiv.detail.meta.value",
+        "pixiv.detail.description",
     ] {
         if let Some(existing) = sheet.get_class_values(class_name).cloned() {
             let mut updated = existing;
@@ -205,7 +212,6 @@ pub(super) struct PixivUiComponents {
     pub search_submit: Entity,
     pub copy_response: Entity,
     pub clear_response: Entity,
-    pub close_overlay: Entity,
 }
 
 #[derive(Resource, Debug, Clone, Copy)]
@@ -234,6 +240,12 @@ pub(super) struct PixivAuthDialog;
 pub(super) struct PixivAuthDialogForm;
 
 #[derive(Component, Debug, Clone, Copy)]
+pub(super) struct PixivDetailDialog;
+
+#[derive(Component, Debug, Clone, Copy)]
+pub(super) struct PixivDetailOverlay;
+
+#[derive(Component, Debug, Clone, Copy)]
 pub(super) struct PixivAccountMenu;
 
 #[derive(Component, Debug, Clone, Copy)]
@@ -247,9 +259,6 @@ pub(super) struct PixivHomeFeed;
 
 #[derive(Component, Debug, Clone, Copy)]
 pub(super) struct PixivIllustCard;
-
-#[derive(Component, Debug, Clone, Copy)]
-pub(super) struct PixivDetailOverlay;
 
 #[derive(Component, Debug, Clone, Copy)]
 pub(super) struct PixivOverlayTags;
@@ -313,16 +322,17 @@ pub(super) enum AppAction {
     SetSearchText(String),
     SubmitSearch,
     OpenIllust(Entity),
-    CloseIllust,
     Bookmark(Entity),
     SearchByTag(String),
     CopyResponseBody,
     ClearResponseBody,
     OpenLoginDialog,
+    DismissLoginDialog,
     ToggleAccountMenu,
     OpenBrowserLogin,
     ExchangeAuthCode,
     RefreshToken,
+    DismissDetailDialog,
     Logout,
 }
 

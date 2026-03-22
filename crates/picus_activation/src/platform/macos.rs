@@ -582,9 +582,9 @@ mod tests {
     <key>CFBundleDisplayName</key>
     <string>Pixiv Desktop</string>
     <key>CFBundleExecutable</key>
-    <string>example_pixiv_client</string>
+    <string>example_pixcus</string>
     <key>CFBundleIdentifier</key>
-    <string>dev.summpot.example-pixiv-client</string>
+    <string>dev.summpot.example-pixcus</string>
     <key>CFBundleName</key>
     <string>Pixiv Desktop</string>
     <key>CFBundlePackageType</key>
@@ -612,9 +612,9 @@ mod tests {
         write_test_info_plist(&plist_path);
 
         let info = read_info_plist(&plist_path).expect("Info.plist should parse");
-        assert_eq!(info.bundle_identifier, "dev.summpot.example-pixiv-client");
+        assert_eq!(info.bundle_identifier, "dev.summpot.example-pixcus");
         assert_eq!(info.bundle_name, "Pixiv Desktop");
-        assert_eq!(info.executable_name, "example_pixiv_client");
+        assert_eq!(info.executable_name, "example_pixcus");
         assert_eq!(info.url_schemes, vec!["pixiv".to_string()]);
 
         let _ = fs::remove_dir_all(dir);
@@ -623,7 +623,7 @@ mod tests {
     #[test]
     fn create_app_bundle_from_plist_copies_plist_and_links_executable() {
         let dir = temp_test_dir("bundle-create");
-        let executable = dir.join("example_pixiv_client-bin");
+        let executable = dir.join("example_pixcus-bin");
         let plist_path = dir.join("Info.plist");
         let apps_dir = dir.join("Applications");
 
@@ -638,7 +638,7 @@ mod tests {
 
         assert_eq!(
             bundle.info_plist.bundle_identifier,
-            "dev.summpot.example-pixiv-client"
+            "dev.summpot.example-pixcus"
         );
         assert!(bundle.bundle_path.exists());
         assert!(bundle.info_plist_path.exists());

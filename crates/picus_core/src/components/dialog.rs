@@ -1,12 +1,12 @@
 use bevy_ecs::{entity::Entity, prelude::*};
 
 use crate::{
-    ProjectionCtx, StyleClass, UiLabel, UiView, components::UiComponentTemplate,
+    ProjectionCtx, StyleClass, UiEvent, UiLabel, UiView, components::UiComponentTemplate,
     templates::ensure_template_part,
 };
 
 /// Modal dialog entity projected in the overlay layer.
-#[derive(Component, Debug, Clone, PartialEq, Eq)]
+#[derive(Component, Debug, Clone, PartialEq)]
 pub struct UiDialog {
     pub title: String,
     pub body: String,
@@ -14,6 +14,26 @@ pub struct UiDialog {
     pub title_key: Option<String>,
     pub body_key: Option<String>,
     pub dismiss_key: Option<String>,
+    pub width: Option<f64>,
+    pub height: Option<f64>,
+}
+
+#[derive(Component, Debug)]
+pub struct UiDialogCloseAction {
+    event: Option<UiEvent>,
+}
+
+impl UiDialogCloseAction {
+    #[must_use]
+    pub fn new<T: Send + Sync + 'static>(target: Entity, action: T) -> Self {
+        Self {
+            event: Some(UiEvent::typed(target, action)),
+        }
+    }
+
+    pub(crate) fn take_event(&mut self) -> Option<UiEvent> {
+        self.event.take()
+    }
 }
 
 impl UiDialog {
@@ -26,6 +46,8 @@ impl UiDialog {
             title_key: None,
             body_key: None,
             dismiss_key: None,
+            width: None,
+            height: None,
         }
     }
 
@@ -39,6 +61,25 @@ impl UiDialog {
         self.title_key = Some(title_key.into());
         self.body_key = Some(body_key.into());
         self.dismiss_key = Some(dismiss_key.into());
+        self
+    }
+
+    #[must_use]
+    pub fn with_fixed_width(mut self, width: f64) -> Self {
+        self.width = Some(width.max(1.0));
+        self
+    }
+
+    #[must_use]
+    pub fn with_fixed_height(mut self, height: f64) -> Self {
+        self.height = Some(height.max(1.0));
+        self
+    }
+
+    #[must_use]
+    pub fn with_fixed_size(mut self, width: f64, height: f64) -> Self {
+        self.width = Some(width.max(1.0));
+        self.height = Some(height.max(1.0));
         self
     }
 }
@@ -91,5 +132,18 @@ impl UiComponentTemplate for UiDialog {
 
     fn project(component: &Self, ctx: ProjectionCtx<'_>) -> UiView {
         crate::projection::dialog::project_dialog(component, ctx)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn dialog_fixed_size_builder_sets_hints() {
+        let dialog = UiDialog::new("title", "body").with_fixed_size(920.0, 760.0);
+
+        assert_eq!(dialog.width, Some(920.0));
+        assert_eq!(dialog.height, Some(760.0));
     }
 }

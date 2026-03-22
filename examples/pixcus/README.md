@@ -1,4 +1,4 @@
-# pixiv_client
+# pixcus
 
 A desktop Pixiv client MVP built with `picus_core`.
 
@@ -7,7 +7,7 @@ It demonstrates:
 - Pixiv OAuth token exchange (auth code + refresh token)
 - Home / Ranking / Manga / Novels / Search feeds
 - Thumbnail + avatar loading
-- Illustration detail overlay and bookmark action
+- Illustration detail dialog and bookmark action
 - Login credential persistence (auto-restore refresh token on next launch)
 
 > This project is an experimental example for learning and prototyping.
@@ -16,11 +16,11 @@ It demonstrates:
 
 From workspace root:
 
-- `cargo run -p pixiv_client`
+- `cargo run -p example_pixcus`
 
 ## macOS deep-link bundle metadata
 
-- `Info.plist` source for registering the `pixiv:` URL scheme lives at `examples/pixiv_client/Info.plist`.
+- `Info.plist` source for registering the `pixiv:` URL scheme lives at `examples/pixcus/Info.plist`.
 - The running app listens for callback URIs through the activation bridge and drains pending URIs on the UI thread, similar to Pixeval’s `ProtocolActivationHub` pattern.
 - `embed_plist` is no longer used here. If you package the example as a macOS `.app`, keep `Info.plist` as the bundle metadata source so Launch Services can register `pixiv://account/login?...` for the app bundle.
 - For local development outside a bundled `.app`, protocol registration and callback forwarding are still handled by `picus_activation`.

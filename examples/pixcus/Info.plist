@@ -7,9 +7,9 @@
 	<key>CFBundleDisplayName</key>
 	<string>Pixiv Desktop</string>
 	<key>CFBundleExecutable</key>
-	<string>example_pixiv_client</string>
+	<string>example_pixcus</string>
 	<key>CFBundleIdentifier</key>
-	<string>dev.summpot.example-pixiv-client</string>
+	<string>dev.summpot.example-pixcus</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
@@ -30,7 +30,7 @@
 			<key>CFBundleTypeRole</key>
 			<string>Viewer</string>
 			<key>CFBundleURLName</key>
-			<string>dev.summpot.example-pixiv-client.oauth</string>
+			<string>dev.summpot.example-pixcus.oauth</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>pixiv</string>

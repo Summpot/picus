@@ -345,5 +345,101 @@
         box_shadow: Var("shadow-ui-component"),
       ),
     ),
+    (
+      selector: Class("pixiv.detail.dialog"),
+      setter: (
+        layout: (
+          padding: Var("space-lg"),
+          gap: Var("gap-lg"),
+          border_width: Var("border-thin"),
+          corner_radius: Var("radius-lg"),
+        ),
+        colors: (
+          bg: Var("surface-overlay"),
+          border: Var("border-default"),
+          text: Var("text-primary"),
+        ),
+        box_shadow: Var("shadow-ui-component"),
+      ),
+    ),
+    (
+      selector: Class("pixiv.detail.hero"),
+      setter: (
+        layout: (
+          padding: Var("space-md"),
+          corner_radius: Var("radius-lg"),
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          bg: Var("surface-subtle"),
+          border: Var("border-default"),
+          text: Var("text-secondary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("pixiv.detail.section"),
+      setter: (
+        layout: (
+          padding: Var("space-md"),
+          gap: Var("gap-xs"),
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          bg: Var("surface-subtle"),
+          border: Var("border-default"),
+          text: Var("text-primary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("pixiv.detail.section.title"),
+      setter: (
+        text: (
+          size: Var("text-sm"),
+        ),
+        colors: (
+          text: Var("text-secondary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("pixiv.detail.meta"),
+      setter: (
+        layout: (
+          gap: Var("gap-md"),
+          padding: Var("space-xs"),
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          bg: Var("surface-panel"),
+          border: Var("border-default"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("pixiv.detail.meta.value"),
+      setter: (
+        text: (
+          size: Var("text-sm"),
+        ),
+        colors: (
+          text: Var("text-primary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("pixiv.detail.description"),
+      setter: (
+        text: (
+          size: Var("text-sm"),
+        ),
+        colors: (
+          text: Var("text-primary"),
+        ),
+      ),
+    ),
   ],
 )

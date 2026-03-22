@@ -52,6 +52,7 @@ pixiv-feed-novel-placeholder = 暂无小说封面
 pixiv-feed-open = 打开
 pixiv-feed-high-res-loading = 高清图加载中…
 
+pixiv-overlay-body = { "" }
 pixiv-overlay-close = 关闭
 pixiv-overlay-title = 插画详情
 pixiv-overlay-author = 作者：
@@ -59,6 +60,17 @@ pixiv-overlay-views = 浏览
 pixiv-overlay-bookmarks = 收藏
 pixiv-overlay-comments = 评论
 pixiv-overlay-tags = 标签
+pixiv-overlay-artwork-info = 作品信息
+pixiv-overlay-author-info = 作者信息
+pixiv-overlay-image-info = 图片信息
+pixiv-overlay-image-info-unknown = 尺寸未知
+pixiv-overlay-pages = 页
+pixiv-overlay-caption = 简介
+pixiv-overlay-description-empty = 此作品没有提供简介。
+pixiv-overlay-account-unknown = 无公开账号
+pixiv-overlay-type-illust = 插画
+pixiv-overlay-type-manga = 漫画
+pixiv-overlay-type-novel = 小说
 
 pixiv-status-sidebar-collapsed = 侧栏已收起
 pixiv-status-sidebar-expanded = 侧栏已展开

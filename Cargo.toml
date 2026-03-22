@@ -9,7 +9,7 @@ members = [
 	"examples/chess_game",
 	"examples/game_2048",
 	"examples/overlay_hit_routing",
-	"examples/pixiv_client",
+	"examples/pixcus",
 	"examples/shared_utils",
 	"examples/timer",
 	"examples/todo_list",

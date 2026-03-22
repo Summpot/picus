@@ -203,7 +203,8 @@ Style rules support token-aware values via `StyleValue::Var(String)`, allowing s
 - **Centralized Layering Model:** `OverlayStack` maintains top-most order. `sync_overlay_stack_lifecycle` keeps it pruned.
 - **Universal Placement Model:** `OverlayPlacement` handles Center/Top/Bottom/Left/Right and Start/End alignments. `sync_overlay_positions` calculates clamping and auto-flipping against screen edges.
 - **Shared anchored popover metadata:** `UiPopover` centralizes anchor/placement/auto-flip configuration for anchored floating surfaces so built-in dropdowns, tooltips, picker panels, and app-level popovers reuse the same placement path.
-- **Built-in Floating Widgets:** `UiDialog` (modal), `UiComboBox` (anchor), `UiDropdownMenu` (floating list), `UiTooltip` (hover-anchor), `UiToast` (default bottom-end placement, configurable placement/width/close-button), `UiMenuItemPanel`, `UiColorPickerPanel`, `UiDatePickerPanel`, `UiThemePickerMenu`
+- **Built-in Floating Widgets:** `UiDialog` (modal, optional fixed width/height hints for overlay placement and projection sizing), `UiComboBox` (anchor), `UiDropdownMenu` (floating list), `UiTooltip` (hover-anchor), `UiToast` (default bottom-end placement, configurable placement/width/close-button), `UiMenuItemPanel`, `UiColorPickerPanel`, `UiDatePickerPanel`, `UiThemePickerMenu`
+- **Dialog close contract:** `UiDialog` optionally carries a typed close-action hook. Both the built-in header close control (rendered in the top-right dialog chrome) and outside-click dismissal route through the same overlay helper, which emits the hook through `UiEventQueue` before despawning. Dialogs without the hook keep the existing despawn-only behavior.
 - **FOUC prevention invariant:** overlay projectors must render with fully transparent resolved styles while `OverlayComputedPosition.is_positioned == false`, then become visible once synchronized placement is available.
 - **Generic temporary lifecycle:** `AutoDismiss { timer }` supports timer-driven teardown for temporary overlays (e.g., toasts).
 
@@ -309,13 +310,13 @@ The workspace currently includes these example members from `Cargo.toml`:
 - `chess_game`
 - `game_2048`
 - `overlay_hit_routing`
-- `pixiv_client`
+- `pixcus`
 - `shared_utils`
 - `timer`
 - `todo_list`
 - `ui_showcase`
 
-The `pixiv_client` example currently exposes authentication through a sidebar-footer login entry that opens a modal overlay dialog for Pixiv OAuth inputs. Once authenticated, the same sidebar footer switches to an avatar-based account trigger with a compact logout popover that reuses the shared anchored popover placement path.
+The `pixcus` example currently exposes authentication through a sidebar-footer login entry that opens a modal overlay dialog for Pixiv OAuth inputs. Once authenticated, the same sidebar footer switches to an avatar-based account trigger with a compact logout popover that reuses the shared anchored popover placement path. Selecting an illustration opens a `UiDialog`-backed artwork detail modal that expands to a near-fullscreen two-column layout sized from current `ViewportMetrics` rather than a fixed `1320x880`: a large artwork hero on the left and a scrollable right rail stacking artwork, author, image, caption, and tag metadata while the built-in header close affordance remains visible in the top-right chrome.
 
 ## 15. Plugin System
 

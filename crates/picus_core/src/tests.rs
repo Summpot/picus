@@ -44,6 +44,11 @@ enum TestAction {
     Clicked,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DialogCloseTestAction {
+    Closed,
+}
+
 fn project_test_root(_: &TestRoot, ctx: ProjectionCtx<'_>) -> UiView {
     Arc::new(ecs_button(ctx.entity, TestAction::Clicked, "Click"))
 }
@@ -2391,6 +2396,20 @@ fn dialog_dismiss_button_targets_dialog_entity() {
 
     assert_eq!(hit_widget.as_str(), "EcsButtonWidget");
     assert_eq!(hit_debug_text, format!("entity={}", dialog.to_bits()));
+
+    let content_width = content_rect.max.x - content_rect.min.x;
+    let content_height = content_rect.max.y - content_rect.min.y;
+    let button_top = button_rect.min.y;
+    let button_right = button_rect.max.x;
+
+    assert!(
+        button_right > content_width * 0.82,
+        "dismiss button should align against the right side of the dialog header"
+    );
+    assert!(
+        button_top < content_height * 0.22,
+        "dismiss button should sit in the top portion of the dialog header"
+    );
 }
 
 #[test]
@@ -2455,6 +2474,35 @@ fn overlay_action_dismiss_dialog_despawns_dialog() {
     handle_overlay_actions(&mut world);
 
     assert!(world.get_entity(dialog).is_err());
+}
+
+#[test]
+fn overlay_action_dismiss_dialog_emits_optional_close_hook_before_despawn() {
+    let mut world = World::new();
+    world.insert_resource(UiEventQueue::default());
+
+    let target = world.spawn_empty().id();
+    let dialog = world
+        .spawn((
+            crate::UiDialog::new("title", "body"),
+            crate::UiDialogCloseAction::new(target, DialogCloseTestAction::Closed),
+        ))
+        .id();
+
+    world
+        .resource::<UiEventQueue>()
+        .push_typed(dialog, crate::OverlayUiAction::DismissDialog);
+
+    handle_overlay_actions(&mut world);
+
+    assert!(world.get_entity(dialog).is_err());
+
+    let events = world
+        .resource_mut::<UiEventQueue>()
+        .drain_actions::<DialogCloseTestAction>();
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].entity, target);
+    assert_eq!(events[0].action, DialogCloseTestAction::Closed);
 }
 
 #[test]
@@ -2856,6 +2904,65 @@ fn handle_global_overlay_clicks_closes_overlay_on_outside_click_without_suppress
         .resource_mut::<crate::OverlayPointerRoutingState>();
     assert!(!routing.take_suppressed_press(window_entity, MouseButton::Left));
     assert!(!routing.take_suppressed_release(window_entity, MouseButton::Left));
+}
+
+#[test]
+fn handle_global_overlay_clicks_outside_dialog_emits_same_optional_close_hook() {
+    let mut app = App::new();
+    app.add_plugins(PicusPlugin);
+
+    let mut window = Window::default();
+    window.resolution.set(800.0, 600.0);
+    let window_entity = app.world_mut().spawn((window, PrimaryWindow)).id();
+
+    let target = app.world_mut().spawn_empty().id();
+    let dialog = spawn_in_overlay_root(
+        app.world_mut(),
+        (
+            crate::UiDialog::new("title", "body"),
+            crate::UiDialogCloseAction::new(target, DialogCloseTestAction::Closed),
+        ),
+    );
+
+    app.update();
+    app.update();
+
+    run_global_overlay_click(&mut app, window_entity, Vec2::new(790.0, 590.0));
+
+    assert!(app.world().get_entity(dialog).is_err());
+
+    let events = app
+        .world_mut()
+        .resource_mut::<UiEventQueue>()
+        .drain_actions::<DialogCloseTestAction>();
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].entity, target);
+    assert_eq!(events[0].action, DialogCloseTestAction::Closed);
+}
+
+#[test]
+fn handle_global_overlay_clicks_outside_dialog_without_hook_keeps_existing_behavior() {
+    let mut app = App::new();
+    app.add_plugins(PicusPlugin);
+
+    let mut window = Window::default();
+    window.resolution.set(800.0, 600.0);
+    let window_entity = app.world_mut().spawn((window, PrimaryWindow)).id();
+
+    let dialog = spawn_in_overlay_root(app.world_mut(), (crate::UiDialog::new("title", "body"),));
+
+    app.update();
+    app.update();
+
+    run_global_overlay_click(&mut app, window_entity, Vec2::new(790.0, 590.0));
+
+    assert!(app.world().get_entity(dialog).is_err());
+    assert!(
+        app.world_mut()
+            .resource_mut::<UiEventQueue>()
+            .drain_actions::<DialogCloseTestAction>()
+            .is_empty()
+    );
 }
 
 #[test]

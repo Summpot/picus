@@ -18,13 +18,27 @@ use crate::{
     views::{ecs_button, opaque_hitbox_for_entity},
 };
 use bevy_ecs::{hierarchy::Children, prelude::Entity};
-use masonry::layout::Length;
+use masonry::layout::{Dim, Length};
 use std::sync::Arc;
 use xilem::{palette::css::BLACK, style::BoxShadow, style::Style as _};
-use xilem_masonry::view::{CrossAxisAlignment, FlexExt as _, flex_col, label, transformed};
+use xilem_masonry::view::{
+    CrossAxisAlignment, FlexExt as _, MainAxisAlignment, flex_col, flex_row, label, transformed,
+};
 
 pub(crate) const DIALOG_SURFACE_MIN_WIDTH: f64 = 240.0;
 pub(crate) const DIALOG_SURFACE_MAX_WIDTH: f64 = 400.0;
+
+pub(crate) fn dialog_surface_padding(layout_padding: f64) -> f64 {
+    layout_padding.max(12.0)
+}
+
+pub(crate) fn dialog_surface_gap(layout_gap: f64) -> f64 {
+    layout_gap.max(10.0)
+}
+
+pub(crate) fn dialog_dismiss_padding(layout_padding: f64) -> f64 {
+    layout_padding.max(8.0)
+}
 
 pub(crate) fn estimate_dialog_surface_width_px(
     title: &str,
@@ -53,6 +67,7 @@ pub(crate) fn estimate_dialog_surface_width_px(
 pub(crate) fn estimate_dialog_surface_height_px(
     title: &str,
     body: &str,
+    dismiss_label: &str,
     dialog_surface_width: f64,
     title_size: f32,
     body_size: f32,
@@ -64,17 +79,17 @@ pub(crate) fn estimate_dialog_surface_height_px(
 ) -> f64 {
     let title_line_height = (title_size as f64 * 1.35).max(18.0);
     let body_line_height = (body_size as f64 * 1.45).max(18.0);
+    let dismiss_width = estimate_text_width_px(dismiss_label, dismiss_size) + dismiss_padding * 2.0;
     let dismiss_height = (dismiss_size as f64 * 1.25 + dismiss_padding * 2.0).max(30.0);
 
-    let text_max_width = (dialog_surface_width - horizontal_padding * 2.0 - 8.0).max(120.0);
-    let title_lines = estimate_wrapped_lines(title, title_size, text_max_width);
-    let body_lines = estimate_wrapped_lines(body, body_size, text_max_width);
+    let header_text_max_width =
+        (dialog_surface_width - horizontal_padding * 2.0 - dismiss_width - gap).max(120.0);
+    let body_text_max_width = (dialog_surface_width - horizontal_padding * 2.0 - 8.0).max(120.0);
+    let title_lines = estimate_wrapped_lines(title, title_size, header_text_max_width);
+    let body_lines = estimate_wrapped_lines(body, body_size, body_text_max_width);
+    let header_height = (title_lines as f64 * title_line_height).max(dismiss_height);
 
-    (vertical_padding * 2.0
-        + title_lines as f64 * title_line_height
-        + body_lines as f64 * body_line_height
-        + dismiss_height
-        + gap * 2.0)
+    (vertical_padding * 2.0 + header_height + gap + body_lines as f64 * body_line_height + gap)
         .max(120.0)
 }
 
@@ -147,28 +162,35 @@ pub(crate) fn project_dialog(dialog: &UiDialog, ctx: ProjectionCtx<'_>) -> UiVie
         dialog_style.layout.padding.max(12.0),
     );
 
+    let hinted_width = dialog.width.unwrap_or(estimated_width);
+
     let dialog_gap = dialog_style.layout.gap.max(10.0);
     let estimated_height = estimate_dialog_surface_height_px(
         &title,
         &body,
-        estimated_width,
+        &dismiss_label,
+        hinted_width,
         title_style.text.size,
         body_style.text.size,
         dismiss_style.text.size,
-        dismiss_style.layout.padding.max(8.0),
-        dialog_gap,
-        dialog_style.layout.padding.max(12.0),
-        dialog_style.layout.padding.max(12.0),
+        dialog_dismiss_padding(dismiss_style.layout.padding),
+        dialog_surface_gap(dialog_gap),
+        dialog_surface_padding(dialog_style.layout.padding),
+        dialog_surface_padding(dialog_style.layout.padding),
     );
 
     let dialog_surface_width = if computed_position.width > 1.0 {
         computed_position.width
+    } else if let Some(width) = dialog.width {
+        width
     } else {
         estimated_width
     };
 
     let dialog_surface_height = if computed_position.height > 1.0 {
         computed_position.height
+    } else if let Some(height) = dialog.height {
+        height
     } else {
         estimated_height
     };
@@ -224,14 +246,27 @@ pub(crate) fn project_dialog(dialog: &UiDialog, ctx: ProjectionCtx<'_>) -> UiVie
     )
     .into_any_flex();
 
-    let mut dialog_children = vec![title_view.into_any_flex(), body_view.into_any_flex()];
-    dialog_children.extend(child_parts.into_iter().filter_map(|(entity, view)| {
+    let extra_body_children = child_parts.into_iter().filter_map(|(entity, view)| {
         (ctx.world.get::<PartDialogTitle>(entity).is_none()
             && ctx.world.get::<PartDialogBody>(entity).is_none()
             && ctx.world.get::<PartDialogDismiss>(entity).is_none())
         .then_some(view.into_any_flex())
-    }));
-    dialog_children.push(dismiss_button);
+    });
+
+    let header = flex_row((title_view.flex(1.0).into_any_flex(), dismiss_button))
+        .cross_axis_alignment(CrossAxisAlignment::Center)
+        .main_axis_alignment(MainAxisAlignment::SpaceBetween)
+        .width(Dim::Stretch)
+        .gap(Length::px(dialog_gap));
+
+    let mut body_children = vec![body_view.into_any_flex()];
+    body_children.extend(extra_body_children);
+    let body = flex_col(body_children)
+        .cross_axis_alignment(CrossAxisAlignment::Stretch)
+        .width(Dim::Stretch)
+        .gap(Length::px(dialog_gap));
+
+    let dialog_children = vec![header.into_any_flex(), body.flex(1.0).into_any_flex()];
 
     let dialog_surface = xilem_masonry::view::sized_box(apply_widget_style(
         apply_flex_alignment(

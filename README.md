@@ -169,7 +169,7 @@ The workspace includes several example applications:
 | `todo_list` | `example_todo_list` | Task management with add/remove |
 | `game_2048` | `example_game_2048` | Classic 2048 game implementation |
 | `overlay_hit_routing` | `example_overlay_hit_routing` | Overlay interaction patterns |
-| `pixiv_client` | `example_pixiv_client` | Image browsing application |
+| `pixcus` | `example_pixcus` | Image browsing application |
 
 Run any example from the repository root:
 

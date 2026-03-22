@@ -688,10 +688,7 @@ mod tests {
 
     #[test]
     fn app_id_normalization_is_stable() {
-        assert_eq!(
-            normalize_app_id("Pixiv Client@Desktop"),
-            "pixiv-client-desktop"
-        );
+        assert_eq!(normalize_app_id("Pixcus Desktop"), "pixcus-desktop");
     }
 
     #[test]

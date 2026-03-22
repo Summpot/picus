@@ -1,9 +1,13 @@
 use super::*;
 
 use picus_core::bevy_math::Vec2;
-use picus_core::{UiPopover, UiScrollView, spawn_popover_in_overlay_root};
+use picus_core::{
+    OverlayPlacement, UiDialogCloseAction, UiPopover, UiScrollView, spawn_popover_in_overlay_root,
+};
 
-use super::actions::{request_next_feed_page, sync_feed_scroll_viewport};
+use super::actions::{
+    clear_overlay_tags, prepare_overlay_tags, request_next_feed_page, sync_feed_scroll_viewport,
+};
 
 #[cfg(target_os = "macos")]
 pub(super) fn pixiv_macos_bundle_config() -> MacosBundleConfig {
@@ -79,6 +83,16 @@ fn auth_dialog_entity(world: &mut World) -> Option<Entity> {
     query.iter(world).next()
 }
 
+fn detail_dialog_entity(world: &mut World) -> Option<Entity> {
+    let mut query = world.query_filtered::<Entity, With<PixivDetailDialog>>();
+    query.iter(world).next()
+}
+
+fn detail_overlay_entity(world: &mut World) -> Option<Entity> {
+    let mut query = world.query_filtered::<Entity, With<PixivDetailOverlay>>();
+    query.iter(world).next()
+}
+
 fn account_menu_entity(world: &mut World) -> Option<Entity> {
     let mut query = world.query_filtered::<Entity, With<PixivAccountMenu>>();
     query.iter(world).next()
@@ -113,6 +127,35 @@ pub(super) fn dismiss_auth_dialog_overlay(world: &mut World) {
     }
 }
 
+pub(super) fn dismiss_detail_dialog_overlay(world: &mut World) {
+    if let Some(entity) = detail_dialog_entity(world)
+        && world.get_entity(entity).is_ok()
+    {
+        world.entity_mut(entity).despawn();
+    }
+}
+
+fn ensure_overlay_tags_container(world: &mut World, parent: Option<Entity>) -> Entity {
+    let current = world.resource::<PixivUiTree>().overlay_tags;
+    let tags_entity = if world.get_entity(current).is_ok() {
+        current
+    } else {
+        let replacement = if let Some(parent) = parent {
+            world.spawn((PixivOverlayTags, ChildOf(parent))).id()
+        } else {
+            world.spawn(PixivOverlayTags).id()
+        };
+        world.resource_mut::<PixivUiTree>().overlay_tags = replacement;
+        replacement
+    };
+
+    if let Some(parent) = parent {
+        world.entity_mut(tags_entity).insert(ChildOf(parent));
+    }
+
+    tags_entity
+}
+
 pub(super) fn reconcile_auth_dialog_overlay_state(world: &mut World) {
     let has_dialog = auth_dialog_entity(world).is_some();
     if has_dialog {
@@ -127,6 +170,30 @@ pub(super) fn reconcile_auth_dialog_overlay_state(world: &mut World) {
         ui_components.code_verifier_input = Entity::PLACEHOLDER;
         ui_components.auth_code_input = Entity::PLACEHOLDER;
         ui_components.refresh_token_input = Entity::PLACEHOLDER;
+    }
+}
+
+pub(super) fn reconcile_detail_dialog_overlay_state(world: &mut World) {
+    if detail_dialog_entity(world).is_some() {
+        return;
+    }
+
+    let _ = ensure_overlay_tags_container(world, None);
+
+    let had_selection = world
+        .get_resource::<UiState>()
+        .and_then(|ui| ui.selected_illust)
+        .is_some();
+    if !had_selection {
+        return;
+    }
+
+    if let Some(mut ui) = world.get_resource_mut::<UiState>() {
+        ui.selected_illust = None;
+    }
+
+    if world.get_resource::<OverlayTags>().is_some() {
+        clear_overlay_tags(world);
     }
 }
 
@@ -158,6 +225,7 @@ pub(super) fn ensure_auth_dialog_overlay(world: &mut World) {
         world,
         (
             UiDialog::new(tr(world, "pixiv.auth.title", "Pixiv Login"), ""),
+            UiDialogCloseAction::new(Entity::PLACEHOLDER, AppAction::DismissLoginDialog),
             StyleClass(vec![
                 "pixiv.overlay".to_string(),
                 "pixiv.auth.dialog".to_string(),
@@ -201,6 +269,70 @@ pub(super) fn ensure_auth_dialog_overlay(world: &mut World) {
     }
 
     sync_bound_text_inputs(world);
+}
+
+pub(super) fn ensure_detail_dialog_overlay(world: &mut World) {
+    let selected_illust = world
+        .get_resource::<UiState>()
+        .and_then(|ui| ui.selected_illust);
+
+    let Some(selected_illust) = selected_illust else {
+        dismiss_detail_dialog_overlay(world);
+        return;
+    };
+
+    if world.get_entity(selected_illust).is_err() {
+        if let Some(mut ui) = world.get_resource_mut::<UiState>() {
+            ui.selected_illust = None;
+        }
+        if world.get_resource::<OverlayTags>().is_some() {
+            clear_overlay_tags(world);
+        }
+        dismiss_detail_dialog_overlay(world);
+        return;
+    }
+
+    let (detail_width, detail_height) = ui::compute_detail_dialog_size(
+        world.resource::<ViewportMetrics>().width as f64,
+        world.resource::<ViewportMetrics>().height as f64,
+    );
+
+    let detail_overlay = if let Some(existing) = detail_overlay_entity(world) {
+        existing
+    } else {
+        let dialog = detail_dialog_entity(world).unwrap_or_else(|| {
+            spawn_in_overlay_root(
+                world,
+                (
+                    UiDialog::new(tr(world, "pixiv.overlay.title", "Illustration details"), "")
+                        .with_localized_keys(
+                            "pixiv-overlay-title",
+                            "pixiv-overlay-body",
+                            "pixiv-overlay-close",
+                        )
+                        .with_fixed_size(detail_width, detail_height),
+                    UiDialogCloseAction::new(Entity::PLACEHOLDER, AppAction::DismissDetailDialog),
+                    StyleClass(vec![
+                        "pixiv.overlay".to_string(),
+                        "pixiv.detail.dialog".to_string(),
+                    ]),
+                    PixivDetailDialog,
+                ),
+            )
+        });
+
+        world.spawn((PixivDetailOverlay, ChildOf(dialog))).id()
+    };
+
+    if let Some(dialog_entity) = detail_dialog_entity(world)
+        && let Some(mut dialog) = world.get_mut::<UiDialog>(dialog_entity)
+    {
+        dialog.width = Some(detail_width);
+        dialog.height = Some(detail_height);
+    }
+
+    let _ = ensure_overlay_tags_container(world, Some(detail_overlay));
+    prepare_overlay_tags(world, selected_illust);
 }
 
 pub(super) fn ensure_account_menu_overlay(world: &mut World) {
@@ -366,7 +498,7 @@ pub(super) fn setup(mut commands: Commands, i18n: Res<AppI18n>) {
     commands.insert_resource(FeedSeenIds::default());
     commands.insert_resource(OverlayTags::default());
     commands.insert_resource(ResponsePanelState::default());
-    commands.insert_resource(ViewportMetrics::default());
+    commands.init_resource::<ViewportMetrics>();
     commands.insert_resource(PixivApiClient::default());
     commands.insert_resource(AuthAvatarVisual::default());
     commands.insert_resource(Assets::<BevyImage>::default());
@@ -434,10 +566,6 @@ pub(super) fn setup(mut commands: Commands, i18n: Res<AppI18n>) {
             &["pixiv.button", "pixiv.button.primary"],
         ),
         clear_response: spawn_ui_component_entity(
-            &mut commands,
-            &["pixiv.button", "pixiv.button.warn"],
-        ),
-        close_overlay: spawn_ui_component_entity(
             &mut commands,
             &["pixiv.button", "pixiv.button.warn"],
         ),
@@ -521,26 +649,7 @@ pub(super) fn setup(mut commands: Commands, i18n: Res<AppI18n>) {
         .filter(|url| url.starts_with("https://") || url.starts_with("http://"));
 
     commands.queue(move |world: &mut World| {
-        let detail_overlay = spawn_in_overlay_root(
-            world,
-            (
-                PixivDetailOverlay,
-                StyleClass(vec!["pixiv.overlay".to_string()]),
-                OverlayState {
-                    is_modal: true,
-                    anchor: None,
-                },
-                OverlayConfig {
-                    placement: OverlayPlacement::Center,
-                    anchor: None,
-                    auto_flip: false,
-                },
-            ),
-        );
-
-        let overlay_tags = world
-            .spawn((PixivOverlayTags, ChildOf(detail_overlay)))
-            .id();
+        let overlay_tags = world.spawn(PixivOverlayTags).id();
 
         if let Some(url) = restored_avatar_url.clone() {
             world.resource_mut::<AuthAvatarVisual>().requested_url = Some(url.clone());
@@ -623,7 +732,7 @@ pub(super) fn build_app(mut activation_service: Option<ActivationService>) -> Ap
         TextPlugin,
         PicusPlugin,
     ))
-    .load_style_sheet_ron(include_str!("../../assets/themes/pixiv_client.ron"))
+    .load_style_sheet_ron(include_str!("../../assets/themes/pixcus.ron"))
     .insert_resource(AppI18n::new(parse_locale("en-US")))
     .register_i18n_bundle(
         "en-US",
@@ -690,7 +799,9 @@ pub(super) fn build_app(mut activation_service: Option<ActivationService>) -> Ap
             apply_network_results,
             spawn_image_tasks,
             apply_image_results,
+            ensure_detail_dialog_overlay,
             reconcile_auth_dialog_overlay_state,
+            reconcile_detail_dialog_overlay_state,
             reconcile_account_menu_overlay_state,
         )
             .chain(),

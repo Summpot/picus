@@ -12,6 +12,8 @@ use super::*;
 const AUTH_FILE_NAME: &str = "auth_session.json";
 const AUTH_NAMESPACE: &str = "picus_core";
 const LEGACY_AUTH_NAMESPACE: &str = concat!("pi", "cus");
+const AUTH_APP_DIR: &str = "pixcus";
+const LEGACY_AUTH_APP_DIR: &str = "pixiv_client";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct StoredAuthState {
@@ -34,7 +36,13 @@ pub(super) fn load_auth_state() -> Result<Option<StoredAuthState>> {
         return Ok(Some(auth));
     }
 
-    load_auth_state_from_path(&legacy_auth_file_path())
+    for legacy in legacy_auth_file_paths() {
+        if let Some(auth) = load_auth_state_from_path(&legacy)? {
+            return Ok(Some(auth));
+        }
+    }
+
+    Ok(None)
 }
 
 pub(super) fn save_auth_state(auth: &StoredAuthState) -> Result<()> {
@@ -43,7 +51,10 @@ pub(super) fn save_auth_state(auth: &StoredAuthState) -> Result<()> {
 
 pub(super) fn clear_auth_state() -> Result<()> {
     clear_auth_state_at_path(&auth_file_path())?;
-    clear_auth_state_at_path(&legacy_auth_file_path())
+    for legacy in legacy_auth_file_paths() {
+        clear_auth_state_at_path(&legacy)?;
+    }
+    Ok(())
 }
 
 fn load_auth_state_from_path(path: &Path) -> Result<Option<StoredAuthState>> {
@@ -110,14 +121,17 @@ fn clear_auth_state_at_path(path: &Path) -> Result<()> {
 }
 
 fn auth_file_path() -> PathBuf {
-    auth_base_dir(AUTH_NAMESPACE).join(AUTH_FILE_NAME)
+    auth_base_dir(AUTH_NAMESPACE, AUTH_APP_DIR).join(AUTH_FILE_NAME)
 }
 
-fn legacy_auth_file_path() -> PathBuf {
-    auth_base_dir(LEGACY_AUTH_NAMESPACE).join(AUTH_FILE_NAME)
+fn legacy_auth_file_paths() -> [PathBuf; 2] {
+    [
+        auth_base_dir(AUTH_NAMESPACE, LEGACY_AUTH_APP_DIR).join(AUTH_FILE_NAME),
+        auth_base_dir(LEGACY_AUTH_NAMESPACE, LEGACY_AUTH_APP_DIR).join(AUTH_FILE_NAME),
+    ]
 }
 
-fn auth_base_dir(namespace: &str) -> PathBuf {
+fn auth_base_dir(namespace: &str, app_dir: &str) -> PathBuf {
     #[cfg(target_os = "macos")]
     {
         let home = std::env::var_os("HOME")
@@ -126,7 +140,7 @@ fn auth_base_dir(namespace: &str) -> PathBuf {
         home.join("Library")
             .join("Application Support")
             .join(namespace)
-            .join("pixiv_client")
+            .join(app_dir)
     }
 
     #[cfg(target_os = "windows")]
@@ -139,7 +153,7 @@ fn auth_base_dir(namespace: &str) -> PathBuf {
                     .map(|path| path.join("AppData").join("Roaming"))
             })
             .unwrap_or_else(std::env::temp_dir);
-        return base.join(namespace).join("pixiv_client");
+        return base.join(namespace).join(app_dir);
     }
 
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
@@ -152,7 +166,7 @@ fn auth_base_dir(namespace: &str) -> PathBuf {
                     .map(|path| path.join(".config"))
             })
             .unwrap_or_else(std::env::temp_dir);
-        base.join(namespace).join("pixiv_client")
+        base.join(namespace).join(app_dir)
     }
 }
 

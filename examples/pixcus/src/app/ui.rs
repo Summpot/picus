@@ -5,8 +5,8 @@ use picus_core::{
     bevy_math::Vec2,
     opaque_hitbox_for_entity,
     xilem::{
-        masonry::{kurbo::Vec2 as KurboVec2, layout::UnitPoint, widgets::BadgePlacement},
-        view::{badged, transformed, zstack},
+        masonry::layout::UnitPoint,
+        view::{portal, transformed, zstack},
     },
 };
 
@@ -14,9 +14,72 @@ const FEED_OVERSCAN_Y: f64 = 240.0;
 const FEED_BASE_CHROME_HEIGHT: f64 = 164.0;
 const FEED_SEARCH_PANEL_HEIGHT: f64 = 56.0;
 const FEED_RESPONSE_PANEL_SPACING: f64 = 18.0;
+const DETAIL_DIALOG_MIN_WIDTH: f64 = 900.0;
+const DETAIL_DIALOG_MAX_WIDTH: f64 = 1440.0;
+const DETAIL_DIALOG_MIN_HEIGHT: f64 = 620.0;
+const DETAIL_DIALOG_MAX_HEIGHT: f64 = 1040.0;
+const DETAIL_DIALOG_VIEWPORT_WIDTH_RATIO: f64 = 0.92;
+const DETAIL_DIALOG_VIEWPORT_HEIGHT_RATIO: f64 = 0.9;
+const DETAIL_DIALOG_VIEWPORT_MARGIN_X: f64 = 28.0;
+const DETAIL_DIALOG_VIEWPORT_MARGIN_Y: f64 = 24.0;
+const DETAIL_RAIL_MIN_WIDTH: f64 = 280.0;
+const DETAIL_RAIL_COMPACT_MIN_WIDTH: f64 = 220.0;
+const DETAIL_RAIL_MAX_WIDTH: f64 = 420.0;
+const DETAIL_RAIL_WIDTH_RATIO: f64 = 0.29;
 
 fn empty_ui() -> UiView {
     Arc::new(label(""))
+}
+
+pub(super) fn compute_detail_dialog_size(viewport_width: f64, viewport_height: f64) -> (f64, f64) {
+    let available_width = (viewport_width - DETAIL_DIALOG_VIEWPORT_MARGIN_X * 2.0).max(320.0);
+    let available_height = (viewport_height - DETAIL_DIALOG_VIEWPORT_MARGIN_Y * 2.0).max(240.0);
+
+    let preferred_width = (viewport_width * DETAIL_DIALOG_VIEWPORT_WIDTH_RATIO)
+        .clamp(DETAIL_DIALOG_MIN_WIDTH, DETAIL_DIALOG_MAX_WIDTH);
+    let preferred_height = (viewport_height * DETAIL_DIALOG_VIEWPORT_HEIGHT_RATIO)
+        .clamp(DETAIL_DIALOG_MIN_HEIGHT, DETAIL_DIALOG_MAX_HEIGHT);
+
+    let width = if available_width >= DETAIL_DIALOG_MIN_WIDTH {
+        preferred_width.min(available_width)
+    } else {
+        available_width
+    };
+    let height = if available_height >= DETAIL_DIALOG_MIN_HEIGHT {
+        preferred_height.min(available_height)
+    } else {
+        available_height
+    };
+
+    (width, height)
+}
+
+fn compute_detail_meta_rail_width(dialog_width: f64) -> f64 {
+    let max_allowed = (dialog_width * 0.4).max(DETAIL_RAIL_COMPACT_MIN_WIDTH);
+    (dialog_width * DETAIL_RAIL_WIDTH_RATIO).clamp(
+        DETAIL_RAIL_MIN_WIDTH.min(max_allowed),
+        DETAIL_RAIL_MAX_WIDTH.min(max_allowed),
+    )
+}
+
+fn detail_dialog_size_for_world(world: &World) -> (f64, f64) {
+    let viewport = world
+        .get_resource::<ViewportMetrics>()
+        .copied()
+        .unwrap_or_default();
+    compute_detail_dialog_size(viewport.width as f64, viewport.height as f64)
+}
+
+fn detail_dialog_size_for_overlay(world: &World, entity: Entity) -> (f64, f64) {
+    let parent = world.get::<ChildOf>(entity).map(|child| child.parent());
+    if let Some(parent) = parent
+        && let Some(dialog) = world.get::<UiDialog>(parent)
+        && let (Some(width), Some(height)) = (dialog.width, dialog.height)
+    {
+        return (width, height);
+    }
+
+    detail_dialog_size_for_world(world)
 }
 
 #[derive(Debug, Clone)]
@@ -860,13 +923,16 @@ pub(super) fn project_home_feed(_: &PixivHomeFeed, ctx: ProjectionCtx<'_>) -> Ui
         }
 
         for item in &row.items {
-            let (_, child_view) = &child_views[item.index];
+            let (card_entity, child_view) = &child_views[item.index];
             let tile: UiView = Arc::new(
                 sized_box(child_view.clone())
                     .width(Dim::Fixed(Length::px(item.width)))
                     .height(Dim::Fixed(Length::px(row.height))),
             );
-            visible_cards.push(Arc::new(transformed(tile).translate((item.x, row.y))));
+            visible_cards.push(Arc::new(
+                transformed(opaque_hitbox_for_entity(*card_entity, tile))
+                    .translate((item.x, row.y)),
+            ));
         }
     }
 
@@ -946,6 +1012,55 @@ fn auth_avatar_view(world: &World, size_px: f64, style: &ResolvedStyle) -> UiVie
     }
 }
 
+fn detail_meta_value(world: &World, value: impl Into<String>) -> UiView {
+    let style = resolve_style_for_classes(world, ["pixiv.detail.meta.value"]);
+    Arc::new(apply_label_style(label(value.into()), &style))
+}
+
+fn detail_description_value(world: &World, value: impl Into<String>) -> UiView {
+    let style = resolve_style_for_classes(world, ["pixiv.detail.description"]);
+    Arc::new(apply_label_style(label(value.into()), &style))
+}
+
+fn detail_section(world: &World, title: String, body: UiView) -> UiView {
+    let section_style = resolve_style_for_classes(world, ["pixiv.detail.section"]);
+    let title_style = resolve_style_for_classes(world, ["pixiv.detail.section.title"]);
+
+    Arc::new(apply_widget_style(
+        flex_col((
+            apply_label_style(label(title), &title_style).into_any_flex(),
+            body.into_any_flex(),
+        ))
+        .cross_axis_alignment(CrossAxisAlignment::Stretch)
+        .width(Dim::Stretch),
+        &section_style,
+    ))
+}
+
+fn detail_description_text(illust: &Illust) -> Option<String> {
+    illust
+        .description
+        .as_ref()
+        .map(|text| text.replace("<br />", "\n").replace("<br/>", "\n"))
+        .map(|text| text.trim().to_string())
+        .filter(|text| !text.is_empty())
+}
+
+fn detail_image_info_text(world: &World, illust: &Illust) -> String {
+    let dimensions = if illust.width > 0 && illust.height > 0 {
+        format!("{}×{} px", illust.width, illust.height,)
+    } else {
+        tr(world, "pixiv.overlay.image-info-unknown", "Unknown size")
+    };
+
+    format!(
+        "{} · {} {}",
+        dimensions,
+        illust.page_count.max(1),
+        tr(world, "pixiv.overlay.pages", "pages")
+    )
+}
+
 pub(super) fn compact_author_name(author: &str) -> String {
     const MAX_AUTHOR_CHARS: usize = 22;
 
@@ -971,12 +1086,14 @@ fn illust_author_overlay(author: &str, avatar: UiView, style: &ResolvedStyle) ->
 
     let overlay_style = picus_core::ResolvedStyle {
         colors: overlay_colors,
-        layout: Default::default(),
+        layout: style.layout,
         text: style.text,
         font_family: style.font_family.clone(),
         box_shadow: None,
         transition: None,
     };
+    let author_label =
+        sized_box(apply_label_style(label(author.to_string()), &overlay_style)).width(Dim::Stretch);
 
     Arc::new(
         sized_box(apply_widget_style(
@@ -985,9 +1102,7 @@ fn illust_author_overlay(author: &str, avatar: UiView, style: &ResolvedStyle) ->
                     .fixed_width(Length::px(20.0))
                     .fixed_height(Length::px(20.0))
                     .into_any_flex(),
-                apply_label_style(label(author.to_string()), &overlay_style)
-                    .flex(1.0)
-                    .into_any_flex(),
+                Arc::new(author_label).flex(1.0).into_any_flex(),
             ))
             .cross_axis_alignment(CrossAxisAlignment::Center)
             .gap(Length::px(6.0))
@@ -1032,14 +1147,16 @@ pub(super) fn project_illust_card(_: &PixivIllustCard, ctx: ProjectionCtx<'_>) -
     let heart_icon_color = subtle_button_style.colors.text.unwrap_or(Color::WHITE);
     let heart_icon = LucideIcon::Heart;
 
-    let heart_button = sized_box(Arc::new(apply_direct_widget_style(
+    let heart_button = sized_box(Arc::new(
         button_with_child(
             action_entities.bookmark,
             AppAction::Bookmark(ctx.entity),
             lucide_icon(heart_icon, 16.0 * anim.heart_scale as f64, heart_icon_color),
-        ),
-        &subtle_button_style,
-    )))
+        )
+        .padding(0.0)
+        .border(Color::TRANSPARENT, 0.0)
+        .background_color(Color::TRANSPARENT),
+    ))
     .fixed_width(Length::px(40.0))
     .fixed_height(Length::px(32.0));
 
@@ -1099,9 +1216,9 @@ pub(super) fn project_illust_card(_: &PixivIllustCard, ctx: ProjectionCtx<'_>) -
 
     Arc::new(
         sized_box(
-            badged(open_button_view, heart_button)
-                .placement(BadgePlacement::TopRight)
-                .offset(KurboVec2::new(-28.0, 24.0)),
+            zstack(vec![open_button_view, Arc::new(heart_button)])
+                .alignment(UnitPoint::TOP_RIGHT)
+                .dims(Dim::Stretch),
         )
         .width(Dim::Stretch)
         .height(Dim::Stretch),
@@ -1117,77 +1234,182 @@ pub(super) fn project_detail_overlay(_: &PixivDetailOverlay, ctx: ProjectionCtx<
     let Some(illust) = ctx.world.get::<Illust>(entity) else {
         return empty_ui();
     };
-    let style = resolve_style(ctx.world, ctx.entity);
-    let ui_components = *ctx.world.resource::<PixivUiComponents>();
     let visual = ctx
         .world
         .get::<IllustVisual>(entity)
         .cloned()
         .unwrap_or_default();
+    let text_style = resolve_style(ctx.world, ctx.entity);
+    let hero_style = resolve_style_for_classes(ctx.world, ["pixiv.detail.hero"]);
+    let meta_style = resolve_style_for_classes(ctx.world, ["pixiv.detail.meta"]);
+    let (dialog_width, _dialog_height) = detail_dialog_size_for_overlay(ctx.world, ctx.entity);
+    let rail_width = compute_detail_meta_rail_width(dialog_width);
 
-    let hero: UiView = if let Some(high_res) = visual.high_res_ui {
-        Arc::new(sized_box(image(high_res)).fixed_height(Length::px(280.0)))
+    let hero: UiView = if let Some(high_res) = visual.high_res_ui.clone() {
+        Arc::new(apply_widget_style(
+            sized_box(image(high_res))
+                .width(Dim::Stretch)
+                .height(Dim::Stretch),
+            &hero_style,
+        ))
     } else {
-        Arc::new(label(tr(
-            ctx.world,
-            "pixiv.feed.high_res_loading",
-            "high-res loading…",
-        )))
-    };
-
-    let tags = ctx.children.into_iter().next().unwrap_or_else(empty_ui);
-
-    Arc::new(
-        sized_box(apply_widget_style(
+        Arc::new(apply_widget_style(
             flex_col((
-                flex_row((
-                    apply_label_style(
-                        label(tr(ctx.world, "pixiv.overlay.title", "Illustration Details")),
-                        &style,
-                    )
-                    .flex(1.0),
-                    action_button(
-                        ctx.world,
-                        ui_components.close_overlay,
-                        AppAction::CloseIllust,
-                        tr(ctx.world, "pixiv.overlay.close", "Close"),
-                    )
-                    .into_any_flex(),
-                ))
-                .into_any_flex(),
-                hero.into_any_flex(),
-                apply_label_style(label(illust.title.clone()), &style).into_any_flex(),
-                apply_label_style(
-                    label(format!(
-                        "{} {}",
-                        tr(ctx.world, "pixiv.overlay.author", "Author:"),
-                        illust.user.name
-                    )),
-                    &style,
+                lucide_icon(
+                    LucideIcon::Image,
+                    22.0,
+                    hero_style.colors.text.unwrap_or(Color::WHITE),
                 )
                 .into_any_flex(),
                 apply_label_style(
-                    label(format!(
-                        "{} {}  {} {}  {} {}",
+                    label(tr(
+                        ctx.world,
+                        "pixiv.feed.high_res_loading",
+                        "high-res loading…",
+                    )),
+                    &text_style,
+                )
+                .into_any_flex(),
+            ))
+            .cross_axis_alignment(CrossAxisAlignment::Center)
+            .main_axis_alignment(MainAxisAlignment::Center)
+            .width(Dim::Stretch)
+            .height(Dim::Stretch),
+            &hero_style,
+        ))
+    };
+
+    let tags = ctx.children.into_iter().next().unwrap_or_else(empty_ui);
+    let author_account = illust.user.account.clone().unwrap_or_else(|| {
+        tr(
+            ctx.world,
+            "pixiv.overlay.account-unknown",
+            "No public account",
+        )
+    });
+
+    let artwork_info = detail_section(
+        ctx.world,
+        tr(ctx.world, "pixiv.overlay.artwork-info", "Artwork info"),
+        Arc::new(
+            flex_col((
+                detail_meta_value(ctx.world, illust.title.clone()).into_any_flex(),
+                detail_meta_value(
+                    ctx.world,
+                    format!(
+                        "{} {} · {} {} · {} {}",
                         tr(ctx.world, "pixiv.overlay.views", "Views"),
                         illust.total_view,
                         tr(ctx.world, "pixiv.overlay.bookmarks", "Bookmarks"),
                         illust.total_bookmarks,
                         tr(ctx.world, "pixiv.overlay.comments", "Comments"),
                         illust.total_comments
-                    )),
-                    &style,
+                    ),
                 )
                 .into_any_flex(),
-                apply_label_style(label(tr(ctx.world, "pixiv.overlay.tags", "Tags")), &style)
-                    .into_any_flex(),
-                tags.into_any_flex(),
+                detail_meta_value(
+                    ctx.world,
+                    match illust.content_kind {
+                        PixivContentKind::Illust => {
+                            tr(ctx.world, "pixiv.overlay.type-illust", "Illustration")
+                        }
+                        PixivContentKind::Manga => {
+                            tr(ctx.world, "pixiv.overlay.type-manga", "Manga")
+                        }
+                        PixivContentKind::Novel => {
+                            tr(ctx.world, "pixiv.overlay.type-novel", "Novel")
+                        }
+                    },
+                )
+                .into_any_flex(),
             ))
             .cross_axis_alignment(CrossAxisAlignment::Stretch)
             .width(Dim::Stretch),
-            &style,
-        ))
-        .fixed_width(Length::px(760.0)),
+        ),
+    );
+
+    let author_info = detail_section(
+        ctx.world,
+        tr(ctx.world, "pixiv.overlay.author-info", "Author info"),
+        Arc::new(apply_widget_style(
+            flex_row((
+                sized_box(illust_avatar_view(&visual, &text_style))
+                    .fixed_width(Length::px(40.0))
+                    .fixed_height(Length::px(40.0))
+                    .into_any_flex(),
+                flex_col((
+                    detail_meta_value(ctx.world, illust.user.name.clone()).into_any_flex(),
+                    detail_meta_value(ctx.world, author_account).into_any_flex(),
+                ))
+                .cross_axis_alignment(CrossAxisAlignment::Stretch)
+                .flex(1.0)
+                .into_any_flex(),
+            ))
+            .cross_axis_alignment(CrossAxisAlignment::Center)
+            .width(Dim::Stretch),
+            &meta_style,
+        )),
+    );
+
+    let image_info = detail_section(
+        ctx.world,
+        tr(ctx.world, "pixiv.overlay.image-info", "Image info"),
+        detail_meta_value(ctx.world, detail_image_info_text(ctx.world, illust)),
+    );
+
+    let description = detail_section(
+        ctx.world,
+        tr(ctx.world, "pixiv.overlay.caption", "Caption"),
+        detail_description_value(
+            ctx.world,
+            detail_description_text(illust).unwrap_or_else(|| {
+                tr(
+                    ctx.world,
+                    "pixiv.overlay.description-empty",
+                    "No caption was provided for this artwork.",
+                )
+            }),
+        ),
+    );
+
+    let tags_section = detail_section(ctx.world, tr(ctx.world, "pixiv.overlay.tags", "Tags"), tags);
+
+    let info_column = flex_col((
+        artwork_info.into_any_flex(),
+        author_info.into_any_flex(),
+        image_info.into_any_flex(),
+        description.into_any_flex(),
+        tags_section.into_any_flex(),
+    ))
+    .cross_axis_alignment(CrossAxisAlignment::Stretch)
+    .width(Dim::Stretch)
+    .gap(Length::px(meta_style.layout.gap.max(12.0)));
+
+    let scrollable_info = Arc::new(apply_widget_style(
+        portal(info_column).dims((Dim::Stretch, Dim::Stretch)),
+        &meta_style,
+    ));
+
+    Arc::new(
+        sized_box(
+            flex_row((
+                sized_box(hero)
+                    .width(Dim::Stretch)
+                    .height(Dim::Stretch)
+                    .flex(1.65)
+                    .into_any_flex(),
+                sized_box(scrollable_info)
+                    .width(Length::px(rail_width))
+                    .height(Dim::Stretch)
+                    .into_any_flex(),
+            ))
+            .cross_axis_alignment(CrossAxisAlignment::Stretch)
+            .width(Dim::Stretch)
+            .height(Dim::Stretch)
+            .gap(Length::px(18.0)),
+        )
+        .width(Dim::Stretch)
+        .height(Dim::Stretch),
     )
 }
 
@@ -1312,5 +1534,34 @@ mod tests {
         assert_eq!(layout.rows.len(), 1);
         assert!(!layout.rows[0].justified);
         assert!((layout.rows[0].height - FEED_TARGET_ROW_HEIGHT).abs() < 1e-6);
+    }
+
+    #[test]
+    fn detail_dialog_size_scales_with_viewport_and_stays_clamped() {
+        let small = compute_detail_dialog_size(1024.0, 720.0);
+        let large = compute_detail_dialog_size(2200.0, 1400.0);
+        let compact = compute_detail_dialog_size(640.0, 480.0);
+
+        assert!(small.0 >= DETAIL_DIALOG_MIN_WIDTH);
+        assert!(small.1 >= DETAIL_DIALOG_MIN_HEIGHT);
+        assert!(large.0 > small.0);
+        assert!(large.1 > small.1);
+        assert!(large.0 <= DETAIL_DIALOG_MAX_WIDTH);
+        assert!(large.1 <= DETAIL_DIALOG_MAX_HEIGHT);
+        assert!(compact.0 < DETAIL_DIALOG_MIN_WIDTH);
+        assert!(compact.1 < DETAIL_DIALOG_MIN_HEIGHT);
+        assert!(compact.0 <= 640.0 - DETAIL_DIALOG_VIEWPORT_MARGIN_X * 2.0);
+        assert!(compact.1 <= 480.0 - DETAIL_DIALOG_VIEWPORT_MARGIN_Y * 2.0);
+    }
+
+    #[test]
+    fn detail_meta_rail_width_tracks_dialog_width_with_bounds() {
+        assert_eq!(compute_detail_meta_rail_width(560.0), 224.0);
+        assert_eq!(compute_detail_meta_rail_width(900.0), DETAIL_RAIL_MIN_WIDTH);
+        assert!(compute_detail_meta_rail_width(1320.0) > DETAIL_RAIL_MIN_WIDTH);
+        assert_eq!(
+            compute_detail_meta_rail_width(1800.0),
+            DETAIL_RAIL_MAX_WIDTH
+        );
     }
 }

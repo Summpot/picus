@@ -20,11 +20,11 @@ use picus_activation::{
 #[cfg(test)]
 use picus_core::bevy_app::PreUpdate;
 use picus_core::{
-    AppI18n, AppPicusExt, LUCIDE_FONT_FAMILY, OverlayComputedPosition, OverlayConfig,
-    OverlayPlacement, OverlayState, PicusPlugin, ProjectionCtx, ResolvedStyle, StyleClass,
-    StyleSheet, StyleValue, SyncAssetSource, SyncTextSource, UiComboBox, UiComboBoxChanged,
-    UiComboOption, UiDialog, UiEventQueue, UiRoot, UiTextInput, UiTextInputChanged, UiThemePicker,
-    UiView, apply_direct_widget_style, apply_label_style, apply_widget_style,
+    AppI18n, AppPicusExt, LUCIDE_FONT_FAMILY, OverlayComputedPosition, PicusPlugin, ProjectionCtx,
+    ResolvedStyle, StyleClass, StyleSheet, StyleValue, SyncAssetSource, SyncTextSource, UiComboBox,
+    UiComboBoxChanged, UiComboOption, UiDialog, UiEventQueue, UiRoot, UiTextInput,
+    UiTextInputChanged, UiThemePicker, UiView, apply_direct_widget_style, apply_label_style,
+    apply_widget_style,
     bevy_app::{App, Startup, Update},
     bevy_ecs::{hierarchy::ChildOf, prelude::*},
     bevy_tasks::{AsyncComputeTaskPool, IoTaskPool, TaskPool},
@@ -50,7 +50,7 @@ use picus_core::{
         winit::{dpi::LogicalSize, error::EventLoopError},
     },
 };
-use pixiv_client::{
+use pixcus::{
     AuthSession, AuthUserSummary, DecodedImageRgba, IdpUrlResponse, Illust, PixivApiClient,
     PixivContentKind, PixivResponse, build_browser_login_url, generate_pkce_code_verifier,
     pkce_s256_challenge,
@@ -85,22 +85,24 @@ use ui::{
 #[cfg(test)]
 mod tests {
     use super::*;
-    use picus_core::{UiScrollView, bevy_ecs::schedule::Schedule, bevy_math::Vec2};
+    use picus_core::{
+        OverlayPlacement, UiScrollView, bevy_ecs::schedule::Schedule, bevy_math::Vec2,
+    };
 
     fn mock_illust(title: &str) -> Illust {
         Illust {
             id: 1,
             title: title.to_string(),
-            image_urls: pixiv_client::ImageUrls {
+            image_urls: pixcus::ImageUrls {
                 medium: "https://example.com/m.jpg".to_string(),
                 large: "https://example.com/l.jpg".to_string(),
                 square_medium: "https://example.com/s.jpg".to_string(),
             },
-            user: pixiv_client::User {
+            user: pixcus::User {
                 id: 9,
                 name: "artist".to_string(),
                 account: Some("artist_account".to_string()),
-                profile_image_urls: pixiv_client::ProfileImageUrls {
+                profile_image_urls: pixcus::ProfileImageUrls {
                     medium: "https://example.com/avatar.jpg".to_string(),
                 },
             },
@@ -111,7 +113,7 @@ mod tests {
             is_bookmarked: false,
             page_count: 1,
             meta_single_page: None,
-            content_kind: pixiv_client::PixivContentKind::Illust,
+            content_kind: pixcus::PixivContentKind::Illust,
             description: None,
             width: 800,
             height: 600,
@@ -544,7 +546,6 @@ mod tests {
             search_submit: Entity::PLACEHOLDER,
             copy_response: Entity::PLACEHOLDER,
             clear_response: Entity::PLACEHOLDER,
-            close_overlay: Entity::PLACEHOLDER,
         });
 
         world.resource::<UiEventQueue>().push_typed(
@@ -807,7 +808,6 @@ mod tests {
             search_submit: Entity::PLACEHOLDER,
             copy_response: Entity::PLACEHOLDER,
             clear_response: Entity::PLACEHOLDER,
-            close_overlay: Entity::PLACEHOLDER,
         });
 
         world
@@ -915,6 +915,19 @@ mod tests {
     }
 
     #[test]
+    fn home_feed_wraps_translated_tiles_with_entity_hitboxes() {
+        let ui_source = include_str!("app/ui.rs");
+
+        assert!(
+            ui_source.contains("let (card_entity, child_view) = &child_views[item.index];")
+                && ui_source.contains("transformed(opaque_hitbox_for_entity(*card_entity, tile))")
+                && ui_source.contains(".translate((item.x, row.y))")
+                && !ui_source.contains("transformed(tile).translate((item.x, row.y))"),
+            "home feed tiles should use the card entity when wrapping translated tiles in opaque hitboxes"
+        );
+    }
+
+    #[test]
     fn card_hover_considers_thumbnail_and_bookmark_entities() {
         let ui_source = include_str!("app/ui.rs");
 
@@ -952,15 +965,60 @@ mod tests {
     }
 
     #[test]
-    fn heart_button_uses_badged_overlay_instead_of_translated_sibling_stack() {
+    fn author_overlay_budgets_text_width_inside_the_thumbnail_row() {
+        let ui_source = include_str!("app/ui.rs");
+
+        assert!(
+            ui_source.contains("let author_label =")
+                && ui_source.contains(
+                    "sized_box(apply_label_style(label(author.to_string()), &overlay_style))"
+                )
+                && ui_source.contains(".width(Dim::Stretch);")
+                && ui_source.contains("Arc::new(author_label).flex(1.0).into_any_flex()"),
+            "author overlay should constrain the author label to the remaining thumbnail row width"
+        );
+    }
+
+    #[test]
+    fn author_overlay_preserves_inherited_layout_style() {
+        let ui_source = include_str!("app/ui.rs");
+
+        assert!(
+            ui_source.contains("let overlay_style = picus_core::ResolvedStyle {")
+                && ui_source.contains("layout: style.layout,")
+                && !ui_source.contains("layout: Default::default(),"),
+            "author overlay should preserve inherited layout instead of resetting to the default scale"
+        );
+    }
+
+    #[test]
+    fn heart_button_is_direct_top_right_child_without_stretch_overlay_shell() {
         let ui_source = include_str!("app/ui.rs");
 
         assert!(
             ui_source.contains("let heart_button = sized_box")
-                && ui_source.contains("badged(open_button_view, heart_button)")
-                && ui_source.contains(".placement(BadgePlacement::TopRight)")
-                && ui_source.contains(".offset(KurboVec2::new(-28.0, 24.0))"),
-            "heart button should be overlaid via badged placement instead of a translated sibling"
+                && ui_source.contains("zstack(vec![open_button_view, Arc::new(heart_button)])")
+                && ui_source.contains(".alignment(UnitPoint::TOP_RIGHT)")
+                && !ui_source.contains("let heart_overlay: UiView = Arc::new(")
+                && !ui_source.contains("zstack(vec![Arc::new(heart_button)])")
+                && !ui_source.contains("badged(open_button_view, heart_button)"),
+            "heart button should be the outer stack's direct top-right child without a stretch overlay shell"
+        );
+    }
+
+    #[test]
+    fn heart_button_uses_icon_only_transparent_button_styling() {
+        let ui_source = include_str!("app/ui.rs");
+
+        assert!(
+            ui_source.contains("let heart_button = sized_box(Arc::new(\n        button_with_child(")
+                && ui_source.contains("AppAction::Bookmark(ctx.entity)")
+                && ui_source.contains(".padding(0.0)")
+                && ui_source.contains(".border(Color::TRANSPARENT, 0.0)")
+                && ui_source.contains(".background_color(Color::TRANSPARENT)")
+                && !ui_source.contains("let heart_button = sized_box(Arc::new(apply_direct_widget_style(")
+                && ui_source.contains("let heart_icon_color = subtle_button_style.colors.text.unwrap_or(Color::WHITE);"),
+            "heart button should stay clickable while rendering as an icon-only transparent affordance"
         );
     }
 
@@ -1026,7 +1084,7 @@ mod tests {
     fn info_plist_keeps_expected_bundle_identifier() {
         let plist = include_str!("../Info.plist");
         assert!(
-            plist.contains("<string>dev.summpot.example-pixiv-client</string>"),
+            plist.contains("<string>dev.summpot.example-pixcus</string>"),
             "Info.plist should keep the Pixiv app bundle identifier stable"
         );
     }
@@ -1057,7 +1115,6 @@ mod tests {
             search_submit: Entity::PLACEHOLDER,
             copy_response: Entity::PLACEHOLDER,
             clear_response: Entity::PLACEHOLDER,
-            close_overlay: Entity::PLACEHOLDER,
         });
 
         app.add_systems(PreUpdate, |queue: Res<UiEventQueue>| {
@@ -1088,14 +1145,7 @@ mod tests {
         let ui_components = *world.resource::<PixivUiComponents>();
         assert!(world.get::<PixivHomeFeed>(tree.home_feed).is_some());
         assert!(world.get::<PixivOverlayTags>(tree.overlay_tags).is_some());
-        let overlay_parent = world
-            .get::<ChildOf>(tree.overlay_tags)
-            .map(ChildOf::parent)
-            .expect("overlay tags should be parented to detail overlay");
-        let overlay_state = world
-            .get::<OverlayState>(overlay_parent)
-            .expect("detail overlay should carry OverlayState");
-        assert!(overlay_state.is_modal);
+        assert!(world.get::<ChildOf>(tree.overlay_tags).is_none());
         assert!(
             world
                 .query_filtered::<Entity, With<PixivAuthDialog>>()
@@ -1111,6 +1161,14 @@ mod tests {
                 .next()
                 .is_none(),
             "account menu overlay should be spawned on demand"
+        );
+        assert!(
+            world
+                .query_filtered::<Entity, With<PixivDetailDialog>>()
+                .iter(&world)
+                .next()
+                .is_none(),
+            "detail dialog should be spawned on demand"
         );
         assert!(
             world
@@ -1209,9 +1267,13 @@ mod tests {
             .iter(&world)
             .next()
             .expect("login dialog should spawn before dismissal");
-        world.entity_mut(dialog).despawn();
+        world
+            .resource::<UiEventQueue>()
+            .push_typed(dialog, picus_core::OverlayUiAction::DismissDialog);
+        picus_core::handle_overlay_actions(&mut world);
+        drain_ui_actions_and_dispatch(&mut world);
 
-        reconcile_auth_dialog_overlay_state(&mut world);
+        assert!(world.get_entity(dialog).is_err());
 
         let auth = world.resource::<AuthState>();
         assert!(!auth.login_dialog_open);
@@ -1219,6 +1281,236 @@ mod tests {
         assert_eq!(ui_components.code_verifier_input, Entity::PLACEHOLDER);
         assert_eq!(ui_components.auth_code_input, Entity::PLACEHOLDER);
         assert_eq!(ui_components.refresh_token_input, Entity::PLACEHOLDER);
+    }
+
+    #[test]
+    fn open_illust_spawns_built_in_detail_dialog_and_reparents_tags() {
+        let mut world = World::new();
+        world.insert_resource(AppI18n::new(parse_locale("en-US")));
+        world.insert_resource(UiEventQueue::default());
+        world.insert_resource(ViewportMetrics {
+            width: 1600.0,
+            height: 1000.0,
+        });
+        let mut schedule = Schedule::default();
+        schedule.add_systems(setup);
+        schedule.run(&mut world);
+
+        let illust = world.spawn(mock_illust_with_id(77)).id();
+
+        world
+            .resource::<UiEventQueue>()
+            .push_typed(Entity::PLACEHOLDER, AppAction::OpenIllust(illust));
+        drain_ui_actions_and_dispatch(&mut world);
+        ensure_detail_dialog_overlay(&mut world);
+
+        let dialog = world
+            .query_filtered::<Entity, With<PixivDetailDialog>>()
+            .iter(&world)
+            .next()
+            .expect("detail dialog should spawn after opening an illustration");
+        let dialog_component = world
+            .get::<UiDialog>(dialog)
+            .expect("detail dialog should carry UiDialog component");
+        let (expected_width, expected_height) = ui::compute_detail_dialog_size(1600.0, 1000.0);
+        assert_eq!(dialog_component.width, Some(expected_width));
+        assert_eq!(dialog_component.height, Some(expected_height));
+
+        let detail_body = world
+            .query_filtered::<Entity, With<PixivDetailOverlay>>()
+            .iter(&world)
+            .next()
+            .expect("detail dialog should contain the example detail body");
+        assert_eq!(
+            world
+                .get::<ChildOf>(detail_body)
+                .expect("detail body should be parented to the dialog")
+                .parent(),
+            dialog
+        );
+
+        let tags_entity = world.resource::<PixivUiTree>().overlay_tags;
+        assert_eq!(
+            world
+                .get::<ChildOf>(tags_entity)
+                .expect("tags should be reparented under the detail body")
+                .parent(),
+            detail_body
+        );
+    }
+
+    #[test]
+    fn reopening_detail_dialog_recreates_tags_container_and_children() {
+        let mut world = World::new();
+        world.insert_resource(AppI18n::new(parse_locale("en-US")));
+        world.insert_resource(UiEventQueue::default());
+        let mut schedule = Schedule::default();
+        schedule.add_systems(setup);
+        schedule.run(&mut world);
+
+        let mut illust = mock_illust_with_id(91);
+        illust.tags = vec![
+            pixcus::Tag {
+                name: "landscape".to_string(),
+                translated_name: Some("Landscape".to_string()),
+            },
+            pixcus::Tag {
+                name: "night".to_string(),
+                translated_name: None,
+            },
+        ];
+        let illust = world.spawn(illust).id();
+
+        world
+            .resource::<UiEventQueue>()
+            .push_typed(Entity::PLACEHOLDER, AppAction::OpenIllust(illust));
+        drain_ui_actions_and_dispatch(&mut world);
+        ensure_detail_dialog_overlay(&mut world);
+
+        let first_dialog = world
+            .query_filtered::<Entity, With<PixivDetailDialog>>()
+            .iter(&world)
+            .next()
+            .expect("detail dialog should exist before dismissal");
+        world.entity_mut(first_dialog).despawn();
+        reconcile_detail_dialog_overlay_state(&mut world);
+
+        world
+            .resource::<UiEventQueue>()
+            .push_typed(Entity::PLACEHOLDER, AppAction::OpenIllust(illust));
+        drain_ui_actions_and_dispatch(&mut world);
+        ensure_detail_dialog_overlay(&mut world);
+
+        let detail_body = world
+            .query_filtered::<Entity, With<PixivDetailOverlay>>()
+            .iter(&world)
+            .next()
+            .expect("detail body should exist after reopening");
+        let tags_entity = world.resource::<PixivUiTree>().overlay_tags;
+        assert!(world.get_entity(tags_entity).is_ok());
+        assert_eq!(
+            world
+                .get::<ChildOf>(tags_entity)
+                .expect("recreated tags container should be parented under detail body")
+                .parent(),
+            detail_body
+        );
+        assert_eq!(world.resource::<OverlayTags>().0.len(), 2);
+    }
+
+    #[test]
+    fn ensure_detail_dialog_overlay_refreshes_size_when_viewport_changes() {
+        let mut world = World::new();
+        world.insert_resource(AppI18n::new(parse_locale("en-US")));
+        world.insert_resource(UiEventQueue::default());
+        world.insert_resource(ViewportMetrics {
+            width: 1360.0,
+            height: 860.0,
+        });
+        let mut schedule = Schedule::default();
+        schedule.add_systems(setup);
+        schedule.run(&mut world);
+
+        let illust = world.spawn(mock_illust_with_id(123)).id();
+        world.resource_mut::<UiState>().selected_illust = Some(illust);
+        ensure_detail_dialog_overlay(&mut world);
+
+        let dialog = world
+            .query_filtered::<Entity, With<PixivDetailDialog>>()
+            .iter(&world)
+            .next()
+            .expect("detail dialog should exist after first ensure");
+        let initial = world
+            .get::<UiDialog>(dialog)
+            .expect("detail dialog should exist after first ensure");
+        let initial_size = (initial.width, initial.height);
+
+        *world.resource_mut::<ViewportMetrics>() = ViewportMetrics {
+            width: 1920.0,
+            height: 1200.0,
+        };
+        ensure_detail_dialog_overlay(&mut world);
+
+        let updated = world
+            .get::<UiDialog>(dialog)
+            .expect("detail dialog should exist after viewport update");
+        let expected = ui::compute_detail_dialog_size(1920.0, 1200.0);
+
+        assert_ne!(initial_size, (updated.width, updated.height));
+        assert_eq!(updated.width, Some(expected.0));
+        assert_eq!(updated.height, Some(expected.1));
+    }
+
+    #[test]
+    fn dismissing_spawned_detail_dialog_clears_selected_illust_state() {
+        let mut world = World::new();
+        world.insert_resource(AppI18n::new(parse_locale("en-US")));
+        world.insert_resource(UiEventQueue::default());
+        let mut schedule = Schedule::default();
+        schedule.add_systems(setup);
+        schedule.run(&mut world);
+
+        let illust = world.spawn(mock_illust_with_id(88)).id();
+
+        world
+            .resource::<UiEventQueue>()
+            .push_typed(Entity::PLACEHOLDER, AppAction::OpenIllust(illust));
+        drain_ui_actions_and_dispatch(&mut world);
+        ensure_detail_dialog_overlay(&mut world);
+
+        let dialog = world
+            .query_filtered::<Entity, With<PixivDetailDialog>>()
+            .iter(&world)
+            .next()
+            .expect("detail dialog should exist before dismissal");
+        world
+            .resource::<UiEventQueue>()
+            .push_typed(dialog, picus_core::OverlayUiAction::DismissDialog);
+        picus_core::handle_overlay_actions(&mut world);
+        drain_ui_actions_and_dispatch(&mut world);
+
+        assert!(world.get_entity(dialog).is_err());
+
+        assert!(world.resource::<UiState>().selected_illust.is_none());
+        assert!(world.resource::<OverlayTags>().0.is_empty());
+    }
+
+    #[test]
+    fn reconcile_detail_dialog_still_clears_state_as_fallback_when_overlay_disappears() {
+        let mut world = World::new();
+        world.insert_resource(AppI18n::new(parse_locale("en-US")));
+        world.insert_resource(UiEventQueue::default());
+        let mut schedule = Schedule::default();
+        schedule.add_systems(setup);
+        schedule.run(&mut world);
+
+        let illust = world.spawn(mock_illust_with_id(99)).id();
+        let overlay_parent = world.resource::<PixivUiTree>().overlay_tags;
+        let overlay_tag = world
+            .spawn((
+                OverlayTag {
+                    text: "fallback-tag".to_string(),
+                },
+                ChildOf(overlay_parent),
+            ))
+            .id();
+        world.insert_resource(OverlayTags(vec![overlay_tag]));
+
+        world.resource_mut::<UiState>().selected_illust = Some(illust);
+        ensure_detail_dialog_overlay(&mut world);
+
+        let dialog = world
+            .query_filtered::<Entity, With<PixivDetailDialog>>()
+            .iter(&world)
+            .next()
+            .expect("detail dialog should exist before fallback reconciliation");
+        world.entity_mut(dialog).despawn();
+
+        reconcile_detail_dialog_overlay_state(&mut world);
+
+        assert!(world.resource::<UiState>().selected_illust.is_none());
+        assert!(world.resource::<OverlayTags>().0.is_empty());
+        assert!(world.get_entity(overlay_tag).is_err());
     }
 
     #[test]
@@ -1260,6 +1552,11 @@ mod tests {
                 "pixiv-auth-close",
                 "pixiv-auth-show-login",
                 "pixiv-auth-logout",
+                "pixiv-overlay-artwork-info",
+                "pixiv-overlay-author-info",
+                "pixiv-overlay-image-info",
+                "pixiv-overlay-caption",
+                "pixiv-overlay-description-empty",
                 "pixiv-status-activation-code-missing",
                 "pixiv-status-activation-verifier-missing",
                 "pixiv-status-activation-exchange-started",
@@ -1314,7 +1611,6 @@ mod tests {
             search_submit: Entity::PLACEHOLDER,
             copy_response: Entity::PLACEHOLDER,
             clear_response: Entity::PLACEHOLDER,
-            close_overlay: Entity::PLACEHOLDER,
         });
 
         world.resource::<UiEventQueue>().push_typed(
@@ -1399,7 +1695,6 @@ mod tests {
             search_submit: Entity::PLACEHOLDER,
             copy_response: Entity::PLACEHOLDER,
             clear_response: Entity::PLACEHOLDER,
-            close_overlay: Entity::PLACEHOLDER,
         });
 
         world.resource::<UiEventQueue>().push_typed(
@@ -1427,15 +1722,14 @@ mod tests {
 
     #[test]
     fn embedded_pixiv_theme_ron_parses() {
-        picus_core::parse_stylesheet_ron(include_str!("../assets/themes/pixiv_client.ron"))
-            .expect("embedded pixiv_client stylesheet should parse");
+        picus_core::parse_stylesheet_ron(include_str!("../assets/themes/pixcus.ron"))
+            .expect("embedded pixcus stylesheet should parse");
     }
 
     #[test]
     fn pixiv_primary_button_uses_neutral_fluent_tokens() {
-        let sheet =
-            picus_core::parse_stylesheet_ron(include_str!("../assets/themes/pixiv_client.ron"))
-                .expect("embedded pixiv_client stylesheet should parse");
+        let sheet = picus_core::parse_stylesheet_ron(include_str!("../assets/themes/pixcus.ron"))
+            .expect("embedded pixcus stylesheet should parse");
 
         let button = sheet
             .get_class_values("pixiv.button")
@@ -1464,9 +1758,8 @@ mod tests {
 
     #[test]
     fn pixiv_text_input_uses_neutral_fluent_tokens() {
-        let sheet =
-            picus_core::parse_stylesheet_ron(include_str!("../assets/themes/pixiv_client.ron"))
-                .expect("embedded pixiv_client stylesheet should parse");
+        let sheet = picus_core::parse_stylesheet_ron(include_str!("../assets/themes/pixcus.ron"))
+            .expect("embedded pixcus stylesheet should parse");
 
         let input = sheet
             .get_class_values("pixiv.text-input")
@@ -1487,9 +1780,8 @@ mod tests {
 
     #[test]
     fn pixiv_card_uses_compact_spacing_tokens() {
-        let sheet =
-            picus_core::parse_stylesheet_ron(include_str!("../assets/themes/pixiv_client.ron"))
-                .expect("embedded pixiv_client stylesheet should parse");
+        let sheet = picus_core::parse_stylesheet_ron(include_str!("../assets/themes/pixcus.ron"))
+            .expect("embedded pixcus stylesheet should parse");
 
         let card = sheet
             .get_class_values("pixiv.card")
@@ -1510,9 +1802,8 @@ mod tests {
 
     #[test]
     fn pixiv_warn_button_uses_fluent_tokens() {
-        let sheet =
-            picus_core::parse_stylesheet_ron(include_str!("../assets/themes/pixiv_client.ron"))
-                .expect("embedded pixiv_client stylesheet should parse");
+        let sheet = picus_core::parse_stylesheet_ron(include_str!("../assets/themes/pixcus.ron"))
+            .expect("embedded pixcus stylesheet should parse");
         let warn = sheet
             .get_class_values("pixiv.button.warn")
             .expect("pixiv.button.warn class should exist");
@@ -1547,9 +1838,8 @@ mod tests {
 
     #[test]
     fn pixiv_auth_overlay_classes_exist() {
-        let sheet =
-            picus_core::parse_stylesheet_ron(include_str!("../assets/themes/pixiv_client.ron"))
-                .expect("embedded pixiv_client stylesheet should parse");
+        let sheet = picus_core::parse_stylesheet_ron(include_str!("../assets/themes/pixcus.ron"))
+            .expect("embedded pixcus stylesheet should parse");
 
         for class_name in [
             "pixiv.sidebar.footer",
@@ -1568,8 +1858,8 @@ mod tests {
     #[test]
     fn sync_font_stack_for_locale_preserves_tokenized_fields() {
         let mut sheet =
-            picus_core::parse_stylesheet_ron(include_str!("../assets/themes/pixiv_client.ron"))
-                .expect("embedded pixiv_client stylesheet should parse");
+            picus_core::parse_stylesheet_ron(include_str!("../assets/themes/pixcus.ron"))
+                .expect("embedded pixcus stylesheet should parse");
 
         // Pixiv sheet intentionally carries class rules with token refs but no local token map.
         assert!(sheet.tokens.is_empty());
@@ -1639,7 +1929,7 @@ mod tests {
         }
         assert!(
             source.contains("LucideIcon"),
-            "pixiv client should use lucide icons in app UI"
+            "pixcus should use lucide icons in app UI"
         );
     }
 

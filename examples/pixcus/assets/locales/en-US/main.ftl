@@ -52,6 +52,7 @@ pixiv-feed-novel-placeholder = Novel cover unavailable
 pixiv-feed-open = Open
 pixiv-feed-high-res-loading = High-res loading…
 
+pixiv-overlay-body = { "" }
 pixiv-overlay-close = Close
 pixiv-overlay-title = Illustration details
 pixiv-overlay-author = Author:
@@ -59,6 +60,17 @@ pixiv-overlay-views = Views
 pixiv-overlay-bookmarks = Bookmarks
 pixiv-overlay-comments = Comments
 pixiv-overlay-tags = Tags
+pixiv-overlay-artwork-info = Artwork info
+pixiv-overlay-author-info = Author info
+pixiv-overlay-image-info = Image info
+pixiv-overlay-image-info-unknown = Unknown size
+pixiv-overlay-pages = pages
+pixiv-overlay-caption = Caption
+pixiv-overlay-description-empty = No caption was provided for this artwork.
+pixiv-overlay-account-unknown = No public account
+pixiv-overlay-type-illust = Illustration
+pixiv-overlay-type-manga = Manga
+pixiv-overlay-type-novel = Novel
 
 pixiv-status-sidebar-collapsed = Sidebar collapsed
 pixiv-status-sidebar-expanded = Sidebar expanded

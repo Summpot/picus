@@ -43,11 +43,7 @@ pub fn generate_pkce_code_verifier() -> String {
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_nanos())
         .unwrap_or_default();
-    let seed = format!(
-        "pixiv-client-{now_nanos}-{}-{}",
-        std::process::id(),
-        HASH_SECRET
-    );
+    let seed = format!("pixcus-{now_nanos}-{}-{}", std::process::id(), HASH_SECRET);
     let digest = Sha256::digest(seed.as_bytes());
     URL_SAFE_NO_PAD.encode(digest)
 }

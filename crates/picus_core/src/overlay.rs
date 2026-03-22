@@ -16,6 +16,10 @@ use bevy_math::Vec2;
 use bevy_window::{PrimaryWindow, Window};
 use masonry::core::{Widget, WidgetRef};
 
+use crate::projection::dialog::{
+    dialog_dismiss_padding, dialog_surface_gap, dialog_surface_padding,
+    estimate_dialog_surface_height_px, estimate_dialog_surface_width_px,
+};
 use crate::{
     AnchoredTo, AppI18n, AutoDismiss, OverlayAnchorRect, OverlayComputedPosition, OverlayConfig,
     OverlayPlacement, OverlayStack, OverlayState, StopUiPointerPropagation, UiColorPicker,
@@ -32,8 +36,6 @@ use crate::{
 
 const OVERLAY_ANCHOR_GAP: f64 = 4.0;
 const DROPDOWN_MAX_VIEWPORT_HEIGHT: f64 = 300.0;
-const DIALOG_SURFACE_MIN_WIDTH: f64 = 240.0;
-const DIALOG_SURFACE_MAX_WIDTH: f64 = 400.0;
 const DROPDOWN_ITEM_HOVER_ENTER_DELAY_SECS: f32 = 0.015;
 
 /// Internal overlay actions emitted by built-in floating UI projectors.
@@ -287,6 +289,16 @@ fn despawn_entity_tree(world: &mut World, entity: Entity) {
 fn despawn_overlay_entity(world: &mut World, entity: Entity) {
     despawn_entity_tree(world, entity);
     remove_overlay_from_stack(world, entity);
+}
+
+fn dismiss_dialog_overlay(world: &mut World, dialog_entity: Entity) {
+    if let Some(mut close_action) = world.get_mut::<crate::UiDialogCloseAction>(dialog_entity)
+        && let Some(event) = close_action.take_event()
+    {
+        world.resource::<UiEventQueue>().push(event);
+    }
+
+    despawn_overlay_entity(world, dialog_entity);
 }
 
 fn close_anchored_overlay<T: Component<Mutability = Mutable>>(
@@ -698,7 +710,9 @@ fn close_date_picker_panel(world: &mut World, panel_entity: Entity) {
 }
 
 fn close_overlay_entity(world: &mut World, overlay_entity: Entity) {
-    if world.get::<UiDropdownMenu>(overlay_entity).is_some() {
+    if world.get::<UiDialog>(overlay_entity).is_some() {
+        dismiss_dialog_overlay(world, overlay_entity);
+    } else if world.get::<UiDropdownMenu>(overlay_entity).is_some() {
         close_dropdown(world, overlay_entity);
     } else if world.get::<UiThemePickerMenu>(overlay_entity).is_some() {
         close_theme_picker_menu(world, overlay_entity);
@@ -727,7 +741,7 @@ pub fn handle_overlay_actions(world: &mut World) {
         match event.action {
             OverlayUiAction::DismissDialog => {
                 if world.get::<UiDialog>(event.entity).is_some() {
-                    despawn_overlay_entity(world, event.entity);
+                    dismiss_dialog_overlay(world, event.entity);
                 }
             }
             OverlayUiAction::ToggleCombo => {
@@ -1221,72 +1235,6 @@ fn estimate_text_width_px(text: &str, font_size: f32) -> f64 {
     (units * font_size as f64).max(font_size as f64 * 2.0)
 }
 
-fn estimate_wrapped_lines(text: &str, font_size: f32, max_line_width: f64) -> usize {
-    let max_line_width = max_line_width.max(font_size as f64 * 2.0);
-    let mut total = 0_usize;
-
-    for raw_line in text.lines() {
-        let logical_line = if raw_line.is_empty() { " " } else { raw_line };
-        let width = estimate_text_width_px(logical_line, font_size);
-        let wrapped = (width / max_line_width).ceil() as usize;
-        total += wrapped.max(1);
-    }
-
-    total.max(1)
-}
-
-fn estimate_dialog_surface_width_px(
-    title: &str,
-    body: &str,
-    dismiss_label: &str,
-    title_size: f32,
-    body_size: f32,
-    dismiss_size: f32,
-    horizontal_padding: f64,
-) -> f64 {
-    let mut widest = estimate_text_width_px(title, title_size)
-        .max(estimate_text_width_px(dismiss_label, dismiss_size));
-
-    for line in body.lines() {
-        widest = widest.max(estimate_text_width_px(line, body_size));
-    }
-
-    (widest + horizontal_padding * 2.0 + 40.0)
-        .clamp(DIALOG_SURFACE_MIN_WIDTH, DIALOG_SURFACE_MAX_WIDTH)
-}
-
-#[expect(
-    clippy::too_many_arguments,
-    reason = "Layout estimator inputs intentionally mirror independently styled dialog fields"
-)]
-fn estimate_dialog_surface_height_px(
-    title: &str,
-    body: &str,
-    dialog_surface_width: f64,
-    title_size: f32,
-    body_size: f32,
-    dismiss_size: f32,
-    dismiss_padding: f64,
-    gap: f64,
-    horizontal_padding: f64,
-    vertical_padding: f64,
-) -> f64 {
-    let title_line_height = (title_size as f64 * 1.35).max(18.0);
-    let body_line_height = (body_size as f64 * 1.45).max(18.0);
-    let dismiss_height = (dismiss_size as f64 * 1.25 + dismiss_padding * 2.0).max(30.0);
-
-    let text_max_width = (dialog_surface_width - horizontal_padding * 2.0 - 8.0).max(120.0);
-    let title_lines = estimate_wrapped_lines(title, title_size, text_max_width);
-    let body_lines = estimate_wrapped_lines(body, body_size, text_max_width);
-
-    (vertical_padding * 2.0
-        + title_lines as f64 * title_line_height
-        + body_lines as f64 * body_line_height
-        + dismiss_height
-        + gap * 2.0)
-        .max(120.0)
-}
-
 fn estimate_dropdown_surface_width_px<'a>(
     anchor_width: f64,
     labels: impl IntoIterator<Item = &'a str>,
@@ -1349,28 +1297,33 @@ fn overlay_size_for_entity(
         let dismiss_label =
             translate_text(world, dialog.dismiss_key.as_deref(), &dialog.dismiss_label);
 
-        let width = estimate_dialog_surface_width_px(
+        let estimated_width = estimate_dialog_surface_width_px(
             &title,
             &body,
             &dismiss_label,
             title_style.text.size,
             body_style.text.size,
             dismiss_style.text.size,
-            dialog_style.layout.padding.max(12.0),
+            dialog_surface_padding(dialog_style.layout.padding),
         );
 
-        let height = estimate_dialog_surface_height_px(
+        let width = dialog.width.unwrap_or(estimated_width);
+
+        let estimated_height = estimate_dialog_surface_height_px(
             &title,
             &body,
+            &dismiss_label,
             width,
             title_style.text.size,
             body_style.text.size,
             dismiss_style.text.size,
-            dismiss_style.layout.padding.max(8.0),
-            dialog_style.layout.gap.max(10.0),
-            dialog_style.layout.padding.max(12.0),
-            dialog_style.layout.padding.max(12.0),
+            dialog_dismiss_padding(dismiss_style.layout.padding),
+            dialog_surface_gap(dialog_style.layout.gap),
+            dialog_surface_padding(dialog_style.layout.padding),
+            dialog_surface_padding(dialog_style.layout.padding),
         );
+
+        let height = dialog.height.unwrap_or(estimated_height);
 
         return (width, height);
     }
@@ -2148,7 +2101,11 @@ pub fn clear_stale_pressed_interactions(world: &mut World) {
 mod tests {
     use super::{
         OVERLAY_ANCHOR_GAP, OverlayAnchorRect, OverlayPlacement, overlay_origin_for_placement,
+        overlay_size_for_entity,
     };
+    use crate::UiDialog;
+    use bevy_ecs::world::World;
+    use std::collections::HashMap;
 
     #[test]
     fn top_placement_is_horizontally_centered_on_anchor() {
@@ -2190,5 +2147,17 @@ mod tests {
 
         assert_eq!(x, 96.0);
         assert_eq!(y, 152.0);
+    }
+
+    #[test]
+    fn dialog_overlay_size_prefers_fixed_hints() {
+        let mut world = World::new();
+        let dialog = world
+            .spawn((UiDialog::new("title", "body").with_fixed_size(920.0, 760.0),))
+            .id();
+
+        let (width, height) = overlay_size_for_entity(&world, dialog, &HashMap::new());
+
+        assert_eq!((width, height), (920.0, 760.0));
     }
 }
