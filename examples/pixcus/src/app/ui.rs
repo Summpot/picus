@@ -1,7 +1,7 @@
 use super::*;
 
 use picus_core::{
-    InteractionState, UiScrollView,
+    UiScrollView,
     bevy_math::Vec2,
     opaque_hitbox_for_entity,
     xilem::{
@@ -1061,60 +1061,6 @@ fn detail_image_info_text(world: &World, illust: &Illust) -> String {
     )
 }
 
-pub(super) fn compact_author_name(author: &str) -> String {
-    const MAX_AUTHOR_CHARS: usize = 22;
-
-    let mut compact = author
-        .chars()
-        .take(MAX_AUTHOR_CHARS + 1)
-        .collect::<String>();
-    if compact.chars().count() <= MAX_AUTHOR_CHARS {
-        return compact;
-    }
-
-    compact = compact.chars().take(MAX_AUTHOR_CHARS).collect();
-    compact.push('…');
-    compact
-}
-
-fn illust_author_overlay(author: &str, avatar: UiView, style: &ResolvedStyle) -> UiView {
-    let overlay_colors = picus_core::ResolvedColorStyle {
-        bg: Some(Color::from_rgba8(0, 0, 0, 180)),
-        text: style.colors.text,
-        border: None,
-    };
-
-    let overlay_style = picus_core::ResolvedStyle {
-        colors: overlay_colors,
-        layout: style.layout,
-        text: style.text,
-        font_family: style.font_family.clone(),
-        box_shadow: None,
-        transition: None,
-    };
-    let author_label =
-        sized_box(apply_label_style(label(author.to_string()), &overlay_style)).width(Dim::Stretch);
-
-    Arc::new(
-        sized_box(apply_widget_style(
-            flex_row((
-                sized_box(avatar)
-                    .fixed_width(Length::px(20.0))
-                    .fixed_height(Length::px(20.0))
-                    .into_any_flex(),
-                Arc::new(author_label).flex(1.0).into_any_flex(),
-            ))
-            .cross_axis_alignment(CrossAxisAlignment::Center)
-            .gap(Length::px(6.0))
-            .width(Dim::Stretch)
-            .height(Dim::Fixed(Length::px(32.0))),
-            &overlay_style,
-        ))
-        .width(Dim::Stretch)
-        .height(Dim::Fixed(Length::px(32.0))),
-    )
-}
-
 pub(super) fn project_illust_card(_: &PixivIllustCard, ctx: ProjectionCtx<'_>) -> UiView {
     let Some(illust) = ctx.world.get::<Illust>(ctx.entity) else {
         return empty_ui();
@@ -1130,7 +1076,6 @@ pub(super) fn project_illust_card(_: &PixivIllustCard, ctx: ProjectionCtx<'_>) -
         .get::<CardAnimState>(ctx.entity)
         .copied()
         .unwrap_or_default();
-    let style = resolve_style(ctx.world, ctx.entity);
     let action_entities = ctx
         .world
         .get::<IllustActionEntities>(ctx.entity)
@@ -1160,54 +1105,11 @@ pub(super) fn project_illust_card(_: &PixivIllustCard, ctx: ProjectionCtx<'_>) -
     .fixed_width(Length::px(40.0))
     .fixed_height(Length::px(32.0));
 
-    let author_avatar = illust_avatar_view(&visual, &style);
-
-    let hovered = ctx
-        .world
-        .get::<InteractionState>(action_entities.open_thumbnail)
-        .map(|state| state.hovered)
-        .unwrap_or(false)
-        || ctx
-            .world
-            .get::<InteractionState>(action_entities.bookmark)
-            .map(|state| state.hovered)
-            .unwrap_or(false);
-
-    let overlay_body: UiView = if hovered {
-        illust_author_overlay(
-            &compact_author_name(&illust.user.name),
-            author_avatar,
-            &style,
-        )
-    } else {
-        Arc::new(
-            sized_box(empty_ui())
-                .width(Dim::Stretch)
-                .height(Dim::Fixed(Length::px(32.0))),
-        )
-    };
-
-    let author_overlay: UiView = Arc::new(
-        sized_box(overlay_body)
-            .width(Dim::Stretch)
-            .height(Dim::Fixed(Length::px(32.0))),
-    );
-
-    let image_view = sized_box(illust_thumbnail_view(ctx.world, illust, &visual))
-        .width(Dim::Stretch)
-        .height(Dim::Stretch);
-
-    let image_with_overlay: UiView = Arc::new(
-        zstack(vec![Arc::new(image_view), author_overlay])
-            .alignment(UnitPoint::BOTTOM_LEFT)
-            .dims(Dim::Stretch),
-    );
-
     let open_button_view: UiView = Arc::new(
         button_with_child(
             action_entities.open_thumbnail,
             AppAction::OpenIllust(ctx.entity),
-            image_with_overlay,
+            illust_thumbnail_view(ctx.world, illust, &visual),
         )
         .padding(0.0)
         .border(Color::TRANSPARENT, 0.0)

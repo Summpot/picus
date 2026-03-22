@@ -894,28 +894,18 @@ mod tests {
     }
 
     #[test]
-    fn compact_author_name_keeps_short_names_and_ellipsizes_long_ones() {
-        assert_eq!(ui::compact_author_name("summpot"), "summpot");
-        assert_eq!(
-            ui::compact_author_name("a very long display name for an illustrator"),
-            "a very long display na…"
-        );
-        assert_eq!(
-            ui::compact_author_name("这是一位名字特别特别长的作者示例"),
-            "这是一位名字特别特别长的作者示例"
-        );
-    }
-
-    #[test]
-    fn author_overlay_uses_noninteractive_sized_wrapper_inside_thumbnail_button() {
+    fn thumbnail_open_button_wraps_thumbnail_view_directly() {
         let ui_source = include_str!("app/ui.rs");
 
         assert!(
-            ui_source.contains("let overlay_body: UiView = if hovered {")
-                && ui_source.contains(
-                    "let author_overlay: UiView = Arc::new(\n        sized_box(overlay_body)"
-                ),
-            "author overlay should stay a non-interactive sized layer inside the thumbnail button"
+            ui_source.contains("button_with_child(")
+                && ui_source.contains("AppAction::OpenIllust(ctx.entity)")
+                && ui_source.contains("illust_thumbnail_view(ctx.world, illust, &visual),")
+                && !ui_source.contains("let image_with_overlay: UiView = Arc::new(")
+                && !ui_source.contains("compact_author_name(")
+                && !ui_source.contains("illust_author_overlay(")
+                && !ui_source.contains("InteractionState"),
+            "thumbnail button should render the thumbnail view directly without hover author overlay helpers"
         );
     }
 
@@ -933,66 +923,15 @@ mod tests {
     }
 
     #[test]
-    fn card_hover_considers_thumbnail_and_bookmark_entities() {
+    fn illust_card_keeps_simplified_outer_stack_with_heart_button() {
         let ui_source = include_str!("app/ui.rs");
 
         assert!(
-            ui_source.contains("get::<InteractionState>(action_entities.open_thumbnail)")
-                && ui_source.contains("get::<InteractionState>(action_entities.bookmark)")
-                && ui_source.contains(".unwrap_or(false)\n        || ctx"),
-            "card hover should stay active when either thumbnail or bookmark is hovered"
-        );
-    }
-
-    #[test]
-    fn author_overlay_stays_inside_thumbnail_image_stack() {
-        let ui_source = include_str!("app/ui.rs");
-
-        assert!(
-            ui_source.contains("let image_with_overlay: UiView = Arc::new(")
-                && ui_source.contains("zstack(vec![Arc::new(image_view), author_overlay])")
-                && ui_source.contains("button_with_child(")
-                && ui_source.contains("image_with_overlay,"),
-            "author overlay should be painted inside the thumbnail image stack"
-        );
-    }
-
-    #[test]
-    fn author_overlay_wrapper_has_explicit_stack_dimensions() {
-        let ui_source = include_str!("app/ui.rs");
-
-        assert!(
-            ui_source.contains("let author_overlay: UiView = Arc::new(")
-                && ui_source.contains(".width(Dim::Stretch)")
-                && ui_source.contains(".height(Dim::Fixed(Length::px(32.0)))"),
-            "author overlay wrapper should keep explicit dimensions inside the zstack"
-        );
-    }
-
-    #[test]
-    fn author_overlay_budgets_text_width_inside_the_thumbnail_row() {
-        let ui_source = include_str!("app/ui.rs");
-
-        assert!(
-            ui_source.contains("let author_label =")
-                && ui_source.contains(
-                    "sized_box(apply_label_style(label(author.to_string()), &overlay_style))"
-                )
-                && ui_source.contains(".width(Dim::Stretch);")
-                && ui_source.contains("Arc::new(author_label).flex(1.0).into_any_flex()"),
-            "author overlay should constrain the author label to the remaining thumbnail row width"
-        );
-    }
-
-    #[test]
-    fn author_overlay_preserves_inherited_layout_style() {
-        let ui_source = include_str!("app/ui.rs");
-
-        assert!(
-            ui_source.contains("let overlay_style = picus_core::ResolvedStyle {")
-                && ui_source.contains("layout: style.layout,")
-                && !ui_source.contains("layout: Default::default(),"),
-            "author overlay should preserve inherited layout instead of resetting to the default scale"
+            ui_source.contains("let open_button_view: UiView = Arc::new(")
+                && ui_source.contains("zstack(vec![open_button_view, Arc::new(heart_button)])")
+                && !ui_source.contains("let author_overlay: UiView = Arc::new(")
+                && !ui_source.contains("let overlay_body: UiView = if hovered {"),
+            "illust card should keep the simplified outer thumbnail-plus-heart stack without author overlay layers"
         );
     }
 
