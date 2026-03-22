@@ -21,6 +21,7 @@ pub(crate) enum VectorIcon {
     RadioOff,
     RadioOn,
     SunMoon,
+    X,
 }
 
 pub(crate) fn vector_icon(icon: VectorIcon, size_px: f64, color: xilem::Color) -> UiView {
@@ -32,6 +33,7 @@ pub(crate) fn vector_icon(icon: VectorIcon, size_px: f64, color: xilem::Color) -
         VectorIcon::RadioOff => PicusIcon::Circle,
         VectorIcon::RadioOn => PicusIcon::CircleDot,
         VectorIcon::SunMoon => PicusIcon::SunMoon,
+        VectorIcon::X => PicusIcon::X,
     };
 
     let mut icon_style = ResolvedStyle::default();

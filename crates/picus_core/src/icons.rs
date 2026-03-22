@@ -17,6 +17,7 @@ pub enum PicusIcon {
     ChevronRight,
     Circle,
     CircleDot,
+    X,
     SunMoon,
 }
 
@@ -30,6 +31,7 @@ impl PicusIcon {
             Self::ChevronRight => lucide_icons::Icon::ChevronRight,
             Self::Circle => lucide_icons::Icon::Circle,
             Self::CircleDot => lucide_icons::Icon::CircleDot,
+            Self::X => lucide_icons::Icon::X,
             Self::SunMoon => lucide_icons::Icon::SunMoon,
         }
     }

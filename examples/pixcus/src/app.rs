@@ -76,10 +76,10 @@ use activation::poll_activation_messages;
 pub(crate) use bootstrap::run;
 use network::{apply_image_results, apply_network_results, spawn_image_tasks, spawn_network_tasks};
 use ui::{
-    project_account_menu, project_auth_dialog_form, project_auth_panel, project_detail_overlay,
-    project_home_feed, project_illust_card, project_main_column, project_overlay_tag,
-    project_overlay_tags, project_response_panel, project_root, project_search_panel,
-    project_sidebar,
+    project_account_menu, project_auth_dialog_form, project_auth_panel, project_detail_meta_rail,
+    project_detail_overlay, project_home_feed, project_illust_card, project_main_column,
+    project_overlay_tag, project_overlay_tags, project_response_panel, project_root,
+    project_search_panel, project_sidebar,
 };
 
 #[cfg(test)]
@@ -235,6 +235,7 @@ mod tests {
         world.insert_resource(PixivUiTree {
             feed_scroll,
             home_feed: Entity::PLACEHOLDER,
+            detail_scroll: Entity::PLACEHOLDER,
             overlay_tags: Entity::PLACEHOLDER,
         });
         world.insert_resource(ViewportMetrics::default());
@@ -269,6 +270,7 @@ mod tests {
         world.insert_resource(PixivUiTree {
             feed_scroll,
             home_feed: Entity::PLACEHOLDER,
+            detail_scroll: Entity::PLACEHOLDER,
             overlay_tags: Entity::PLACEHOLDER,
         });
         world.insert_resource(ViewportMetrics {
@@ -307,6 +309,7 @@ mod tests {
         world.insert_resource(PixivUiTree {
             feed_scroll,
             home_feed,
+            detail_scroll: Entity::PLACEHOLDER,
             overlay_tags: Entity::PLACEHOLDER,
         });
         world.insert_resource(UiState::default());
@@ -405,6 +408,7 @@ mod tests {
         world.insert_resource(PixivUiTree {
             feed_scroll,
             home_feed,
+            detail_scroll: Entity::PLACEHOLDER,
             overlay_tags: Entity::PLACEHOLDER,
         });
         world.insert_resource(UiState::default());
@@ -715,6 +719,7 @@ mod tests {
         world.insert_resource(PixivUiTree {
             feed_scroll,
             home_feed,
+            detail_scroll: Entity::PLACEHOLDER,
             overlay_tags: overlay_parent,
         });
         world.insert_resource(UiState {
@@ -1019,6 +1024,22 @@ mod tests {
                 && !ui_source.contains("let heart_button = sized_box(Arc::new(apply_direct_widget_style(")
                 && ui_source.contains("let heart_icon_color = subtle_button_style.colors.text.unwrap_or(Color::WHITE);"),
             "heart button should stay clickable while rendering as an icon-only transparent affordance"
+        );
+    }
+
+    #[test]
+    fn detail_dialog_meta_rail_uses_real_scroll_view_pattern() {
+        let ui_source = include_str!("app/ui.rs");
+        let bootstrap_source = include_str!("app/bootstrap.rs");
+
+        assert!(
+            ui_source
+                .contains("sized_box(ctx.children.into_iter().next().unwrap_or_else(empty_ui))")
+                && ui_source.contains("pub(super) fn project_detail_meta_rail")
+                && bootstrap_source.contains("UiScrollView::new(")
+                && bootstrap_source.contains("PixivDetailRailScroll")
+                && bootstrap_source.contains("PixivDetailMetaRail"),
+            "detail dialog metadata should be rendered through a real UiScrollView child rail"
         );
     }
 
@@ -1329,13 +1350,36 @@ mod tests {
             dialog
         );
 
+        let detail_scroll = world.resource::<PixivUiTree>().detail_scroll;
+        assert!(world.get::<UiScrollView>(detail_scroll).is_some());
+        assert_eq!(
+            world
+                .get::<ChildOf>(detail_scroll)
+                .expect("detail rail scroll should be parented to the detail body")
+                .parent(),
+            detail_body
+        );
+
+        let detail_meta_rail = world
+            .query_filtered::<Entity, With<PixivDetailMetaRail>>()
+            .iter(&world)
+            .next()
+            .expect("detail dialog should contain a scrollable metadata rail child");
+        assert_eq!(
+            world
+                .get::<ChildOf>(detail_meta_rail)
+                .expect("detail metadata rail should be parented to the detail scroll view")
+                .parent(),
+            detail_scroll
+        );
+
         let tags_entity = world.resource::<PixivUiTree>().overlay_tags;
         assert_eq!(
             world
                 .get::<ChildOf>(tags_entity)
-                .expect("tags should be reparented under the detail body")
+                .expect("tags should be reparented under the detail metadata rail")
                 .parent(),
-            detail_body
+            detail_meta_rail
         );
     }
 
@@ -1386,14 +1430,34 @@ mod tests {
             .iter(&world)
             .next()
             .expect("detail body should exist after reopening");
+        let detail_scroll = world.resource::<PixivUiTree>().detail_scroll;
+        assert_eq!(
+            world
+                .get::<ChildOf>(detail_scroll)
+                .expect("recreated detail rail scroll should be parented under detail body")
+                .parent(),
+            detail_body
+        );
+        let detail_meta_rail = world
+            .query_filtered::<Entity, With<PixivDetailMetaRail>>()
+            .iter(&world)
+            .next()
+            .expect("recreated detail metadata rail should exist");
+        assert_eq!(
+            world
+                .get::<ChildOf>(detail_meta_rail)
+                .expect("recreated detail metadata rail should be parented under detail scroll")
+                .parent(),
+            detail_scroll
+        );
         let tags_entity = world.resource::<PixivUiTree>().overlay_tags;
         assert!(world.get_entity(tags_entity).is_ok());
         assert_eq!(
             world
                 .get::<ChildOf>(tags_entity)
-                .expect("recreated tags container should be parented under detail body")
+                .expect("recreated tags container should be parented under detail metadata rail")
                 .parent(),
-            detail_body
+            detail_meta_rail
         );
         assert_eq!(world.resource::<OverlayTags>().0.len(), 2);
     }

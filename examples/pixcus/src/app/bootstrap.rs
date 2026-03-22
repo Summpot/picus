@@ -93,6 +93,16 @@ fn detail_overlay_entity(world: &mut World) -> Option<Entity> {
     query.iter(world).next()
 }
 
+fn detail_scroll_entity(world: &mut World) -> Option<Entity> {
+    let mut query = world.query_filtered::<Entity, With<PixivDetailRailScroll>>();
+    query.iter(world).next()
+}
+
+fn detail_meta_rail_entity(world: &mut World) -> Option<Entity> {
+    let mut query = world.query_filtered::<Entity, With<PixivDetailMetaRail>>();
+    query.iter(world).next()
+}
+
 fn account_menu_entity(world: &mut World) -> Option<Entity> {
     let mut query = world.query_filtered::<Entity, With<PixivAccountMenu>>();
     query.iter(world).next()
@@ -297,7 +307,7 @@ pub(super) fn ensure_detail_dialog_overlay(world: &mut World) {
         world.resource::<ViewportMetrics>().height as f64,
     );
 
-    let detail_overlay = if let Some(existing) = detail_overlay_entity(world) {
+    if let Some(existing) = detail_overlay_entity(world) {
         existing
     } else {
         let dialog = detail_dialog_entity(world).unwrap_or_else(|| {
@@ -321,8 +331,29 @@ pub(super) fn ensure_detail_dialog_overlay(world: &mut World) {
             )
         });
 
-        world.spawn((PixivDetailOverlay, ChildOf(dialog))).id()
+        let overlay = world.spawn((PixivDetailOverlay, ChildOf(dialog))).id();
+
+        let scroll = world
+            .spawn((
+                UiScrollView::new(
+                    Vec2::new(detail_width as f32, detail_height as f32),
+                    Vec2::new(detail_width as f32, detail_height as f32),
+                )
+                .with_vertical_scrollbar(true)
+                .with_horizontal_scrollbar(false),
+                PixivDetailRailScroll,
+                ChildOf(overlay),
+            ))
+            .id();
+
+        world.spawn((PixivDetailMetaRail, ChildOf(scroll)));
+
+        overlay
     };
+
+    let rail_width = ui::compute_detail_meta_rail_width(detail_width);
+    let detail_scroll = detail_scroll_entity(world).expect("detail rail scroll should exist");
+    world.resource_mut::<PixivUiTree>().detail_scroll = detail_scroll;
 
     if let Some(dialog_entity) = detail_dialog_entity(world)
         && let Some(mut dialog) = world.get_mut::<UiDialog>(dialog_entity)
@@ -331,7 +362,17 @@ pub(super) fn ensure_detail_dialog_overlay(world: &mut World) {
         dialog.height = Some(detail_height);
     }
 
-    let _ = ensure_overlay_tags_container(world, Some(detail_overlay));
+    if let Some(mut scroll_view) = world.get_mut::<UiScrollView>(detail_scroll) {
+        scroll_view.viewport_size = Vec2::new(rail_width as f32, detail_height as f32);
+        scroll_view.content_size.x = scroll_view.content_size.x.max(rail_width as f32);
+        scroll_view.content_size.y = scroll_view.content_size.y.max(detail_height as f32);
+        scroll_view.show_vertical_scrollbar = true;
+        scroll_view.show_horizontal_scrollbar = false;
+        scroll_view.clamp_scroll_offset();
+    }
+
+    let detail_meta_rail = detail_meta_rail_entity(world).expect("detail meta rail should exist");
+    let _ = ensure_overlay_tags_container(world, Some(detail_meta_rail));
     prepare_overlay_tags(world, selected_illust);
 }
 
@@ -666,6 +707,7 @@ pub(super) fn setup(mut commands: Commands, i18n: Res<AppI18n>) {
         world.insert_resource(PixivUiTree {
             feed_scroll,
             home_feed,
+            detail_scroll: Entity::PLACEHOLDER,
             overlay_tags,
         });
     });
@@ -699,6 +741,7 @@ picus_core::impl_ui_component_template!(PixivSearchPanel, project_search_panel);
 picus_core::impl_ui_component_template!(PixivHomeFeed, project_home_feed);
 picus_core::impl_ui_component_template!(PixivIllustCard, project_illust_card);
 picus_core::impl_ui_component_template!(PixivDetailOverlay, project_detail_overlay);
+picus_core::impl_ui_component_template!(PixivDetailMetaRail, project_detail_meta_rail);
 picus_core::impl_ui_component_template!(PixivOverlayTags, project_overlay_tags);
 picus_core::impl_ui_component_template!(OverlayTag, project_overlay_tag);
 
@@ -781,6 +824,7 @@ pub(super) fn build_app(mut activation_service: Option<ActivationService>) -> Ap
     .register_ui_component::<PixivHomeFeed>()
     .register_ui_component::<PixivIllustCard>()
     .register_ui_component::<PixivDetailOverlay>()
+    .register_ui_component::<PixivDetailMetaRail>()
     .register_ui_component::<PixivOverlayTags>()
     .register_ui_component::<OverlayTag>()
     .add_tween_systems(Update, component_tween_system::<CardAnimLens>())

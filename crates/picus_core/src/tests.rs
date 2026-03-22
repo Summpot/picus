@@ -2358,7 +2358,7 @@ fn dialog_dismiss_button_targets_dialog_entity() {
         let runtime = app.world().non_send_resource::<crate::MasonryRuntime>();
         let root = runtime.render_root.get_layer_root(0);
         let mut button_rects = Vec::new();
-        collect_widget_bounds_by_short_name(root, "EcsButtonWidget", &mut button_rects);
+        collect_widget_bounds_by_short_name(root, "EcsButtonWithChildWidget", &mut button_rects);
 
         button_rects
             .into_iter()
@@ -2394,7 +2394,7 @@ fn dialog_dismiss_button_targets_dialog_entity() {
             .unwrap_or_default()
     };
 
-    assert_eq!(hit_widget.as_str(), "EcsButtonWidget");
+    assert_eq!(hit_widget.as_str(), "EcsButtonWithChildWidget");
     assert_eq!(hit_debug_text, format!("entity={}", dialog.to_bits()));
 
     let content_width = content_rect.max.x - content_rect.min.x;
@@ -2441,7 +2441,7 @@ fn dialog_projects_single_dismiss_button_without_fullscreen_backdrop_button() {
         let runtime = app.world().non_send_resource::<crate::MasonryRuntime>();
         let root = runtime.render_root.get_layer_root(0);
         let mut button_rects = Vec::new();
-        collect_widget_bounds_by_short_name(root, "EcsButtonWidget", &mut button_rects);
+        collect_widget_bounds_by_short_name(root, "EcsButtonWithChildWidget", &mut button_rects);
         button_rects
     };
 

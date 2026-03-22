@@ -218,6 +218,7 @@ pub(super) struct PixivUiComponents {
 pub(super) struct PixivUiTree {
     pub feed_scroll: Entity,
     pub home_feed: Entity,
+    pub detail_scroll: Entity,
     pub overlay_tags: Entity,
 }
 
@@ -244,6 +245,12 @@ pub(super) struct PixivDetailDialog;
 
 #[derive(Component, Debug, Clone, Copy)]
 pub(super) struct PixivDetailOverlay;
+
+#[derive(Component, Debug, Clone, Copy)]
+pub(super) struct PixivDetailRailScroll;
+
+#[derive(Component, Debug, Clone, Copy)]
+pub(super) struct PixivDetailMetaRail;
 
 #[derive(Component, Debug, Clone, Copy)]
 pub(super) struct PixivAccountMenu;

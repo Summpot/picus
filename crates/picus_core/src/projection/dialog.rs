@@ -1,21 +1,18 @@
 use super::{
     core::{ProjectionCtx, UiView},
     utils::{
-        app_i18n_font_stack, estimate_text_width_px, estimate_wrapped_lines,
-        hide_style_without_collapsing_layout, translate_text,
+        VectorIcon, app_i18n_font_stack, estimate_text_width_px, estimate_wrapped_lines,
+        hide_style_without_collapsing_layout, translate_text, vector_icon,
     },
 };
 use crate::{
-    ecs::{
-        OverlayComputedPosition, PartDialogBody, PartDialogDismiss, PartDialogTitle, UiDialog,
-        UiLabel,
-    },
+    ecs::{OverlayComputedPosition, PartDialogBody, PartDialogDismiss, PartDialogTitle, UiDialog},
     overlay::OverlayUiAction,
     styling::{
         apply_direct_widget_style, apply_flex_alignment, apply_label_style, apply_widget_style,
         resolve_style, resolve_style_for_classes,
     },
-    views::{ecs_button, opaque_hitbox_for_entity},
+    views::{ecs_button_with_child, opaque_hitbox_for_entity},
 };
 use bevy_ecs::{hierarchy::Children, prelude::Entity};
 use masonry::layout::{Dim, Length};
@@ -27,6 +24,8 @@ use xilem_masonry::view::{
 
 pub(crate) const DIALOG_SURFACE_MIN_WIDTH: f64 = 240.0;
 pub(crate) const DIALOG_SURFACE_MAX_WIDTH: f64 = 400.0;
+pub(crate) const DIALOG_DISMISS_ICON_SIZE_PX: f64 = 16.0;
+pub(crate) const DIALOG_DISMISS_BUTTON_SIZE_PX: f64 = 32.0;
 
 pub(crate) fn dialog_surface_padding(layout_padding: f64) -> f64 {
     layout_padding.max(12.0)
@@ -36,21 +35,14 @@ pub(crate) fn dialog_surface_gap(layout_gap: f64) -> f64 {
     layout_gap.max(10.0)
 }
 
-pub(crate) fn dialog_dismiss_padding(layout_padding: f64) -> f64 {
-    layout_padding.max(8.0)
-}
-
 pub(crate) fn estimate_dialog_surface_width_px(
     title: &str,
     body: &str,
-    dismiss_label: &str,
     title_size: f32,
     body_size: f32,
-    dismiss_size: f32,
     horizontal_padding: f64,
 ) -> f64 {
-    let mut widest = estimate_text_width_px(title, title_size)
-        .max(estimate_text_width_px(dismiss_label, dismiss_size));
+    let mut widest = estimate_text_width_px(title, title_size).max(DIALOG_DISMISS_BUTTON_SIZE_PX);
 
     for line in body.lines() {
         widest = widest.max(estimate_text_width_px(line, body_size));
@@ -67,20 +59,17 @@ pub(crate) fn estimate_dialog_surface_width_px(
 pub(crate) fn estimate_dialog_surface_height_px(
     title: &str,
     body: &str,
-    dismiss_label: &str,
     dialog_surface_width: f64,
     title_size: f32,
     body_size: f32,
-    dismiss_size: f32,
-    dismiss_padding: f64,
     gap: f64,
     horizontal_padding: f64,
     vertical_padding: f64,
 ) -> f64 {
     let title_line_height = (title_size as f64 * 1.35).max(18.0);
     let body_line_height = (body_size as f64 * 1.45).max(18.0);
-    let dismiss_width = estimate_text_width_px(dismiss_label, dismiss_size) + dismiss_padding * 2.0;
-    let dismiss_height = (dismiss_size as f64 * 1.25 + dismiss_padding * 2.0).max(30.0);
+    let dismiss_width = DIALOG_DISMISS_BUTTON_SIZE_PX;
+    let dismiss_height = DIALOG_DISMISS_BUTTON_SIZE_PX;
 
     let header_text_max_width =
         (dialog_surface_width - horizontal_padding * 2.0 - dismiss_width - gap).max(120.0);
@@ -124,7 +113,7 @@ pub(crate) fn project_dialog(dialog: &UiDialog, ctx: ProjectionCtx<'_>) -> UiVie
 
     let title = translate_text(ctx.world, dialog.title_key.as_deref(), &dialog.title);
     let body = translate_text(ctx.world, dialog.body_key.as_deref(), &dialog.body);
-    let dismiss_label = translate_text(
+    let _dismiss_label = translate_text(
         ctx.world,
         dialog.dismiss_key.as_deref(),
         &dialog.dismiss_label,
@@ -155,10 +144,8 @@ pub(crate) fn project_dialog(dialog: &UiDialog, ctx: ProjectionCtx<'_>) -> UiVie
     let estimated_width = estimate_dialog_surface_width_px(
         &title,
         &body,
-        &dismiss_label,
         title_style.text.size,
         body_style.text.size,
-        dismiss_style.text.size,
         dialog_style.layout.padding.max(12.0),
     );
 
@@ -168,12 +155,9 @@ pub(crate) fn project_dialog(dialog: &UiDialog, ctx: ProjectionCtx<'_>) -> UiVie
     let estimated_height = estimate_dialog_surface_height_px(
         &title,
         &body,
-        &dismiss_label,
         hinted_width,
         title_style.text.size,
         body_style.text.size,
-        dismiss_style.text.size,
-        dialog_dismiss_padding(dismiss_style.layout.padding),
         dialog_surface_gap(dialog_gap),
         dialog_surface_padding(dialog_style.layout.padding),
         dialog_surface_padding(dialog_style.layout.padding),
@@ -226,22 +210,16 @@ pub(crate) fn project_dialog(dialog: &UiDialog, ctx: ProjectionCtx<'_>) -> UiVie
         Arc::new(apply_label_style(label(body.clone()), &body_style))
     };
 
-    let dismiss_text = if is_positioned {
-        child_parts
-            .iter()
-            .find_map(|(entity, _)| {
-                ctx.world
-                    .get::<PartDialogDismiss>(*entity)
-                    .and_then(|_| ctx.world.get::<UiLabel>(*entity))
-                    .map(|label| label.text.clone())
-            })
-            .unwrap_or_else(|| dismiss_label.clone())
-    } else {
-        dismiss_label.clone()
-    };
-
     let dismiss_button = apply_direct_widget_style(
-        ecs_button(ctx.entity, OverlayUiAction::DismissDialog, dismiss_text),
+        ecs_button_with_child(
+            ctx.entity,
+            OverlayUiAction::DismissDialog,
+            vector_icon(
+                VectorIcon::X,
+                DIALOG_DISMISS_ICON_SIZE_PX,
+                dismiss_style.colors.text.unwrap_or(xilem::Color::WHITE),
+            ),
+        ),
         &dismiss_style,
     )
     .into_any_flex();
@@ -288,7 +266,8 @@ pub(crate) fn project_dialog(dialog: &UiDialog, ctx: ProjectionCtx<'_>) -> UiVie
 #[cfg(test)]
 mod tests {
     use super::{
-        DIALOG_SURFACE_MAX_WIDTH, DIALOG_SURFACE_MIN_WIDTH, estimate_dialog_surface_width_px,
+        DIALOG_DISMISS_BUTTON_SIZE_PX, DIALOG_SURFACE_MAX_WIDTH, DIALOG_SURFACE_MIN_WIDTH,
+        estimate_dialog_surface_height_px, estimate_dialog_surface_width_px,
     };
 
     #[test]
@@ -296,17 +275,23 @@ mod tests {
         let width = estimate_dialog_surface_width_px(
             "Very long modal title that should hit max width",
             "This is a long body line that should also be measured for width and then clamped.",
-            "Close",
             24.0,
             16.0,
-            15.0,
             16.0,
         );
 
         assert!((DIALOG_SURFACE_MIN_WIDTH..=DIALOG_SURFACE_MAX_WIDTH).contains(&width));
         assert_eq!(
-            estimate_dialog_surface_width_px("", "", "", 24.0, 16.0, 15.0, 16.0),
+            estimate_dialog_surface_width_px("", "", 24.0, 16.0, 16.0),
             DIALOG_SURFACE_MIN_WIDTH
         );
+    }
+
+    #[test]
+    fn dialog_surface_height_estimation_uses_fixed_icon_close_footprint() {
+        let height =
+            estimate_dialog_surface_height_px("Title", "Body", 280.0, 24.0, 16.0, 10.0, 16.0, 16.0);
+
+        assert!(height >= DIALOG_DISMISS_BUTTON_SIZE_PX + 32.0);
     }
 }

@@ -17,8 +17,8 @@ use bevy_window::{PrimaryWindow, Window};
 use masonry::core::{Widget, WidgetRef};
 
 use crate::projection::dialog::{
-    dialog_dismiss_padding, dialog_surface_gap, dialog_surface_padding,
-    estimate_dialog_surface_height_px, estimate_dialog_surface_width_px,
+    dialog_surface_gap, dialog_surface_padding, estimate_dialog_surface_height_px,
+    estimate_dialog_surface_width_px,
 };
 use crate::{
     AnchoredTo, AppI18n, AutoDismiss, OverlayAnchorRect, OverlayComputedPosition, OverlayConfig,
@@ -1278,10 +1278,6 @@ fn overlay_size_for_entity(
         if dialog_style.layout.gap <= 0.0 {
             dialog_style.layout.gap = 10.0;
         }
-        if dismiss_style.layout.padding <= 0.0 {
-            dismiss_style.layout.padding = 8.0;
-        }
-
         if title_style.text.size <= 0.0 {
             title_style.text.size = 24.0;
         }
@@ -1294,16 +1290,14 @@ fn overlay_size_for_entity(
 
         let title = translate_text(world, dialog.title_key.as_deref(), &dialog.title);
         let body = translate_text(world, dialog.body_key.as_deref(), &dialog.body);
-        let dismiss_label =
+        let _dismiss_label =
             translate_text(world, dialog.dismiss_key.as_deref(), &dialog.dismiss_label);
 
         let estimated_width = estimate_dialog_surface_width_px(
             &title,
             &body,
-            &dismiss_label,
             title_style.text.size,
             body_style.text.size,
-            dismiss_style.text.size,
             dialog_surface_padding(dialog_style.layout.padding),
         );
 
@@ -1312,12 +1306,9 @@ fn overlay_size_for_entity(
         let estimated_height = estimate_dialog_surface_height_px(
             &title,
             &body,
-            &dismiss_label,
             width,
             title_style.text.size,
             body_style.text.size,
-            dismiss_style.text.size,
-            dialog_dismiss_padding(dismiss_style.layout.padding),
             dialog_surface_gap(dialog_style.layout.gap),
             dialog_surface_padding(dialog_style.layout.padding),
             dialog_surface_padding(dialog_style.layout.padding),

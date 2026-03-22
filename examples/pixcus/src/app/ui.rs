@@ -6,7 +6,7 @@ use picus_core::{
     opaque_hitbox_for_entity,
     xilem::{
         masonry::layout::UnitPoint,
-        view::{portal, transformed, zstack},
+        view::{transformed, zstack},
     },
 };
 
@@ -54,7 +54,7 @@ pub(super) fn compute_detail_dialog_size(viewport_width: f64, viewport_height: f
     (width, height)
 }
 
-fn compute_detail_meta_rail_width(dialog_width: f64) -> f64 {
+pub(super) fn compute_detail_meta_rail_width(dialog_width: f64) -> f64 {
     let max_allowed = (dialog_width * 0.4).max(DETAIL_RAIL_COMPACT_MIN_WIDTH);
     (dialog_width * DETAIL_RAIL_WIDTH_RATIO).clamp(
         DETAIL_RAIL_MIN_WIDTH.min(max_allowed),
@@ -1231,7 +1231,7 @@ pub(super) fn project_detail_overlay(_: &PixivDetailOverlay, ctx: ProjectionCtx<
         return empty_ui();
     };
 
-    let Some(illust) = ctx.world.get::<Illust>(entity) else {
+    let Some(_illust) = ctx.world.get::<Illust>(entity) else {
         return empty_ui();
     };
     let visual = ctx
@@ -1279,6 +1279,53 @@ pub(super) fn project_detail_overlay(_: &PixivDetailOverlay, ctx: ProjectionCtx<
         ))
     };
 
+    let scrollable_info = Arc::new(apply_widget_style(
+        sized_box(ctx.children.into_iter().next().unwrap_or_else(empty_ui))
+            .width(Dim::Stretch)
+            .height(Dim::Stretch),
+        &meta_style,
+    ));
+
+    Arc::new(
+        sized_box(
+            flex_row((
+                sized_box(hero)
+                    .width(Dim::Stretch)
+                    .height(Dim::Stretch)
+                    .flex(1.65)
+                    .into_any_flex(),
+                sized_box(scrollable_info)
+                    .width(Length::px(rail_width))
+                    .height(Dim::Stretch)
+                    .into_any_flex(),
+            ))
+            .cross_axis_alignment(CrossAxisAlignment::Stretch)
+            .width(Dim::Stretch)
+            .height(Dim::Stretch)
+            .gap(Length::px(18.0)),
+        )
+        .width(Dim::Stretch)
+        .height(Dim::Stretch),
+    )
+}
+
+pub(super) fn project_detail_meta_rail(_: &PixivDetailMetaRail, ctx: ProjectionCtx<'_>) -> UiView {
+    let ui = ctx.world.resource::<UiState>();
+    let Some(entity) = ui.selected_illust else {
+        return empty_ui();
+    };
+
+    let Some(illust) = ctx.world.get::<Illust>(entity) else {
+        return empty_ui();
+    };
+
+    let visual = ctx
+        .world
+        .get::<IllustVisual>(entity)
+        .cloned()
+        .unwrap_or_default();
+    let text_style = resolve_style(ctx.world, ctx.entity);
+    let meta_style = resolve_style_for_classes(ctx.world, ["pixiv.detail.meta"]);
     let tags = ctx.children.into_iter().next().unwrap_or_else(empty_ui);
     let author_account = illust.user.account.clone().unwrap_or_else(|| {
         tr(
@@ -1374,42 +1421,17 @@ pub(super) fn project_detail_overlay(_: &PixivDetailOverlay, ctx: ProjectionCtx<
 
     let tags_section = detail_section(ctx.world, tr(ctx.world, "pixiv.overlay.tags", "Tags"), tags);
 
-    let info_column = flex_col((
-        artwork_info.into_any_flex(),
-        author_info.into_any_flex(),
-        image_info.into_any_flex(),
-        description.into_any_flex(),
-        tags_section.into_any_flex(),
-    ))
-    .cross_axis_alignment(CrossAxisAlignment::Stretch)
-    .width(Dim::Stretch)
-    .gap(Length::px(meta_style.layout.gap.max(12.0)));
-
-    let scrollable_info = Arc::new(apply_widget_style(
-        portal(info_column).dims((Dim::Stretch, Dim::Stretch)),
-        &meta_style,
-    ));
-
     Arc::new(
-        sized_box(
-            flex_row((
-                sized_box(hero)
-                    .width(Dim::Stretch)
-                    .height(Dim::Stretch)
-                    .flex(1.65)
-                    .into_any_flex(),
-                sized_box(scrollable_info)
-                    .width(Length::px(rail_width))
-                    .height(Dim::Stretch)
-                    .into_any_flex(),
-            ))
-            .cross_axis_alignment(CrossAxisAlignment::Stretch)
-            .width(Dim::Stretch)
-            .height(Dim::Stretch)
-            .gap(Length::px(18.0)),
-        )
+        flex_col((
+            artwork_info.into_any_flex(),
+            author_info.into_any_flex(),
+            image_info.into_any_flex(),
+            description.into_any_flex(),
+            tags_section.into_any_flex(),
+        ))
+        .cross_axis_alignment(CrossAxisAlignment::Stretch)
         .width(Dim::Stretch)
-        .height(Dim::Stretch),
+        .gap(Length::px(meta_style.layout.gap.max(12.0))),
     )
 }
 
