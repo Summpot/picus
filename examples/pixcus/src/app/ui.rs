@@ -26,6 +26,8 @@ const DETAIL_RAIL_MIN_WIDTH: f64 = 280.0;
 const DETAIL_RAIL_COMPACT_MIN_WIDTH: f64 = 220.0;
 const DETAIL_RAIL_MAX_WIDTH: f64 = 420.0;
 const DETAIL_RAIL_WIDTH_RATIO: f64 = 0.29;
+const DETAIL_RAIL_VIEWPORT_CHROME_HEIGHT: f64 = 88.0;
+const DETAIL_RAIL_VIEWPORT_MIN_HEIGHT: f64 = 180.0;
 
 fn empty_ui() -> UiView {
     Arc::new(label(""))
@@ -60,6 +62,10 @@ pub(super) fn compute_detail_meta_rail_width(dialog_width: f64) -> f64 {
         DETAIL_RAIL_MIN_WIDTH.min(max_allowed),
         DETAIL_RAIL_MAX_WIDTH.min(max_allowed),
     )
+}
+
+pub(super) fn compute_detail_meta_rail_viewport_height(dialog_height: f64) -> f64 {
+    (dialog_height - DETAIL_RAIL_VIEWPORT_CHROME_HEIGHT).max(DETAIL_RAIL_VIEWPORT_MIN_HEIGHT)
 }
 
 fn detail_dialog_size_for_world(world: &World) -> (f64, f64) {
@@ -588,11 +594,9 @@ pub(super) fn project_sidebar(_: &PixivSidebar, ctx: ProjectionCtx<'_>) -> UiVie
 }
 
 pub(super) fn project_main_column(_: &PixivMainColumn, ctx: ProjectionCtx<'_>) -> UiView {
-    let ui = ctx.world.resource::<UiState>();
     let root_style = resolve_style_for_classes(ctx.world, ["pixiv.root"]);
 
     let mut children = Vec::new();
-    children.push(apply_label_style(label(ui.status_line.clone()), &root_style).into_any_flex());
 
     let mut projected_children = ctx.children.into_iter().collect::<Vec<_>>();
     let feed_scroll = projected_children.pop();
@@ -1084,11 +1088,23 @@ pub(super) fn project_illust_card(_: &PixivIllustCard, ctx: ProjectionCtx<'_>) -
             open_thumbnail: ctx.entity,
             bookmark: ctx.entity,
         });
-    let subtle_button_style = resolve_style_for_entity_classes(
-        ctx.world,
-        action_entities.bookmark,
-        ["pixiv.button", "pixiv.button.subtle"],
-    );
+    let subtle_button_style = if illust.is_bookmarked {
+        resolve_style_for_entity_classes(
+            ctx.world,
+            action_entities.bookmark,
+            [
+                "pixiv.button",
+                "pixiv.button.subtle",
+                "pixiv.button.subtle.active-bookmark",
+            ],
+        )
+    } else {
+        resolve_style_for_entity_classes(
+            ctx.world,
+            action_entities.bookmark,
+            ["pixiv.button", "pixiv.button.subtle"],
+        )
+    };
     let heart_icon_color = subtle_button_style.colors.text.unwrap_or(Color::WHITE);
     let heart_icon = LucideIcon::Heart;
 

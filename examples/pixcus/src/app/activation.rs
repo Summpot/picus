@@ -57,8 +57,9 @@ fn process_activation_uri(world: &mut World, uri: &str) {
     }
 
     let Some(code) = extract_auth_code_from_input(uri) else {
-        set_status_key(
+        spawn_toast_key(
             world,
+            ToastKind::Warning,
             "pixiv.status.activation_code_missing",
             "Received pixiv callback but no `code=` was found.",
         );
@@ -69,8 +70,9 @@ fn process_activation_uri(world: &mut World, uri: &str) {
     if code_verifier.trim().is_empty() {
         world.resource_mut::<AuthState>().login_dialog_open = true;
         ensure_auth_dialog_overlay(world);
-        set_status_key(
+        spawn_toast_key(
             world,
+            ToastKind::Warning,
             "pixiv.status.activation_verifier_missing",
             "Received pixiv callback, but PKCE code_verifier is empty. Click Open Browser Login first.",
         );
@@ -85,8 +87,9 @@ fn process_activation_uri(world: &mut World, uri: &str) {
             code_verifier,
         });
 
-    set_status_key(
+    spawn_toast_key(
         world,
+        ToastKind::Info,
         "pixiv.status.activation_exchange_started",
         "Received pixiv callback. Exchanging auth code automatically…",
     );

@@ -363,9 +363,10 @@ pub(super) fn ensure_detail_dialog_overlay(world: &mut World) {
     }
 
     if let Some(mut scroll_view) = world.get_mut::<UiScrollView>(detail_scroll) {
-        scroll_view.viewport_size = Vec2::new(rail_width as f32, detail_height as f32);
+        let rail_height = ui::compute_detail_meta_rail_viewport_height(detail_height);
+        scroll_view.viewport_size = Vec2::new(rail_width as f32, rail_height as f32);
         scroll_view.content_size.x = scroll_view.content_size.x.max(rail_width as f32);
-        scroll_view.content_size.y = scroll_view.content_size.y.max(detail_height as f32);
+        scroll_view.content_size.y = scroll_view.content_size.y.max(rail_height as f32);
         scroll_view.show_vertical_scrollbar = true;
         scroll_view.show_horizontal_scrollbar = false;
         scroll_view.clamp_scroll_offset();
@@ -518,11 +519,6 @@ pub(super) fn setup(mut commands: Commands, i18n: Res<AppI18n>) {
     });
 
     commands.insert_resource(UiState {
-        status_line: if restored_auth.is_some() {
-            "Booting Pixiv MVP… restored saved credentials, refreshing token…".to_string()
-        } else {
-            "Booting Pixiv MVP…".to_string()
-        },
         ..UiState::default()
     });
     commands.insert_resource(AuthState {
@@ -691,6 +687,13 @@ pub(super) fn setup(mut commands: Commands, i18n: Res<AppI18n>) {
 
     commands.queue(move |world: &mut World| {
         let overlay_tags = world.spawn(PixivOverlayTags).id();
+
+        let boot_message = if restored_auth.is_some() {
+            "Booting Pixiv MVP… restored saved credentials, refreshing token…"
+        } else {
+            "Booting Pixiv MVP…"
+        };
+        spawn_in_overlay_root(world, (UiToast::new(boot_message),));
 
         if let Some(url) = restored_avatar_url.clone() {
             world.resource_mut::<AuthAvatarVisual>().requested_url = Some(url.clone());

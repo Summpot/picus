@@ -251,6 +251,14 @@
       ),
     ),
     (
+      selector: Class("pixiv.button.subtle.active-bookmark"),
+      setter: (
+        colors: (
+          text: Var("status-error-border"),
+        ),
+      ),
+    ),
+    (
       selector: Class("pixiv.button.sidebar"),
       setter: (
         colors: (

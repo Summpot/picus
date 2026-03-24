@@ -307,8 +307,9 @@ pub(super) fn apply_authenticated_session(
         resolved_user_summary
     };
 
-    set_status_key(
+    spawn_toast_key(
         world,
+        ToastKind::Success,
         "pixiv.status.authenticated_loading_home",
         "Authenticated. Loading home feed…",
     );
@@ -338,8 +339,9 @@ pub(super) fn apply_network_results(world: &mut World) {
                     auth.session.is_none()
                 };
                 if should_announce {
-                    set_status_key(
+                    spawn_toast_key(
                         world,
+                        ToastKind::Info,
                         "pixiv.status.idp_discovered",
                         "IdP endpoint discovered. Enter auth_code or refresh token.",
                     );
@@ -438,10 +440,10 @@ pub(super) fn apply_network_results(world: &mut World) {
                         added
                     )
                 };
-                set_status(world, message);
+                spawn_toast(world, message, ToastKind::Success);
             }
             NetworkResult::BookmarkDone { illust_id } => {
-                set_status(
+                spawn_toast(
                     world,
                     format!(
                         "{} #{illust_id}",
@@ -451,6 +453,7 @@ pub(super) fn apply_network_results(world: &mut World) {
                             "Bookmark synced for illust",
                         )
                     ),
+                    ToastKind::Success,
                 );
             }
             NetworkResult::Error {
@@ -470,7 +473,7 @@ pub(super) fn apply_network_results(world: &mut World) {
                     "{}: {summary}",
                     tr(world, "pixiv.status.network_error", "Network error")
                 );
-                set_status(world, status_message);
+                spawn_toast(world, status_message, ToastKind::Error);
                 *world.resource_mut::<ResponsePanelState>() = ResponsePanelState {
                     title: tr(
                         world,
@@ -545,7 +548,7 @@ pub(super) fn apply_image_results(world: &mut World) {
                 };
 
                 let Some(rgba_image) = image::RgbaImage::from_raw(width, height, rgba8) else {
-                    set_status(
+                    spawn_toast(
                         world,
                         format!(
                             "{} ({target:?})",
@@ -555,6 +558,7 @@ pub(super) fn apply_image_results(world: &mut World) {
                                 "Image decode buffer size mismatch for entity",
                             )
                         ),
+                        ToastKind::Error,
                     );
                     continue;
                 };
@@ -616,12 +620,13 @@ pub(super) fn apply_image_results(world: &mut World) {
                     ImageTarget::AuthAvatar => true,
                 };
                 if should_report {
-                    set_status(
+                    spawn_toast(
                         world,
                         format!(
                             "{} ({which}): {error}",
                             tr(world, "pixiv.status.image_load_failed", "Image load failed")
                         ),
+                        ToastKind::Warning,
                     );
                 }
             }

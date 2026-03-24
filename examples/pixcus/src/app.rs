@@ -21,10 +21,10 @@ use picus_activation::{
 use picus_core::bevy_app::PreUpdate;
 use picus_core::{
     AppI18n, AppPicusExt, LUCIDE_FONT_FAMILY, OverlayComputedPosition, PicusPlugin, ProjectionCtx,
-    ResolvedStyle, StyleClass, StyleSheet, StyleValue, SyncAssetSource, SyncTextSource, UiComboBox,
-    UiComboBoxChanged, UiComboOption, UiDialog, UiEventQueue, UiRoot, UiTextInput,
-    UiTextInputChanged, UiThemePicker, UiView, apply_direct_widget_style, apply_label_style,
-    apply_widget_style,
+    ResolvedStyle, StyleClass, StyleSheet, StyleValue, SyncAssetSource, SyncTextSource, ToastKind,
+    UiComboBox, UiComboBoxChanged, UiComboOption, UiDialog, UiEventQueue, UiRoot, UiTextInput,
+    UiTextInputChanged, UiThemePicker, UiToast, UiView, apply_direct_widget_style,
+    apply_label_style, apply_widget_style,
     bevy_app::{App, Startup, Update},
     bevy_ecs::{hierarchy::ChildOf, prelude::*},
     bevy_tasks::{AsyncComputeTaskPool, IoTaskPool, TaskPool},
@@ -144,6 +144,14 @@ mod tests {
             account: Some("user_knrk3528".to_string()),
             avatar_url: Some("https://example.com/avatar.png".to_string()),
         }
+    }
+
+    fn toast_messages(world: &mut World) -> Vec<(String, ToastKind)> {
+        let mut query = world.query::<&UiToast>();
+        query
+            .iter(world)
+            .map(|toast| (toast.message.clone(), toast.kind))
+            .collect()
     }
 
     #[test]
@@ -967,6 +975,21 @@ mod tests {
     }
 
     #[test]
+    fn heart_button_binds_active_color_to_bookmark_state() {
+        let ui_source = include_str!("app/ui.rs");
+        let theme_source = include_str!("../assets/themes/pixcus.ron");
+
+        assert!(
+            ui_source.contains("if illust.is_bookmarked")
+                && ui_source.contains("pixiv.button.subtle.active-bookmark")
+                && theme_source
+                    .contains("selector: Class(\"pixiv.button.subtle.active-bookmark\")")
+                && theme_source.contains("text: Var(\"status-error-border\")"),
+            "bookmarked hearts should derive their persistent red icon color from illust.is_bookmarked via themed active classes"
+        );
+    }
+
+    #[test]
     fn detail_dialog_meta_rail_uses_real_scroll_view_pattern() {
         let ui_source = include_str!("app/ui.rs");
         let bootstrap_source = include_str!("app/bootstrap.rs");
@@ -983,13 +1006,24 @@ mod tests {
     }
 
     #[test]
-    fn idp_discovery_does_not_replace_authenticated_status_line() {
+    fn detail_dialog_meta_rail_scroll_viewport_is_bounded_below_dialog_height() {
+        let ui_source = include_str!("app/ui.rs");
+        let bootstrap_source = include_str!("app/bootstrap.rs");
+
+        assert!(
+            ui_source.contains("pub(super) fn compute_detail_meta_rail_viewport_height")
+                && bootstrap_source.contains("let rail_height = ui::compute_detail_meta_rail_viewport_height(detail_height);")
+                && bootstrap_source.contains("scroll_view.viewport_size = Vec2::new(rail_width as f32, rail_height as f32);")
+                && bootstrap_source.contains("scroll_view.content_size.y = scroll_view.content_size.y.max(rail_height as f32);"),
+            "detail metadata rail should keep a bounded scroll viewport inside the dialog body rather than expanding to full dialog height"
+        );
+    }
+
+    #[test]
+    fn idp_discovery_does_not_spawn_info_toast_for_authenticated_session() {
         let mut world = World::new();
         world.insert_resource(AppI18n::new(parse_locale("en-US")));
-        world.insert_resource(UiState {
-            status_line: "Authenticated. Loading home feed…".to_string(),
-            ..UiState::default()
-        });
+        world.insert_resource(UiState::default());
         world.insert_resource(AuthState {
             session: Some(mock_auth_session()),
             ..AuthState::default()
@@ -1026,10 +1060,7 @@ mod tests {
 
         network::apply_network_results(&mut world);
 
-        assert_eq!(
-            world.resource::<UiState>().status_line,
-            "Authenticated. Loading home feed…"
-        );
+        assert!(toast_messages(&mut world).is_empty());
         assert_eq!(
             world
                 .resource::<AuthState>()
@@ -1091,6 +1122,55 @@ mod tests {
             app.world().resource::<UiState>().search_text,
             "same-frame text"
         );
+    }
+
+    #[test]
+    fn pixiv_main_column_no_longer_renders_status_label() {
+        let ui_source = include_str!("app/ui.rs");
+
+        assert!(
+            ui_source.contains("pub(super) fn project_main_column")
+                && !ui_source.contains("ui.status_line")
+                && !ui_source.contains("children.push(apply_label_style(label(")
+                && !ui_source.contains("status_line.clone()"),
+            "main column should no longer render a persistent top status label"
+        );
+    }
+
+    #[test]
+    fn authenticated_session_spawns_success_toast() {
+        let mut world = World::new();
+        world.insert_resource(AppI18n::new(parse_locale("en-US")));
+        world.insert_resource(UiState::default());
+        world.insert_resource(AuthState::default());
+        world.insert_resource(ResponsePanelState::default());
+        world.insert_resource(FeedPagination::default());
+
+        let (cmd_tx, cmd_rx) = unbounded::<NetworkCommand>();
+        let (result_tx, result_rx) = unbounded::<NetworkResult>();
+        world.insert_resource(NetworkBridge {
+            cmd_tx,
+            cmd_rx: cmd_rx.clone(),
+            result_tx,
+            result_rx,
+        });
+
+        network::apply_authenticated_session(
+            &mut world,
+            mock_auth_session(),
+            Some(mock_user_summary()),
+        );
+
+        assert!(toast_messages(&mut world).contains(&(
+            "Authenticated. Loading home feed…".to_string(),
+            ToastKind::Success,
+        )));
+        assert!(matches!(
+            cmd_rx
+                .try_recv()
+                .expect("home feed request should be queued"),
+            NetworkCommand::FetchHome { .. }
+        ));
     }
 
     #[test]
@@ -1290,7 +1370,17 @@ mod tests {
         );
 
         let detail_scroll = world.resource::<PixivUiTree>().detail_scroll;
-        assert!(world.get::<UiScrollView>(detail_scroll).is_some());
+        let scroll = world
+            .get::<UiScrollView>(detail_scroll)
+            .expect("detail rail scroll should exist");
+        assert_eq!(
+            scroll.viewport_size,
+            Vec2::new(
+                ui::compute_detail_meta_rail_width(expected_width) as f32,
+                ui::compute_detail_meta_rail_viewport_height(expected_height) as f32
+            )
+        );
+        assert!(scroll.viewport_size.y < expected_height as f32);
         assert_eq!(
             world
                 .get::<ChildOf>(detail_scroll)
@@ -1442,6 +1532,19 @@ mod tests {
         assert_ne!(initial_size, (updated.width, updated.height));
         assert_eq!(updated.width, Some(expected.0));
         assert_eq!(updated.height, Some(expected.1));
+
+        let detail_scroll = world.resource::<PixivUiTree>().detail_scroll;
+        let scroll = world
+            .get::<UiScrollView>(detail_scroll)
+            .expect("detail scroll should resize with the dialog");
+        assert_eq!(
+            scroll.viewport_size,
+            Vec2::new(
+                ui::compute_detail_meta_rail_width(expected.0) as f32,
+                ui::compute_detail_meta_rail_viewport_height(expected.1) as f32
+            )
+        );
+        assert!(scroll.viewport_size.y < expected.1 as f32);
     }
 
     #[test]

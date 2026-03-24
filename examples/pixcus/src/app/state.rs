@@ -55,16 +55,16 @@ pub(super) fn tr(world: &World, key: &str, fallback: &str) -> String {
     fallback.to_string()
 }
 
-pub(super) fn set_status(world: &mut World, message: impl Into<String>) {
-    world.resource_mut::<UiState>().status_line = message.into();
+pub(super) fn spawn_toast(world: &mut World, message: impl Into<String>, kind: ToastKind) {
+    spawn_in_overlay_root(world, (UiToast::new(message).with_kind(kind),));
 }
 
-pub(super) fn set_status_key(world: &mut World, key: &str, fallback: &str) {
+pub(super) fn spawn_toast_key(world: &mut World, kind: ToastKind, key: &str, fallback: &str) {
     let message = {
         let world_ref: &World = world;
         tr(world_ref, key, fallback)
     };
-    set_status(world, message);
+    spawn_toast(world, message, kind);
 }
 
 pub(super) fn sync_font_stack_for_locale(sheet: &mut StyleSheet, stack: Option<&[String]>) {
@@ -116,7 +116,6 @@ pub(super) struct UiState {
     pub sidebar_collapsed: bool,
     pub search_text: String,
     pub selected_illust: Option<Entity>,
-    pub status_line: String,
 }
 
 #[derive(Resource, Debug, Clone, Default)]

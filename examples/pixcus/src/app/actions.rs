@@ -157,13 +157,23 @@ pub(super) fn drain_ui_actions_and_dispatch(world: &mut World) {
                 };
 
                 if collapsed {
-                    set_status_key(world, "pixiv.status.sidebar_collapsed", "Sidebar collapsed");
+                    spawn_toast_key(
+                        world,
+                        ToastKind::Info,
+                        "pixiv.status.sidebar_collapsed",
+                        "Sidebar collapsed",
+                    );
                 } else {
-                    set_status_key(world, "pixiv.status.sidebar_expanded", "Sidebar expanded");
+                    spawn_toast_key(
+                        world,
+                        ToastKind::Info,
+                        "pixiv.status.sidebar_expanded",
+                        "Sidebar expanded",
+                    );
                 }
             }
             AppAction::SetTab(tab) => {
-                let status_line = match tab {
+                let status_message = match tab {
                     NavTab::Home => tr(world, "pixiv.status.loading_home", "Loading Home feed…"),
                     NavTab::Rankings => tr(
                         world,
@@ -181,11 +191,8 @@ pub(super) fn drain_ui_actions_and_dispatch(world: &mut World) {
                     ),
                 };
 
-                {
-                    let mut ui = world.resource_mut::<UiState>();
-                    ui.active_tab = tab;
-                    ui.status_line = status_line;
-                }
+                world.resource_mut::<UiState>().active_tab = tab;
+                spawn_toast(world, status_message, ToastKind::Info);
 
                 if tab == NavTab::Search {
                     cancel_feed_requests(world);
@@ -201,28 +208,35 @@ pub(super) fn drain_ui_actions_and_dispatch(world: &mut World) {
                 let query = world.resource::<UiState>().search_text.clone();
 
                 if query.trim().is_empty() {
-                    set_status_key(
+                    spawn_toast_key(
                         world,
+                        ToastKind::Warning,
                         "pixiv.status.search_keyword_required",
                         "Please enter a search keyword first.",
                     );
                     continue;
                 }
 
-                set_status(
+                spawn_toast(
                     world,
                     format!(
                         "{} ‘{}’…",
                         tr(world, "pixiv.status.searching", "Searching for"),
                         query.trim()
                     ),
+                    ToastKind::Info,
                 );
                 world.resource_mut::<UiState>().active_tab = NavTab::Search;
                 queue_search_command(world, query);
             }
             AppAction::OpenIllust(entity) => {
                 world.resource_mut::<UiState>().selected_illust = Some(entity);
-                set_status_key(world, "pixiv.overlay.title", "Illustration details");
+                spawn_toast_key(
+                    world,
+                    ToastKind::Info,
+                    "pixiv.overlay.title",
+                    "Illustration details",
+                );
 
                 if let Some(illust) = world.get::<Illust>(entity) {
                     let high_res = illust
@@ -265,21 +279,23 @@ pub(super) fn drain_ui_actions_and_dispatch(world: &mut World) {
                     ui.search_text = tag.clone();
                     ui.active_tab = NavTab::Search;
                 }
-                set_status(
+                spawn_toast(
                     world,
                     format!(
                         "{} ‘{}’…",
                         tr(world, "pixiv.status.searching", "Searching for"),
                         tag.trim()
                     ),
+                    ToastKind::Info,
                 );
                 queue_search_command(world, tag);
             }
             AppAction::CopyResponseBody => {
                 let body = world.resource::<ResponsePanelState>().content.clone();
                 if body.trim().is_empty() {
-                    set_status_key(
+                    spawn_toast_key(
                         world,
+                        ToastKind::Warning,
                         "pixiv.status.no_response_to_copy",
                         "No response body to copy.",
                     );
@@ -288,27 +304,30 @@ pub(super) fn drain_ui_actions_and_dispatch(world: &mut World) {
 
                 match arboard::Clipboard::new().and_then(|mut clipboard| clipboard.set_text(body)) {
                     Ok(_) => {
-                        set_status_key(
+                        spawn_toast_key(
                             world,
+                            ToastKind::Success,
                             "pixiv.status.response_copied",
                             "Response body copied to clipboard.",
                         );
                     }
                     Err(err) => {
-                        set_status(
+                        spawn_toast(
                             world,
                             format!(
                                 "{}: {err}",
                                 tr(world, "pixiv.status.copy_failed", "Clipboard copy failed")
                             ),
+                            ToastKind::Error,
                         );
                     }
                 }
             }
             AppAction::ClearResponseBody => {
                 *world.resource_mut::<ResponsePanelState>() = ResponsePanelState::default();
-                set_status_key(
+                spawn_toast_key(
                     world,
+                    ToastKind::Info,
                     "pixiv.status.response_panel_cleared",
                     "Response panel cleared.",
                 );
@@ -391,10 +410,10 @@ pub(super) fn drain_ui_actions_and_dispatch(world: &mut World) {
                                     "Browser login page opened. /idp-urls is not ready yet, so token exchange will use fallback redirect_uri. If Login fails, wait for IdP discovery and retry.",
                                 )
                             };
-                            set_status(world, message);
+                            spawn_toast(world, message, ToastKind::Info);
                         }
                         Err(err) => {
-                            set_status(
+                            spawn_toast(
                                 world,
                                 format!(
                                     "{}: {err}. {}: {login_url}",
@@ -409,11 +428,12 @@ pub(super) fn drain_ui_actions_and_dispatch(world: &mut World) {
                                         "Open this URL manually"
                                     )
                                 ),
+                                ToastKind::Warning,
                             );
                         }
                     },
                     Err(err) => {
-                        set_status(
+                        spawn_toast(
                             world,
                             format!(
                                 "{}: {err}",
@@ -423,6 +443,7 @@ pub(super) fn drain_ui_actions_and_dispatch(world: &mut World) {
                                     "Failed to build browser login URL"
                                 )
                             ),
+                            ToastKind::Error,
                         );
                     }
                 }
@@ -432,8 +453,9 @@ pub(super) fn drain_ui_actions_and_dispatch(world: &mut World) {
                 let Some(code) =
                     super::activation::extract_auth_code_from_input(&auth.auth_code_input)
                 else {
-                    set_status_key(
+                    spawn_toast_key(
                         world,
+                        ToastKind::Warning,
                         "pixiv.status.auth_code_missing",
                         "Auth code is missing. Please paste a raw code or a callback URL containing `code=`.",
                     );
@@ -450,7 +472,12 @@ pub(super) fn drain_ui_actions_and_dispatch(world: &mut World) {
             }
             AppAction::RefreshToken => {
                 let refresh_token = world.resource::<AuthState>().refresh_token_input.clone();
-                set_status_key(world, "pixiv.status.refreshing_token", "Refreshing token…");
+                spawn_toast_key(
+                    world,
+                    ToastKind::Info,
+                    "pixiv.status.refreshing_token",
+                    "Refreshing token…",
+                );
                 let _ = world
                     .resource::<NetworkBridge>()
                     .cmd_tx
@@ -471,14 +498,15 @@ pub(super) fn drain_ui_actions_and_dispatch(world: &mut World) {
                 clear_authenticated_runtime(world);
                 match super::persistence::clear_auth_state() {
                     Ok(()) => {
-                        set_status_key(
+                        spawn_toast_key(
                             world,
+                            ToastKind::Success,
                             "pixiv.status.logged_out",
                             "Logged out. Saved Pixiv auth was cleared.",
                         );
                     }
                     Err(err) => {
-                        set_status(
+                        spawn_toast(
                             world,
                             format!(
                                 "{}: {err}",
@@ -488,6 +516,7 @@ pub(super) fn drain_ui_actions_and_dispatch(world: &mut World) {
                                     "Logged out locally, but clearing saved auth failed"
                                 )
                             ),
+                            ToastKind::Error,
                         );
                     }
                 }
@@ -554,7 +583,11 @@ pub(super) fn drain_ui_actions_and_dispatch(world: &mut World) {
             "pixiv.status.locale_switched",
             "Language switched to",
         );
-        set_status(world, format!("{status_prefix} {}", locale_badge(&next)));
+        spawn_toast(
+            world,
+            format!("{status_prefix} {}", locale_badge(&next)),
+            ToastKind::Success,
+        );
     }
 
     sync_bound_text_inputs(world);

@@ -81,7 +81,7 @@ From workspace root:
 - The app now tries:
    1. default browser integration, then
    2. OS fallback launcher (`open` on macOS, `xdg-open` on Linux, `start` on Windows).
-- If both fail, the status line shows a full login URL; open it manually in your browser.
+- If both fail, the app shows a warning toast with the full login URL; open it manually in your browser.
 
 ### If login shows `Network error: idp-urls not ready`
 
@@ -104,7 +104,7 @@ From workspace root:
 ## Response Body Panel
 
 - Network errors now keep full response details.
-- The app shows them in a **scrollable response panel** (instead of putting giant text in status line).
+- The app shows them in a **scrollable response panel** while brief status/warning/error feedback appears as overlay toasts.
 - You can click **Copy Response Body** to copy full text to clipboard.
 
 ### Option B: Manual auth/refresh flow
