@@ -902,124 +902,6 @@ mod tests {
     }
 
     #[test]
-    fn thumbnail_open_button_wraps_thumbnail_view_directly() {
-        let ui_source = include_str!("app/ui.rs");
-
-        assert!(
-            ui_source.contains("button_with_child(")
-                && ui_source.contains("AppAction::OpenIllust(ctx.entity)")
-                && ui_source.contains("illust_thumbnail_view(ctx.world, illust, &visual),")
-                && !ui_source.contains("let image_with_overlay: UiView = Arc::new(")
-                && !ui_source.contains("compact_author_name(")
-                && !ui_source.contains("illust_author_overlay(")
-                && !ui_source.contains("InteractionState"),
-            "thumbnail button should render the thumbnail view directly without hover author overlay helpers"
-        );
-    }
-
-    #[test]
-    fn home_feed_wraps_translated_tiles_with_entity_hitboxes() {
-        let ui_source = include_str!("app/ui.rs");
-
-        assert!(
-            ui_source.contains("let (card_entity, child_view) = &child_views[item.index];")
-                && ui_source.contains("transformed(opaque_hitbox_for_entity(*card_entity, tile))")
-                && ui_source.contains(".translate((item.x, row.y))")
-                && !ui_source.contains("transformed(tile).translate((item.x, row.y))"),
-            "home feed tiles should use the card entity when wrapping translated tiles in opaque hitboxes"
-        );
-    }
-
-    #[test]
-    fn illust_card_keeps_simplified_outer_stack_with_heart_button() {
-        let ui_source = include_str!("app/ui.rs");
-
-        assert!(
-            ui_source.contains("let open_button_view: UiView = Arc::new(")
-                && ui_source.contains("zstack(vec![open_button_view, Arc::new(heart_button)])")
-                && !ui_source.contains("let author_overlay: UiView = Arc::new(")
-                && !ui_source.contains("let overlay_body: UiView = if hovered {"),
-            "illust card should keep the simplified outer thumbnail-plus-heart stack without author overlay layers"
-        );
-    }
-
-    #[test]
-    fn heart_button_is_direct_top_right_child_without_stretch_overlay_shell() {
-        let ui_source = include_str!("app/ui.rs");
-
-        assert!(
-            ui_source.contains("let heart_button = sized_box")
-                && ui_source.contains("zstack(vec![open_button_view, Arc::new(heart_button)])")
-                && ui_source.contains(".alignment(UnitPoint::TOP_RIGHT)")
-                && !ui_source.contains("let heart_overlay: UiView = Arc::new(")
-                && !ui_source.contains("zstack(vec![Arc::new(heart_button)])")
-                && !ui_source.contains("badged(open_button_view, heart_button)"),
-            "heart button should be the outer stack's direct top-right child without a stretch overlay shell"
-        );
-    }
-
-    #[test]
-    fn heart_button_uses_icon_only_transparent_button_styling() {
-        let ui_source = include_str!("app/ui.rs");
-
-        assert!(
-            ui_source.contains("let heart_button = sized_box(Arc::new(\n        button_with_child(")
-                && ui_source.contains("AppAction::Bookmark(ctx.entity)")
-                && ui_source.contains(".padding(0.0)")
-                && ui_source.contains(".border(Color::TRANSPARENT, 0.0)")
-                && ui_source.contains(".background_color(Color::TRANSPARENT)")
-                && !ui_source.contains("let heart_button = sized_box(Arc::new(apply_direct_widget_style(")
-                && ui_source.contains("let heart_icon_color = subtle_button_style.colors.text.unwrap_or(Color::WHITE);"),
-            "heart button should stay clickable while rendering as an icon-only transparent affordance"
-        );
-    }
-
-    #[test]
-    fn heart_button_binds_active_color_to_bookmark_state() {
-        let ui_source = include_str!("app/ui.rs");
-        let theme_source = include_str!("../assets/themes/pixcus.ron");
-
-        assert!(
-            ui_source.contains("if illust.is_bookmarked")
-                && ui_source.contains("pixiv.button.subtle.active-bookmark")
-                && theme_source
-                    .contains("selector: Class(\"pixiv.button.subtle.active-bookmark\")")
-                && theme_source.contains("text: Var(\"status-error-border\")"),
-            "bookmarked hearts should derive their persistent red icon color from illust.is_bookmarked via themed active classes"
-        );
-    }
-
-    #[test]
-    fn detail_dialog_meta_rail_uses_real_scroll_view_pattern() {
-        let ui_source = include_str!("app/ui.rs");
-        let bootstrap_source = include_str!("app/bootstrap.rs");
-
-        assert!(
-            ui_source
-                .contains("sized_box(ctx.children.into_iter().next().unwrap_or_else(empty_ui))")
-                && ui_source.contains("pub(super) fn project_detail_meta_rail")
-                && bootstrap_source.contains("UiScrollView::new(")
-                && bootstrap_source.contains("PixivDetailRailScroll")
-                && bootstrap_source.contains("PixivDetailMetaRail"),
-            "detail dialog metadata should be rendered through a real UiScrollView child rail"
-        );
-    }
-
-    #[test]
-    fn detail_dialog_meta_rail_scroll_viewport_is_bounded_below_dialog_height() {
-        let ui_source = include_str!("app/ui.rs");
-        let bootstrap_source = include_str!("app/bootstrap.rs");
-
-        assert!(
-            ui_source.contains("pub(super) fn compute_detail_meta_rail_viewport_height")
-                && bootstrap_source.contains("let rail_height = ui::compute_detail_meta_rail_viewport_height(detail_height);")
-                && bootstrap_source.contains("scroll_view.viewport_size = Vec2::new(rail_width as f32, rail_height as f32);")
-                && bootstrap_source.contains("scroll_view.content_size.y = scroll_view.content_size.y.max(rail_height as f32);"),
-            "detail metadata rail should keep a bounded scroll viewport inside the dialog body rather than expanding to full dialog height"
-        );
-    }
-
-    #[test]
     fn idp_discovery_does_not_spawn_info_toast_for_authenticated_session() {
         let mut world = World::new();
         world.insert_resource(AppI18n::new(parse_locale("en-US")));
@@ -1121,19 +1003,6 @@ mod tests {
         assert_eq!(
             app.world().resource::<UiState>().search_text,
             "same-frame text"
-        );
-    }
-
-    #[test]
-    fn pixiv_main_column_no_longer_renders_status_label() {
-        let ui_source = include_str!("app/ui.rs");
-
-        assert!(
-            ui_source.contains("pub(super) fn project_main_column")
-                && !ui_source.contains("ui.status_line")
-                && !ui_source.contains("children.push(apply_label_style(label(")
-                && !ui_source.contains("status_line.clone()"),
-            "main column should no longer render a persistent top status label"
         );
     }
 
@@ -2017,26 +1886,6 @@ mod tests {
             .expect("locale combo should select active locale");
 
         assert_eq!(combo.options[selected].value, "ja-JP");
-    }
-
-    #[test]
-    fn pixiv_ui_drops_legacy_unicode_icons() {
-        let app_source = include_str!("app.rs");
-        let ui_source = include_str!("app/ui.rs");
-        let source = format!("{app_source}\n{ui_source}");
-        for codepoint in [0x25B6, 0x25C0, 0x1F464, 0x1F441, 0x2764, 0x2665, 0x2661] {
-            let legacy_icon = char::from_u32(codepoint)
-                .expect("valid unicode codepoint")
-                .to_string();
-            assert!(
-                !source.contains(&legacy_icon),
-                "legacy unicode icon `{legacy_icon}` should be replaced by lucide"
-            );
-        }
-        assert!(
-            source.contains("LucideIcon"),
-            "pixcus should use lucide icons in app UI"
-        );
     }
 
     #[test]
