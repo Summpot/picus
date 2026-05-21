@@ -12,13 +12,13 @@ path = "src/lib.rs"
 app-single-instance.workspace = true
 ipc-channel.workspace = true
 serde.workspace = true
-plist = "1.9"
+plist.workspace = true
 
 [target.'cfg(target_os = "macos")'.dependencies]
-block2 = "0.6.2"
-objc2 = { version = "0.6.4", default-features = false, features = ["std"] }
-objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std", "block2", "NSWorkspace"] }
-objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSBundle", "NSError", "NSObject", "NSString", "NSURL"] }
+block2.workspace = true
+objc2.workspace = true
+objc2-app-kit.workspace = true
+objc2-foundation.workspace = true
 
 [target.'cfg(windows)'.dependencies]
-winreg = "0.56"
+winreg.workspace = true

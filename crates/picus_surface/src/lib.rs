@@ -9,8 +9,8 @@ use vello::{
     peniko::Color,
     wgpu::{
         self, CompositeAlphaMode, Device, Instance, MemoryBudgetThresholds, MemoryHints,
-        PresentMode, Surface, SurfaceConfiguration, Texture, TextureFormat, TextureUsages,
-        TextureView,
+        PresentMode, Surface, SurfaceConfiguration, SurfaceTexture, Texture, TextureFormat,
+        TextureUsages, TextureView,
     },
 };
 use wgpu::util::{TextureBlitter, TextureBlitterBuilder};
@@ -118,19 +118,19 @@ impl ExternalWindowSurface {
             antialiasing_method: AaConfig::Area,
         };
 
-        let surface_texture = match self.surface.surface.get_current_texture() {
+        let surface_texture = match get_current_surface_texture(&self.surface.surface) {
             Ok(texture) => texture,
-            Err(wgpu::SurfaceError::Outdated) => {
+            Err(SurfaceTextureStatus::Outdated) => {
                 let current_width = self.surface.config.width.max(1);
                 let current_height = self.surface.config.height.max(1);
                 self.render_cx
                     .resize_surface(&mut self.surface, current_width, current_height);
 
-                match self.surface.surface.get_current_texture() {
+                match get_current_surface_texture(&self.surface.surface) {
                     Ok(texture) => texture,
                     Err(error) => {
                         tracing::error!(
-                            "Couldn't get swap chain texture after configuring. Cause: '{error}'"
+                            "Couldn't get swap chain texture after configuring. Cause: '{error:?}'"
                         );
                         return;
                     }
@@ -138,7 +138,7 @@ impl ExternalWindowSurface {
             }
             Err(error) => {
                 tracing::error!(
-                    "Couldn't get swap chain texture, operation unrecoverable: {error}"
+                    "Couldn't get swap chain texture, operation unrecoverable: {error:?}"
                 );
                 return;
             }
@@ -192,11 +192,12 @@ impl RenderContext {
         let backends = wgpu::Backends::from_env().unwrap_or_default();
         let flags = wgpu::InstanceFlags::from_build_config().with_env();
         let backend_options = wgpu::BackendOptions::from_env_or_default();
-        let instance = Instance::new(&wgpu::InstanceDescriptor {
+        let instance = Instance::new(wgpu::InstanceDescriptor {
             backends,
             flags,
-            backend_options,
             memory_budget_thresholds: MemoryBudgetThresholds::default(),
+            backend_options,
+            display: None,
         });
 
         Self {
@@ -392,6 +393,29 @@ fn create_targets(width: u32, height: u32, device: &Device) -> (Texture, Texture
     });
     let target_view = target_texture.create_view(&wgpu::TextureViewDescriptor::default());
     (target_texture, target_view)
+}
+
+#[derive(Debug)]
+enum SurfaceTextureStatus {
+    Timeout,
+    Occluded,
+    Outdated,
+    Lost,
+    Validation,
+}
+
+fn get_current_surface_texture(
+    surface: &Surface<'_>,
+) -> Result<SurfaceTexture, SurfaceTextureStatus> {
+    match surface.get_current_texture() {
+        wgpu::CurrentSurfaceTexture::Success(texture)
+        | wgpu::CurrentSurfaceTexture::Suboptimal(texture) => Ok(texture),
+        wgpu::CurrentSurfaceTexture::Timeout => Err(SurfaceTextureStatus::Timeout),
+        wgpu::CurrentSurfaceTexture::Occluded => Err(SurfaceTextureStatus::Occluded),
+        wgpu::CurrentSurfaceTexture::Outdated => Err(SurfaceTextureStatus::Outdated),
+        wgpu::CurrentSurfaceTexture::Lost => Err(SurfaceTextureStatus::Lost),
+        wgpu::CurrentSurfaceTexture::Validation => Err(SurfaceTextureStatus::Validation),
+    }
 }
 
 struct RenderSurface<'surface> {

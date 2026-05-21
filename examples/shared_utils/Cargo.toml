@@ -6,5 +6,5 @@ license.workspace = true
 
 [dependencies]
 tracing-subscriber.workspace = true
-picus_core = { path = "../../crates/picus_core" }
+picus_core.workspace = true
 bevy_ecs.workspace = true

@@ -9,26 +9,26 @@ name = "pixcus"
 path = "src/lib.rs"
 
 [dependencies]
-anyhow = "1"
-arboard = "3"
-base64 = "0.22"
-bevy_asset = { version = "0.18", default-features = false }
+anyhow.workspace = true
+arboard.workspace = true
+base64.workspace = true
+bevy_asset.workspace = true
 bevy_embedded_assets.workspace = true
 bevy_ecs.workspace = true
-bevy_image = { version = "0.18", default-features = false }
-bevy_text = { version = "0.18", default-features = false }
-picus_activation = { path = "../../crates/picus_activation" }
-picus_core = { path = "../../crates/picus_core" }
-chrono = { version = "0.4", default-features = false, features = ["clock"] }
-crossbeam-channel = "0.5"
-image = { version = "0.25", default-features = true }
-md5 = "0.8"
+bevy_image.workspace = true
+bevy_text.workspace = true
+picus_activation.workspace = true
+picus_core.workspace = true
+chrono.workspace = true
+crossbeam-channel.workspace = true
+image.workspace = true
+md5.workspace = true
 lucide-icons.workspace = true
-reqwest = { version = "0.13", default-features = false, features = ["blocking", "json", "form", "rustls"] }
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-sha2 = "0.10"
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
 unic-langid.workspace = true
-vello = "0.7"
-webbrowser = "1"
-shared_utils = { path = "../shared_utils" }
+vello.workspace = true
+webbrowser.workspace = true
+shared_utils.workspace = true
