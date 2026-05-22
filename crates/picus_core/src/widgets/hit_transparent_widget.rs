@@ -4,10 +4,10 @@ use masonry::{
         AccessCtx, ChildrenIds, LayoutCtx, MeasureCtx, NewWidget, PaintCtx, PropertiesRef,
         RegisterCtx, UpdateCtx, Widget, WidgetMut, WidgetPod,
     },
+    imaging::Painter,
     kurbo::{Axis, Point, Size},
-    layout::{LayoutSize, LenReq},
+    layout::{LayoutSize, LenReq, Length},
 };
-use vello::Scene;
 
 /// Paint/layout wrapper that removes its child subtree from pointer hit-testing.
 pub struct HitTransparentWidget {
@@ -42,8 +42,8 @@ impl Widget for HitTransparentWidget {
         _props: &PropertiesRef<'_>,
         axis: Axis,
         len_req: LenReq,
-        cross_length: Option<f64>,
-    ) -> f64 {
+        cross_length: Option<Length>,
+    ) -> Length {
         let auto_length = len_req.into();
         let context_size = LayoutSize::maybe(axis.cross(), cross_length);
 
@@ -62,7 +62,13 @@ impl Widget for HitTransparentWidget {
         ctx.derive_baselines(&self.child);
     }
 
-    fn paint(&mut self, _ctx: &mut PaintCtx<'_>, _props: &PropertiesRef<'_>, _scene: &mut Scene) {}
+    fn paint(
+        &mut self,
+        _ctx: &mut PaintCtx<'_>,
+        _props: &PropertiesRef<'_>,
+        _painter: &mut Painter<'_>,
+    ) {
+    }
 
     fn accessibility_role(&self) -> Role {
         Role::GenericContainer

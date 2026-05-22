@@ -5,7 +5,10 @@ use picus_core::{
     bevy_math::Vec2,
     opaque_hitbox_for_entity,
     xilem::{
-        masonry::layout::UnitPoint,
+        masonry::{
+            layout::{Length, UnitPoint},
+            properties::Padding,
+        },
         view::{transformed, zstack},
     },
 };
@@ -1114,8 +1117,8 @@ pub(super) fn project_illust_card(_: &PixivIllustCard, ctx: ProjectionCtx<'_>) -
             AppAction::Bookmark(ctx.entity),
             lucide_icon(heart_icon, 16.0 * anim.heart_scale as f64, heart_icon_color),
         )
-        .padding(0.0)
-        .border(Color::TRANSPARENT, 0.0)
+        .padding(Padding::ZERO)
+        .border(Color::TRANSPARENT, Length::ZERO)
         .background_color(Color::TRANSPARENT),
     ))
     .fixed_width(Length::px(40.0))
@@ -1127,8 +1130,8 @@ pub(super) fn project_illust_card(_: &PixivIllustCard, ctx: ProjectionCtx<'_>) -
             AppAction::OpenIllust(ctx.entity),
             illust_thumbnail_view(ctx.world, illust, &visual),
         )
-        .padding(0.0)
-        .border(Color::TRANSPARENT, 0.0)
+        .padding(Padding::ZERO)
+        .border(Color::TRANSPARENT, Length::ZERO)
         .background_color(Color::TRANSPARENT),
     );
 

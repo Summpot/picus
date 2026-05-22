@@ -8,10 +8,10 @@ use masonry::{
         PropertiesMut, PropertiesRef, QueryCtx, RegisterCtx, UpdateCtx, Widget, WidgetId,
         WidgetMut, WidgetPod, WidgetRef,
     },
+    imaging::Painter,
     kurbo::{Axis, Point, Size},
-    layout::LenReq,
+    layout::{LenReq, Length},
 };
-use vello::Scene;
 
 /// Pointer-opaque wrapper that forces hit-testing across its full layout bounds.
 ///
@@ -72,8 +72,8 @@ impl Widget for OpaqueHitboxWidget {
         _props: &PropertiesRef<'_>,
         axis: Axis,
         _len_req: LenReq,
-        cross_length: Option<f64>,
-    ) -> f64 {
+        cross_length: Option<Length>,
+    ) -> Length {
         ctx.redirect_measurement(&mut self.child, axis, cross_length)
     }
 
@@ -83,7 +83,13 @@ impl Widget for OpaqueHitboxWidget {
         ctx.derive_baselines(&self.child);
     }
 
-    fn paint(&mut self, _ctx: &mut PaintCtx<'_>, _props: &PropertiesRef<'_>, _scene: &mut Scene) {}
+    fn paint(
+        &mut self,
+        _ctx: &mut PaintCtx<'_>,
+        _props: &PropertiesRef<'_>,
+        _painter: &mut Painter<'_>,
+    ) {
+    }
 
     fn accessibility_role(&self) -> Role {
         Role::GenericContainer

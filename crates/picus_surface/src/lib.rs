@@ -4,16 +4,16 @@
 )]
 
 use bevy_window::RawHandleWrapper;
-use vello::{
-    AaConfig, AaSupport, Error, RenderParams, Renderer, RendererOptions, Scene,
-    peniko::Color,
-    wgpu::{
-        self, CompositeAlphaMode, Device, Instance, MemoryBudgetThresholds, MemoryHints,
-        PresentMode, Surface, SurfaceConfiguration, SurfaceTexture, Texture, TextureFormat,
-        TextureUsages, TextureView,
-    },
+use masonry_imaging::{
+    PreparedFrame,
+    texture_render::{RenderTarget, Renderer},
 };
 use wgpu::util::{TextureBlitter, TextureBlitterBuilder};
+use wgpu::{
+    CompositeAlphaMode, Device, Instance, MemoryBudgetThresholds, MemoryHints, PresentMode,
+    Surface, SurfaceConfiguration, SurfaceTexture, Texture, TextureFormat, TextureUsages,
+    TextureView,
+};
 
 /// Metrics captured from an externally owned window.
 #[derive(Debug, Clone, Copy)]
@@ -43,7 +43,7 @@ impl ExternalWindowSurface {
         raw_handle: RawHandleWrapper,
         metrics: ExistingWindowMetrics,
         present_mode: PresentMode,
-    ) -> Result<Self, Error> {
+    ) -> Result<Self, RenderSurfaceError> {
         // SAFETY: The caller provides a `RawHandleWrapper` originating from Bevy's
         // `WindowWrapper`, which internally keeps an owning reference to the window alive.
         // We create a thread-locked handle target only for surface initialization.
@@ -78,49 +78,16 @@ impl ExternalWindowSurface {
         }
     }
 
-    /// Render a Masonry/Vello scene and present it to the attached window surface.
-    pub fn render_scene(
-        &mut self,
-        renderer: &mut Option<Renderer>,
-        scene: Scene,
-        logical_width: u32,
-        logical_height: u32,
-        base_color: Color,
-    ) {
-        let transformed_scene = if self.scale_factor == 1.0 {
-            None
-        } else {
-            let mut scaled = Scene::new();
-            scaled.append(&scene, Some(vello::kurbo::Affine::scale(self.scale_factor)));
-            Some(scaled)
-        };
-        let scene_ref = transformed_scene.as_ref().unwrap_or(&scene);
-
+    /// Render a prepared Masonry frame and present it to the attached window surface.
+    pub fn render_frame(&mut self, renderer: &mut Renderer, frame: PreparedFrame<'_>) {
         let dev_id = self.surface.dev_id;
+        let adapter = &self.render_cx.devices[dev_id].adapter;
         let device = &self.render_cx.devices[dev_id].device;
         let queue = &self.render_cx.devices[dev_id].queue;
 
-        let renderer = renderer.get_or_insert_with(|| {
-            Renderer::new(
-                device,
-                RendererOptions {
-                    antialiasing_support: AaSupport::area_only(),
-                    ..Default::default()
-                },
-            )
-            .expect("failed to create Vello renderer")
-        });
-
-        let render_params = RenderParams {
-            base_color,
-            width: logical_width.max(1),
-            height: logical_height.max(1),
-            antialiasing_method: AaConfig::Area,
-        };
-
         let surface_texture = match get_current_surface_texture(&self.surface.surface) {
             Ok(texture) => texture,
-            Err(SurfaceTextureStatus::Outdated) => {
+            Err(wgpu::SurfaceError::Outdated) => {
                 let current_width = self.surface.config.width.max(1);
                 let current_height = self.surface.config.height.max(1);
                 self.render_cx
@@ -145,13 +112,16 @@ impl ExternalWindowSurface {
         };
 
         if let Err(error) = renderer.render_to_texture(
-            device,
-            queue,
-            scene_ref,
-            &self.surface.target_view,
-            &render_params,
+            RenderTarget {
+                adapter,
+                device,
+                queue,
+                texture: &self.surface.target_texture,
+                view: &self.surface.target_view,
+            },
+            frame,
         ) {
-            tracing::error!("failed to render scene to texture: {error}");
+            tracing::error!("failed to render Masonry frame to texture: {error}");
             return;
         }
 
@@ -192,12 +162,11 @@ impl RenderContext {
         let backends = wgpu::Backends::from_env().unwrap_or_default();
         let flags = wgpu::InstanceFlags::from_build_config().with_env();
         let backend_options = wgpu::BackendOptions::from_env_or_default();
-        let instance = Instance::new(wgpu::InstanceDescriptor {
+        let instance = Instance::new(&wgpu::InstanceDescriptor {
             backends,
             flags,
             memory_budget_thresholds: MemoryBudgetThresholds::default(),
             backend_options,
-            display: None,
         });
 
         Self {
@@ -212,9 +181,11 @@ impl RenderContext {
         width: u32,
         height: u32,
         present_mode: PresentMode,
-    ) -> Result<RenderSurface<'w>, Error> {
+    ) -> Result<RenderSurface<'w>, RenderSurfaceError> {
         self.create_render_surface(
-            self.instance.create_surface(window.into())?,
+            self.instance
+                .create_surface(window.into())
+                .map_err(RenderSurfaceError::CreateSurface)?,
             width,
             height,
             present_mode,
@@ -228,11 +199,11 @@ impl RenderContext {
         width: u32,
         height: u32,
         present_mode: PresentMode,
-    ) -> Result<RenderSurface<'w>, Error> {
+    ) -> Result<RenderSurface<'w>, RenderSurfaceError> {
         let dev_id = self
             .device(Some(&surface))
             .await
-            .ok_or(Error::NoCompatibleDevice)?;
+            .ok_or(RenderSurfaceError::NoCompatibleDevice)?;
 
         let device_handle = &self.devices[dev_id];
         let capabilities = surface.get_capabilities(&device_handle.adapter);
@@ -245,7 +216,7 @@ impl RenderContext {
                     TextureFormat::Rgba8Unorm | TextureFormat::Bgra8Unorm
                 )
             })
-            .ok_or(Error::UnsupportedSurfaceFormat)?;
+            .ok_or(RenderSurfaceError::UnsupportedSurfaceFormat)?;
 
         const PREMUL_BLEND_STATE: wgpu::BlendState = wgpu::BlendState {
             alpha: wgpu::BlendComponent::REPLACE,
@@ -396,26 +367,28 @@ fn create_targets(width: u32, height: u32, device: &Device) -> (Texture, Texture
 }
 
 #[derive(Debug)]
-enum SurfaceTextureStatus {
-    Timeout,
-    Occluded,
-    Outdated,
-    Lost,
-    Validation,
+pub enum RenderSurfaceError {
+    CreateSurface(wgpu::CreateSurfaceError),
+    NoCompatibleDevice,
+    UnsupportedSurfaceFormat,
 }
+
+impl core::fmt::Display for RenderSurfaceError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::CreateSurface(err) => write!(f, "creating surface failed: {err}"),
+            Self::NoCompatibleDevice => write!(f, "no compatible WGPU device found"),
+            Self::UnsupportedSurfaceFormat => write!(f, "unsupported surface format"),
+        }
+    }
+}
+
+impl std::error::Error for RenderSurfaceError {}
 
 fn get_current_surface_texture(
     surface: &Surface<'_>,
-) -> Result<SurfaceTexture, SurfaceTextureStatus> {
-    match surface.get_current_texture() {
-        wgpu::CurrentSurfaceTexture::Success(texture)
-        | wgpu::CurrentSurfaceTexture::Suboptimal(texture) => Ok(texture),
-        wgpu::CurrentSurfaceTexture::Timeout => Err(SurfaceTextureStatus::Timeout),
-        wgpu::CurrentSurfaceTexture::Occluded => Err(SurfaceTextureStatus::Occluded),
-        wgpu::CurrentSurfaceTexture::Outdated => Err(SurfaceTextureStatus::Outdated),
-        wgpu::CurrentSurfaceTexture::Lost => Err(SurfaceTextureStatus::Lost),
-        wgpu::CurrentSurfaceTexture::Validation => Err(SurfaceTextureStatus::Validation),
-    }
+) -> Result<SurfaceTexture, wgpu::SurfaceError> {
+    surface.get_current_texture()
 }
 
 struct RenderSurface<'surface> {

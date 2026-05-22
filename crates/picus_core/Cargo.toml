@@ -23,17 +23,18 @@ picus_surface.workspace = true
 crossbeam-queue.workspace = true
 fluent.workspace = true
 masonry.workspace = true
+masonry_imaging.workspace = true
 rfd.workspace = true
 tokio.workspace = true
 unic-langid.workspace = true
 xilem.workspace = true
 xilem_core.workspace = true
 xilem_masonry.workspace = true
-vello.workspace = true
 tracing.workspace = true
 serde.workspace = true
 ron.workspace = true
 lucide-icons.workspace = true
+wgpu.workspace = true
 
 [dev-dependencies]
 num-traits.workspace = true

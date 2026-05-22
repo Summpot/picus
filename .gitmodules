@@ -1,4 +1,0 @@
-[submodule "third_party/xilem"]
-	path = third_party/xilem
-	url = https://github.com/Summpot/xilem.git
-	branch = bevy-xilem-dev

@@ -5,16 +5,15 @@ use masonry::{
     accesskit::{Node, Role},
     core::keyboard::{Key, NamedKey},
     core::{
-        AccessCtx, AccessEvent, ChildrenIds, EventCtx, HasProperty, LayoutCtx, MeasureCtx,
-        NewWidget, PaintCtx, PointerButton, PointerButtonEvent, PointerEvent, PropertiesMut,
-        PropertiesRef, Property, RegisterCtx, TextEvent, Update, UpdateCtx, Widget, WidgetMut,
-        WidgetPod,
+        AccessCtx, AccessEvent, ChildrenIds, EventCtx, LayoutCtx, MeasureCtx, NewWidget, PaintCtx,
+        PointerButton, PointerButtonEvent, PointerEvent, PropertiesMut, PropertiesRef, Property,
+        RegisterCtx, TextEvent, Update, UpdateCtx, UsesProperty, Widget, WidgetMut, WidgetPod,
     },
+    imaging::Painter,
     kurbo::{Axis, Size},
-    layout::{LayoutSize, LenReq, SizeDef},
+    layout::{LayoutSize, LenReq, Length, SizeDef},
     properties::{Background, BorderColor, BorderWidth, ContentColor, CornerRadius, Padding},
 };
-use vello::Scene;
 
 use crate::{
     events::{UiEvent, push_global_ui_event},
@@ -31,7 +30,10 @@ pub struct EcsButtonWithChildWidget<A> {
     pressed: bool,
 }
 
-impl<A> HasProperty<ContentColor> for EcsButtonWithChildWidget<A> {}
+impl<A> UsesProperty<ContentColor> for EcsButtonWithChildWidget<A> where
+    A: Clone + Send + Sync + 'static
+{
+}
 
 impl<A> EcsButtonWithChildWidget<A> {
     #[must_use]
@@ -216,8 +218,8 @@ where
         _props: &PropertiesRef<'_>,
         axis: Axis,
         len_req: LenReq,
-        cross_length: Option<f64>,
-    ) -> f64 {
+        cross_length: Option<Length>,
+    ) -> Length {
         let auto_length = len_req.into();
         let context_size = LayoutSize::maybe(axis.cross(), cross_length);
 
@@ -239,7 +241,13 @@ where
         ctx.derive_baselines(&self.child);
     }
 
-    fn paint(&mut self, _ctx: &mut PaintCtx<'_>, _props: &PropertiesRef<'_>, _scene: &mut Scene) {}
+    fn paint(
+        &mut self,
+        _ctx: &mut PaintCtx<'_>,
+        _props: &PropertiesRef<'_>,
+        _painter: &mut Painter<'_>,
+    ) {
+    }
 
     fn accessibility_role(&self) -> Role {
         Role::Button

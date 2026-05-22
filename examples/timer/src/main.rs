@@ -15,13 +15,13 @@ use picus_core::{
     xilem::{
         Color,
         core::fork,
-        masonry::layout::Length,
-        style::Style as _,
-        vello::{
-            Scene,
-            kurbo::{Affine, Cap, Circle, Line, Point, Size, Stroke, Vec2},
-            peniko::Fill,
+        masonry::{
+            imaging::{Painter, record::Scene},
+            kurbo::{Cap, Circle, Line, Point, Size, Stroke, Vec2},
+            layout::Length,
+            properties::Padding,
         },
+        style::Style as _,
         view::{
             CrossAxisAlignment, FlexExt as _, canvas, flex_col, flex_row, label, progress_bar,
             sized_box, task,
@@ -131,31 +131,20 @@ fn tick_timer(state: &mut TimerState) {
 fn draw_timer_dial(scene: &mut Scene, size: Size, progress: f64, running: bool) {
     let center = Point::new(size.width / 2.0, size.height / 2.0);
     let radius = (size.width.min(size.height) * 0.5) - 3.0;
+    let mut painter = Painter::new(scene);
 
     let outer = Circle::new(center, radius);
     let inner = Circle::new(center, radius - 12.0);
 
-    scene.fill(
-        Fill::NonZero,
-        Affine::IDENTITY,
-        Color::from_rgb8(0x1B, 0x1B, 0x1D),
-        None,
-        &outer,
-    );
-    scene.fill(
-        Fill::NonZero,
-        Affine::IDENTITY,
-        Color::from_rgb8(0x28, 0x28, 0x2C),
-        None,
-        &inner,
-    );
-    scene.stroke(
-        &Stroke::new(2.0),
-        Affine::IDENTITY,
-        Color::from_rgb8(0x70, 0x75, 0x84),
-        None,
-        &outer,
-    );
+    painter
+        .fill(outer, Color::from_rgb8(0x1B, 0x1B, 0x1D))
+        .draw();
+    painter
+        .fill(inner, Color::from_rgb8(0x28, 0x28, 0x2C))
+        .draw();
+    painter
+        .stroke(outer, &Stroke::new(2.0), Color::from_rgb8(0x70, 0x75, 0x84))
+        .draw();
 
     for tick in 0..60 {
         let major = tick % 5 == 0;
@@ -169,17 +158,17 @@ fn draw_timer_dial(scene: &mut Scene, size: Size, progress: f64, running: bool) 
                 (radius - 17.0) * unit
             };
 
-        scene.stroke(
-            &Stroke::new(if major { 2.2 } else { 1.1 }).with_caps(Cap::Round),
-            Affine::IDENTITY,
-            if major {
-                Color::from_rgb8(0xB8, 0xC0, 0xD4)
-            } else {
-                Color::from_rgb8(0x6E, 0x75, 0x88)
-            },
-            None,
-            &Line::new(inner_pt, outer_pt),
-        );
+        painter
+            .stroke(
+                Line::new(inner_pt, outer_pt),
+                &Stroke::new(if major { 2.2 } else { 1.1 }).with_caps(Cap::Round),
+                if major {
+                    Color::from_rgb8(0xB8, 0xC0, 0xD4)
+                } else {
+                    Color::from_rgb8(0x6E, 0x75, 0x88)
+                },
+            )
+            .draw();
     }
 
     let lit_markers = (clamp01(progress) * 60.0).round() as usize;
@@ -187,40 +176,35 @@ fn draw_timer_dial(scene: &mut Scene, size: Size, progress: f64, running: bool) 
         let angle = ((step as f64) / 60.0) * TAU - FRAC_PI_2;
         let marker_pos = center + (radius - 31.0) * Vec2::from_angle(angle);
         let marker = Circle::new(marker_pos, 1.8);
-        scene.fill(
-            Fill::NonZero,
-            Affine::IDENTITY,
-            if running {
-                Color::from_rgb8(0x79, 0xD7, 0x9C)
-            } else {
-                Color::from_rgb8(0xD5, 0xAF, 0x78)
-            },
-            None,
-            &marker,
-        );
+        painter
+            .fill(
+                marker,
+                if running {
+                    Color::from_rgb8(0x79, 0xD7, 0x9C)
+                } else {
+                    Color::from_rgb8(0xD5, 0xAF, 0x78)
+                },
+            )
+            .draw();
     }
 
     let hand_angle = dial_angle(progress);
     let hand_end = center + (radius - 35.0) * Vec2::from_angle(hand_angle);
-    scene.stroke(
-        &Stroke::new(4.0).with_caps(Cap::Round),
-        Affine::IDENTITY,
-        if running {
-            Color::from_rgb8(0x7A, 0xE4, 0xA3)
-        } else {
-            Color::from_rgb8(0xF0, 0xBF, 0x82)
-        },
-        None,
-        &Line::new(center, hand_end),
-    );
+    painter
+        .stroke(
+            Line::new(center, hand_end),
+            &Stroke::new(4.0).with_caps(Cap::Round),
+            if running {
+                Color::from_rgb8(0x7A, 0xE4, 0xA3)
+            } else {
+                Color::from_rgb8(0xF0, 0xBF, 0x82)
+            },
+        )
+        .draw();
 
-    scene.fill(
-        Fill::NonZero,
-        Affine::IDENTITY,
-        Color::from_rgb8(0xF3, 0xF7, 0xFF),
-        None,
-        &Circle::new(center, 4.5),
-    );
+    painter
+        .fill(Circle::new(center, 4.5), Color::from_rgb8(0xF3, 0xF7, 0xFF))
+        .draw();
 }
 
 fn project_timer_root(_: &TimerRootView, ctx: ProjectionCtx<'_>) -> UiView {
@@ -278,11 +262,11 @@ fn project_timer_dial(_: &TimerDialView, ctx: ProjectionCtx<'_>) -> UiView {
                 },
             )
             .alt_text("Timer dial")
-            .padding(dial_shell_style.layout.padding)
-            .corner_radius(dial_shell_style.layout.corner_radius)
+            .padding(Padding::all(Length::px(dial_shell_style.layout.padding)))
+            .corner_radius(Length::px(dial_shell_style.layout.corner_radius))
             .border(
                 dial_shell_style.colors.border.unwrap_or(Color::TRANSPARENT),
-                dial_shell_style.layout.border_width,
+                Length::px(dial_shell_style.layout.border_width),
             )
             .background_color(dial_shell_style.colors.bg.unwrap_or(Color::TRANSPARENT)),
         )

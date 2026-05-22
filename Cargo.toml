@@ -15,7 +15,6 @@ members = [
 	"examples/todo_list",
 	"examples/ui_showcase",
 ]
-exclude = ["third_party/xilem"]
 
 [workspace.package]
 version = "0.1.0"
@@ -43,12 +42,14 @@ reqwest = { version = "0.13", default-features = false, features = ["blocking", 
 rfd = "0.17"
 fluent = "0.17"
 unic-langid = { version = "0.9", features = ["macros"] }
-masonry = { path = "third_party/xilem/masonry" }
-masonry_winit = { path = "third_party/xilem/masonry_winit" }
-xilem = { path = "third_party/xilem/xilem" }
-xilem_core = { path = "third_party/xilem/xilem_core" }
-xilem_masonry = { path = "third_party/xilem/xilem_masonry" }
-vello = "0.9"
+masonry = { git = "https://github.com/linebender/xilem.git", rev = "72c6517ad035f352c70f939f4754a3f79fca23fd" }
+masonry_imaging = { git = "https://github.com/linebender/xilem.git", rev = "72c6517ad035f352c70f939f4754a3f79fca23fd", features = ["imaging_vello"] }
+masonry_winit = { git = "https://github.com/linebender/xilem.git", rev = "72c6517ad035f352c70f939f4754a3f79fca23fd" }
+xilem = { git = "https://github.com/linebender/xilem.git", rev = "72c6517ad035f352c70f939f4754a3f79fca23fd" }
+xilem_core = { git = "https://github.com/linebender/xilem.git", rev = "72c6517ad035f352c70f939f4754a3f79fca23fd" }
+xilem_masonry = { git = "https://github.com/linebender/xilem.git", rev = "72c6517ad035f352c70f939f4754a3f79fca23fd" }
+vello = { version = "0.8.0", default-features = false, features = ["wgpu"] }
+wgpu = "28.0.0"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 bevy_reflect = { version = "=0.19.0-rc.1", default-features = false }

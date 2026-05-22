@@ -13,7 +13,11 @@ use picus_core::{
     run_app_with_window_options, slider,
     xilem::{
         Color,
-        masonry::{dpi::LogicalSize, layout::AsUnit},
+        masonry::{
+            dpi::LogicalSize,
+            layout::{AsUnit, Length},
+            properties::Padding,
+        },
         style::Style as _,
         view::{
             CrossAxisAlignment, FlexExt as _, GridExt as _, flex_col, flex_row, grid, label, prose,
@@ -477,11 +481,11 @@ fn build_chess_board_view(world: &World, ui: &ChessUiResource, action_entity: En
                 ChessEvent::ClickSquare { row, col },
                 label_piece,
             )
-            .padding(cell_style.layout.padding)
-            .corner_radius(cell_style.layout.corner_radius)
+            .padding(Padding::all(Length::px(cell_style.layout.padding)))
+            .corner_radius(Length::px(cell_style.layout.corner_radius))
             .border(
                 cell_style.colors.border.unwrap_or(Color::TRANSPARENT),
-                cell_style.layout.border_width,
+                Length::px(cell_style.layout.border_width),
             )
             .background_color(color)
             .grid_pos(draw_col as i32, draw_row as i32);

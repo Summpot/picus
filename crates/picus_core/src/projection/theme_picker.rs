@@ -89,7 +89,8 @@ pub(crate) fn project_theme_picker_menu(
         menu_style.layout.border_width = 1.0;
     }
     if menu_style.box_shadow.is_none() {
-        menu_style.box_shadow = Some(BoxShadow::new(BLACK.with_alpha(0.28), (0.0, 8.0)).blur(16.0));
+        menu_style.box_shadow =
+            Some(BoxShadow::new(BLACK.with_alpha(0.28), (0.0, 8.0)).blur(Length::px(16.0)));
     }
 
     let mut item_style = resolve_style_for_classes(ctx.world, ["overlay.dropdown.item"]);

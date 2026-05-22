@@ -4,17 +4,17 @@ use bevy_ecs::entity::Entity;
 use masonry::{
     accesskit::{Node, Role},
     core::{
-        AccessCtx, AccessEvent, ChildrenIds, EventCtx, HasProperty, LayoutCtx, MeasureCtx,
-        PaintCtx, PointerButton, PointerButtonEvent, PointerEvent, PointerUpdate, PropertiesMut,
-        PropertiesRef, Property, RegisterCtx, TextEvent, Update, UpdateCtx, Widget, WidgetMut,
-        WidgetPod,
+        AccessCtx, AccessEvent, ChildrenIds, EventCtx, LayoutCtx, MeasureCtx, PaintCtx,
+        PointerButton, PointerButtonEvent, PointerEvent, PointerUpdate, PropertiesMut,
+        PropertiesRef, Property, RegisterCtx, TextEvent, Update, UpdateCtx, UsesProperty, Widget,
+        WidgetMut, WidgetPod,
     },
+    imaging::Painter,
     kurbo::Size,
-    layout::{LayoutSize, LenReq, SizeDef},
+    layout::{LayoutSize, LenReq, Length, SizeDef},
     properties::{Background, BorderColor, BorderWidth, ContentColor, CornerRadius, Padding},
     widgets::Label,
 };
-use vello::Scene;
 
 use crate::{
     ScrollAxis, WidgetUiAction,
@@ -38,7 +38,7 @@ pub struct EcsDragThumbWidget {
     last_axis_position: Option<f64>,
 }
 
-impl HasProperty<ContentColor> for EcsDragThumbWidget {}
+impl UsesProperty<ContentColor> for EcsDragThumbWidget {}
 
 impl EcsDragThumbWidget {
     #[must_use]
@@ -46,7 +46,7 @@ impl EcsDragThumbWidget {
         Self {
             entity,
             axis,
-            label: Label::new(label).with_auto_id().to_pod(),
+            label: Label::new(label).prepare().to_pod(),
             hovered: false,
             pressed: false,
             last_axis_position: None,
@@ -234,8 +234,8 @@ impl Widget for EcsDragThumbWidget {
         _props: &PropertiesRef<'_>,
         axis: masonry::kurbo::Axis,
         len_req: LenReq,
-        cross_length: Option<f64>,
-    ) -> f64 {
+        cross_length: Option<Length>,
+    ) -> Length {
         let auto_length = len_req.into();
         let context_size = LayoutSize::maybe(axis.cross(), cross_length);
 
@@ -257,7 +257,13 @@ impl Widget for EcsDragThumbWidget {
         ctx.derive_baselines(&self.label);
     }
 
-    fn paint(&mut self, _ctx: &mut PaintCtx<'_>, _props: &PropertiesRef<'_>, _scene: &mut Scene) {}
+    fn paint(
+        &mut self,
+        _ctx: &mut PaintCtx<'_>,
+        _props: &PropertiesRef<'_>,
+        _painter: &mut Painter<'_>,
+    ) {
+    }
 
     fn accessibility_role(&self) -> Role {
         Role::GenericContainer

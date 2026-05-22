@@ -101,7 +101,7 @@ pub(crate) fn project_dialog(dialog: &UiDialog, ctx: ProjectionCtx<'_>) -> UiVie
     }
     if dialog_style.box_shadow.is_none() {
         dialog_style.box_shadow =
-            Some(BoxShadow::new(BLACK.with_alpha(0.36), (0.0, 10.0)).blur(22.0));
+            Some(BoxShadow::new(BLACK.with_alpha(0.36), (0.0, 10.0)).blur(Length::px(22.0)));
     }
 
     let mut title_style = resolve_style_for_classes(ctx.world, ["overlay.dialog.title"]);

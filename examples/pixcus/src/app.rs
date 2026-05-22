@@ -40,7 +40,7 @@ use picus_core::{
     resolve_style_for_entity_classes, run_app_with_window_options, spawn_in_overlay_root,
     xilem::{
         Color,
-        masonry::layout::{Dim, Length},
+        masonry::layout::Dim,
         style::Style as _,
         view::{
             CrossAxisAlignment, FlexExt as _, MainAxisAlignment, flex_col, flex_row, image, label,

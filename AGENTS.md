@@ -38,12 +38,12 @@ cross-cutting design decisions that code comments cannot express well.
    - Execute straightforward tasks directly.
    - Ask the user only for architecture-level choices with meaningful trade-offs.
 
-7. **Third-party submodules**
-   - `third_party/xilem` remains fork-backed. `origin` points to the user's fork;
-     `upstream` points to the official repo. Fork edits happen on
-     `bevy-xilem-dev`.
-   - Sync Xilem upstream by rebasing or merging `upstream/*` into
-     `bevy-xilem-dev`, then update the submodule commit in this repository.
+7. **Third-party dependencies**
+   - Xilem/Masonry dependencies track official upstream only. Prefer crates.io
+     releases when every needed crate is published; otherwise use official
+     `https://github.com/linebender/xilem.git` Git dependencies pinned by commit.
+   - Do not reintroduce `third_party` submodules or user-fork dependencies unless
+     a required capability cannot be expressed against upstream Xilem.
    - Temporary local Cargo `[patch]` or path overrides are allowed for validation;
      remove them unless they are part of the intended design.
 

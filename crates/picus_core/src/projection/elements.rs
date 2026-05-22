@@ -17,6 +17,7 @@ use crate::{
 };
 use bevy_ecs::{hierarchy::Children, prelude::*};
 use masonry::layout::Length;
+use masonry::properties::Padding;
 use std::sync::Arc;
 use tracing::trace;
 use xilem_masonry::style::Style as _;
@@ -62,6 +63,10 @@ fn map_text_alignment_for_input(
         crate::styling::TextAlign::Center => masonry::parley::Alignment::Center,
         crate::styling::TextAlign::End => masonry::parley::Alignment::End,
     }
+}
+
+fn style_padding(value: f64) -> Padding {
+    Padding::all(Length::px(value))
 }
 
 pub(crate) fn project_label(label_component: &UiLabel, ctx: ProjectionCtx<'_>) -> UiView {
@@ -201,14 +206,14 @@ pub(crate) fn project_progress_bar(progress: &UiProgressBar, ctx: ProjectionCtx<
         transformed(
             sized_box(
                 progress_bar(progress.progress)
-                    .corner_radius(style.layout.corner_radius)
+                    .corner_radius(Length::px(style.layout.corner_radius))
                     .border(
                         style.colors.border.unwrap_or(xilem::Color::TRANSPARENT),
-                        style.layout.border_width,
+                        Length::px(style.layout.border_width),
                     )
                     .background_color(style.colors.bg.unwrap_or(xilem::Color::TRANSPARENT)),
             )
-            .padding(style.layout.padding),
+            .padding(style_padding(style.layout.padding)),
         )
         .scale(scale),
     )
@@ -238,11 +243,11 @@ pub(crate) fn project_text_input(input: &UiTextInput, ctx: ProjectionCtx<'_>) ->
             transformed(
                 styled
                     .text_color(text_color)
-                    .padding(style.layout.padding)
-                    .corner_radius(style.layout.corner_radius)
+                    .padding(style_padding(style.layout.padding))
+                    .corner_radius(Length::px(style.layout.corner_radius))
                     .border(
                         style.colors.border.unwrap_or(xilem::Color::TRANSPARENT),
-                        style.layout.border_width,
+                        Length::px(style.layout.border_width),
                     )
                     .background_color(style.colors.bg.unwrap_or(xilem::Color::TRANSPARENT))
                     .box_shadow(style.box_shadow.unwrap_or_default()),
@@ -254,11 +259,11 @@ pub(crate) fn project_text_input(input: &UiTextInput, ctx: ProjectionCtx<'_>) ->
     Arc::new(
         transformed(
             styled
-                .padding(style.layout.padding)
-                .corner_radius(style.layout.corner_radius)
+                .padding(style_padding(style.layout.padding))
+                .corner_radius(Length::px(style.layout.corner_radius))
                 .border(
                     style.colors.border.unwrap_or(xilem::Color::TRANSPARENT),
-                    style.layout.border_width,
+                    Length::px(style.layout.border_width),
                 )
                 .background_color(style.colors.bg.unwrap_or(xilem::Color::TRANSPARENT))
                 .box_shadow(style.box_shadow.unwrap_or_default()),

@@ -3,13 +3,11 @@ use std::borrow::Cow;
 use bevy_ecs::entity::Entity;
 use masonry::{
     core::{ArcStr, NewWidget, PointerButton, PropertySet},
-    parley::Alignment as TextAlign,
-    parley::StyleProperty,
-    parley::style::FontStack,
-    properties::{CheckmarkColor, ContentColor, DisabledContentColor, PlaceholderColor},
+    parley::{Alignment as TextAlign, FontFamily, StyleProperty},
+    peniko::Color,
+    properties::{CheckmarkColor, ContentColor, PlaceholderColor},
     widgets::{self, CheckboxToggled, RadioButtonSelected, TextAction},
 };
-use vello::peniko::Color;
 use xilem_core::{MessageCtx, MessageResult, Mut, View, ViewMarker};
 use xilem_masonry::view::{Button, Label, Slider, Switch, slider, switch, text_button};
 use xilem_masonry::{Pod, ViewCtx};
@@ -52,7 +50,7 @@ where
         checked,
         map_action: Box::new(map_action),
         text_size: masonry::theme::TEXT_SIZE_NORMAL,
-        font: FontStack::List(Cow::Borrowed(&[])),
+        font: FontFamily::List(Cow::Borrowed(&[])),
         text_color: None,
         checkmark_color: None,
         disabled: false,
@@ -69,7 +67,7 @@ pub struct EcsCheckboxView<A> {
     checked: bool,
     map_action: EcsCheckboxCallback<A>,
     text_size: f32,
-    font: FontStack<'static>,
+    font: FontFamily<'static>,
     text_color: Option<Color>,
     checkmark_color: Option<Color>,
     disabled: bool,
@@ -85,7 +83,7 @@ where
         self
     }
 
-    pub fn font(mut self, font: impl Into<FontStack<'static>>) -> Self {
+    pub fn font(mut self, font: impl Into<FontFamily<'static>>) -> Self {
         self.font = font.into();
         self
     }
@@ -118,10 +116,10 @@ where
     fn build(&self, ctx: &mut ViewCtx, _: &mut ()) -> (Self::Element, Self::ViewState) {
         let label = widgets::Label::new(self.label.clone())
             .with_style(StyleProperty::FontSize(self.text_size))
-            .with_style(StyleProperty::FontStack(self.font.clone()));
+            .with_style(StyleProperty::FontFamily(self.font.clone()));
 
         let label = if let Some(color) = self.text_color {
-            NewWidget::new_with_props(label, ContentColor::new(color))
+            NewWidget::new(label).with_props(ContentColor::new(color))
         } else {
             NewWidget::new(label)
         };
@@ -161,7 +159,7 @@ where
             widgets::Label::insert_style(&mut label, StyleProperty::FontSize(self.text_size));
         }
         if prev.font != self.font {
-            widgets::Label::insert_style(&mut label, StyleProperty::FontStack(self.font.clone()));
+            widgets::Label::insert_style(&mut label, StyleProperty::FontFamily(self.font.clone()));
         }
         if prev.text_color != self.text_color {
             if let Some(color) = self.text_color {
@@ -226,7 +224,7 @@ where
         label: label.into(),
         checked,
         text_size: masonry::theme::TEXT_SIZE_NORMAL,
-        font: FontStack::List(Cow::Borrowed(&[])),
+        font: FontFamily::List(Cow::Borrowed(&[])),
         text_color: None,
         checkmark_color: None,
         disabled: false,
@@ -241,7 +239,7 @@ pub struct EcsRadioButtonView<A> {
     label: ArcStr,
     checked: bool,
     text_size: f32,
-    font: FontStack<'static>,
+    font: FontFamily<'static>,
     text_color: Option<Color>,
     checkmark_color: Option<Color>,
     disabled: bool,
@@ -257,7 +255,7 @@ where
         self
     }
 
-    pub fn font(mut self, font: impl Into<FontStack<'static>>) -> Self {
+    pub fn font(mut self, font: impl Into<FontFamily<'static>>) -> Self {
         self.font = font.into();
         self
     }
@@ -285,10 +283,10 @@ where
     fn build(&self, ctx: &mut ViewCtx, _: &mut ()) -> (Self::Element, Self::ViewState) {
         let label = widgets::Label::new(self.label.clone())
             .with_style(StyleProperty::FontSize(self.text_size))
-            .with_style(StyleProperty::FontStack(self.font.clone()));
+            .with_style(StyleProperty::FontFamily(self.font.clone()));
 
         let label = if let Some(color) = self.text_color {
-            NewWidget::new_with_props(label, ContentColor::new(color))
+            NewWidget::new(label).with_props(ContentColor::new(color))
         } else {
             NewWidget::new(label)
         };
@@ -327,7 +325,7 @@ where
             widgets::Label::insert_style(&mut label, StyleProperty::FontSize(self.text_size));
         }
         if prev.font != self.font {
-            widgets::Label::insert_style(&mut label, StyleProperty::FontStack(self.font.clone()));
+            widgets::Label::insert_style(&mut label, StyleProperty::FontFamily(self.font.clone()));
         }
         if prev.text_color != self.text_color {
             if let Some(color) = self.text_color {
@@ -424,7 +422,7 @@ where
         placeholder: ArcStr::default(),
         text_alignment: TextAlign::default(),
         text_size: masonry::theme::TEXT_SIZE_NORMAL,
-        font: FontStack::List(Cow::Borrowed(&[])),
+        font: FontFamily::List(Cow::Borrowed(&[])),
         disabled: false,
         clip: true,
     }
@@ -444,7 +442,7 @@ pub struct EcsTextInputView<A> {
     placeholder: ArcStr,
     text_alignment: TextAlign,
     text_size: f32,
-    font: FontStack<'static>,
+    font: FontFamily<'static>,
     disabled: bool,
     clip: bool,
 }
@@ -474,7 +472,7 @@ where
         self
     }
 
-    pub fn font(mut self, font: impl Into<FontStack<'static>>) -> Self {
+    pub fn font(mut self, font: impl Into<FontFamily<'static>>) -> Self {
         self.font = font.into();
         self
     }
@@ -498,6 +496,14 @@ where
         self.clip = clip;
         self
     }
+
+    fn effective_text_color(&self) -> Option<Color> {
+        if self.disabled {
+            self.disabled_text_color.or(self.text_color)
+        } else {
+            self.text_color
+        }
+    }
 }
 
 impl<A> ViewMarker for EcsTextInputView<A> where A: Send + Sync + 'static {}
@@ -513,18 +519,15 @@ where
         let text_area = widgets::TextArea::new_editable(&self.contents)
             .with_text_alignment(self.text_alignment)
             .with_style(StyleProperty::FontSize(self.text_size))
-            .with_style(StyleProperty::FontStack(self.font.clone()));
+            .with_style(StyleProperty::FontFamily(self.font.clone()));
 
         let mut props = PropertySet::new();
-        if let Some(color) = self.text_color {
+        if let Some(color) = self.effective_text_color() {
             props.insert(ContentColor { color });
-        }
-        if let Some(color) = self.disabled_text_color {
-            props.insert(DisabledContentColor(ContentColor { color }));
         }
 
         let text_input =
-            widgets::TextInput::from_text_area(NewWidget::new_with_props(text_area, props))
+            widgets::TextInput::from_text_area(NewWidget::new(text_area).with_props(props))
                 .with_text_alignment(self.text_alignment)
                 .with_clip(self.clip)
                 .with_placeholder(self.placeholder.clone());
@@ -550,18 +553,11 @@ where
         mut element: Mut<'_, Self::Element>,
         _: &mut (),
     ) {
-        if self.text_color != prev.text_color {
-            if let Some(color) = self.text_color {
+        if self.effective_text_color() != prev.effective_text_color() {
+            if let Some(color) = self.effective_text_color() {
                 element.insert_prop(ContentColor { color });
             } else {
                 element.remove_prop::<ContentColor>();
-            }
-        }
-        if self.disabled_text_color != prev.disabled_text_color {
-            if let Some(color) = self.disabled_text_color {
-                element.insert_prop(DisabledContentColor(ContentColor { color }));
-            } else {
-                element.remove_prop::<DisabledContentColor>();
             }
         }
         if self.placeholder_color != prev.placeholder_color {
@@ -599,7 +595,7 @@ where
         if self.font != prev.font {
             widgets::TextArea::insert_style(
                 &mut text_area,
-                StyleProperty::FontStack(self.font.clone()),
+                StyleProperty::FontFamily(self.font.clone()),
             );
         }
     }

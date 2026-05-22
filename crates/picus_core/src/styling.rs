@@ -25,7 +25,7 @@ use bevy_ecs::{
 };
 use bevy_reflect::TypePath;
 use bevy_time::Time;
-use masonry::core::HasProperty;
+use masonry::core::UsesProperty;
 use masonry::theme;
 use serde::{
     Deserialize,
@@ -35,8 +35,9 @@ use serde::{
     },
 };
 use xilem::{Color, style::Style as _};
+use xilem_masonry::masonry::layout::Length;
 use xilem_masonry::masonry::parley::{
-    Alignment as ParleyTextAlign, FontFamily, GenericFamily, style::FontStack,
+    Alignment as ParleyTextAlign, FontFamily, FontFamilyName, GenericFamily,
 };
 use xilem_masonry::masonry::properties::{
     Background, BorderColor, BorderWidth, BoxShadow, CornerRadius, LineBreaking, Padding,
@@ -1895,6 +1896,14 @@ fn map_text_alignment(text_align: TextAlign) -> ParleyTextAlign {
     }
 }
 
+fn style_padding(value: f64) -> Padding {
+    Padding::all(Length::px(value))
+}
+
+fn style_length(value: f64) -> Length {
+    Length::px(value)
+}
+
 pub trait StyleFlexAlignmentExt {
     fn with_style_alignment(self, style: &ResolvedStyle) -> Self;
 }
@@ -1922,11 +1931,11 @@ where
     let scale = style.layout.scale.max(0.01);
     transformed(
         sized_box(view)
-            .padding(style.layout.padding)
-            .corner_radius(style.layout.corner_radius)
+            .padding(style_padding(style.layout.padding))
+            .corner_radius(style_length(style.layout.corner_radius))
             .border(
                 style.colors.border.unwrap_or(Color::TRANSPARENT),
-                style.layout.border_width,
+                style_length(style.layout.border_width),
             )
             .background_color(style.colors.bg.unwrap_or(Color::TRANSPARENT))
             .box_shadow(style.box_shadow.unwrap_or_default()),
@@ -1942,20 +1951,20 @@ pub fn apply_direct_widget_style<V>(view: V, style: &ResolvedStyle) -> impl Widg
 where
     V: WidgetView<(), ()>,
     V::Widget: Sized
-        + HasProperty<Padding>
-        + HasProperty<CornerRadius>
-        + HasProperty<BorderColor>
-        + HasProperty<BorderWidth>
-        + HasProperty<Background>
-        + HasProperty<BoxShadow>,
+        + UsesProperty<Padding>
+        + UsesProperty<CornerRadius>
+        + UsesProperty<BorderColor>
+        + UsesProperty<BorderWidth>
+        + UsesProperty<Background>
+        + UsesProperty<BoxShadow>,
 {
     let scale = style.layout.scale.max(0.01);
     transformed(
-        view.padding(style.layout.padding)
-            .corner_radius(style.layout.corner_radius)
+        view.padding(style_padding(style.layout.padding))
+            .corner_radius(style_length(style.layout.corner_radius))
             .border(
                 style.colors.border.unwrap_or(Color::TRANSPARENT),
-                style.layout.border_width,
+                style_length(style.layout.border_width),
             )
             .background_color(style.colors.bg.unwrap_or(Color::TRANSPARENT))
             .box_shadow(style.box_shadow.unwrap_or_default()),
@@ -2336,17 +2345,17 @@ fn lerp_f64(start: f64, end: f64, t: f32) -> f64 {
     start + ((end - start) * t as f64)
 }
 
-fn map_font_family_name(name: &str) -> FontFamily<'static> {
+fn map_font_family_name(name: &str) -> FontFamilyName<'static> {
     let trimmed = name.trim();
     let lower = trimmed.to_ascii_lowercase();
     if let Some(generic) = GenericFamily::parse(lower.as_str()) {
-        FontFamily::Generic(generic)
+        FontFamilyName::Generic(generic)
     } else {
-        FontFamily::Named(trimmed.to_string().into())
+        FontFamilyName::Named(trimmed.to_string().into())
     }
 }
 
-pub(crate) fn font_stack_from_style(style: &ResolvedStyle) -> Option<FontStack<'static>> {
+pub(crate) fn font_stack_from_style(style: &ResolvedStyle) -> Option<FontFamily<'static>> {
     let families = style.font_family.as_ref()?;
     if families.is_empty() {
         return None;
@@ -2358,9 +2367,9 @@ pub(crate) fn font_stack_from_style(style: &ResolvedStyle) -> Option<FontStack<'
         .collect::<Vec<_>>();
 
     if mapped.len() == 1 {
-        Some(FontStack::Single(mapped.into_iter().next().unwrap()))
+        Some(FontFamily::Single(mapped.into_iter().next().unwrap()))
     } else {
-        Some(FontStack::List(Cow::Owned(mapped)))
+        Some(FontFamily::List(Cow::Owned(mapped)))
     }
 }
 
@@ -2511,11 +2520,11 @@ pub fn apply_direct_text_input_style(
             styled
                 .text_color(text_color)
                 .placeholder_color(placeholder_color_from_style(style))
-                .padding(style.layout.padding)
-                .corner_radius(style.layout.corner_radius)
+                .padding(style_padding(style.layout.padding))
+                .corner_radius(style_length(style.layout.corner_radius))
                 .border(
                     style.colors.border.unwrap_or(Color::TRANSPARENT),
-                    style.layout.border_width,
+                    style_length(style.layout.border_width),
                 )
                 .background_color(style.colors.bg.unwrap_or(Color::TRANSPARENT))
                 .box_shadow(style.box_shadow.unwrap_or_default()),
@@ -2526,11 +2535,11 @@ pub fn apply_direct_text_input_style(
     transformed(
         styled
             .placeholder_color(placeholder_color_from_style(style))
-            .padding(style.layout.padding)
-            .corner_radius(style.layout.corner_radius)
+            .padding(style_padding(style.layout.padding))
+            .corner_radius(style_length(style.layout.corner_radius))
             .border(
                 style.colors.border.unwrap_or(Color::TRANSPARENT),
-                style.layout.border_width,
+                style_length(style.layout.border_width),
             )
             .background_color(style.colors.bg.unwrap_or(Color::TRANSPARENT))
             .box_shadow(style.box_shadow.unwrap_or_default()),
@@ -3109,7 +3118,7 @@ impl BoxShadowDef {
     fn into_box_shadow(self) -> io::Result<BoxShadow> {
         Ok(
             BoxShadow::new(self.color.into_color()?, (self.offset_x, self.offset_y))
-                .blur(self.blur),
+                .blur(style_length(self.blur)),
         )
     }
 }

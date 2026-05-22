@@ -11,9 +11,10 @@ use masonry::{
         Widget, WidgetMut, WidgetPod,
         keyboard::{Key, NamedKey},
     },
+    imaging::Painter,
     kurbo::{Axis, Point, Size},
-    layout::LenReq,
-    vello::Scene,
+    layout::{LenReq, Length},
+    properties::Padding,
 };
 use picus_core::{
     AppPicusExt, PicusPlugin, ProjectionCtx, StyleClass, UiEventQueue, UiRoot, UiThemePicker,
@@ -25,7 +26,6 @@ use picus_core::{
     button, emit_ui_action, resolve_style, resolve_style_for_classes, run_app_with_window_options,
     xilem::{
         Color,
-        masonry::layout::Length,
         style::Style as _,
         view::{
             CrossAxisAlignment, FlexExt as _, MainAxisAlignment, flex_col, flex_row, label, portal,
@@ -604,8 +604,8 @@ impl<W: Widget + FromDynWidget + ?Sized> Widget for HotkeyCaptureWidget<W> {
         _props: &PropertiesRef<'_>,
         axis: Axis,
         _len_req: LenReq,
-        cross_length: Option<f64>,
-    ) -> f64 {
+        cross_length: Option<Length>,
+    ) -> Length {
         ctx.redirect_measurement(&mut self.child, axis, cross_length)
     }
 
@@ -615,7 +615,13 @@ impl<W: Widget + FromDynWidget + ?Sized> Widget for HotkeyCaptureWidget<W> {
         ctx.derive_baselines(&self.child);
     }
 
-    fn paint(&mut self, _ctx: &mut PaintCtx<'_>, _props: &PropertiesRef<'_>, _scene: &mut Scene) {}
+    fn paint(
+        &mut self,
+        _ctx: &mut PaintCtx<'_>,
+        _props: &PropertiesRef<'_>,
+        _painter: &mut Painter<'_>,
+    ) {
+    }
 
     fn accessibility_role(&self) -> Role {
         Role::GenericContainer
@@ -949,11 +955,11 @@ fn project_ui_component_button(button_info: &UiComponentButton, ctx: ProjectionC
     Arc::new(
         sized_box(
             button(ctx.entity, button_info.action, button_info.label)
-                .padding(style.layout.padding)
-                .corner_radius(style.layout.corner_radius)
+                .padding(Padding::all(Length::px(style.layout.padding)))
+                .corner_radius(Length::px(style.layout.corner_radius))
                 .border(
                     style.colors.border.unwrap_or(Color::TRANSPARENT),
-                    style.layout.border_width,
+                    Length::px(style.layout.border_width),
                 )
                 .background_color(style.colors.bg.unwrap_or(Color::TRANSPARENT))
                 .color(text_color),

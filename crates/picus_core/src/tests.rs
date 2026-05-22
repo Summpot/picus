@@ -3330,7 +3330,7 @@ fn stylesheet_box_shadow_token_parses_and_resolves() {
         crate::xilem::Color::from_rgba8(0, 0, 0, 89),
         (0.0, 12.0),
     )
-    .blur(24.0);
+    .blur(crate::xilem::masonry::layout::Length::px(24.0));
 
     assert_eq!(resolved.box_shadow, Some(expected));
 }

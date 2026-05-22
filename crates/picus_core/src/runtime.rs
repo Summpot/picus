@@ -21,7 +21,7 @@ use bevy_window::{
 };
 use masonry::layout::{Dim, UnitPoint};
 use masonry::{
-    app::{RenderRoot, RenderRootOptions, RenderRootSignal, WindowSizePolicy},
+    app::{RenderRoot, RenderRootOptions, RenderRootSignal, VisualLayerKind, WindowSizePolicy},
     core::{
         Handled, PointerButton, PointerButtonEvent, PointerEvent, PointerId, PointerInfo,
         PointerScrollEvent, PointerState, PointerType, PointerUpdate, ScrollDelta, TextEvent,
@@ -31,10 +31,11 @@ use masonry::{
     dpi::{PhysicalPosition, PhysicalSize},
     peniko::Color,
     theme::default_property_set,
-    vello::{Renderer, wgpu},
     widgets::Passthrough,
 };
+use masonry_imaging::{Layer as ImagingLayer, PreparedFrame, texture_render::Renderer};
 use picus_surface::{ExistingWindowMetrics, ExternalWindowSurface};
+use wgpu::PresentMode;
 use xilem::style::Style as _;
 use xilem::winit::window::Window as XilemWinitWindow;
 use xilem_core::{ProxyError, RawProxy, SendMessage, View, ViewId};
@@ -101,7 +102,7 @@ pub struct MasonryRuntime {
     viewport_width: f64,
     viewport_height: f64,
     window_surface: Option<ExternalWindowSurface>,
-    renderer: Option<Renderer>,
+    renderer: Renderer,
     #[cfg(test)]
     pointer_trace: Vec<PointerTraceEvent>,
 }
@@ -180,7 +181,7 @@ impl FromWorld for MasonryRuntime {
             viewport_width: initial_viewport.0,
             viewport_height: initial_viewport.1,
             window_surface: None,
-            renderer: None,
+            renderer: Renderer::new(),
             #[cfg(test)]
             pointer_trace: Vec::new(),
         }
@@ -636,7 +637,7 @@ impl MasonryRuntime {
         match ExternalWindowSurface::new_from_bevy_raw_handle(
             raw_handle,
             metrics,
-            wgpu::PresentMode::AutoVsync,
+            PresentMode::AutoVsync,
         ) {
             Ok(surface) => {
                 self.window_surface = Some(surface);
@@ -654,18 +655,40 @@ impl MasonryRuntime {
             .render_root
             .handle_window_event(WindowEvent::AnimFrame(delta));
         let logical_size = self.render_root.size();
-        let (paint_result, _tree_update) = self.render_root.redraw();
+        let (visual_layers, _tree_update) = self.render_root.redraw();
 
         let Some(surface) = self.window_surface.as_mut() else {
             return;
         };
-        surface.render_scene(
-            &mut self.renderer,
-            paint_result.composite(),
+
+        let overlays = visual_layers
+            .overlay_layers()
+            .map(|layer| {
+                let VisualLayerKind::Scene(scene) = &layer.kind else {
+                    unreachable!("overlay_layers only returns scene layers");
+                };
+                ImagingLayer {
+                    scene,
+                    transform: layer.transform,
+                }
+            })
+            .collect::<Vec<_>>();
+        let Some(root_layer) = visual_layers.root_layer() else {
+            return;
+        };
+        let VisualLayerKind::Scene(root_scene) = &root_layer.kind else {
+            unreachable!("root_layer always returns a scene layer");
+        };
+        let frame = PreparedFrame::new(
             logical_size.width.max(1),
             logical_size.height.max(1),
+            self.window_scale_factor,
             Color::BLACK,
+            root_scene,
+            &overlays,
         );
+
+        surface.render_frame(&mut self.renderer, frame);
     }
 
     pub(crate) fn take_pending_ime_signals(&mut self) -> Vec<ImeWindowSignal> {
@@ -677,7 +700,7 @@ impl MasonryRuntime {
         if window_changed {
             self.active_window = Some(window);
             self.window_surface = None;
-            self.renderer = None;
+            self.renderer = Renderer::new();
         }
 
         let next_scale = metrics.scale_factor.max(f64::EPSILON);
