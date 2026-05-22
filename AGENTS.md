@@ -38,12 +38,12 @@ cross-cutting design decisions that code comments cannot express well.
    - Execute straightforward tasks directly.
    - Ask the user only for architecture-level choices with meaningful trade-offs.
 
-7. **Fork-backed submodules**
-   - `third_party/bevy` and `third_party/xilem` are fork-backed submodules.
-   - `origin` points to the user's fork; `upstream` points to the official repo.
-   - Fork edits happen on `bevy-xilem-dev`.
-   - Sync upstream by rebasing or merging `upstream/*` into `bevy-xilem-dev`, then
-     update the submodule commit in this repository.
+7. **Third-party submodules**
+   - `third_party/xilem` remains fork-backed. `origin` points to the user's fork;
+     `upstream` points to the official repo. Fork edits happen on
+     `bevy-xilem-dev`.
+   - Sync Xilem upstream by rebasing or merging `upstream/*` into
+     `bevy-xilem-dev`, then update the submodule commit in this repository.
    - Temporary local Cargo `[patch]` or path overrides are allowed for validation;
      remove them unless they are part of the intended design.
 
