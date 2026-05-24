@@ -6,7 +6,7 @@ use masonry::{
     parley::{Alignment as TextAlign, FontFamily, StyleProperty},
     peniko::Color,
     properties::{CheckmarkColor, ContentColor, PlaceholderColor},
-    widgets::{self, CheckboxToggled, RadioButtonSelected, TextAction},
+    widgets::{self, CheckboxToggled, InsertNewline, RadioButtonSelected, TextAction},
 };
 use xilem_core::{MessageCtx, MessageResult, Mut, View, ViewMarker};
 use xilem_masonry::view::{Button, Label, Slider, Switch, slider, switch, text_button};
@@ -425,6 +425,7 @@ where
         font: FontFamily::List(Cow::Borrowed(&[])),
         disabled: false,
         clip: true,
+        insert_newline: InsertNewline::default(),
     }
 }
 
@@ -445,6 +446,7 @@ pub struct EcsTextInputView<A> {
     font: FontFamily<'static>,
     disabled: bool,
     clip: bool,
+    insert_newline: InsertNewline,
 }
 
 impl<A> EcsTextInputView<A>
@@ -497,6 +499,11 @@ where
         self
     }
 
+    pub fn insert_newline(mut self, insert_newline: InsertNewline) -> Self {
+        self.insert_newline = insert_newline;
+        self
+    }
+
     fn effective_text_color(&self) -> Option<Color> {
         if self.disabled {
             self.disabled_text_color.or(self.text_color)
@@ -518,6 +525,7 @@ where
     fn build(&self, ctx: &mut ViewCtx, _: &mut ()) -> (Self::Element, Self::ViewState) {
         let text_area = widgets::TextArea::new_editable(&self.contents)
             .with_text_alignment(self.text_alignment)
+            .with_insert_newline(self.insert_newline)
             .with_style(StyleProperty::FontSize(self.text_size))
             .with_style(StyleProperty::FontFamily(self.font.clone()));
 
@@ -581,6 +589,10 @@ where
         }
 
         let mut text_area = widgets::TextInput::text_mut(&mut element);
+
+        if self.insert_newline != prev.insert_newline {
+            widgets::TextArea::set_insert_newline(&mut text_area, self.insert_newline);
+        }
 
         if self.contents != prev.contents && text_area.widget.text() != &self.contents {
             widgets::TextArea::reset_text(&mut text_area, &self.contents);

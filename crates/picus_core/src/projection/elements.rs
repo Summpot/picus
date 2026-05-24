@@ -4,8 +4,9 @@ use super::{
 };
 use crate::{
     ecs::{
-        LocalizeText, PartSwitchThumb, PartSwitchTrack, UiBadge, UiButton, UiCheckbox, UiLabel,
-        UiProgressBar, UiSlider, UiSwitch, UiTextInput,
+        LocalizeText, PartSwitchThumb, PartSwitchTrack, UiBadge, UiButton, UiCheckbox, UiImage,
+        UiLabel, UiMultilineTextInput, UiPasswordInput, UiProgressBar, UiSlider, UiSwitch,
+        UiTextInput,
     },
     i18n::resolve_localized_text,
     styling::{
@@ -18,11 +19,13 @@ use crate::{
 use bevy_ecs::{hierarchy::Children, prelude::*};
 use masonry::layout::Length;
 use masonry::properties::Padding;
+use masonry::widgets::InsertNewline;
 use std::sync::Arc;
 use tracing::trace;
 use xilem_masonry::style::Style as _;
 use xilem_masonry::view::{
-    FlexExt as _, badge, flex_row, label, progress_bar, sized_box, transformed,
+    FlexExt as _, badge, flex_row, image as xilem_image, label, progress_bar, sized_box,
+    transformed,
 };
 
 fn child_entity_views(ctx: &ProjectionCtx<'_>) -> Vec<(Entity, UiView)> {
@@ -67,6 +70,10 @@ fn map_text_alignment_for_input(
 
 fn style_padding(value: f64) -> Padding {
     Padding::all(Length::px(value))
+}
+
+fn masked_text(value: &str, mask: char) -> String {
+    value.chars().map(|_| mask).collect()
 }
 
 pub(crate) fn project_label(label_component: &UiLabel, ctx: ProjectionCtx<'_>) -> UiView {
@@ -220,17 +227,73 @@ pub(crate) fn project_progress_bar(progress: &UiProgressBar, ctx: ProjectionCtx<
 }
 
 pub(crate) fn project_text_input(input: &UiTextInput, ctx: ProjectionCtx<'_>) -> UiView {
+    project_ecs_text_input(
+        ctx,
+        input.value.clone(),
+        input.placeholder.clone(),
+        true,
+        InsertNewline::Never,
+        false,
+        |entity, value| WidgetUiAction::SetTextInput {
+            input: entity,
+            value,
+        },
+    )
+}
+
+pub(crate) fn project_password_input(input: &UiPasswordInput, ctx: ProjectionCtx<'_>) -> UiView {
+    let mask = input.mask;
+    project_ecs_text_input(
+        ctx,
+        masked_text(&input.value, mask),
+        input.placeholder.clone(),
+        true,
+        InsertNewline::Never,
+        input.read_only,
+        move |entity, display_value| WidgetUiAction::SetPasswordInputDisplay {
+            input: entity,
+            display_value,
+        },
+    )
+}
+
+pub(crate) fn project_multiline_text_input(
+    input: &UiMultilineTextInput,
+    ctx: ProjectionCtx<'_>,
+) -> UiView {
+    project_ecs_text_input(
+        ctx,
+        input.value.clone(),
+        input.placeholder.clone(),
+        input.clip,
+        InsertNewline::OnEnter,
+        input.read_only,
+        |entity, value| WidgetUiAction::SetMultilineTextInput {
+            input: entity,
+            value,
+        },
+    )
+}
+
+fn project_ecs_text_input(
+    ctx: ProjectionCtx<'_>,
+    value: String,
+    placeholder: String,
+    clip: bool,
+    insert_newline: InsertNewline,
+    disabled: bool,
+    map_action: impl Fn(Entity, String) -> WidgetUiAction + Send + Sync + 'static,
+) -> UiView {
     let style = resolve_style(ctx.world, ctx.entity);
     let scale = style.layout.scale.max(0.01);
-    let mut styled = ecs_text_input(ctx.entity, input.value.clone(), move |value| {
-        WidgetUiAction::SetTextInput {
-            input: ctx.entity,
-            value,
-        }
-    })
-    .placeholder(input.placeholder.clone())
-    .text_size(style.text.size)
-    .text_alignment(map_text_alignment_for_input(style.text.text_align));
+    let entity = ctx.entity;
+    let mut styled = ecs_text_input(entity, value, move |value| map_action(entity, value))
+        .placeholder(placeholder)
+        .text_size(style.text.size)
+        .text_alignment(map_text_alignment_for_input(style.text.text_align))
+        .clip(clip)
+        .insert_newline(insert_newline)
+        .disabled(disabled);
 
     if let Some(font_stack) = font_stack_from_style(&style) {
         styled = styled.font(font_stack);
@@ -270,4 +333,25 @@ pub(crate) fn project_text_input(input: &UiTextInput, ctx: ProjectionCtx<'_>) ->
         )
         .scale(scale),
     )
+}
+
+pub(crate) fn project_image(image_component: &UiImage, ctx: ProjectionCtx<'_>) -> UiView {
+    let style = resolve_style(ctx.world, ctx.entity);
+    let Some(image_brush) = image_component.image_brush() else {
+        let fallback_text = image_component.alt_text.clone().unwrap_or_default();
+        return Arc::new(apply_widget_style(
+            apply_label_style(label(fallback_text), &style),
+            &style,
+        ));
+    };
+
+    let mut image_view = xilem_image(image_brush).decorative(image_component.decorative);
+    if let Some(alt_text) = &image_component.alt_text {
+        image_view = image_view.alt_text(alt_text.clone());
+    }
+
+    Arc::new(apply_widget_style(
+        image_view.fit(image_component.fit),
+        &style,
+    ))
 }

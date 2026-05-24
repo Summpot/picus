@@ -12,11 +12,13 @@ pub mod widgets;
 pub use core::*;
 
 use crate::ecs::{
-    UiBadge, UiButton, UiCheckbox, UiColorPicker, UiColorPickerPanel, UiComboBox, UiDatePicker,
-    UiDatePickerPanel, UiDialog, UiDropdownMenu, UiFlexColumn, UiFlexRow, UiGroupBox, UiLabel,
-    UiMenuBar, UiMenuBarItem, UiMenuItemPanel, UiOverlayRoot, UiPopover, UiProgressBar,
-    UiRadioGroup, UiRoot, UiScrollView, UiSlider, UiSpinner, UiSplitPane, UiSwitch, UiTabBar,
-    UiTable, UiTextInput, UiThemePicker, UiThemePickerMenu, UiToast, UiTooltip, UiTreeNode,
+    UiBadge, UiButton, UiCanvas, UiCheckbox, UiColorPicker, UiColorPickerPanel, UiComboBox,
+    UiDataTable, UiDatePicker, UiDatePickerPanel, UiDialog, UiDropdownMenu, UiFlexColumn,
+    UiFlexRow, UiGrid, UiGroupBox, UiImage, UiLabel, UiListView, UiMenuBar, UiMenuBarItem,
+    UiMenuItemPanel, UiMultilineTextInput, UiOverlayRoot, UiPasswordInput, UiPopover,
+    UiProgressBar, UiRadioGroup, UiRoot, UiScrollView, UiSlider, UiSpinner, UiSplitPane, UiSwitch,
+    UiTabBar, UiTable, UiTextInput, UiThemePicker, UiThemePickerMenu, UiToast, UiTooltip,
+    UiTreeNode,
 };
 
 /// Register non-UI-component foundational projectors.
@@ -25,6 +27,7 @@ pub fn register_core_projectors(registry: &mut UiProjectorRegistry) {
         .register_component::<UiRoot>(layout::project_ui_root)
         .register_component::<UiFlexColumn>(layout::project_flex_column)
         .register_component::<UiFlexRow>(layout::project_flex_row)
+        .register_component::<UiGrid>(layout::project_grid)
         .register_component::<UiLabel>(elements::project_label)
         .register_component::<UiOverlayRoot>(overlay::project_overlay_root);
 }
@@ -43,6 +46,9 @@ pub fn register_builtin_projectors(registry: &mut UiProjectorRegistry) {
         .register_component::<UiSlider>(elements::project_slider)
         .register_component::<UiSwitch>(elements::project_switch)
         .register_component::<UiTextInput>(elements::project_text_input)
+        .register_component::<UiPasswordInput>(elements::project_password_input)
+        .register_component::<UiMultilineTextInput>(elements::project_multiline_text_input)
+        .register_component::<UiImage>(elements::project_image)
         .register_component::<UiProgressBar>(elements::project_progress_bar)
         .register_component::<UiDialog>(dialog::project_dialog)
         .register_component::<UiPopover>(popover::project_popover)
@@ -50,9 +56,12 @@ pub fn register_builtin_projectors(registry: &mut UiProjectorRegistry) {
         .register_component::<UiDropdownMenu>(dropdown::project_dropdown_menu)
         .register_component::<UiRadioGroup>(widgets::project_radio_group)
         .register_component::<UiScrollView>(widgets::project_scroll_view)
+        .register_component::<UiCanvas>(widgets::project_canvas)
         .register_component::<UiTabBar>(widgets::project_tab_bar)
+        .register_component::<UiListView>(widgets::project_list_view)
         .register_component::<UiTreeNode>(widgets::project_tree_node)
         .register_component::<UiTable>(widgets::project_table)
+        .register_component::<UiDataTable>(widgets::project_data_table)
         .register_component::<UiMenuBar>(widgets::project_menu_bar)
         .register_component::<UiMenuBarItem>(widgets::project_menu_bar_item)
         .register_component::<UiMenuItemPanel>(widgets::project_menu_item_panel)

@@ -5,12 +5,13 @@ use bevy_ecs::{
     hierarchy::{ChildOf, Children},
     prelude::Component,
 };
-use masonry::kurbo::{Axis, Point};
+use masonry::imaging::Painter;
+use masonry::kurbo::{Axis, BezPath, Circle, Line, Point, Rect, Stroke};
 use masonry::layout::{Dim, Length};
 use xilem::Color;
 use xilem::style::Style as _;
 use xilem_masonry::view::{
-    CrossAxisAlignment, FlexExt as _, MainAxisAlignment, flex_col, flex_row, label,
+    CrossAxisAlignment, FlexExt as _, MainAxisAlignment, canvas, flex_col, flex_row, label,
     radio_group as xilem_radio_group, sized_box, spinner, split, transformed, zstack,
 };
 
@@ -18,9 +19,11 @@ use crate::{
     ecs::{
         AnchoredTo, OverlayComputedPosition, PartScrollBarHorizontal, PartScrollBarVertical,
         PartScrollThumbHorizontal, PartScrollThumbVertical, PartScrollViewport, ScrollAxis,
-        SplitDirection, ToastKind, UiColorPicker, UiColorPickerPanel, UiDatePicker,
-        UiDatePickerPanel, UiGroupBox, UiMenuBar, UiMenuBarItem, UiMenuItemPanel, UiRadioGroup,
-        UiScrollView, UiSpinner, UiSplitPane, UiTabBar, UiTable, UiToast, UiTooltip, UiTreeNode,
+        SplitDirection, ToastKind, UiCanvas, UiCanvasCommand, UiCanvasPathCommand,
+        UiCanvasPosition, UiColorPicker, UiColorPickerPanel, UiDataTable, UiDatePicker,
+        UiDatePickerPanel, UiGroupBox, UiListSelectionMode, UiListView, UiMenuBar, UiMenuBarItem,
+        UiMenuItemPanel, UiRadioGroup, UiScrollView, UiSortDirection, UiSpinner, UiSplitPane,
+        UiTabBar, UiTable, UiToast, UiTooltip, UiTreeNode,
     },
     overlay::OverlayUiAction,
     styling::{
@@ -133,6 +136,29 @@ fn apply_color_overrides(base: &mut ResolvedStyle, overrides: &ResolvedStyle) {
     }
     if overrides.colors.border.is_some() {
         base.colors.border = overrides.colors.border;
+    }
+}
+
+fn selected_row_style(
+    world: &bevy_ecs::world::World,
+    base_class: &str,
+    selected_class: &str,
+) -> ResolvedStyle {
+    let mut style = default_item_style(world, base_class);
+    let overrides = resolve_style_for_classes(world, [base_class, selected_class]);
+    apply_color_overrides(&mut style, &overrides);
+    if style.colors.bg.is_none() {
+        style.colors.bg = Some(Color::from_rgb8(0x00, 0x78, 0xD4));
+    }
+    if style.colors.text.is_none() {
+        style.colors.text = Some(Color::WHITE);
+    }
+    style
+}
+
+fn apply_optional_item_padding(style: &mut ResolvedStyle, padding: Option<f64>) {
+    if let Some(padding) = padding {
+        style.layout.padding = padding;
     }
 }
 
@@ -384,6 +410,191 @@ pub(crate) fn project_scroll_view(scroll_view: &UiScrollView, ctx: ProjectionCtx
         apply_flex_alignment(flex_col(rows), &style).gap(Length::px(0.0)),
         &style,
     ))
+}
+
+// ---------------------------------------------------------------------------
+// Canvas
+// ---------------------------------------------------------------------------
+
+fn canvas_path(commands: &[UiCanvasPathCommand]) -> BezPath {
+    let mut path = BezPath::new();
+    for command in commands {
+        match *command {
+            UiCanvasPathCommand::MoveTo { x, y } => path.move_to((x, y)),
+            UiCanvasPathCommand::LineTo { x, y } => path.line_to((x, y)),
+            UiCanvasPathCommand::QuadTo { x1, y1, x, y } => path.quad_to((x1, y1), (x, y)),
+            UiCanvasPathCommand::CubicTo {
+                x1,
+                y1,
+                x2,
+                y2,
+                x,
+                y,
+            } => path.curve_to((x1, y1), (x2, y2), (x, y)),
+            UiCanvasPathCommand::ClosePath => path.close_path(),
+        }
+    }
+    path
+}
+
+pub(crate) fn project_canvas(canvas_component: &UiCanvas, ctx: ProjectionCtx<'_>) -> UiView {
+    let style = resolve_style(ctx.world, ctx.entity);
+    let commands = canvas_component.commands.clone();
+    let mut canvas_view = canvas(
+        move |_: &mut (),
+              _: &mut masonry::core::MutateCtx<'_>,
+              scene: &mut masonry::imaging::record::Scene,
+              size| {
+            let mut painter = Painter::new(scene);
+            for command in &commands {
+                match command {
+                    UiCanvasCommand::FillCanvas { color } => {
+                        let rect = Rect::new(0.0, 0.0, size.width, size.height);
+                        painter.fill(rect, *color).draw();
+                    }
+                    UiCanvasCommand::StrokeCanvas {
+                        color,
+                        stroke_width,
+                    } => {
+                        let rect = Rect::new(0.0, 0.0, size.width, size.height);
+                        painter
+                            .stroke(rect, &Stroke::new(*stroke_width), *color)
+                            .draw();
+                    }
+                    UiCanvasCommand::FillRect {
+                        x,
+                        y,
+                        width,
+                        height,
+                        color,
+                    } => {
+                        painter
+                            .fill(Rect::new(*x, *y, *x + *width, *y + *height), *color)
+                            .draw();
+                    }
+                    UiCanvasCommand::FillRoundedRect {
+                        x,
+                        y,
+                        width,
+                        height,
+                        radius,
+                        color,
+                    } => {
+                        painter
+                            .fill(
+                                Rect::new(*x, *y, *x + *width, *y + *height)
+                                    .to_rounded_rect(*radius),
+                                *color,
+                            )
+                            .draw();
+                    }
+                    UiCanvasCommand::StrokeRect {
+                        x,
+                        y,
+                        width,
+                        height,
+                        color,
+                        stroke_width,
+                    } => {
+                        painter
+                            .stroke(
+                                Rect::new(*x, *y, *x + *width, *y + *height),
+                                &Stroke::new(*stroke_width),
+                                *color,
+                            )
+                            .draw();
+                    }
+                    UiCanvasCommand::StrokeRoundedRect {
+                        x,
+                        y,
+                        width,
+                        height,
+                        radius,
+                        color,
+                        stroke_width,
+                    } => {
+                        painter
+                            .stroke(
+                                Rect::new(*x, *y, *x + *width, *y + *height)
+                                    .to_rounded_rect(*radius),
+                                &Stroke::new(*stroke_width),
+                                *color,
+                            )
+                            .draw();
+                    }
+                    UiCanvasCommand::Line {
+                        x1,
+                        y1,
+                        x2,
+                        y2,
+                        color,
+                        stroke_width,
+                    } => {
+                        painter
+                            .stroke(
+                                Line::new((*x1, *y1), (*x2, *y2)),
+                                &Stroke::new(*stroke_width),
+                                *color,
+                            )
+                            .draw();
+                    }
+                    UiCanvasCommand::FillCircle {
+                        cx,
+                        cy,
+                        radius,
+                        color,
+                    } => {
+                        painter
+                            .fill(Circle::new((*cx, *cy), *radius), *color)
+                            .draw();
+                    }
+                    UiCanvasCommand::StrokeCircle {
+                        cx,
+                        cy,
+                        radius,
+                        color,
+                        stroke_width,
+                    } => {
+                        painter
+                            .stroke(
+                                Circle::new((*cx, *cy), *radius),
+                                &Stroke::new(*stroke_width),
+                                *color,
+                            )
+                            .draw();
+                    }
+                    UiCanvasCommand::FillPath { commands, color } => {
+                        painter.fill(canvas_path(commands), *color).draw();
+                    }
+                    UiCanvasCommand::StrokePath {
+                        commands,
+                        color,
+                        stroke_width,
+                    } => {
+                        painter
+                            .stroke(canvas_path(commands), &Stroke::new(*stroke_width), *color)
+                            .draw();
+                    }
+                }
+            }
+        },
+    );
+    if let Some(alt_text) = &canvas_component.alt_text {
+        canvas_view = canvas_view.alt_text(alt_text.clone());
+    }
+
+    let mut layers: Vec<UiView> = vec![Arc::new(canvas_view)];
+    for (entity, child) in child_entity_views(&ctx) {
+        let offset = ctx
+            .world
+            .get::<UiCanvasPosition>(entity)
+            .copied()
+            .unwrap_or_default()
+            .offset();
+        layers.push(Arc::new(transformed(child).translate(offset)));
+    }
+
+    Arc::new(apply_widget_style(zstack(layers), &style))
 }
 
 // ---------------------------------------------------------------------------
@@ -675,6 +886,253 @@ pub(crate) fn project_table(table: &UiTable, ctx: ProjectionCtx<'_>) -> UiView {
         .collect::<Vec<_>>();
 
     let mut all_rows = vec![header_row];
+    all_rows.extend(data_rows);
+
+    Arc::new(apply_widget_style(
+        apply_flex_alignment(flex_col(all_rows), &style).gap(Length::px(style.layout.gap.max(1.0))),
+        &style,
+    ))
+}
+
+// ---------------------------------------------------------------------------
+// List View
+// ---------------------------------------------------------------------------
+
+pub(crate) fn project_list_view(list_view: &UiListView, ctx: ProjectionCtx<'_>) -> UiView {
+    let style = resolve_style(ctx.world, ctx.entity);
+    let mut item_style = default_item_style(ctx.world, "widget.list_view.item");
+    apply_optional_item_padding(&mut item_style, list_view.item_padding);
+    if item_style.colors.text.is_none() {
+        item_style.colors.text = style.colors.text;
+    }
+    let mut selected_style = selected_row_style(
+        ctx.world,
+        "widget.list_view.item",
+        "widget.list_view.item.selected",
+    );
+    apply_optional_item_padding(&mut selected_style, list_view.item_padding);
+    let selected_indices = list_view.clamped_selected_indices();
+
+    if list_view.items.is_empty() {
+        let empty_text = list_view.empty_text.clone().unwrap_or_default();
+        return Arc::new(apply_widget_style(
+            apply_flex_alignment(
+                flex_col(vec![
+                    apply_label_style(label(empty_text), &item_style).into_any_flex(),
+                ]),
+                &style,
+            ),
+            &style,
+        ));
+    }
+
+    let rows = list_view
+        .items
+        .iter()
+        .enumerate()
+        .map(|(index, item)| {
+            let row_style = if selected_indices.contains(&index) {
+                &selected_style
+            } else {
+                &item_style
+            };
+            let label_view = apply_label_style(label(item.clone()), row_style);
+
+            let row_view: UiView = if matches!(list_view.selection_mode, UiListSelectionMode::None)
+            {
+                Arc::new(apply_widget_style(
+                    sized_box(label_view).width(Dim::Stretch),
+                    row_style,
+                ))
+            } else {
+                Arc::new(apply_direct_widget_style(
+                    ecs_button_with_child(
+                        ctx.entity,
+                        WidgetUiAction::SelectListItem {
+                            list_view: ctx.entity,
+                            index,
+                        },
+                        label_view,
+                    ),
+                    row_style,
+                ))
+            };
+
+            if let Some(height) = list_view.item_height {
+                sized_box(row_view)
+                    .height(Dim::Fixed(Length::px(height)))
+                    .into_any_flex()
+            } else {
+                row_view.into_any_flex()
+            }
+        })
+        .collect::<Vec<_>>();
+
+    Arc::new(apply_widget_style(
+        apply_flex_alignment(flex_col(rows), &style).gap(Length::px(style.layout.gap.max(1.0))),
+        &style,
+    ))
+}
+
+// ---------------------------------------------------------------------------
+// Data Table
+// ---------------------------------------------------------------------------
+
+pub(crate) fn project_data_table(table: &UiDataTable, ctx: ProjectionCtx<'_>) -> UiView {
+    let style = resolve_style(ctx.world, ctx.entity);
+    let mut header_style = resolve_style_for_classes(ctx.world, ["widget.data_table.header"]);
+    if header_style.colors.bg.is_none() {
+        header_style.colors.bg = Some(Color::from_rgb8(0x2A, 0x2A, 0x2A));
+    }
+    if header_style.layout.padding <= 0.0 {
+        header_style.layout.padding = 6.0;
+    }
+    if header_style.colors.text.is_none() {
+        header_style.colors.text = style.colors.text;
+    }
+
+    let mut cell_style = default_item_style(ctx.world, "widget.data_table.cell");
+    if cell_style.colors.text.is_none() {
+        cell_style.colors.text = style.colors.text;
+    }
+
+    let mut row_style = resolve_style_for_classes(ctx.world, ["widget.data_table.row"]);
+    if row_style.layout.padding <= 0.0 {
+        row_style.layout.padding = 0.0;
+    }
+    let mut striped_style = row_style.clone();
+    let striped_overrides = resolve_style_for_classes(ctx.world, ["widget.data_table.row.striped"]);
+    apply_color_overrides(&mut striped_style, &striped_overrides);
+    if striped_style.colors.bg.is_none() {
+        striped_style.colors.bg = Some(Color::from_rgba8(255, 255, 255, 18));
+    }
+    let selected_style = selected_row_style(
+        ctx.world,
+        "widget.data_table.row",
+        "widget.data_table.row.selected",
+    );
+    let selected_rows = table.clamped_selected_rows();
+
+    let column_count = table
+        .columns
+        .len()
+        .max(
+            table
+                .rows
+                .iter()
+                .map(|row| row.cells.len())
+                .max()
+                .unwrap_or(0),
+        )
+        .max(1);
+
+    let header_cells = (0..column_count)
+        .map(|index| {
+            let column = table.columns.get(index);
+            let mut text = column
+                .map(|column| column.label.clone())
+                .unwrap_or_default();
+            if let Some(sort) = table.sort.filter(|sort| sort.column == index) {
+                text.push_str(match sort.direction {
+                    UiSortDirection::Ascending => " ^",
+                    UiSortDirection::Descending => " v",
+                });
+            }
+            let content = apply_widget_style(
+                sized_box(apply_label_style(label(text), &header_style)).width(Dim::Stretch),
+                &header_style,
+            );
+            let cell: UiView = if column.is_some_and(|column| column.sortable) {
+                Arc::new(apply_direct_widget_style(
+                    ecs_button_with_child(
+                        ctx.entity,
+                        WidgetUiAction::SortDataTableColumn {
+                            table: ctx.entity,
+                            column: index,
+                        },
+                        content,
+                    ),
+                    &header_style,
+                ))
+            } else {
+                Arc::new(content)
+            };
+            if let Some(width) = column.and_then(|column| column.width) {
+                sized_box(cell)
+                    .width(Dim::Fixed(Length::px(width)))
+                    .into_any_flex()
+            } else {
+                cell.flex(1.0).into_any_flex()
+            }
+        })
+        .collect::<Vec<_>>();
+    let header_row = table
+        .show_header
+        .then(|| flex_row(header_cells).into_any_flex());
+
+    let data_rows = table
+        .sorted_row_indices()
+        .into_iter()
+        .enumerate()
+        .map(|(display_index, row_index)| {
+            let row = &table.rows[row_index];
+            let active_row_style = if selected_rows.contains(&row_index) {
+                &selected_style
+            } else if table.striped && display_index % 2 == 1 {
+                &striped_style
+            } else {
+                &row_style
+            };
+            let cells = (0..column_count)
+                .map(|column_index| {
+                    let text = row.cells.get(column_index).cloned().unwrap_or_default();
+                    let cell = Arc::new(apply_widget_style(
+                        sized_box(apply_label_style(label(text), &cell_style)).width(Dim::Stretch),
+                        &cell_style,
+                    ));
+                    if let Some(width) = table
+                        .columns
+                        .get(column_index)
+                        .and_then(|column| column.width)
+                    {
+                        sized_box(cell)
+                            .width(Dim::Fixed(Length::px(width)))
+                            .into_any_flex()
+                    } else {
+                        cell.flex(1.0).into_any_flex()
+                    }
+                })
+                .collect::<Vec<_>>();
+            let content = flex_row(cells);
+            let row_view = if matches!(table.selection_mode, UiListSelectionMode::None) {
+                let row_view: UiView = Arc::new(apply_widget_style(content, active_row_style));
+                row_view
+            } else {
+                let row_view: UiView = Arc::new(apply_direct_widget_style(
+                    ecs_button_with_child(
+                        ctx.entity,
+                        WidgetUiAction::SelectDataTableRow {
+                            table: ctx.entity,
+                            row: row_index,
+                        },
+                        content,
+                    ),
+                    active_row_style,
+                ));
+                row_view
+            };
+
+            if let Some(height) = table.row_height {
+                sized_box(row_view)
+                    .height(Dim::Fixed(Length::px(height)))
+                    .into_any_flex()
+            } else {
+                row_view.into_any_flex()
+            }
+        })
+        .collect::<Vec<_>>();
+
+    let mut all_rows = header_row.into_iter().collect::<Vec<_>>();
     all_rows.extend(data_rows);
 
     Arc::new(apply_widget_style(

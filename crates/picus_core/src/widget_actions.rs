@@ -10,10 +10,12 @@ use masonry::core::{Widget, WidgetRef};
 use crate::{
     AnchoredTo, AutoDismiss, HasTooltip, InteractionState, MasonryRuntime, OverlayAnchorRect,
     OverlayComputedPosition, OverlayConfig, OverlayPlacement, OverlayState, ScrollAxis, UiCheckbox,
-    UiCheckboxChanged, UiOverlayRoot, UiRadioGroup, UiRadioGroupChanged, UiScrollView,
-    UiScrollViewChanged, UiSlider, UiSliderChanged, UiSwitch, UiSwitchChanged, UiTabBar,
-    UiTabChanged, UiTextInput, UiTextInputChanged, UiTooltip, UiTreeNode, UiTreeNodeToggled,
-    events::UiEventQueue,
+    UiCheckboxChanged, UiDataTable, UiDataTableSelectionChanged, UiDataTableSortChanged,
+    UiListSelectionMode, UiListView, UiListViewSelectionChanged, UiMultilineTextInput,
+    UiMultilineTextInputChanged, UiOverlayRoot, UiPasswordInput, UiPasswordInputChanged,
+    UiRadioGroup, UiRadioGroupChanged, UiScrollView, UiScrollViewChanged, UiSlider,
+    UiSliderChanged, UiSwitch, UiSwitchChanged, UiTabBar, UiTabChanged, UiTextInput,
+    UiTextInputChanged, UiTooltip, UiTreeNode, UiTreeNodeToggled, events::UiEventQueue,
 };
 
 /// Internal action enum for non-overlay widget interactions.
@@ -40,6 +42,19 @@ pub enum WidgetUiAction {
     ToggleSwitch { switch: Entity },
     /// Update text input contents.
     SetTextInput { input: Entity, value: String },
+    /// Update a password input from the visible masked editor contents.
+    SetPasswordInputDisplay {
+        input: Entity,
+        display_value: String,
+    },
+    /// Update multiline text input contents.
+    SetMultilineTextInput { input: Entity, value: String },
+    /// Select an item in a list view.
+    SelectListItem { list_view: Entity, index: usize },
+    /// Select a row in a data table.
+    SelectDataTableRow { table: Entity, row: usize },
+    /// Sort a data table by a column.
+    SortDataTableColumn { table: Entity, column: usize },
     /// Drag an ECS scroll-thumb by a physical pixel delta.
     DragScrollThumb {
         thumb: Entity,
@@ -98,6 +113,20 @@ fn quantize_slider_value(slider: &UiSlider, value: f64) -> f64 {
     let step = slider.step.max(f64::EPSILON);
     let steps = ((value - slider.min) / step).round();
     (slider.min + steps * step).clamp(slider.min, slider.max)
+}
+
+fn reconcile_password_value(previous: &str, display_value: &str, mask: char) -> String {
+    let mut previous_chars = previous.chars();
+    let mut resolved = String::new();
+
+    for display_char in display_value.chars() {
+        match previous_chars.next() {
+            Some(previous_char) if display_char == mask => resolved.push(previous_char),
+            Some(_) | None => resolved.push(display_char),
+        }
+    }
+
+    resolved
 }
 
 fn find_ancestor_scroll_view(world: &World, mut entity: Entity) -> Option<Entity> {
@@ -426,11 +455,205 @@ pub fn handle_widget_actions(world: &mut World) {
                     continue;
                 }
 
-                if let Some(mut text_input) = world.get_mut::<UiTextInput>(input) {
-                    text_input.value = value.clone();
+                let changed = if let Some(mut text_input) = world.get_mut::<UiTextInput>(input) {
+                    if text_input.value == value {
+                        None
+                    } else {
+                        text_input.value = value.clone();
+                        Some(value)
+                    }
+                } else {
+                    None
+                };
+
+                if let Some(value) = changed {
                     world
                         .resource::<UiEventQueue>()
                         .push_typed(input, UiTextInputChanged { input, value });
+                }
+            }
+
+            WidgetUiAction::SetPasswordInputDisplay {
+                input,
+                display_value,
+            } => {
+                if world.get_entity(input).is_err() {
+                    continue;
+                }
+
+                let changed =
+                    if let Some(mut password_input) = world.get_mut::<UiPasswordInput>(input) {
+                        if password_input.read_only {
+                            continue;
+                        }
+                        let next = reconcile_password_value(
+                            &password_input.value,
+                            &display_value,
+                            password_input.mask,
+                        );
+                        let next = password_input.clamped_value(next);
+                        if password_input.value == next {
+                            None
+                        } else {
+                            password_input.value = next.clone();
+                            Some(next)
+                        }
+                    } else {
+                        None
+                    };
+
+                if let Some(value) = changed {
+                    world
+                        .resource::<UiEventQueue>()
+                        .push_typed(input, UiPasswordInputChanged { input, value });
+                }
+            }
+
+            WidgetUiAction::SetMultilineTextInput { input, value } => {
+                if world.get_entity(input).is_err() {
+                    continue;
+                }
+
+                let changed =
+                    if let Some(mut text_input) = world.get_mut::<UiMultilineTextInput>(input) {
+                        if text_input.read_only {
+                            continue;
+                        }
+                        let next = text_input.clamped_value(value);
+                        if text_input.value == next {
+                            None
+                        } else {
+                            text_input.value = next.clone();
+                            Some(next)
+                        }
+                    } else {
+                        None
+                    };
+
+                if let Some(value) = changed {
+                    world
+                        .resource::<UiEventQueue>()
+                        .push_typed(input, UiMultilineTextInputChanged { input, value });
+                }
+            }
+
+            WidgetUiAction::SelectListItem { list_view, index } => {
+                if world.get_entity(list_view).is_err() {
+                    continue;
+                }
+
+                let changed = if let Some(mut list) = world.get_mut::<UiListView>(list_view) {
+                    if index >= list.items.len() {
+                        continue;
+                    }
+                    match list.selection_mode {
+                        UiListSelectionMode::None => None,
+                        UiListSelectionMode::Single => {
+                            if list.selected == Some(index) {
+                                None
+                            } else {
+                                list.selected = Some(index);
+                                list.selected_indices = vec![index];
+                                Some((list.selected, list.clamped_selected_indices()))
+                            }
+                        }
+                        UiListSelectionMode::Multiple => {
+                            if let Some(position) =
+                                list.selected_indices.iter().position(|item| *item == index)
+                            {
+                                list.selected_indices.remove(position);
+                            } else {
+                                list.selected_indices.push(index);
+                            }
+                            list.selected_indices.sort_unstable();
+                            list.selected_indices.dedup();
+                            list.selected = list.selected_indices.first().copied();
+                            Some((list.selected, list.clamped_selected_indices()))
+                        }
+                    }
+                } else {
+                    None
+                };
+
+                if let Some((selected, selected_indices)) = changed {
+                    world.resource::<UiEventQueue>().push_typed(
+                        list_view,
+                        UiListViewSelectionChanged {
+                            list_view,
+                            selected,
+                            selected_indices,
+                        },
+                    );
+                }
+            }
+
+            WidgetUiAction::SelectDataTableRow { table, row } => {
+                if world.get_entity(table).is_err() {
+                    continue;
+                }
+
+                let changed = if let Some(mut data_table) = world.get_mut::<UiDataTable>(table) {
+                    if row >= data_table.rows.len() {
+                        continue;
+                    }
+                    match data_table.selection_mode {
+                        UiListSelectionMode::None => None,
+                        UiListSelectionMode::Single => {
+                            if data_table.selected_row == Some(row) {
+                                None
+                            } else {
+                                data_table.selected_row = Some(row);
+                                data_table.selected_rows = vec![row];
+                                Some((data_table.selected_row, data_table.clamped_selected_rows()))
+                            }
+                        }
+                        UiListSelectionMode::Multiple => {
+                            if let Some(position) = data_table
+                                .selected_rows
+                                .iter()
+                                .position(|item| *item == row)
+                            {
+                                data_table.selected_rows.remove(position);
+                            } else {
+                                data_table.selected_rows.push(row);
+                            }
+                            data_table.selected_rows.sort_unstable();
+                            data_table.selected_rows.dedup();
+                            data_table.selected_row = data_table.selected_rows.first().copied();
+                            Some((data_table.selected_row, data_table.clamped_selected_rows()))
+                        }
+                    }
+                } else {
+                    None
+                };
+
+                if let Some((selected_row, selected_rows)) = changed {
+                    world.resource::<UiEventQueue>().push_typed(
+                        table,
+                        UiDataTableSelectionChanged {
+                            table,
+                            selected_row,
+                            selected_rows,
+                        },
+                    );
+                }
+            }
+
+            WidgetUiAction::SortDataTableColumn { table, column } => {
+                if world.get_entity(table).is_err() {
+                    continue;
+                }
+
+                let changed = if let Some(mut data_table) = world.get_mut::<UiDataTable>(table) {
+                    data_table.toggle_sort_column(column)
+                } else {
+                    None
+                };
+
+                if let Some(sort) = changed {
+                    world
+                        .resource::<UiEventQueue>()
+                        .push_typed(table, UiDataTableSortChanged { table, sort });
                 }
             }
 

@@ -7,13 +7,20 @@ use crate::{AppPicusExt, ProjectionCtx, StyleTypeRegistry, UiView};
 
 mod badge;
 mod button;
+mod canvas;
 mod checkbox;
 mod color_picker;
 mod combo_box;
+mod data_table;
 mod date_picker;
 mod dialog;
+mod grid;
 mod group_box;
+mod image;
+mod list_view;
 mod menu;
+mod multiline_text_input;
+mod password_input;
 mod popover;
 mod progress_bar;
 mod radio_group;
@@ -32,13 +39,20 @@ mod tree_node;
 
 pub use badge::*;
 pub use button::*;
+pub use canvas::*;
 pub use checkbox::*;
 pub use color_picker::*;
 pub use combo_box::*;
+pub use data_table::*;
 pub use date_picker::*;
 pub use dialog::*;
+pub use grid::*;
 pub use group_box::*;
+pub use image::*;
+pub use list_view::*;
 pub use menu::*;
+pub use multiline_text_input::*;
+pub use password_input::*;
 pub use popover::*;
 pub use progress_bar::*;
 pub use radio_group::*;
@@ -134,10 +148,14 @@ pub fn expand_all_ui_component_templates<T: UiComponentTemplate>(world: &mut Wor
 pub fn register_builtin_ui_components(app: &mut App) {
     app.register_ui_component::<button::UiButton>()
         .register_ui_component::<badge::UiBadge>()
+        .register_ui_component::<canvas::UiCanvas>()
         .register_ui_component::<checkbox::UiCheckbox>()
         .register_ui_component::<slider::UiSlider>()
         .register_ui_component::<switch::UiSwitch>()
         .register_ui_component::<text_input::UiTextInput>()
+        .register_ui_component::<password_input::UiPasswordInput>()
+        .register_ui_component::<multiline_text_input::UiMultilineTextInput>()
+        .register_ui_component::<image::UiImage>()
         .register_ui_component::<progress_bar::UiProgressBar>()
         .register_ui_component::<dialog::UiDialog>()
         .register_ui_component::<popover::UiPopover>()
@@ -146,9 +164,12 @@ pub fn register_builtin_ui_components(app: &mut App) {
         .register_ui_component::<combo_box::UiDropdownItem>()
         .register_ui_component::<radio_group::UiRadioGroup>()
         .register_ui_component::<scroll_view::UiScrollView>()
+        .register_ui_component::<grid::UiGrid>()
         .register_ui_component::<tab_bar::UiTabBar>()
+        .register_ui_component::<list_view::UiListView>()
         .register_ui_component::<tree_node::UiTreeNode>()
         .register_ui_component::<table::UiTable>()
+        .register_ui_component::<data_table::UiDataTable>()
         .register_ui_component::<menu::UiMenuBar>()
         .register_ui_component::<menu::UiMenuBarItem>()
         .register_ui_component::<menu::UiMenuItemPanel>()

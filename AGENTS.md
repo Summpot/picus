@@ -123,8 +123,12 @@ components with `AppPicusExt::register_ui_component::<T>()`.
   view.
 
 Projection uses `entity.to_bits()` for stable node identities. Core root/container
-types include `UiRoot`, `UiOverlayRoot`, `UiFlexColumn`, `UiFlexRow`, `UiLabel`,
-`UiButton`, and `LocalizeText`.
+types include `UiRoot`, `UiOverlayRoot`, `UiFlexColumn`, `UiFlexRow`, `UiGrid`
+with MewUI-style `UiGridLength` track intent and `UiGridCell` attached
+placement, `UiLabel`, `UiButton`, `UiCanvas`/`UiCanvasCommand` plus
+`UiCanvasPosition` child positioning, `UiImage`, `UiTextInput`,
+`UiPasswordInput`, `UiMultilineTextInput`, `UiListView`, `UiTable`,
+`UiDataTable`, and `LocalizeText`.
 
 ## 6. Synthesis and Events
 

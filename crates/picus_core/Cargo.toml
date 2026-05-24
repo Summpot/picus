@@ -35,6 +35,7 @@ serde.workspace = true
 ron.workspace = true
 lucide-icons.workspace = true
 wgpu.workspace = true
+image.workspace = true
 
 [dev-dependencies]
 num-traits.workspace = true
