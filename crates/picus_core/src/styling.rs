@@ -12,6 +12,7 @@ use crate::bevy_tween::{
     interpolation::EaseKind,
     tween::{ComponentTween, TweenInterpolationValue, TweenPreviousValue},
 };
+use crate::xilem::{Color, style::Style as _};
 use bevy_asset::{
     Asset, AssetEvent, AssetLoader, AssetServer, Assets, Handle, LoadContext, io::Reader,
 };
@@ -38,7 +39,6 @@ use serde::{
         value::{MapAccessDeserializer, SeqAccessDeserializer},
     },
 };
-use xilem::{Color, style::Style as _};
 use xilem_masonry::masonry::properties::LineBreaking;
 use xilem_masonry::{
     WidgetView,
@@ -1818,7 +1818,7 @@ pub fn resolve_style(world: &World, entity: Entity) -> ResolvedStyle {
 
     compute_resolved_style(world, entity).unwrap_or(ResolvedStyle {
         // When no stylesheet/inline style source is present, force transparent
-        // text to avoid falling back to Masonry/Xilem intrinsic text painting.
+        // text to avoid falling back to retained-widget intrinsic text painting.
         // This keeps "no theme selected" surfaces visually empty as intended.
         colors: ResolvedColorStyle {
             text: Some(Color::TRANSPARENT),

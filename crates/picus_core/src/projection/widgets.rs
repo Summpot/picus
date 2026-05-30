@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use crate::xilem::Color;
+use crate::xilem::style::Style as _;
 use bevy_ecs::{
     entity::Entity,
     hierarchy::{ChildOf, Children},
@@ -8,8 +10,6 @@ use bevy_ecs::{
 use masonry_core::imaging::Painter;
 use masonry_core::kurbo::{Axis, BezPath, Circle, Line, Point, Rect, Stroke};
 use masonry_core::layout::{Dim, Length};
-use xilem::Color;
-use xilem::style::Style as _;
 use xilem_masonry::view::{
     CrossAxisAlignment, FlexExt as _, MainAxisAlignment, canvas, flex_col, flex_row, label,
     radio_group as xilem_radio_group, sized_box, spinner, split, transformed, zstack,

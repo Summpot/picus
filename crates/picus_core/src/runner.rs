@@ -1,8 +1,8 @@
+use crate::xilem::winit::{dpi::Size, error::EventLoopError};
 use bevy_a11y::AccessibilityPlugin;
 use bevy_app::App;
 use bevy_input::InputPlugin;
 use bevy_window::{PrimaryWindow, Window, WindowPlugin};
-use xilem::winit::{dpi::Size, error::EventLoopError};
 
 /// Compatibility window options applied to Bevy's primary window before `App::run()`.
 #[derive(Clone, Debug, Default)]
@@ -146,7 +146,7 @@ pub fn run_app_with_window_options(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use xilem::winit::dpi::{LogicalSize, PhysicalSize};
+    use crate::xilem::winit::dpi::{LogicalSize, PhysicalSize};
 
     #[test]
     fn options_apply_initial_and_min_sizes() {

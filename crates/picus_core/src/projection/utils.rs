@@ -24,7 +24,7 @@ pub(crate) enum VectorIcon {
     X,
 }
 
-pub(crate) fn vector_icon(icon: VectorIcon, size_px: f64, color: xilem::Color) -> UiView {
+pub(crate) fn vector_icon(icon: VectorIcon, size_px: f64, color: crate::xilem::Color) -> UiView {
     let lucide_icon = match icon {
         VectorIcon::Check => PicusIcon::Check,
         VectorIcon::ChevronDown => PicusIcon::ChevronDown,
@@ -67,9 +67,9 @@ pub(crate) fn translate_text(world: &World, key: Option<&str>, fallback: &str) -
     }
 }
 
-pub(crate) fn transparentize(color: xilem::Color) -> xilem::Color {
+pub(crate) fn transparentize(color: crate::xilem::Color) -> crate::xilem::Color {
     let rgba = color.to_rgba8();
-    xilem::Color::from_rgba8(rgba.r, rgba.g, rgba.b, 0)
+    crate::xilem::Color::from_rgba8(rgba.r, rgba.g, rgba.b, 0)
 }
 
 pub(crate) fn hide_style_without_collapsing_layout(style: &mut ResolvedStyle) {
@@ -77,19 +77,19 @@ pub(crate) fn hide_style_without_collapsing_layout(style: &mut ResolvedStyle) {
         style
             .colors
             .bg
-            .map_or(xilem::Color::TRANSPARENT, transparentize),
+            .map_or(crate::xilem::Color::TRANSPARENT, transparentize),
     );
     style.colors.border = Some(
         style
             .colors
             .border
-            .map_or(xilem::Color::TRANSPARENT, transparentize),
+            .map_or(crate::xilem::Color::TRANSPARENT, transparentize),
     );
     style.colors.text = Some(
         style
             .colors
             .text
-            .map_or(xilem::Color::TRANSPARENT, transparentize),
+            .map_or(crate::xilem::Color::TRANSPARENT, transparentize),
     );
     style.box_shadow = None;
 }

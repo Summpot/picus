@@ -39,11 +39,14 @@ cross-cutting design decisions that code comments cannot express well.
    - Ask the user only for architecture-level choices with meaningful trade-offs.
 
 7. **Third-party dependencies**
-   - Xilem/Masonry dependencies track official upstream only. Prefer crates.io
+   - Core Linebender dependencies track official upstream only. Prefer crates.io
      releases when every needed crate is published; otherwise use official
      `https://github.com/linebender/xilem.git` Git dependencies pinned by commit.
+   - Do not depend directly on upstream `masonry` or upstream `xilem`.
+     `picus_masonry` and local `xilem_masonry` are Picus-owned compatibility
+     crates copied from upstream and retargeted to `masonry_core`.
    - Do not reintroduce `third_party` submodules or user-fork dependencies unless
-     a required capability cannot be expressed against upstream Xilem.
+     a required capability cannot be expressed against official upstream crates.
    - Temporary local Cargo `[patch]` or path overrides are allowed for validation;
      remove them unless they are part of the intended design.
 
@@ -51,14 +54,18 @@ cross-cutting design decisions that code comments cannot express well.
 
 `picus` is a Bevy-first UI framework that combines ECS state management with a
 retained Masonry Core UI runtime. `picus_core` depends directly on
-`masonry_core`; the higher-level `masonry` crate is a legacy transitive adapter
-through `xilem`/`xilem_masonry` and should not be reintroduced as a direct Picus
-dependency.
+`masonry_core` and the Picus-owned local `xilem_masonry` adapter. The
+higher-level upstream `masonry` and upstream `xilem` crates are not dependencies
+and should not be reintroduced.
 
 Crates:
 
 - `picus_core`: ECS-driven UI projection, styling, overlays, built-in components,
   fonts, icons, and runtime integration.
+- `picus_masonry`: Picus-owned Masonry widget/property set copied from upstream
+  Masonry and retargeted to `masonry_core`.
+- `xilem_masonry`: Picus-owned Xilem-compatible view adapter copied from upstream
+  `xilem_masonry` and retargeted to `picus_masonry`.
 - `picus_surface`: Vello/wgpu rendering surface for an externally owned Bevy
   window.
 - `picus_activation`: single-instance activation, custom URI protocol handling,
@@ -75,7 +82,7 @@ resource driven by Bevy systems; GUI apps use Bevy's native `App::run()` and
 `bevy_winit` lifecycle.
 
 `MasonryRuntime` is a `NonSend` resource containing a `masonry_core::app::RenderRoot`,
-Xilem view state, pointer state, primary-window metrics, `picus_surface` state,
+retained view state, pointer state, primary-window metrics, `picus_surface` state,
 and Vello renderer state.
 
 System stages:
@@ -107,11 +114,11 @@ Pointer invariants:
 - Click injection sends a pointer move before down/up events.
 - Window resize injection uses logical dimensions.
 
-IME state flows both ways: Bevy events enter Masonry, and Masonry IME callbacks
-update Bevy window `ime_enabled` and `ime_position`.
+IME state flows both ways: Bevy events enter Masonry Core, and Masonry Core IME
+callbacks update Bevy window `ime_enabled` and `ime_position`.
 
 Layout-affecting styles such as padding, border, background, and corner radius are
-applied to the target widget so Masonry hit testing matches the visible box model.
+applied to the target widget so Masonry Core hit testing matches the visible box model.
 
 ## 5. ECS UI Model
 
@@ -122,7 +129,7 @@ components with `AppPicusExt::register_ui_component::<T>()`.
 `UiComponentTemplate` is the component contract:
 
 - `expand(world, entity)` creates template children once.
-- `project(&T, ProjectionCtx) -> UiView` converts ECS state into a Masonry/Xilem
+- `project(&T, ProjectionCtx) -> UiView` converts ECS state into a Picus retained
   view.
 
 Projection uses `entity.to_bits()` for stable node identities. Core root/container
@@ -135,7 +142,7 @@ placement, `UiLabel`, `UiButton`, `UiCanvas`/`UiCanvasCommand` plus
 
 Priority built-ins (`UiButton`, `UiBadge`, `UiProgressBar`, `UiSwitch`, and
 `UiCheckbox`) own their Picus-composed visual structure instead of exposing raw
-Xilem default component appearance.
+compatibility widget appearance.
 
 ## 6. Synthesis and Events
 
@@ -201,19 +208,19 @@ widget, label, or text-input style helpers. Use
 
 ## 8. Scroll Views and Overlays
 
-`UiScrollView` is a logical ECS component projected through a Masonry portal view.
+`UiScrollView` is a logical ECS component projected through a Masonry Core portal view.
 It stores scroll offset, viewport/content geometry, and optional external scrollbar
 parts.
 
 Scroll invariants:
 
-- Masonry portal geometry synchronizes back to ECS each frame.
-- Live viewport size follows Masonry layout constraints.
+- Masonry Core portal geometry synchronizes back to ECS each frame.
+- Live viewport size follows Masonry Core layout constraints.
 - Scroll offsets clamp to physical bounds after wheel, drag, and geometry updates.
 - Nested wheel routing starts at the deepest hit target and stops at the first
   scroll view that can move.
 
-The overlay system uses Masonry floating/portal roots and `OverlayStack` ordering.
+The overlay system uses Masonry Core floating/portal roots and `OverlayStack` ordering.
 `OverlayPlacement` handles screen placement, clamping, and auto-flip behavior.
 `UiPopover` is the shared anchored-placement model for dropdowns, tooltips, picker
 panels, popovers, and related floating surfaces.
@@ -234,8 +241,9 @@ Overlay invariants:
 `picus_core::icons` uses bundled Lucide icon/font data. Icon text styling uses the
 upstream Lucide family name, `"lucide"`.
 
-`XilemFontBridge` registers Bevy font assets with Masonry. Fonts can come from the
-asset server, direct bytes, or direct paths through `AppPicusExt`.
+`XilemFontBridge` is the legacy-named font bridge that registers Bevy font assets
+with Masonry Core. Fonts can come from the asset server, direct bytes, or direct
+paths through `AppPicusExt`.
 
 `AppI18n` is the synchronous i18n registry. `LocalizeText` resolves through the
 active bundle and falls back to the key or explicit fallback text.

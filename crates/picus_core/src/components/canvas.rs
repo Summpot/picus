@@ -1,5 +1,5 @@
+use crate::xilem::Color;
 use bevy_ecs::prelude::*;
-use xilem::Color;
 
 use crate::{ProjectionCtx, UiView, components::UiComponentTemplate};
 

@@ -5,6 +5,7 @@ use super::{
         hide_style_without_collapsing_layout, translate_text, vector_icon,
     },
 };
+use crate::xilem::{palette::css::BLACK, style::BoxShadow, style::Style as _};
 use crate::{
     ecs::{OverlayComputedPosition, PartDialogBody, PartDialogDismiss, PartDialogTitle, UiDialog},
     overlay::OverlayUiAction,
@@ -17,7 +18,6 @@ use crate::{
 use bevy_ecs::{hierarchy::Children, prelude::Entity};
 use masonry_core::layout::{Dim, Length};
 use std::sync::Arc;
-use xilem::{palette::css::BLACK, style::BoxShadow, style::Style as _};
 use xilem_masonry::view::{
     CrossAxisAlignment, FlexExt as _, MainAxisAlignment, flex_col, flex_row, label, transformed,
 };
@@ -85,10 +85,10 @@ pub(crate) fn estimate_dialog_surface_height_px(
 pub(crate) fn project_dialog(dialog: &UiDialog, ctx: ProjectionCtx<'_>) -> UiView {
     let mut dialog_style = resolve_style(ctx.world, ctx.entity);
     if dialog_style.colors.bg.is_none() {
-        dialog_style.colors.bg = Some(xilem::Color::from_rgb8(0x18, 0x1E, 0x2D));
+        dialog_style.colors.bg = Some(crate::xilem::Color::from_rgb8(0x18, 0x1E, 0x2D));
     }
     if dialog_style.colors.border.is_none() {
-        dialog_style.colors.border = Some(xilem::Color::from_rgb8(0x3A, 0x48, 0x68));
+        dialog_style.colors.border = Some(crate::xilem::Color::from_rgb8(0x3A, 0x48, 0x68));
     }
     if dialog_style.layout.padding <= 0.0 {
         dialog_style.layout.padding = 18.0;
@@ -217,7 +217,10 @@ pub(crate) fn project_dialog(dialog: &UiDialog, ctx: ProjectionCtx<'_>) -> UiVie
             vector_icon(
                 VectorIcon::X,
                 DIALOG_DISMISS_ICON_SIZE_PX,
-                dismiss_style.colors.text.unwrap_or(xilem::Color::WHITE),
+                dismiss_style
+                    .colors
+                    .text
+                    .unwrap_or(crate::xilem::Color::WHITE),
             ),
         ),
         &dismiss_style,

@@ -1,4 +1,4 @@
-//! Bevy + Xilem/Masonry integration with ECS-driven UI projection.
+//! Bevy + Masonry Core integration with ECS-driven UI projection.
 //!
 //! `picus_core` lets you:
 //! - register ECS UI components through [`UiComponentTemplate`],
@@ -67,6 +67,7 @@ pub mod templates;
 pub mod views;
 pub mod widget_actions;
 pub mod widgets;
+pub mod xilem;
 
 pub use bevy_app;
 pub use bevy_asset;
@@ -78,7 +79,6 @@ pub use bevy_text;
 pub use bevy_window;
 pub use masonry_core;
 pub use rfd;
-pub use xilem;
 pub use xilem_masonry;
 
 pub use app_ext::*;

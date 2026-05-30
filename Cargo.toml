@@ -4,6 +4,8 @@ members = [
 	"crates/picus_surface",
 	"crates/picus_activation",
 	"crates/picus_core",
+	"crates/picus_masonry",
+	"crates/xilem_masonry",
 	"examples/async_downloader",
 	"examples/calculator",
 	"examples/chess_game",
@@ -45,9 +47,8 @@ unic-langid = { version = "0.9", features = ["macros"] }
 masonry_core = { git = "https://github.com/linebender/xilem.git", rev = "72c6517ad035f352c70f939f4754a3f79fca23fd" }
 masonry_imaging = { git = "https://github.com/linebender/xilem.git", rev = "72c6517ad035f352c70f939f4754a3f79fca23fd", features = ["imaging_vello"] }
 masonry_winit = { git = "https://github.com/linebender/xilem.git", rev = "72c6517ad035f352c70f939f4754a3f79fca23fd" }
-xilem = { git = "https://github.com/linebender/xilem.git", rev = "72c6517ad035f352c70f939f4754a3f79fca23fd" }
 xilem_core = { git = "https://github.com/linebender/xilem.git", rev = "72c6517ad035f352c70f939f4754a3f79fca23fd" }
-xilem_masonry = { git = "https://github.com/linebender/xilem.git", rev = "72c6517ad035f352c70f939f4754a3f79fca23fd" }
+xilem_masonry = { path = "crates/xilem_masonry" }
 vello = { version = "0.8.0", default-features = false, features = ["wgpu"] }
 wgpu = "28.0.0"
 tracing = "0.1"

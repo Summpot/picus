@@ -134,7 +134,7 @@ pub trait AppPicusExt {
 
     /// Register a font synchronously from bytes or filesystem path.
     ///
-    /// Font registration is fail-fast and writes into the active Masonry/Xilem runtime font
+    /// Font registration is fail-fast and writes into the active Masonry Core runtime font
     /// database used for text shaping.
     fn register_xilem_font(&mut self, source: SyncAssetSource<'_>) -> &mut Self;
 
@@ -148,12 +148,12 @@ pub trait AppPicusExt {
         font_stack: Vec<&str>,
     ) -> &mut Self;
 
-    /// Queue raw font bytes for registration in Xilem/Masonry text shaping.
+    /// Queue raw font bytes for registration in retained text shaping.
     ///
-    /// This bridges app-provided fonts into Xilem's font database.
+    /// This bridges app-provided fonts into the retained Masonry Core font database.
     fn register_xilem_font_bytes(&mut self, bytes: &[u8]) -> &mut Self;
 
-    /// Read and queue a font file for registration in Xilem/Masonry text shaping.
+    /// Read and queue a font file for registration in retained text shaping.
     ///
     /// Typical path for Bevy projects: `assets/fonts/<font-file>.ttf|otf`.
     fn register_xilem_font_path(&mut self, path: impl AsRef<Path>) -> io::Result<&mut Self>;

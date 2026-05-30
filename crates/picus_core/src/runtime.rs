@@ -3,6 +3,8 @@ use std::{
     sync::{Arc, mpsc},
 };
 
+use crate::xilem::style::Style as _;
+use crate::xilem::winit::window::Window as XilemWinitWindow;
 use bevy_ecs::{
     entity::Entity,
     message::MessageReader,
@@ -34,8 +36,6 @@ use masonry_core::{
 use masonry_imaging::{Layer as ImagingLayer, PreparedFrame, texture_render::Renderer};
 use picus_surface::{ExistingWindowMetrics, ExternalWindowSurface};
 use wgpu::PresentMode;
-use xilem::style::Style as _;
-use xilem::winit::window::Window as XilemWinitWindow;
 use xilem_core::{ProxyError, RawProxy, SendMessage, View, ViewId};
 use xilem_masonry::{
     ViewCtx,
@@ -621,7 +621,7 @@ impl MasonryRuntime {
 
     pub fn ensure_external_surface(
         &mut self,
-        window: &WindowWrapper<xilem::winit::window::Window>,
+        window: &WindowWrapper<crate::xilem::winit::window::Window>,
         metrics: ExistingWindowMetrics,
     ) -> bool {
         if let Some(surface) = self.window_surface.as_mut() {

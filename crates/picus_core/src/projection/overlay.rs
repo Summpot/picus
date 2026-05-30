@@ -25,7 +25,7 @@ pub(crate) fn project_overlay_root(_: &UiOverlayRoot, ctx: ProjectionCtx<'_>) ->
     if has_modal_overlay {
         let mut dimmer_style = resolve_style_for_classes(ctx.world, ["overlay.modal.dimmer"]);
         if dimmer_style.colors.bg.is_none() {
-            dimmer_style.colors.bg = Some(xilem::Color::from_rgba8(0, 0, 0, 160));
+            dimmer_style.colors.bg = Some(crate::xilem::Color::from_rgba8(0, 0, 0, 160));
         }
 
         let dimmer: UiView = Arc::new(apply_widget_style(

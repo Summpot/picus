@@ -3,7 +3,7 @@
 //! This module exposes two naming groups:
 //! - ECS-adapted UI components (`button`, `button_with_child`, `checkbox`, `slider`, `switch`,
 //!   `text_button`, `text_input`)
-//! - Raw Xilem widgets with `xilem_` prefix (`xilem_button`, `xilem_checkbox`, ...)
+//! - Raw retained widgets with `xilem_` compatibility prefix (`xilem_button`, `xilem_checkbox`, ...)
 //!
 //! # Example
 //!
@@ -18,7 +18,7 @@
 //! let entity = world.spawn_empty().id();
 //!
 //! let _ecs_adapted = button(entity, (), "ECS event button");
-//! let _raw_xilem = xilem_button::<(), (), _, _>(label("Raw xilem button"), |_| ());
+//! let _raw_retained = xilem_button::<(), (), _, _>(label("Raw retained button"), |_| ());
 //! ```
 mod ecs_button_view;
 mod ecs_button_with_child_view;

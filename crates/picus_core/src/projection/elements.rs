@@ -38,11 +38,11 @@ const PROGRESS_BAR_WIDTH: f64 = 240.0;
 const PROGRESS_BAR_HEIGHT: f64 = 8.0;
 const PROGRESS_INDETERMINATE_WIDTH: f64 = 80.0;
 
-fn placeholder_color_from_style(style: &crate::styling::ResolvedStyle) -> xilem::Color {
+fn placeholder_color_from_style(style: &crate::styling::ResolvedStyle) -> crate::xilem::Color {
     style
         .colors
         .text
-        .unwrap_or(xilem::Color::WHITE)
+        .unwrap_or(crate::xilem::Color::WHITE)
         .with_alpha(0.72)
 }
 
@@ -150,7 +150,7 @@ pub(crate) fn project_checkbox(checkbox: &UiCheckbox, ctx: ProjectionCtx<'_>) ->
         .colors
         .text
         .or(style.colors.text)
-        .unwrap_or(xilem::Color::WHITE);
+        .unwrap_or(crate::xilem::Color::WHITE);
     let mark_size = (mark_style.text.size as f64).clamp(10.0, CHECKBOX_MARK_SIZE);
 
     let box_layer: UiView = Arc::new(apply_widget_style(
@@ -388,10 +388,13 @@ fn project_ecs_text_input(
                     .padding(style_padding(style.layout.padding))
                     .corner_radius(Length::px(style.layout.corner_radius))
                     .border(
-                        style.colors.border.unwrap_or(xilem::Color::TRANSPARENT),
+                        style
+                            .colors
+                            .border
+                            .unwrap_or(crate::xilem::Color::TRANSPARENT),
                         Length::px(style.layout.border_width),
                     )
-                    .background_color(style.colors.bg.unwrap_or(xilem::Color::TRANSPARENT))
+                    .background_color(style.colors.bg.unwrap_or(crate::xilem::Color::TRANSPARENT))
                     .box_shadow(style.box_shadow.unwrap_or_default()),
             )
             .scale(scale),
@@ -404,10 +407,13 @@ fn project_ecs_text_input(
                 .padding(style_padding(style.layout.padding))
                 .corner_radius(Length::px(style.layout.corner_radius))
                 .border(
-                    style.colors.border.unwrap_or(xilem::Color::TRANSPARENT),
+                    style
+                        .colors
+                        .border
+                        .unwrap_or(crate::xilem::Color::TRANSPARENT),
                     Length::px(style.layout.border_width),
                 )
-                .background_color(style.colors.bg.unwrap_or(xilem::Color::TRANSPARENT))
+                .background_color(style.colors.bg.unwrap_or(crate::xilem::Color::TRANSPARENT))
                 .box_shadow(style.box_shadow.unwrap_or_default()),
         )
         .scale(scale),

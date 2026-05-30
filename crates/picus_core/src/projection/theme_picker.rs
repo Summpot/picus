@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
+use crate::xilem::{Color, palette::css::BLACK, style::BoxShadow, style::Style as _};
 use masonry_core::layout::{Dim, Length};
-use xilem::{Color, palette::css::BLACK, style::BoxShadow, style::Style as _};
 use xilem_masonry::view::{
     CrossAxisAlignment, FlexExt as _, MainAxisAlignment, flex_col, flex_row, label, portal,
     transformed,

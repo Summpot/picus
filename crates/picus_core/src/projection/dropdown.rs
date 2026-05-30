@@ -1,3 +1,4 @@
+use crate::xilem::{palette::css::BLACK, style::BoxShadow, style::Style as _};
 use crate::{
     ecs::{AnchoredTo, OverlayAnchorRect, UiComboBox, UiDropdownItem, UiDropdownMenu},
     overlay::OverlayUiAction,
@@ -9,7 +10,6 @@ use crate::{
 };
 use masonry_core::layout::{Dim, Length};
 use std::sync::Arc;
-use xilem::{palette::css::BLACK, style::BoxShadow, style::Style as _};
 use xilem_masonry::view::{
     CrossAxisAlignment, FlexExt as _, flex_col, flex_row, label, portal, transformed,
 };
@@ -362,7 +362,7 @@ pub(crate) fn project_combo_box(combo_box: &UiComboBox, ctx: ProjectionCtx<'_>) 
     let icon_color = style
         .colors
         .text
-        .unwrap_or(xilem::Color::from_rgb8(0xE7, 0xEC, 0xF8));
+        .unwrap_or(crate::xilem::Color::from_rgb8(0xE7, 0xEC, 0xF8));
     let chevron = if combo_box.is_open {
         vector_icon(VectorIcon::ChevronUp, 10.0, icon_color)
     } else {
@@ -392,10 +392,10 @@ pub(crate) fn project_dropdown_menu(_: &UiDropdownMenu, ctx: ProjectionCtx<'_>) 
 
     let mut menu_style = resolve_style_for_classes(ctx.world, ["overlay.dropdown.menu"]);
     if menu_style.colors.bg.is_none() {
-        menu_style.colors.bg = Some(xilem::Color::from_rgb8(0x16, 0x1C, 0x2A));
+        menu_style.colors.bg = Some(crate::xilem::Color::from_rgb8(0x16, 0x1C, 0x2A));
     }
     if menu_style.colors.border.is_none() {
-        menu_style.colors.border = Some(xilem::Color::from_rgb8(0x38, 0x46, 0x64));
+        menu_style.colors.border = Some(crate::xilem::Color::from_rgb8(0x38, 0x46, 0x64));
     }
     if menu_style.layout.padding <= 0.0 {
         menu_style.layout.padding = 8.0;
@@ -508,14 +508,14 @@ pub(crate) fn project_dropdown_item(item: &UiDropdownItem, ctx: ProjectionCtx<'_
     let icon_color = item_style
         .colors
         .text
-        .unwrap_or(xilem::Color::from_rgb8(0xE7, 0xEC, 0xF8));
+        .unwrap_or(crate::xilem::Color::from_rgb8(0xE7, 0xEC, 0xF8));
     let indicator = vector_icon(
         VectorIcon::Check,
         14.0,
         if is_selected {
             icon_color
         } else {
-            xilem::Color::from_rgba8(0, 0, 0, 0)
+            crate::xilem::Color::from_rgba8(0, 0, 0, 0)
         },
     );
     let label_text = translate_text(ctx.world, option.label_key.as_deref(), &option.label);

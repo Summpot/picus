@@ -1,12 +1,12 @@
 # picus
 
-A Bevy-first UI framework that connects ECS state management with a retained Xilem/Masonry runtime.
+A Bevy-first UI framework that connects ECS state management with a retained Masonry Core runtime.
 
 ---
 
 ## What is picus?
 
-**picus** is a workspace for building desktop user interfaces with Rust. It combines Bevy's ECS architecture with Xilem/Masonry's retained widget tree model, giving you:
+**picus** is a workspace for building desktop user interfaces with Rust. It combines Bevy's ECS architecture with a retained Masonry Core widget tree model, giving you:
 
 - Declarative UI defined through ECS components
 - Explicit, typed event handling
@@ -14,13 +14,15 @@ A Bevy-first UI framework that connects ECS state management with a retained Xil
 - Built-in internationalization support
 - Cross-platform window management
 
-The workspace currently contains three crates:
+The workspace currently contains these crates:
 
 - **picus_core** — the main UI framework (this is the crate you depend on)
+- **picus_masonry** — Picus-owned widget/property set retargeted to Masonry Core
+- **xilem_masonry** — Picus-owned Xilem-compatible retained view adapter
 - **picus_surface** — Vello rendering bridge for window surfaces
 - **picus_activation** — deep linking and single-instance support
 
-This README covers the `picus_core` crate, which provides the complete UI framework experience. The companion crates handle specialized platform integration.
+This README covers the `picus_core` crate, which provides the complete UI framework experience. The companion crates provide the retained runtime, rendering, and platform integration.
 
 ---
 
@@ -109,7 +111,7 @@ fn main() -> Result<(), EventLoopError> {
 The pattern is straightforward:
 
 1. Define a component type that implements `UiComponentTemplate`
-2. In `project()`, return a Xilem/Masonry view built from the entity
+2. In `project()`, return a Picus view built from the entity
 3. Spawn the component with `UiRoot` to attach it to the UI tree
 4. Handle typed events from `UiEventQueue` in your systems
 5. Run with `run_app_with_window_options` or `run_app`
@@ -148,6 +150,10 @@ The main framework crate. It provides:
 ### picus_surface
 
 A low-level bridge that attaches a Vello renderer to an external Bevy window. `picus_core` uses this internally for the `Last` paint pass. You typically won't interact with this crate directly unless you're customizing the rendering pipeline.
+
+### picus_masonry and xilem_masonry
+
+Local compatibility crates copied from official Linebender sources and retargeted for Picus. They provide the retained widget/view layer without depending on upstream `masonry` or upstream `xilem` directly.
 
 ### picus_activation
 
@@ -197,7 +203,7 @@ See [AGENTS.md](./AGENTS.md#8-styling-system-reference) for the full guide on se
 The crate exports two families of UI components:
 
 - **ECS adapters** (recommended) — `button`, `checkbox`, `slider`, `switch`, `text_button`, `text_input` — these emit typed actions directly into `UiEventQueue`
-- **Raw Xilem widgets** — `xilem_button`, `xilem_checkbox`, etc. — for cases where you need the original widget without ECS integration
+- **Raw retained widgets** — `xilem_button`, `xilem_checkbox`, etc. — for cases where you need the low-level Picus/Xilem-compatible widget without ECS integration
 
 Legacy `ecs_*` names remain for backward compatibility.
 

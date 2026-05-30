@@ -14,7 +14,7 @@ use masonry_core::peniko::Blob;
 
 use crate::MasonryRuntime;
 
-/// Font bridge resource that stores pending font files for registration in Masonry/Parley.
+/// Font bridge resource that stores pending font files for registration in Masonry Core/Parley.
 ///
 /// Fonts can be queued either from raw bytes or by file path (for example
 /// `assets/fonts/NotoSansCJK-Regular.otf`).
@@ -84,9 +84,9 @@ pub fn collect_bevy_font_assets(
     }
 }
 
-/// Sync pending font bytes into Masonry's internal text/font database.
+/// Sync pending font bytes into Masonry Core's internal text/font database.
 ///
-/// This is the bridge between Bevy-side app setup and Xilem/Masonry font shaping.
+/// This is the bridge between Bevy-side app setup and retained font shaping.
 pub fn sync_fonts_to_xilem(
     runtime: Option<NonSendMut<MasonryRuntime>>,
     mut bridge: ResMut<XilemFontBridge>,
