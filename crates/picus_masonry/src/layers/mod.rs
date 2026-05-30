@@ -8,8 +8,6 @@
     reason = "Widgets are not expected to implement Debug"
 )]
 
-mod selector_menu;
 mod tooltip;
 
-pub use selector_menu::*;
 pub use tooltip::*;

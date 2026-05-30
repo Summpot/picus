@@ -14,4 +14,3 @@ xilem_core = { git = "https://github.com/linebender/xilem.git", rev = "72c6517ad
 smallvec = "1.15.1"
 tokio = { version = "1.52.3", features = ["rt", "rt-multi-thread", "time", "sync"] }
 tracing = "0.1"
-usvg = "0.47.0"

@@ -12,6 +12,5 @@ doctest = false
 accesskit = "0.24.0"
 include_doc_path = { git = "https://github.com/linebender/xilem.git", rev = "72c6517ad035f352c70f939f4754a3f79fca23fd", package = "linebender_include_doc_path" }
 masonry_core = { git = "https://github.com/linebender/xilem.git", rev = "72c6517ad035f352c70f939f4754a3f79fca23fd" }
-resvg = "0.47.0"
 smallvec = "1.15.1"
 tracing = "0.1"

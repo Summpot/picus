@@ -9,7 +9,6 @@ use crate::core::{
     DefaultProperties, PropertySet, PropertyStack, Selector, StyleProperty, StyleSet,
 };
 use crate::layout::{AsUnit, Length};
-use crate::palette::css::DIM_GRAY;
 use crate::parley::{GenericFamily, LineHeight};
 use crate::peniko::Color;
 
@@ -53,7 +52,6 @@ pub const SCROLLBAR_EDGE_WIDTH: f64 = 1.;
 pub const DEFAULT_GAP: Length = Length::const_px(10.0);
 pub const DEFAULT_SPACER_LEN: Length = Length::const_px(10.0);
 pub const WIDGET_CONTROL_COMPONENT_PADDING: Length = Length::const_px(4.0);
-pub const SELECTOR_MIN_WIDTH: f64 = 100.0;
 
 pub fn default_property_set() -> DefaultProperties {
     let mut properties = DefaultProperties::new();
@@ -136,14 +134,6 @@ pub fn default_property_set() -> DefaultProperties {
         properties.insert_stack::<Checkbox>(stack);
     }
 
-    // DisclosureButton
-    properties.insert::<DisclosureButton, _>(ContentColor::new(DIM_GRAY));
-    properties.insert::<DisclosureButton, _>(Dimensions::fixed(
-        Length::const_px(16.),
-        Length::const_px(16.),
-    ));
-    properties.insert::<DisclosureButton, _>(Padding::all(4.px()));
-
     // Divider
     properties.insert::<Divider, _>(ContentColor::new(ZYNC_500));
 
@@ -180,55 +170,6 @@ pub fn default_property_set() -> DefaultProperties {
             Background::Color(Color::BLACK),
         );
         properties.insert_stack::<Switch>(stack);
-    }
-
-    // FIXME
-    use crate::widgets::Selector as SelectorButton;
-
-    // Selector
-    properties.insert::<SelectorButton, _>(Padding::from_vh(6.px(), 16.px()));
-    properties.insert::<SelectorButton, _>(CornerRadius { radius: 2.px() });
-    properties.insert::<SelectorButton, _>(BorderWidth {
-        width: BORDER_WIDTH,
-    });
-
-    properties.insert::<SelectorButton, _>(Background::Color(ZYNC_800));
-    properties.insert::<SelectorButton, _>(BorderColor { color: ZYNC_700 });
-    {
-        let mut stack = PropertyStack::new();
-        stack.push(
-            Selector::new().with_active(true),
-            Background::Color(ZYNC_700),
-        );
-        stack.push(
-            Selector::new().with_disabled(true),
-            Background::Color(Color::BLACK),
-        );
-        stack.push(
-            Selector::new().with_hovered(true),
-            BorderColor { color: ZYNC_500 },
-        );
-        stack.push(
-            Selector::new().with_focused(true),
-            BorderColor { color: FOCUS_COLOR },
-        );
-        properties.insert_stack::<SelectorButton>(stack);
-    }
-
-    // SelectorItem
-    properties.insert::<SelectorItem, _>(Padding::from_vh(6.px(), 16.px()));
-    properties.insert::<SelectorItem, _>(Background::Color(ZYNC_900));
-    {
-        let mut stack = PropertyStack::new();
-        stack.push(
-            Selector::new().with_active(true),
-            Background::Color(ZYNC_800),
-        );
-        stack.push(
-            Selector::new().with_disabled(true),
-            Background::Color(Color::BLACK),
-        );
-        properties.insert_stack::<SelectorItem>(stack);
     }
 
     // Flex
