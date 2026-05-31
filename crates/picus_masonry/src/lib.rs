@@ -3,7 +3,7 @@
 
 //! Compatibility facade for Picus' retained widget runtime.
 //!
-//! New code should prefer [`picus_ui_runtime::retained`]. This crate remains so
+//! New code should prefer [`picus_widget::retained`]. This crate remains so
 //! existing imports can keep compiling while the legacy Masonry-derived naming
 //! is phased out.
 

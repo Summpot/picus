@@ -4,7 +4,7 @@
 //! Picus-local Xilem view adapter for the Picus Masonry widget set.
 //!
 //! This crate vendors the upstream `xilem_masonry` view layer, retargeted to
-//! [`picus_ui_runtime`].
+//! [`picus_widget`].
 
 #![forbid(unsafe_code)]
 #![allow(
