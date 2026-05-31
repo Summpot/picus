@@ -10,7 +10,7 @@ use bevy_ecs::{
 use masonry_core::imaging::Painter;
 use masonry_core::kurbo::{Axis, BezPath, Circle, Line, Point, Rect, Stroke};
 use masonry_core::layout::{Dim, Length};
-use xilem_masonry::view::{
+use picus_view::view::{
     CrossAxisAlignment, FlexExt as _, MainAxisAlignment, canvas, flex_col, flex_row, label,
     radio_group as xilem_radio_group, sized_box, spinner, split, transformed, zstack,
 };

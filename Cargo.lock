@@ -3263,15 +3263,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "linebender_include_doc_path"
-version = "0.1.0"
-source = "git+https://github.com/linebender/xilem.git?rev=72c6517ad035f352c70f939f4754a3f79fca23fd#72c6517ad035f352c70f939f4754a3f79fca23fd"
-dependencies = [
- "proc-macro2",
- "quote",
-]
-
-[[package]]
 name = "linebender_resource_handle"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4246,13 +4237,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "picus_masonry"
-version = "0.1.0"
-dependencies = [
- "picus_widget",
-]
-
-[[package]]
 name = "picus_surface"
 version = "0.1.0"
 dependencies = [
@@ -4267,7 +4251,6 @@ dependencies = [
 name = "picus_view"
 version = "0.1.0"
 dependencies = [
- "masonry_core",
  "picus_widget",
  "smallvec",
  "tokio",
@@ -4280,7 +4263,6 @@ name = "picus_widget"
 version = "0.1.0"
 dependencies = [
  "accesskit",
- "linebender_include_doc_path",
  "masonry_core",
  "smallvec",
  "tracing",

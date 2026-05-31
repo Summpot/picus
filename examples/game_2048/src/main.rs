@@ -23,7 +23,12 @@ use picus_core::{
     bevy_ecs::{hierarchy::ChildOf, prelude::*},
     bevy_input::{ButtonInput, keyboard::KeyCode},
     bevy_window::WindowResized,
-    button, emit_ui_action, resolve_style, resolve_style_for_classes, run_app_with_window_options,
+    button, emit_ui_action,
+    picus_view::{
+        Pod, ViewCtx, WidgetView,
+        core::{MessageCtx, MessageResult, Mut, View, ViewId, ViewMarker, ViewPathTracker},
+    },
+    resolve_style, resolve_style_for_classes, run_app_with_window_options,
     xilem::{
         Color,
         style::Style as _,
@@ -32,10 +37,6 @@ use picus_core::{
             sized_box,
         },
         winit::{dpi::LogicalSize, error::EventLoopError},
-    },
-    xilem_masonry::{
-        Pod, ViewCtx, WidgetView,
-        core::{MessageCtx, MessageResult, Mut, View, ViewId, ViewMarker, ViewPathTracker},
     },
 };
 use shared_utils::init_logging;

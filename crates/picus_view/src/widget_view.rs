@@ -1,11 +1,11 @@
 // Copyright 2025 the Xilem Authors
 // SPDX-License-Identifier: Apache-2.0
 
-use masonry::core::{FromDynWidget, Property, UsesProperty, Widget};
-use masonry::kurbo::Affine;
+use picus_widget::core::{FromDynWidget, Property, UsesProperty, Widget};
+use picus_widget::kurbo::Affine;
 
 use crate::core::{View, ViewSequence};
-use crate::view::{Prop, Transformed, transformed};
+use crate::views::{Prop, Transformed, transformed};
 use crate::{AnyWidgetView, Pod, ViewCtx};
 
 /// The trait for views representing the widget tree.
@@ -23,7 +23,7 @@ pub trait WidgetView<State: 'static, Action = ()>:
     ///
     /// # Examples
     /// ```
-    /// # use xilem_masonry as xilem;
+    /// # use picus_view as xilem;
     /// use xilem::{view::label, WidgetView};
     ///
     /// # fn view<State: 'static>() -> impl WidgetView<State> + use<State> {
@@ -59,8 +59,8 @@ pub trait WidgetView<State: 'static, Action = ()>:
     ///
     /// # Examples
     /// ```
-    /// # use xilem_masonry as xilem;
-    /// use xilem::{masonry::{layout::AsUnit, properties::CornerRadius}, view::{text_button, label}, WidgetView};
+    /// # use picus_view as xilem;
+    /// use xilem::{picus_widget::{layout::AsUnit, properties::CornerRadius}, view::{text_button, label}, WidgetView};
     ///
     /// # fn view<State: 'static>() -> impl WidgetView<State> + use<State> {
     /// text_button("click me", |_| {})
@@ -101,7 +101,7 @@ where
 /// # Examples
 ///
 /// ```
-/// # use xilem_masonry as xilem;
+/// # use picus_view as xilem;
 /// use xilem::{view::prose, WidgetViewSequence};
 ///
 /// fn prose_sequence<State: 'static>(

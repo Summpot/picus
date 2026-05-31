@@ -3,14 +3,14 @@
 
 use std::marker::PhantomData;
 
-use masonry::widgets;
+use picus_widget::widgets;
 
 use crate::core::{MessageCtx, MessageResult, Mut, View, ViewMarker};
 use crate::{Pod, ViewCtx, WidgetView};
 
 /// A view which puts `child` into a scrollable region.
 ///
-/// This corresponds to the Masonry [`Portal`](masonry::widgets::Portal) widget.
+/// This corresponds to the Masonry [`Portal`](picus_widget::widgets::Portal) widget.
 pub fn portal<Child, State, Action>(child: Child) -> Portal<Child, State, Action>
 where
     State: 'static,

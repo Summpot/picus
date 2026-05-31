@@ -78,8 +78,8 @@ pub use bevy_tasks;
 pub use bevy_text;
 pub use bevy_window;
 pub use masonry_core;
+pub use picus_view;
 pub use rfd;
-pub use xilem_masonry;
 
 pub use app_ext::*;
 pub use components::*;
@@ -153,7 +153,7 @@ pub mod prelude {
 
     pub use crate::{
         bevy_app, bevy_asset, bevy_ecs, bevy_input, bevy_math, bevy_tasks, bevy_text, bevy_tween,
-        bevy_window, rfd, xilem, xilem_masonry,
+        bevy_window, picus_view, rfd, xilem,
     };
 }
 

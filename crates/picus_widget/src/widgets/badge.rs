@@ -4,7 +4,6 @@
 use std::sync::Arc;
 
 use accesskit::{Node, Role};
-use include_doc_path::include_doc_path;
 use tracing::{Span, trace_span};
 
 use crate::core::{
@@ -27,7 +26,7 @@ use crate::widgets::Label;
 ///
 #[doc = concat!(
     "![Badge with text](",
-    include_doc_path!("screenshots/badge_with_text.png"),
+    "screenshots/badge_with_text.png",
     ")",
 )]
 ///

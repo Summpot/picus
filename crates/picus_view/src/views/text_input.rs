@@ -1,15 +1,15 @@
 // Copyright 2024 the Xilem Authors
 // SPDX-License-Identifier: Apache-2.0
 
-use masonry::core::{ArcStr, NewWidget, PropertySet};
-use masonry::parley::style::FontWeight;
-use masonry::parley::{FontFamily, StyleProperty};
-use masonry::peniko::Color;
-use masonry::properties::{CaretColor, ContentColor, PlaceholderColor, SelectionColor};
-use masonry::widgets::{self, TextAction};
+use picus_widget::core::{ArcStr, NewWidget, PropertySet};
+use picus_widget::parley::style::FontWeight;
+use picus_widget::parley::{FontFamily, StyleProperty};
+use picus_widget::peniko::Color;
+use picus_widget::properties::{CaretColor, ContentColor, PlaceholderColor, SelectionColor};
+use picus_widget::widgets::{self, TextAction};
 
 use crate::core::{MessageCtx, MessageResult, Mut, View, ViewMarker};
-use crate::view::Prop;
+use crate::views::Prop;
 use crate::{InsertNewline, Pod, TextAlign, ViewCtx, WidgetView as _};
 
 // FIXME - A major problem of the current approach (always setting the text_input contents)
@@ -40,7 +40,7 @@ type Callback<State, Action> = Box<dyn Fn(&mut State, String) -> Action + Send +
 /// Create a basic text input with its content stored in the app state:
 ///
 /// ```
-/// # use xilem_masonry as xilem;
+/// # use picus_view as xilem;
 /// # use xilem::view::text_input;
 /// # use xilem::WidgetView;
 ///
@@ -58,9 +58,9 @@ type Callback<State, Action> = Box<dyn Fn(&mut State, String) -> Action + Send +
 /// Create a multiline `text_input`:
 ///
 /// ```
-/// # use xilem_masonry as xilem;
+/// # use picus_view as xilem;
 /// use xilem::view::text_input;
-/// use xilem::masonry::widgets::InsertNewline;
+/// use xilem::picus_widget::widgets::InsertNewline;
 /// # use xilem::WidgetView;
 ///
 /// # struct State {
@@ -86,7 +86,7 @@ where
         text_color: None,
         placeholder: ArcStr::default(),
         text_alignment: TextAlign::default(),
-        text_size: masonry::theme::TEXT_SIZE_NORMAL,
+        text_size: picus_widget::theme::TEXT_SIZE_NORMAL,
         weight: FontWeight::NORMAL,
         font: FontFamily::List(std::borrow::Cow::Borrowed(&[])),
         insert_newline: InsertNewline::default(),
@@ -112,7 +112,7 @@ pub struct TextInput<State: 'static, Action> {
     insert_newline: InsertNewline,
     disabled: bool,
     clip: bool,
-    // TODO: add more attributes of `masonry::widgets::TextInput`
+    // TODO: add more attributes of `picus_widget::widgets::TextInput`
 }
 
 impl<State: 'static, Action: 'static> TextInput<State, Action> {

@@ -3,14 +3,14 @@
 
 use std::marker::PhantomData;
 
-use masonry::kurbo::{Axis, Cap};
-use masonry::layout::Length;
-use masonry::util::debug_panic;
-use masonry::widgets::{self, DashFit, Placement};
+use picus_widget::kurbo::{Axis, Cap};
+use picus_widget::layout::Length;
+use picus_widget::util::debug_panic;
+use picus_widget::widgets::{self, DashFit, Placement};
 use smallvec::SmallVec;
 
 use crate::core::{MessageCtx, MessageResult, Mut, View, ViewId, ViewMarker, ViewPathTracker};
-use crate::view::Spinner;
+use crate::views::Spinner;
 use crate::{Pod, ViewCtx, WidgetView};
 
 /// Creates a new [`Divider`] parallel with the given `axis`.

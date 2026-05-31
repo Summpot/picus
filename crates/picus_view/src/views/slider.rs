@@ -3,7 +3,7 @@
 
 use std::marker::PhantomData;
 
-use masonry::widgets::{self, SliderMoved};
+use picus_widget::widgets::{self, SliderMoved};
 
 use crate::core::{MessageCtx, MessageResult, Mut, View, ViewMarker};
 use crate::{Pod, ViewCtx, WidgetView};

@@ -4,7 +4,6 @@
 use std::any::TypeId;
 
 use accesskit::{Node, Role};
-use include_doc_path::include_doc_path;
 use tracing::{Span, trace_span};
 
 use crate::core::keyboard::{Key, KeyState, NamedKey};
@@ -30,7 +29,7 @@ use crate::widgets::AnimatedF32;
 ///
 #[doc = concat!(
     "![Vertical scrollbar](",
-    include_doc_path!("screenshots/scrollbar_default.png"),
+    "screenshots/scrollbar_default.png",
     ")",
 )]
 /// This widget does not directly scroll any content. Instead, it exposes its position via

@@ -3,8 +3,8 @@
 
 use std::marker::PhantomData;
 
-use masonry::layout::Length;
-use masonry::widgets;
+use picus_widget::layout::Length;
+use picus_widget::widgets;
 
 use crate::core::{MessageCtx, MessageResult, Mut, View, ViewMarker};
 use crate::{Pod, ViewCtx, WidgetView};
@@ -18,12 +18,12 @@ use crate::{Pod, ViewCtx, WidgetView};
 /// # Example
 /// See more methods for `sized_box` on [`SizedBox`] page.
 /// ```ignore
-/// # use xilem_masonry as xilem;
+/// # use picus_view as xilem;
 /// use xilem::view::{sized_box, button};
 /// use xilem::palette;
 /// use kurbo::RoundedRectRadii;
-/// use masonry::layout::AsUnit;
-/// use masonry::properties::Padding;
+/// use picus_widget::layout::AsUnit;
+/// use picus_widget::properties::Padding;
 ///
 /// sized_box(button("Button", |data: &mut i32| *data+=1))
 ///     .background(palette::css::RED)

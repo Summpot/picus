@@ -5,7 +5,6 @@ use std::any::TypeId;
 use std::f64::consts::PI;
 
 use accesskit::{Node, Role};
-use include_doc_path::include_doc_path;
 use tracing::{Span, trace_span};
 
 use crate::core::{
@@ -24,7 +23,7 @@ use crate::theme;
 ///
 #[doc = concat!(
     "![Spinner frame](",
-    include_doc_path!("screenshots/spinner_init.png"),
+    "screenshots/spinner_init.png",
     ")",
 )]
 pub struct Spinner {

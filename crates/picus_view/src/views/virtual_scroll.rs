@@ -5,9 +5,9 @@ use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::ops::Range;
 
-use masonry::core::{Widget, WidgetPod};
-use masonry::util::debug_panic;
-use masonry::widgets::{self, VirtualScrollAction};
+use picus_widget::core::{Widget, WidgetPod};
+use picus_widget::util::debug_panic;
+use picus_widget::widgets::{self, VirtualScrollAction};
 use private::VirtualScrollState;
 
 use crate::core::{MessageCtx, MessageResult, Mut, View, ViewId, ViewMarker, ViewPathTracker};
@@ -89,7 +89,7 @@ where
 mod private {
     use std::collections::HashMap;
 
-    use masonry::widgets::VirtualScrollAction;
+    use picus_widget::widgets::VirtualScrollAction;
 
     #[expect(
         unnameable_types,

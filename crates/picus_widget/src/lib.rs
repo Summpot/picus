@@ -3,11 +3,9 @@
 
 //! Picus-owned retained UI backend.
 //!
-//! This crate is the long-term home for Picus' retained widget runtime. The
-//! retained surface is being migrated in place from the legacy
-//! `picus_masonry` implementation so Picus can move behind a Picus-native
-//! crate boundary while widgets, properties, and themes are rewritten
-//! incrementally.
+//! This crate is the long-term home for Picus' retained widget runtime. It
+//! builds Picus widgets, properties, layers, and theme defaults directly on
+//! Masonry Core while keeping Xilem view concerns in `picus_view`.
 
 #![forbid(unsafe_code)]
 #![allow(
@@ -22,6 +20,7 @@ pub mod theme;
 pub mod widgets;
 
 pub use accesskit;
+pub use masonry_core;
 pub use masonry_core::imaging;
 pub use masonry_core::palette;
 pub use masonry_core::{app, core, dpi, kurbo, layout, parley, peniko, ui_events, util};

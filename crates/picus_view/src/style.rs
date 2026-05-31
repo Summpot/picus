@@ -3,17 +3,17 @@
 
 //! Traits used to set custom styles on views.
 
-use masonry::core::UsesProperty;
-use masonry::layout::{Dim, Length};
-use masonry::peniko::Color;
-pub use masonry::properties::types::{Gradient, GradientShape};
-pub use masonry::properties::{
+use picus_widget::core::UsesProperty;
+use picus_widget::layout::{Dim, Length};
+use picus_widget::peniko::Color;
+pub use picus_widget::properties::types::{Gradient, GradientShape};
+pub use picus_widget::properties::{
     Background, BorderColor, BorderWidth, BoxShadow, CornerRadius, Padding,
 };
-use masonry::properties::{ContentColor, Dimensions, Gap, LineBreaking};
+use picus_widget::properties::{ContentColor, Dimensions, Gap, LineBreaking};
 
 use crate::WidgetView;
-use crate::view::Prop;
+use crate::views::Prop;
 
 /// Trait implemented by most widget views that lets you style their properties.
 ///

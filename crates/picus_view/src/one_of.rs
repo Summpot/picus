@@ -3,15 +3,15 @@
 
 //! Statically typed alternatives to the type-erased [`AnyWidgetView`](`crate::any_view::AnyWidgetView`).
 
-use masonry::accesskit::{Node, Role};
-use masonry::core::{
+use picus_widget::accesskit::{Node, Role};
+use picus_widget::core::{
     AccessCtx, AccessEvent, ChildrenIds, EventCtx, FromDynWidget, LayoutCtx, MeasureCtx, NoAction,
     PaintCtx, PointerEvent, PropertiesMut, PropertiesRef, RegisterCtx, TextEvent, Widget,
     WidgetPod,
 };
-use masonry::imaging::Painter;
-use masonry::kurbo::{Axis, Point, Size};
-use masonry::layout::{LenReq, Length};
+use picus_widget::imaging::Painter;
+use picus_widget::kurbo::{Axis, Point, Size};
+use picus_widget::layout::{LenReq, Length};
 
 use crate::core::Mut;
 use crate::core::one_of::OneOf;

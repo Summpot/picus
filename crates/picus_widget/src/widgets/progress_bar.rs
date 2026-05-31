@@ -4,7 +4,6 @@
 use std::any::TypeId;
 
 use accesskit::{Node, Role};
-use include_doc_path::include_doc_path;
 use tracing::{Span, trace_span};
 
 use crate::core::{
@@ -27,7 +26,7 @@ use crate::widgets::Label;
 ///
 #[doc = concat!(
     "![25% progress bar](",
-    include_doc_path!("screenshots/progress_bar_25_percent.png"),
+    "screenshots/progress_bar_25_percent.png",
     ")",
 )]
 pub struct ProgressBar {

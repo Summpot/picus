@@ -4,7 +4,6 @@
 use std::any::TypeId;
 
 use accesskit::{Node, Role, Toggled};
-use include_doc_path::include_doc_path;
 use tracing::{Span, trace, trace_span};
 
 use crate::core::keyboard::Key;
@@ -27,7 +26,7 @@ use crate::widgets::Label;
 ///
 #[doc = concat!(
     "![Checkbox with checked state](",
-    include_doc_path!("screenshots/checkbox_hello_checked.png"),
+    "screenshots/checkbox_hello_checked.png",
     ")",
 )]
 ///

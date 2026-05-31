@@ -3,10 +3,10 @@
 
 use std::marker::PhantomData;
 
-use masonry::core::{ArcStr, NewWidget};
-use masonry::parley::style::FontWeight;
-use masonry::parley::{FontFamily, StyleProperty};
-use masonry::widgets::{self, CheckboxToggled};
+use picus_widget::core::{ArcStr, NewWidget};
+use picus_widget::parley::style::FontWeight;
+use picus_widget::parley::{FontFamily, StyleProperty};
+use picus_widget::widgets::{self, CheckboxToggled};
 
 use crate::core::{MessageCtx, MessageResult, Mut, View, ViewMarker};
 use crate::{Pod, ViewCtx};
@@ -15,7 +15,7 @@ use crate::{Pod, ViewCtx};
 ///
 /// # Example
 /// ```
-/// # use xilem_masonry as xilem;
+/// # use picus_view as xilem;
 /// use xilem::view::checkbox;
 /// # use xilem::WidgetView;
 ///
@@ -42,7 +42,7 @@ where
         label: label.into(),
         callback,
         checked,
-        text_size: masonry::theme::TEXT_SIZE_NORMAL,
+        text_size: picus_widget::theme::TEXT_SIZE_NORMAL,
         weight: FontWeight::NORMAL,
         font: FontFamily::List(std::borrow::Cow::Borrowed(&[])),
         disabled: false,

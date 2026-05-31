@@ -5,7 +5,6 @@ use std::any::TypeId;
 use std::mem::Discriminant;
 
 use accesskit::{Node, Role};
-use include_doc_path::include_doc_path;
 use smallvec::SmallVec;
 use tracing::{Span, trace_span};
 
@@ -33,7 +32,7 @@ use crate::{TextAlign, TextAlignOptions, theme};
 ///
 #[doc = concat!(
     "![Styled label](",
-    include_doc_path!("screenshots/label_styled_label.png"),
+    "screenshots/label_styled_label.png",
     ")",
 )]
 pub struct Label {

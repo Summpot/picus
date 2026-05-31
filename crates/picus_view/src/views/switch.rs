@@ -3,7 +3,7 @@
 
 use std::marker::PhantomData;
 
-use masonry::widgets::{self, SwitchToggled};
+use picus_widget::widgets::{self, SwitchToggled};
 
 use crate::core::{MessageCtx, MessageResult, Mut, View, ViewMarker};
 use crate::{Pod, ViewCtx};
@@ -12,7 +12,7 @@ use crate::{Pod, ViewCtx};
 ///
 /// # Example
 /// ```
-/// # use xilem_masonry as xilem;
+/// # use picus_view as xilem;
 /// use xilem::view::switch;
 /// # use xilem::WidgetView;
 ///

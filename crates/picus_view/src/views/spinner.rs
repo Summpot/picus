@@ -1,7 +1,7 @@
 // Copyright 2024 the Xilem Authors
 // SPDX-License-Identifier: Apache-2.0
 
-use masonry::widgets;
+use picus_widget::widgets;
 
 use crate::core::{MessageCtx, MessageResult, Mut, View, ViewMarker};
 use crate::{Pod, ViewCtx};
@@ -16,7 +16,7 @@ use crate::{Pod, ViewCtx};
 /// # Examples
 ///
 /// ```rust,no_run
-/// # use xilem_masonry as xilem;
+/// # use picus_view as xilem;
 /// # use xilem::{view::{spinner, flex_col}, WidgetView, core::one_of::Either};
 /// # struct ApiClient;
 /// # struct RequestState { pending: bool }

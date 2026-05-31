@@ -1,9 +1,9 @@
 // Copyright 2024 the Xilem Authors
 // SPDX-License-Identifier: Apache-2.0
 
-use masonry::core::{FromDynWidget, Widget};
-use masonry::properties::Dimensions;
-use masonry::widgets::Passthrough;
+use picus_widget::core::{FromDynWidget, Widget};
+use picus_widget::properties::Dimensions;
+use picus_widget::widgets::Passthrough;
 
 use crate::core::{AnyElement, AnyView, Mut, SuperElement};
 use crate::{Pod, ViewCtx};

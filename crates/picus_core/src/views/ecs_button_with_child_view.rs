@@ -1,6 +1,6 @@
 use bevy_ecs::entity::Entity;
+use picus_view::{Pod, ViewCtx, WidgetView};
 use xilem_core::{MessageCtx, MessageResult, Mut, View, ViewMarker};
-use xilem_masonry::{Pod, ViewCtx, WidgetView};
 
 use crate::widgets::{EcsButtonWidgetAction, EcsButtonWithChildWidget, HitTransparentWidget};
 

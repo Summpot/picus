@@ -1,7 +1,7 @@
 // Copyright 2025 the Xilem Authors
 // SPDX-License-Identifier: Apache-2.0
 
-use masonry::core::{FromDynWidget, NewWidget, PropertySet, Widget, WidgetMut};
+use picus_widget::core::{FromDynWidget, NewWidget, PropertySet, Widget, WidgetMut};
 
 use crate::ViewCtx;
 use crate::core::{Mut, SuperElement, ViewElement};
@@ -16,8 +16,8 @@ use crate::core::{Mut, SuperElement, ViewElement};
 /// This has a protocol to ensure that multiple views changing the
 /// transform interoperate successfully.
 ///
-/// [`transformed`]: crate::view::Transformed
-/// [`WidgetView::transform`]: crate::view::transformed
+/// [`transformed`]: crate::views::Transformed
+/// [`WidgetView::transform`]: crate::views::transformed
 pub struct Pod<W: Widget + FromDynWidget + ?Sized> {
     /// A [`Widget`] yet to be inserted in the widget tree.
     pub new_widget: NewWidget<W>,

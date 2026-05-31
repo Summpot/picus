@@ -3,8 +3,8 @@
 
 use std::marker::PhantomData;
 
-use masonry::kurbo::Vec2;
-use masonry::widgets::{self, BadgePlacement};
+use picus_widget::kurbo::Vec2;
+use picus_widget::widgets::{self, BadgePlacement};
 
 use crate::core::{MessageCtx, MessageResult, Mut, View, ViewId, ViewMarker, ViewPathTracker};
 use crate::{Pod, ViewCtx, WidgetView};

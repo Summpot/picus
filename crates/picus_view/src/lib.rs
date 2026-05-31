@@ -14,12 +14,13 @@
 )]
 #![expect(clippy::missing_assert_message, reason = "Vendored upstream behavior.")]
 
-pub use masonry as picus_widget;
-pub use masonry_core;
+pub use picus_widget;
+pub use picus_widget::masonry_core;
 pub use xilem_core as core;
 
 pub mod style;
-pub mod view;
+pub mod views;
+pub use views as view;
 
 mod any_view;
 mod masonry_root;
@@ -35,6 +36,6 @@ pub use view_ctx::ViewCtx;
 pub use widget_view::{WidgetView, WidgetViewSequence};
 
 // TODO - Remove these re-exports and fix the places in the crate that use them
-pub(crate) use masonry::parley::Alignment as TextAlign;
-pub(crate) use masonry::peniko::Color;
-pub(crate) use masonry::widgets::InsertNewline;
+pub(crate) use picus_widget::parley::Alignment as TextAlign;
+pub(crate) use picus_widget::peniko::Color;
+pub(crate) use picus_widget::widgets::InsertNewline;

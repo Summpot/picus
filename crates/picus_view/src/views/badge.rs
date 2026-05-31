@@ -3,8 +3,8 @@
 
 use std::marker::PhantomData;
 
-use masonry::core::ArcStr;
-use masonry::widgets;
+use picus_widget::core::ArcStr;
+use picus_widget::widgets;
 
 use crate::core::{MessageCtx, MessageResult, Mut, View, ViewMarker};
 use crate::{Pod, ViewCtx, WidgetView};

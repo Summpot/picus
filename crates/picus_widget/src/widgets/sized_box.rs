@@ -4,7 +4,6 @@
 use std::any::TypeId;
 
 use accesskit::{Node, Role};
-use include_doc_path::include_doc_path;
 use tracing::{Span, trace_span};
 
 use crate::core::{
@@ -54,7 +53,7 @@ use crate::properties::{BorderWidth, Padding};
 /// [`Dimensions::MAX`]: crate::properties::Dimensions::MAX
 #[doc = concat!(
     "![Box with blue border, pink background and a child label](",
-    include_doc_path!("screenshots/sized_box_label_box_with_padding.png"),
+    "screenshots/sized_box_label_box_with_padding.png",
     ")",
 )]
 pub struct SizedBox {

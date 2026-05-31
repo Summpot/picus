@@ -7,7 +7,6 @@
 // its computed size. See https://github.com/linebender/xilem/issues/378
 
 use accesskit::{Node, Role};
-use include_doc_path::include_doc_path;
 use tracing::{Span, trace_span};
 
 use crate::core::{
@@ -25,7 +24,7 @@ use crate::layout::{AsUnit, LayoutSize, LenReq, Length, SizeDef, UnitPoint};
 ///
 #[doc = concat!(
     "![Right-aligned label](",
-    include_doc_path!("screenshots/align_right.png"),
+    "screenshots/align_right.png",
     ")",
 )]
 pub struct Align {

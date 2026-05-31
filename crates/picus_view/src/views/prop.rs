@@ -4,7 +4,7 @@
 use std::cmp::PartialEq;
 use std::marker::PhantomData;
 
-use masonry::core::{Property, UsesProperty};
+use picus_widget::core::{Property, UsesProperty};
 
 use crate::core::{MessageCtx, Mut, View, ViewMarker};
 use crate::{Pod, ViewCtx, WidgetView};

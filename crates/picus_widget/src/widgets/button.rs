@@ -5,7 +5,6 @@ use std::any::TypeId;
 use std::sync::Arc;
 
 use accesskit::{Node, Role};
-use include_doc_path::include_doc_path;
 use tracing::{Span, trace, trace_span};
 
 use crate::core::MeasureCtx;
@@ -28,7 +27,7 @@ use crate::widgets::Label;
 ///
 #[doc = concat!(
     "![Button with text label](",
-    include_doc_path!("screenshots/button_hello.png"),
+    "screenshots/button_hello.png",
     ")",
 )]
 pub struct Button {

@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use accesskit::{ActionData, Node, Role};
-use include_doc_path::include_doc_path;
 use tracing::{Span, trace_span};
 
 use crate::core::keyboard::{Key, NamedKey};
@@ -39,7 +38,7 @@ pub enum SplitPoint {
 ///
 #[doc = concat!(
     "![Split panel with two labels](",
-    include_doc_path!("screenshots/split_columns.png"),
+    "screenshots/split_columns.png",
     ")",
 )]
 pub struct Split<ChildA, ChildB>

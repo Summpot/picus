@@ -3,12 +3,12 @@
 
 use std::marker::PhantomData;
 
-use masonry::core::{CollectionWidget, FromDynWidget, Widget, WidgetMut};
-use masonry::kurbo::Axis;
-use masonry::layout::Length;
-pub use masonry::properties::types::{CrossAxisAlignment, MainAxisAlignment};
-pub use masonry::widgets::FlexParams;
-use masonry::widgets::{self};
+use picus_widget::core::{CollectionWidget, FromDynWidget, Widget, WidgetMut};
+use picus_widget::kurbo::Axis;
+use picus_widget::layout::Length;
+pub use picus_widget::properties::types::{CrossAxisAlignment, MainAxisAlignment};
+pub use picus_widget::widgets::FlexParams;
+use picus_widget::widgets::{self};
 
 use crate::core::{
     AppendVec, ElementSplice, MessageCtx, MessageResult, Mut, SuperElement, View, ViewElement,
@@ -42,10 +42,10 @@ use crate::{AnyWidgetView, Pod, ViewCtx, WidgetView};
 ///
 /// # Example
 /// ```rust,no_run
-/// # use xilem_masonry as xilem;
-/// use xilem::masonry::properties::types::{CrossAxisAlignment, MainAxisAlignment};
-/// use xilem::masonry::kurbo::Axis;
-/// use xilem::masonry::layout::AsUnit;
+/// # use picus_view as xilem;
+/// use xilem::picus_widget::properties::types::{CrossAxisAlignment, MainAxisAlignment};
+/// use xilem::picus_widget::kurbo::Axis;
+/// use xilem::picus_widget::layout::AsUnit;
 /// use xilem::view::{button, text_button, flex, label, sized_box, FlexExt as _, FlexSpacer, Label};
 /// use xilem::style::Style;
 /// use xilem::WidgetView;
@@ -78,8 +78,8 @@ use crate::{AnyWidgetView, Pod, ViewCtx, WidgetView};
 /// }
 /// ```
 ///
-/// [`FlexBasis::Auto`]: masonry::widgets::FlexBasis::Auto
-/// [`FlexBasis::Zero`]: masonry::widgets::FlexBasis::Zero
+/// [`FlexBasis::Auto`]: picus_widget::widgets::FlexBasis::Auto
+/// [`FlexBasis::Zero`]: picus_widget::widgets::FlexBasis::Zero
 pub fn flex<State: 'static, Action, Seq: FlexSequence<State, Action>>(
     axis: Axis,
     sequence: Seq,
@@ -152,7 +152,7 @@ impl<Seq, State, Action> Flex<Seq, State, Action> {
 mod hidden {
     use super::FlexItem;
     use crate::core::{AppendVec, View};
-    use crate::view::FlexElement;
+    use crate::views::FlexElement;
     use crate::{AnyWidgetView, ViewCtx};
 
     #[doc(hidden)]
@@ -423,7 +423,7 @@ impl ElementSplice<FlexElement> for FlexSplice<'_, '_> {
 /// # Examples
 ///
 /// ```
-/// # use xilem_masonry as xilem;
+/// # use picus_view as xilem;
 /// use xilem::view::{label, FlexSequence, FlexExt as _};
 ///
 /// fn label_sequence<State: 'static>(
@@ -449,9 +449,9 @@ pub trait FlexExt<State: 'static, Action>: WidgetView<State, Action> {
     ///
     /// # Examples
     /// ```
-    /// # use xilem_masonry as xilem;
-    /// use xilem::masonry::kurbo::Axis;
-    /// use xilem::masonry::layout::AsUnit;
+    /// # use picus_view as xilem;
+    /// use xilem::picus_widget::kurbo::Axis;
+    /// use xilem::picus_widget::layout::AsUnit;
     /// use xilem::view::{text_button, label, flex, CrossAxisAlignment, FlexSpacer, FlexExt};
     /// # use xilem::WidgetView;
     ///
@@ -478,9 +478,9 @@ pub trait FlexExt<State: 'static, Action>: WidgetView<State, Action> {
     ///
     /// # Examples
     /// ```
-    /// # use xilem_masonry as xilem;
-    /// use xilem::masonry::kurbo::Axis;
-    /// use xilem::masonry::layout::AsUnit;
+    /// # use picus_view as xilem;
+    /// use xilem::picus_widget::kurbo::Axis;
+    /// use xilem::picus_widget::layout::AsUnit;
     /// use xilem::view::{flex, label, FlexSpacer, FlexExt, AnyFlexChild};
     /// # use xilem::WidgetView;
     ///
@@ -511,9 +511,9 @@ pub struct FlexItem<V, State, Action> {
 ///
 /// # Examples
 /// ```
-/// # use xilem_masonry as xilem;
-/// use xilem::masonry::kurbo::Axis;
-/// use xilem::masonry::layout::AsUnit;
+/// # use picus_view as xilem;
+/// use xilem::picus_widget::kurbo::Axis;
+/// use xilem::picus_widget::layout::AsUnit;
 /// use xilem::view::{text_button, label, flex_item, flex, CrossAxisAlignment, FlexSpacer};
 /// # use xilem::WidgetView;
 ///
@@ -691,9 +691,9 @@ impl FlexSpacer {
     ///
     /// # Examples
     /// ```
-    /// # use xilem_masonry as xilem;
-    /// use xilem::masonry::kurbo::Axis;
-    /// use xilem::masonry::layout::AsUnit;
+    /// # use picus_view as xilem;
+    /// use xilem::picus_widget::kurbo::Axis;
+    /// use xilem::picus_widget::layout::AsUnit;
     /// use xilem::view::{flex, FlexSpacer};
     /// # use xilem::WidgetView;
     ///
@@ -717,8 +717,8 @@ where
     ///
     /// # Examples
     /// ```
-    /// # use xilem_masonry as xilem;
-    /// use xilem::masonry::kurbo::Axis;
+    /// # use picus_view as xilem;
+    /// use xilem::picus_widget::kurbo::Axis;
     /// use xilem::view::{flex, flex_item, label};
     /// # use xilem::WidgetView;
     ///

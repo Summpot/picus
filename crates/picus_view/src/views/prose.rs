@@ -3,10 +3,10 @@
 
 use std::marker::PhantomData;
 
-use masonry::core::{ArcStr, NewWidget, PropertySet, StyleProperty};
-use masonry::parley::FontWeight;
-use masonry::properties::{ContentColor, LineBreaking};
-use masonry::widgets;
+use picus_widget::core::{ArcStr, NewWidget, PropertySet, StyleProperty};
+use picus_widget::parley::FontWeight;
+use picus_widget::properties::{ContentColor, LineBreaking};
+use picus_widget::widgets;
 
 use crate::core::{MessageCtx, MessageResult, Mut, View, ViewMarker};
 use crate::{Color, Pod, TextAlign, ViewCtx};
@@ -17,7 +17,7 @@ pub fn prose<State, Action>(content: impl Into<ArcStr>) -> Prose<State, Action> 
         content: content.into(),
         text_color: None,
         text_alignment: TextAlign::default(),
-        text_size: masonry::theme::TEXT_SIZE_NORMAL,
+        text_size: picus_widget::theme::TEXT_SIZE_NORMAL,
         line_break_mode: LineBreaking::WordWrap,
         weight: FontWeight::NORMAL,
         phantom: PhantomData,
@@ -46,7 +46,7 @@ pub struct Prose<State, Action> {
     weight: FontWeight,
     phantom: PhantomData<fn(State) -> Action>,
     // TODO: disabled: bool,
-    // TODO: add more attributes of `masonry::widgets::Prose`
+    // TODO: add more attributes of `picus_widget::widgets::Prose`
 }
 
 impl<State, Action> Prose<State, Action> {

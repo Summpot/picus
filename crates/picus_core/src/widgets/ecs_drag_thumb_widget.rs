@@ -14,7 +14,7 @@ use masonry_core::{
     layout::{LayoutSize, LenReq, Length, SizeDef},
     properties::{Background, BorderColor, BorderWidth, CornerRadius, Padding},
 };
-use xilem_masonry::masonry::{properties::ContentColor, widgets::Label};
+use picus_view::picus_widget::{properties::ContentColor, widgets::Label};
 
 use crate::{
     ScrollAxis, WidgetUiAction,

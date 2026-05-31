@@ -20,14 +20,14 @@ use masonry_core::{
     layout::{Dim, Length, UnitPoint},
     properties::Padding,
 };
-use std::sync::Arc;
-use tracing::trace;
-use xilem_masonry::masonry::widgets::InsertNewline;
-use xilem_masonry::style::Style as _;
-use xilem_masonry::view::{
+use picus_view::picus_widget::widgets::InsertNewline;
+use picus_view::style::Style as _;
+use picus_view::view::{
     CrossAxisAlignment, FlexExt as _, flex_row, image as xilem_image, label, sized_box,
     transformed, zstack,
 };
+use std::sync::Arc;
+use tracing::trace;
 
 const CHECKBOX_BOX_SIZE: f64 = 18.0;
 const CHECKBOX_MARK_SIZE: f64 = 14.0;

@@ -3,10 +3,10 @@
 
 use std::marker::PhantomData;
 
-use masonry::core::{CollectionWidget, FromDynWidget, Widget, WidgetMut};
-use masonry::layout::UnitPoint;
-use masonry::widgets;
-pub use masonry::widgets::ChildAlignment;
+use picus_widget::core::{CollectionWidget, FromDynWidget, Widget, WidgetMut};
+use picus_widget::layout::UnitPoint;
+use picus_widget::widgets;
+pub use picus_widget::widgets::ChildAlignment;
 
 use crate::core::{
     AppendVec, ElementSplice, MessageCtx, MessageResult, Mut, SuperElement, View, ViewElement,
@@ -22,7 +22,7 @@ use crate::{Pod, ViewCtx, WidgetView};
 /// This example shows how to add two text labels on top of each other.
 ///
 /// ```
-/// # use xilem_masonry as xilem;
+/// # use picus_view as xilem;
 /// use xilem::WidgetView;
 /// use xilem::view::{zstack, label, text_button};
 /// fn view<State: 'static>() -> impl WidgetView<State> {

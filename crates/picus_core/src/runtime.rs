@@ -35,13 +35,13 @@ use masonry_core::{
 };
 use masonry_imaging::{Layer as ImagingLayer, PreparedFrame, texture_render::Renderer};
 use picus_surface::{ExistingWindowMetrics, ExternalWindowSurface};
-use wgpu::PresentMode;
-use xilem_core::{ProxyError, RawProxy, SendMessage, View, ViewId};
-use xilem_masonry::{
+use picus_view::{
     ViewCtx,
-    masonry::widgets::Passthrough,
+    picus_widget::widgets::Passthrough,
     view::{label, zstack},
 };
+use wgpu::PresentMode;
+use xilem_core::{ProxyError, RawProxy, SendMessage, View, ViewId};
 
 use crate::{
     events::{UiEventQueue, install_global_ui_event_queue},

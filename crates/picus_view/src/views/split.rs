@@ -3,9 +3,9 @@
 
 use std::marker::PhantomData;
 
-use masonry::kurbo::Axis;
-use masonry::layout::{AsUnit, Length};
-use masonry::widgets;
+use picus_widget::kurbo::Axis;
+use picus_widget::layout::{AsUnit, Length};
+use picus_widget::widgets;
 
 use crate::core::{MessageCtx, MessageResult, Mut, View, ViewId, ViewMarker, ViewPathTracker};
 use crate::{Pod, ViewCtx, WidgetView};
@@ -19,7 +19,7 @@ use crate::{Pod, ViewCtx, WidgetView};
 /// To create a split view, provide it with two child views.
 ///
 /// ```ignore
-/// # use xilem_masonry as xilem;
+/// # use picus_view as xilem;
 /// use xilem::view::{split, label};
 ///
 /// split(
@@ -32,7 +32,7 @@ use crate::{Pod, ViewCtx, WidgetView};
 /// For the full list of modifiers see the [`Split`] struct.
 ///
 /// ```ignore
-/// # use xilem_masonry as xilem;
+/// # use picus_view as xilem;
 /// use xilem::view::{split, label};
 ///
 /// split(label("Left view"), label("Right view"))

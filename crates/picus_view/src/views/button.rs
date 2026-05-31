@@ -4,12 +4,12 @@
 use std::any::type_name;
 use std::marker::PhantomData;
 
-use masonry::core::ArcStr;
-pub use masonry::core::PointerButton;
-use masonry::widgets::{self, ButtonPress};
+use picus_widget::core::ArcStr;
+pub use picus_widget::core::PointerButton;
+use picus_widget::widgets::{self, ButtonPress};
 
 use crate::core::{MessageCtx, MessageResult, Mut, View, ViewId, ViewMarker, ViewPathTracker};
-use crate::view::{Label, label};
+use crate::views::{Label, label};
 use crate::{Pod, ViewCtx, WidgetView};
 
 /// A button which calls `callback` when the primary mouse button (normally left) is pressed.
@@ -32,8 +32,8 @@ use crate::{Pod, ViewCtx, WidgetView};
 /// To create a simple button with styled text:
 ///
 /// ```
-/// # use xilem_masonry as xilem;
-/// use xilem::masonry::parley::style::FontWeight;
+/// # use picus_view as xilem;
+/// use xilem::picus_widget::parley::style::FontWeight;
 /// use xilem::view::{button, label};
 /// # use xilem::WidgetView;
 ///
@@ -53,8 +53,8 @@ use crate::{Pod, ViewCtx, WidgetView};
 /// To create a button with more complex (non-interactive) contents children:
 ///
 /// ```
-/// # use xilem_masonry as xilem;
-/// use xilem::masonry::parley::style::FontWeight;
+/// # use picus_view as xilem;
+/// use xilem::picus_widget::parley::style::FontWeight;
 /// use xilem::view::{button, label, flex_row, FlexExt};
 /// # use xilem::WidgetView;
 /// # type State = u32;

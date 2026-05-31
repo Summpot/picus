@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use accesskit::{Node, Role};
-use include_doc_path::include_doc_path;
 use tracing::trace_span;
 
 use crate::core::{
@@ -50,7 +49,7 @@ impl Child {
 ///
 #[doc = concat!(
     "![Red foreground widget on top of blue background widget](",
-    include_doc_path!("screenshots/zstack_alignment_default.png"),
+    "screenshots/zstack_alignment_default.png",
     ")",
 )]
 pub struct ZStack {

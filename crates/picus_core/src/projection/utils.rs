@@ -9,8 +9,8 @@ use crate::{
 };
 use bevy_ecs::prelude::*;
 use masonry_core::layout::{Dim, Length};
-use xilem_masonry::style::Style as _;
-use xilem_masonry::view::{label, sized_box};
+use picus_view::style::Style as _;
+use picus_view::view::{label, sized_box};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum VectorIcon {

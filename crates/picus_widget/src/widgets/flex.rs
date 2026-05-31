@@ -4,7 +4,6 @@
 use std::any::TypeId;
 
 use accesskit::{Node, Role};
-use include_doc_path::include_doc_path;
 use tracing::{Span, trace_span};
 
 use crate::core::{
@@ -44,7 +43,7 @@ use crate::util::Sanitize;
 ///
 #[doc = concat!(
     "![Flex column with multiple labels](",
-    include_doc_path!("screenshots/flex_col_main_axis_spaceAround.png"),
+    "screenshots/flex_col_main_axis_spaceAround.png",
     ")",
 )]
 pub struct Flex {

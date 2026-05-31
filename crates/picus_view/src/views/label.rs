@@ -1,10 +1,10 @@
 // Copyright 2024 the Xilem Authors
 // SPDX-License-Identifier: Apache-2.0
 
-use masonry::core::{ArcStr, StyleProperty};
-use masonry::parley::style::FontWeight;
-use masonry::parley::{FontFamily, FontFamilyName, GenericFamily, LineHeight};
-use masonry::widgets;
+use picus_widget::core::{ArcStr, StyleProperty};
+use picus_widget::parley::style::FontWeight;
+use picus_widget::parley::{FontFamily, FontFamilyName, GenericFamily, LineHeight};
+use picus_widget::widgets;
 
 use crate::core::{MessageCtx, MessageResult, Mut, View, ViewMarker};
 use crate::{Pod, TextAlign, ViewCtx};
@@ -13,13 +13,13 @@ use crate::{Pod, TextAlign, ViewCtx};
 /// # Example
 ///
 /// ```
-/// # use xilem_masonry as xilem;
-/// use xilem::masonry::palette;
+/// # use picus_view as xilem;
+/// use xilem::picus_widget::palette;
 /// use xilem::view::label;
 /// use xilem::style::Style as _;
-/// use xilem::masonry::parley::Alignment as TextAlign;
-/// use xilem::masonry::parley::style::FontWeight;
-/// use xilem::masonry::parley::fontique;
+/// use xilem::picus_widget::parley::Alignment as TextAlign;
+/// use xilem::picus_widget::parley::style::FontWeight;
+/// use xilem::picus_widget::parley::fontique;
 /// # use xilem::WidgetView;
 ///
 /// # fn view() -> impl WidgetView<()> {
@@ -36,7 +36,7 @@ pub fn label(label: impl Into<ArcStr>) -> Label {
     Label {
         label: label.into(),
         text_alignment: TextAlign::default(),
-        text_size: masonry::theme::TEXT_SIZE_NORMAL,
+        text_size: picus_widget::theme::TEXT_SIZE_NORMAL,
         weight: FontWeight::NORMAL,
         enable_hinting: true,
         line_height: LineHeight::default(),
@@ -60,7 +60,7 @@ pub struct Label {
     font: FontFamily<'static>,
     letter_spacing: f32,
     word_spacing: f32,
-    // TODO: add more attributes of `masonry::widgets::Label`
+    // TODO: add more attributes of `picus_widget::widgets::Label`
 }
 
 impl Label {

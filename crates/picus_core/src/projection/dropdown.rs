@@ -9,10 +9,10 @@ use crate::{
     views::{ecs_button_with_child, opaque_hitbox_for_entity},
 };
 use masonry_core::layout::{Dim, Length};
-use std::sync::Arc;
-use xilem_masonry::view::{
+use picus_view::view::{
     CrossAxisAlignment, FlexExt as _, flex_col, flex_row, label, portal, transformed,
 };
+use std::sync::Arc;
 
 #[cfg(test)]
 use crate::UiDropdownPlacement;

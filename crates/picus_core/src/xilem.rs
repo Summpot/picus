@@ -10,8 +10,8 @@ pub use masonry_core::{
     peniko::{Blob, Color, ImageBrush, ImageFormat},
 };
 pub use masonry_winit::{app, winit};
+pub use picus_view::{AnyWidgetView, Pod, ViewCtx, WidgetView, WidgetViewSequence};
+pub use picus_view::{style, view};
 pub use xilem_core as core;
-pub use xilem_masonry::{AnyWidgetView, Pod, ViewCtx, WidgetView, WidgetViewSequence};
-pub use xilem_masonry::{style, view};
 
-pub use xilem_masonry::masonry::widgets::InsertNewline;
+pub use picus_view::picus_widget::widgets::InsertNewline;

@@ -5,7 +5,6 @@ members = [
 	"crates/picus_activation",
 	"crates/picus_core",
 	"crates/picus_widget",
-	"crates/picus_masonry",
 	"crates/picus_view",
 	"examples/async_downloader",
 	"examples/calculator",
@@ -40,6 +39,8 @@ bevy_winit = { version = "=0.19.0-rc.2", default-features = false }
 crossbeam-queue = "0.3"
 crossbeam-channel = "0.5"
 tokio = { version = "1.52", features = ["rt-multi-thread"] }
+smallvec = "1.15.1"
+accesskit = "0.24.0"
 num-traits = "0.2"
 reqwest = { version = "0.13", default-features = false, features = ["blocking", "json", "form", "rustls"] }
 rfd = "0.17"
@@ -49,6 +50,7 @@ masonry_core = { git = "https://github.com/linebender/xilem.git", rev = "72c6517
 masonry_imaging = { git = "https://github.com/linebender/xilem.git", rev = "72c6517ad035f352c70f939f4754a3f79fca23fd", features = ["imaging_vello"] }
 masonry_winit = { git = "https://github.com/linebender/xilem.git", rev = "72c6517ad035f352c70f939f4754a3f79fca23fd" }
 xilem_core = { git = "https://github.com/linebender/xilem.git", rev = "72c6517ad035f352c70f939f4754a3f79fca23fd" }
+picus_widget = { path = "crates/picus_widget" }
 picus_view = { path = "crates/picus_view" }
 vello = { version = "0.8.0", default-features = false, features = ["wgpu"] }
 wgpu = "28.0.0"
@@ -78,7 +80,6 @@ sha2 = "0.11"
 webbrowser = "1"
 
 picus_core = { path = "crates/picus_core" }
-picus_widget = { path = "crates/picus_widget" }
 picus_activation = { path = "crates/picus_activation" }
 picus_surface = { path = "crates/picus_surface" }
 shared_utils = { path = "examples/shared_utils" }

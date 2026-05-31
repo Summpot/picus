@@ -3,10 +3,10 @@
 
 use std::marker::PhantomData;
 
-use masonry::core::{ArcStr, MutateCtx};
-use masonry::imaging::record::Scene;
-use masonry::kurbo::Size;
-use masonry::widgets::{self, CanvasSizeChanged};
+use picus_widget::core::{ArcStr, MutateCtx};
+use picus_widget::imaging::record::Scene;
+use picus_widget::kurbo::Size;
+use picus_widget::widgets::{self, CanvasSizeChanged};
 
 use crate::core::{MessageCtx, MessageResult, Mut, View, ViewMarker};
 use crate::{Pod, ViewCtx};
@@ -16,8 +16,8 @@ use crate::{Pod, ViewCtx};
 /// # Example
 ///
 /// ```
-/// # use xilem_masonry as xilem;
-/// use xilem::{view::canvas, masonry::{palette, kurbo::{Rect, Size}, imaging::{Painter, record::Scene}}};
+/// # use picus_view as xilem;
+/// use xilem::{view::canvas, picus_widget::{palette, kurbo::{Rect, Size}, imaging::{Painter, record::Scene}}};
 /// # use xilem::WidgetView;
 ///
 /// # fn fill_canvas<State: 'static>() -> impl WidgetView<State> {

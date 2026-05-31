@@ -1,7 +1,7 @@
 use bevy_ecs::entity::Entity;
 use masonry_core::core::ArcStr;
+use picus_view::{Pod, ViewCtx};
 use xilem_core::{MessageCtx, MessageResult, Mut, View, ViewMarker};
-use xilem_masonry::{Pod, ViewCtx};
 
 use crate::widgets::{EcsButtonWidget, EcsButtonWidgetAction};
 

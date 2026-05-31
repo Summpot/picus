@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use accesskit::{Node, Role};
-use include_doc_path::include_doc_path;
 use tracing::{Span, trace_span};
 
 use crate::core::{
@@ -31,7 +30,7 @@ use crate::widgets::TextArea;
 ///
 #[doc = concat!(
     "![Multiple lines with different alignments](",
-    include_doc_path!("screenshots/prose_alignment_flex.png"),
+    "screenshots/prose_alignment_flex.png",
     ")",
 )]
 pub struct Prose {

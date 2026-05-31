@@ -4,7 +4,6 @@
 use std::any::TypeId;
 
 use accesskit::{Node, Role};
-use include_doc_path::include_doc_path;
 use tracing::{Span, trace_span};
 
 use crate::core::{
@@ -24,7 +23,7 @@ use crate::util::debug_panic;
 ///
 #[doc = concat!(
     "![Grid with buttons of various sizes](",
-    include_doc_path!("screenshots/grid_with_changed_spacing.png"),
+    "screenshots/grid_with_changed_spacing.png",
     ")",
 )]
 pub struct Grid {

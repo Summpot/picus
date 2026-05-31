@@ -5,7 +5,7 @@ use std::any::TypeId;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
-use masonry::core::{FromDynWidget, Property, Widget, WidgetId, WidgetMut};
+use picus_widget::core::{FromDynWidget, Property, Widget, WidgetId, WidgetMut};
 
 use crate::Pod;
 use crate::core::{Environment, RawProxy, ViewId, ViewPathTracker};

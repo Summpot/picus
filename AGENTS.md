@@ -43,9 +43,8 @@ cross-cutting design decisions that code comments cannot express well.
      releases when every needed crate is published; otherwise use official
      `https://github.com/linebender/xilem.git` Git dependencies pinned by commit.
    - Do not depend directly on upstream `masonry` or upstream `xilem`.
-    `picus_ui_runtime` is the Picus-owned retained backend. `picus_masonry`
-    is a compatibility facade over that backend, and local `xilem_masonry`
-    is the Picus-owned view adapter on top.
+   - `picus_widget` is the Picus-owned retained widget backend, and
+     `picus_view` is the Picus-owned Xilem-compatible view adapter on top.
    - Do not reintroduce `third_party` submodules or user-fork dependencies unless
      a required capability cannot be expressed against official upstream crates.
    - Temporary local Cargo `[patch]` or path overrides are allowed for validation;
@@ -55,22 +54,19 @@ cross-cutting design decisions that code comments cannot express well.
 
 `picus` is a Bevy-first UI framework that combines ECS state management with a
 retained Masonry Core UI runtime. `picus_core` depends directly on
-`masonry_core` and the Picus-owned local `xilem_masonry` adapter.
-`xilem_masonry` consumes `picus_ui_runtime` for the underlying widget
-and property runtime, while `picus_masonry` remains a migration-time compatibility
-facade. The higher-level upstream `masonry` and upstream `xilem` crates are not
-dependencies and should not be reintroduced.
+`masonry_core` and the Picus-owned local `picus_view` adapter.
+`picus_view` consumes `picus_widget` for the underlying widget, property, layer,
+and theme runtime. The higher-level upstream `masonry` and upstream `xilem`
+crates are not dependencies and should not be reintroduced.
 
 Crates:
 
 - `picus_core`: ECS-driven UI projection, styling, overlays, built-in components,
   fonts, icons, and runtime integration.
-- `picus_ui_runtime`: Picus-owned retained widget/property backend and the long-term
-  home for incremental widget rewrites.
-- `picus_masonry`: compatibility facade that re-exports retained runtime APIs while
-  legacy Masonry-derived naming is phased out.
-- `xilem_masonry`: Picus-owned Xilem-compatible view adapter copied from upstream
-  `xilem_masonry` and retargeted to `picus_ui_runtime`.
+- `picus_widget`: Picus-owned retained widget/property backend and the long-term
+  home for incremental widget rewrites on top of `masonry_core`.
+- `picus_view`: Picus-owned Xilem-compatible view adapter on top of
+  `picus_widget` and `xilem_core`.
 - `picus_surface`: Vello/wgpu rendering surface for an externally owned Bevy
   window.
 - `picus_activation`: single-instance activation, custom URI protocol handling,

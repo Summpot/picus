@@ -4,8 +4,8 @@
 use crate::core::{MessageCtx, MessageResult, Mut, View, ViewMarker};
 use crate::{Pod, ViewCtx};
 
-use masonry::core::ArcStr;
-use masonry::widgets::{self, RadioButtonSelected};
+use picus_widget::core::ArcStr;
+use picus_widget::widgets::{self, RadioButtonSelected};
 
 /// An element which can be in checked and unchecked state.
 ///

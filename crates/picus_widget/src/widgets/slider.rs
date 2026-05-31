@@ -4,7 +4,6 @@
 use std::any::TypeId;
 
 use accesskit::{ActionData, Node, Orientation, Role};
-use include_doc_path::include_doc_path;
 use tracing::{Span, trace_span};
 
 use crate::core::keyboard::{Key, NamedKey};
@@ -26,7 +25,7 @@ use crate::theme;
 ///
 #[doc = concat!(
     "![Slider](",
-    include_doc_path!("screenshots/slider_initial_state.png"),
+    "screenshots/slider_initial_state.png",
     ")",
 )]
 pub struct Slider {

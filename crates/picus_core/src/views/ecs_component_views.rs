@@ -6,20 +6,20 @@ use masonry_core::{
     parley::{Alignment as TextAlign, FontFamily, StyleProperty},
     peniko::Color,
 };
-use xilem_core::{MessageCtx, MessageResult, Mut, View, ViewMarker};
-use xilem_masonry::view::{Button, Label, Slider, Switch, slider, switch, text_button};
-use xilem_masonry::{
+use picus_view::{
     Pod, ViewCtx,
-    masonry::{
+    picus_widget::{
         properties::{CheckmarkColor, ContentColor, PlaceholderColor},
         widgets::{self, CheckboxToggled, InsertNewline, RadioButtonSelected, TextAction},
     },
+    view::{Button, Label, Slider, Switch, slider, switch, text_button},
 };
+use xilem_core::{MessageCtx, MessageResult, Mut, View, ViewMarker};
 
 use crate::events::emit_ui_action;
 use crate::styling::DEFAULT_TEXT_SIZE;
 
-/// ECS-dispatching variant of `xilem_masonry::view::text_button`.
+/// ECS-dispatching variant of `picus_view::view::text_button`.
 pub fn ecs_text_button<A>(
     entity: Entity,
     action: A,
@@ -38,7 +38,7 @@ where
     })
 }
 
-/// ECS-dispatching variant of `xilem_masonry::view::checkbox`.
+/// ECS-dispatching variant of `picus_view::view::checkbox`.
 pub fn ecs_checkbox<A, F>(
     entity: Entity,
     label: impl Into<ArcStr>,
@@ -379,7 +379,7 @@ where
     }
 }
 
-/// ECS-dispatching variant of `xilem_masonry::view::slider`.
+/// ECS-dispatching variant of `picus_view::view::slider`.
 pub fn ecs_slider<A, F>(
     entity: Entity,
     min: f64,
@@ -396,7 +396,7 @@ where
     })
 }
 
-/// ECS-dispatching variant of `xilem_masonry::view::switch`.
+/// ECS-dispatching variant of `picus_view::view::switch`.
 pub fn ecs_switch<A, F>(
     entity: Entity,
     on: bool,
@@ -411,7 +411,7 @@ where
     })
 }
 
-/// ECS-dispatching variant of `xilem_masonry::view::text_input`.
+/// ECS-dispatching variant of `picus_view::view::text_input`.
 pub fn ecs_text_input<A, F>(entity: Entity, contents: String, map_action: F) -> EcsTextInputView<A>
 where
     A: Send + Sync + 'static,

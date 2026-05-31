@@ -4,7 +4,6 @@
 use std::any::TypeId;
 
 use accesskit::{Node, Role, Toggled};
-use include_doc_path::include_doc_path;
 use masonry_core::debug_panic;
 use tracing::{Span, trace, trace_span};
 
@@ -25,7 +24,7 @@ use crate::widgets::{Label, RadioGroup};
 ///
 #[doc = concat!(
     "![Radio button with checked state](",
-    include_doc_path!("screenshots/radio_button_hello_checked.png"),
+    "screenshots/radio_button_hello_checked.png",
     ")",
 )]
 ///

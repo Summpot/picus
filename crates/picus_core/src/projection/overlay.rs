@@ -4,9 +4,9 @@ use crate::{
     styling::{apply_widget_style, resolve_style_for_classes},
 };
 use masonry_core::layout::{Dim, UnitPoint};
+use picus_view::style::Style;
+use picus_view::view::{label, zstack};
 use std::sync::Arc;
-use xilem_masonry::style::Style;
-use xilem_masonry::view::{label, zstack};
 
 pub(crate) fn project_overlay_root(_: &UiOverlayRoot, ctx: ProjectionCtx<'_>) -> UiView {
     let has_modal_overlay = ctx
@@ -29,7 +29,7 @@ pub(crate) fn project_overlay_root(_: &UiOverlayRoot, ctx: ProjectionCtx<'_>) ->
         }
 
         let dimmer: UiView = Arc::new(apply_widget_style(
-            xilem_masonry::view::sized_box(label(""))
+            picus_view::view::sized_box(label(""))
                 .width(Dim::Stretch)
                 .height(Dim::Stretch),
             &dimmer_style,

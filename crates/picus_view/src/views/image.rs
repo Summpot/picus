@@ -3,15 +3,15 @@
 
 //! The bitmap image widget.
 
-use masonry::core::ArcStr;
-use masonry::peniko::ImageBrush;
-use masonry::widgets;
+use picus_widget::core::ArcStr;
+use picus_widget::peniko::ImageBrush;
+use picus_widget::widgets;
 
 use crate::core::{MessageCtx, MessageResult, Mut, View, ViewMarker};
-use crate::view::Prop;
+use crate::views::Prop;
 use crate::{Pod, ViewCtx, WidgetView};
 
-pub use masonry::properties::ObjectFit;
+pub use picus_widget::properties::ObjectFit;
 
 /// Displays the bitmap `image`.
 ///

@@ -17,10 +17,10 @@ use crate::{
 };
 use bevy_ecs::{hierarchy::Children, prelude::Entity};
 use masonry_core::layout::{Dim, Length};
-use std::sync::Arc;
-use xilem_masonry::view::{
+use picus_view::view::{
     CrossAxisAlignment, FlexExt as _, MainAxisAlignment, flex_col, flex_row, label, transformed,
 };
+use std::sync::Arc;
 
 pub(crate) const DIALOG_SURFACE_MIN_WIDTH: f64 = 240.0;
 pub(crate) const DIALOG_SURFACE_MAX_WIDTH: f64 = 400.0;
@@ -249,7 +249,7 @@ pub(crate) fn project_dialog(dialog: &UiDialog, ctx: ProjectionCtx<'_>) -> UiVie
 
     let dialog_children = vec![header.into_any_flex(), body.flex(1.0).into_any_flex()];
 
-    let dialog_surface = xilem_masonry::view::sized_box(apply_widget_style(
+    let dialog_surface = picus_view::view::sized_box(apply_widget_style(
         apply_flex_alignment(
             flex_col(dialog_children).cross_axis_alignment(CrossAxisAlignment::Stretch),
             &dialog_style,

@@ -4,7 +4,7 @@
 use crate::core::{MessageCtx, MessageResult, Mut, View, ViewMarker};
 use crate::{Pod, ViewCtx, WidgetView};
 
-use masonry::widgets;
+use picus_widget::widgets;
 
 /// An element which holds radio buttons.
 ///

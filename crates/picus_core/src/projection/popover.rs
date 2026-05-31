@@ -2,10 +2,8 @@ use std::sync::Arc;
 
 use bevy_ecs::{entity::Entity, world::World};
 use masonry_core::layout::{Dim, Length};
-use xilem_masonry::style::Style as _;
-use xilem_masonry::view::{
-    CrossAxisAlignment, FlexExt as _, flex_col, label, sized_box, transformed,
-};
+use picus_view::style::Style as _;
+use picus_view::view::{CrossAxisAlignment, FlexExt as _, flex_col, label, sized_box, transformed};
 
 use crate::{
     ecs::{OverlayComputedPosition, UiPopover},

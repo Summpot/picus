@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use bevy_ecs::{hierarchy::Children, prelude::*};
-use xilem_masonry::view::{FlexExt as _, flex_col, label};
+use picus_view::view::{FlexExt as _, flex_col, label};
 
 use crate::{
     ecs::{UiOverlayRoot, UiRoot},

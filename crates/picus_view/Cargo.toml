@@ -1,17 +1,16 @@
 [package]
 name = "picus_view"
-version = "0.1.0"
-edition = "2024"
-license = "MIT OR Apache-2.0"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
 
 [lib]
 test = false
 doctest = false
 
 [dependencies]
-masonry = { package = "picus_widget", path = "../picus_widget" }
-masonry_core.workspace = true
-xilem_core = { git = "https://github.com/linebender/xilem.git", rev = "72c6517ad035f352c70f939f4754a3f79fca23fd" }
-smallvec = "1.15.1"
-tokio = { version = "1.52.3", features = ["rt", "rt-multi-thread", "time", "sync"] }
-tracing = "0.1"
+picus_widget.workspace = true
+xilem_core.workspace = true
+smallvec.workspace = true
+tokio = { workspace = true, features = ["rt", "rt-multi-thread", "time", "sync"] }
+tracing.workspace = true

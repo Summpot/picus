@@ -1,8 +1,8 @@
 // Copyright 2025 the Xilem Authors
 // SPDX-License-Identifier: Apache-2.0
 
-use masonry::app::RenderRoot;
-use masonry::widgets::Passthrough;
+use picus_widget::app::RenderRoot;
+use picus_widget::widgets::Passthrough;
 
 use crate::core::{MessageCtx, Mut, View, ViewElement, ViewMarker};
 use crate::{AnyWidgetView, Pod, ViewCtx, WidgetView};

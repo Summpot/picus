@@ -1,6 +1,6 @@
 use bevy_ecs::prelude::*;
+use picus_view::AnyWidgetView;
 use std::{fmt, marker::PhantomData, sync::Arc};
-use xilem_masonry::AnyWidgetView;
 
 /// Xilem state used by synthesized UI views.
 pub type UiXilemState = ();

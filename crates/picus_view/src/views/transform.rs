@@ -3,7 +3,7 @@
 
 use std::marker::PhantomData;
 
-use masonry::kurbo::{Affine, Vec2};
+use picus_widget::kurbo::{Affine, Vec2};
 
 use crate::core::{MessageCtx, Mut, View, ViewMarker};
 use crate::{Pod, ViewCtx, WidgetView};
@@ -76,7 +76,7 @@ impl<V, State, Action> Transformed<V, State, Action> {
 }
 
 mod private {
-    use masonry::kurbo::Affine;
+    use picus_widget::kurbo::Affine;
 
     /// The View state for the [Transformed](super::Transformed)
     #[expect(

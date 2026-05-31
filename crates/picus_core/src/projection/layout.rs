@@ -5,9 +5,9 @@ use crate::{
 };
 use bevy_ecs::{entity::Entity, hierarchy::Children};
 use masonry_core::layout::{Dim, Length};
+use picus_view::style::Style;
+use picus_view::view::{FlexExt as _, GridExt as _, GridParams, flex_col, flex_row, grid};
 use std::sync::Arc;
-use xilem_masonry::style::Style;
-use xilem_masonry::view::{FlexExt as _, GridExt as _, GridParams, flex_col, flex_row, grid};
 
 fn child_entity_views(ctx: &ProjectionCtx<'_>) -> Vec<(Entity, UiView)> {
     let child_entities = ctx

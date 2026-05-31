@@ -32,17 +32,17 @@ use masonry_core::{
     parley::{Alignment as ParleyTextAlign, FontFamily, FontFamilyName, GenericFamily},
     properties::{Background, BorderColor, BorderWidth, BoxShadow, CornerRadius, Padding},
 };
+use picus_view::picus_widget::properties::LineBreaking;
+use picus_view::{
+    WidgetView,
+    view::{CrossAxisAlignment, Flex, Label, MainAxisAlignment, TextInput, sized_box, transformed},
+};
 use serde::{
     Deserialize,
     de::{
         self, EnumAccess, IntoDeserializer, VariantAccess, Visitor,
         value::{MapAccessDeserializer, SeqAccessDeserializer},
     },
-};
-use xilem_masonry::masonry::properties::LineBreaking;
-use xilem_masonry::{
-    WidgetView,
-    view::{CrossAxisAlignment, Flex, Label, MainAxisAlignment, TextInput, sized_box, transformed},
 };
 
 use crate::UiEventQueue;

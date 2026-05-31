@@ -3,8 +3,8 @@
 
 use std::marker::PhantomData;
 
-use masonry::core::{CollectionWidget, FromDynWidget, Widget, WidgetMut};
-use masonry::widgets;
+use picus_widget::core::{CollectionWidget, FromDynWidget, Widget, WidgetMut};
+use picus_widget::widgets;
 
 use crate::core::{
     AppendVec, ElementSplice, MessageCtx, MessageResult, Mut, SuperElement, View, ViewElement,
@@ -12,14 +12,14 @@ use crate::core::{
 };
 use crate::{Pod, ViewCtx, WidgetView};
 
-pub use masonry::widgets::GridParams;
+pub use picus_widget::widgets::GridParams;
 /// A Grid layout divides a window into regions and defines the relationship
 /// between inner elements in terms of size and position.
 ///
 /// # Example
 /// ```ignore
-/// # use xilem_masonry as xilem;
-/// use masonry::widgets::GridParams;
+/// # use picus_view as xilem;
+/// use picus_widget::widgets::GridParams;
 /// use xilem::view::{
 ///     text_button, grid, label, GridExt,
 /// };
@@ -300,8 +300,8 @@ pub trait GridExt<State: 'static, Action>: WidgetView<State, Action> {
     ///
     /// # Examples
     /// ```
-    /// # use xilem_masonry as xilem;
-    /// use masonry::widgets::GridParams;
+    /// # use picus_view as xilem;
+    /// use picus_widget::widgets::GridParams;
     /// use xilem::view::{text_button, prose, grid, GridExt};
     /// # use xilem::WidgetView;
     ///
@@ -327,8 +327,8 @@ pub trait GridExt<State: 'static, Action>: WidgetView<State, Action> {
     ///
     /// # Examples
     /// ```
-    /// # use xilem_masonry as xilem;
-    /// use masonry::widgets::GridParams;
+    /// # use picus_view as xilem;
+    /// use picus_widget::widgets::GridParams;
     /// use xilem::{view::{text_button, prose, grid, GridExt}};
     /// # use xilem::WidgetView;
     ///

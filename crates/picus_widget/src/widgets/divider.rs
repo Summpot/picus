@@ -4,7 +4,6 @@
 use std::any::TypeId;
 
 use accesskit::{Node, Role};
-use include_doc_path::include_doc_path;
 use masonry_core::debug_panic;
 use smallvec::SmallVec;
 use tracing::{Span, trace_span};
@@ -39,7 +38,7 @@ use crate::widgets::Label;
 ///
 #[doc = concat!(
     "![Styled divider examples](",
-    include_doc_path!("screenshots/divider_styled.png"),
+    "screenshots/divider_styled.png",
     ")",
 )]
 pub struct Divider {

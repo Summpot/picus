@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use accesskit::{Node, Role};
-use include_doc_path::include_doc_path;
 use tracing::{Span, trace_span};
 
 use crate::core::{
@@ -46,7 +45,7 @@ impl BadgePlacement {
 ///
 #[doc = concat!(
     "![Badged button](",
-    include_doc_path!("screenshots/badged_button.png"),
+    "screenshots/badged_button.png",
     ")",
 )]
 ///
