@@ -370,6 +370,10 @@ fn set_gallery_page(world: &mut World, rt: &GalleryRuntime, page: usize) {
             world.entity_mut(button).insert(class_list);
         }
     }
+
+    if let Some(mut state) = world.get_resource_mut::<GalleryState>() {
+        state.active_page = page;
+    }
 }
 
 /// Spawn a modal dialog overlay.

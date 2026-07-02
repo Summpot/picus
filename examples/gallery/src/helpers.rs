@@ -1,17 +1,13 @@
 //! Shared helpers for the Fluent UI-style Gallery example.
 //!
 //! Provides utility functions for creating styled cards, grids, notes, placeholders,
-//! and reusable widgets (canvas samples, generated images).
-//!
-//! These helpers correspond to the "component documentation" pattern used by Fluent UI,
-//! where each component example is wrapped in a consistent card layout with descriptive
-//! notes and placeholder fallbacks for unimplemented features.
+//! section headers, and reusable widgets (canvas samples, generated images).
 
 use bevy_ecs::{hierarchy::ChildOf, prelude::*};
 use bevy_math::Vec2;
 use picus_core::{
-    StyleClass, UiCanvas, UiCanvasCommand, UiCanvasPathCommand, UiFlexColumn, UiGrid, UiImage,
-    UiLabel, xilem::Color,
+    StyleClass, UiAvatar, UiCanvas, UiCanvasCommand, UiCanvasPathCommand, UiDivider, UiFlexColumn,
+    UiGrid, UiImage, UiLabel, avatar_sizes, xilem::Color,
 };
 
 /// Create a single class name for an entity.
@@ -25,9 +21,6 @@ pub fn classes(names: &[&str]) -> StyleClass {
 }
 
 /// Create a card container (UiFlexColumn with "gallery.card" class) inside `parent`.
-///
-/// Cards are the primary unit for grouping related component examples,
-/// similar to Fluent UI's component example cards.
 pub fn card(commands: &mut Commands, parent: Entity, title: &str) -> Entity {
     let card = commands
         .spawn((UiFlexColumn, class("gallery.card"), ChildOf(parent)))
@@ -41,9 +34,6 @@ pub fn card(commands: &mut Commands, parent: Entity, title: &str) -> Entity {
 }
 
 /// Create a grid container inside `parent` with the given number of columns.
-///
-/// Grids are used to arrange component example cards in a responsive layout,
-/// similar to Fluent UI's example grid layouts.
 pub fn grid(commands: &mut Commands, parent: Entity, columns: u32) -> Entity {
     commands
         .spawn((
@@ -55,17 +45,11 @@ pub fn grid(commands: &mut Commands, parent: Entity, columns: u32) -> Entity {
 }
 
 /// Add a descriptive note label inside `parent`.
-///
-/// Notes provide supplemental information about a component example,
-/// such as limitations or usage guidance.
 pub fn note(commands: &mut Commands, parent: Entity, text: impl Into<String>) {
     commands.spawn((UiLabel::new(text), class("gallery.note"), ChildOf(parent)));
 }
 
 /// Add a placeholder card inside `parent` for a feature that is not yet implemented.
-///
-/// Placeholders clearly indicate gaps in component coverage, similar to
-/// Fluent UI's "Coming soon" or "Not implemented" markers.
 pub fn placeholder(commands: &mut Commands, parent: Entity, title: &str, reason: &str) {
     let panel = commands
         .spawn((UiFlexColumn, class("gallery.placeholder"), ChildOf(parent)))
@@ -76,6 +60,31 @@ pub fn placeholder(commands: &mut Commands, parent: Entity, title: &str, reason:
         ChildOf(panel),
     ));
     commands.spawn((UiLabel::new(reason), class("gallery.note"), ChildOf(panel)));
+}
+
+/// Add a category section header with divider in the sidebar.
+pub fn sidebar_category_header(commands: &mut Commands, parent: Entity, label: &str) {
+    commands.spawn((
+        UiLabel::new(label),
+        class("gallery.sidebar_category"),
+        ChildOf(parent),
+    ));
+}
+
+/// Add a page description label.
+#[allow(dead_code)]
+pub fn page_description(commands: &mut Commands, parent: Entity, text: &str) {
+    commands.spawn((
+        UiLabel::new(text),
+        class("gallery.page_description"),
+        ChildOf(parent),
+    ));
+}
+
+/// Add a horizontal divider.
+#[allow(dead_code)]
+pub fn divider(commands: &mut Commands, parent: Entity) {
+    commands.spawn((UiDivider::horizontal(), ChildOf(parent)));
 }
 
 /// Create a sample canvas widget demonstrating Picus canvas drawing capabilities.
@@ -158,6 +167,12 @@ pub fn generated_image() -> UiImage {
         }
     }
     UiImage::from_rgba8(width, height, rgba).with_alt_text("Generated Picus media sample")
+}
+
+/// Create an avatar for the top bar branding.
+#[allow(dead_code)]
+pub fn brand_avatar(name: &str) -> UiAvatar {
+    UiAvatar::new(name).with_size(avatar_sizes::MD)
 }
 
 /// Fluent UI-style page viewport and content dimensions.

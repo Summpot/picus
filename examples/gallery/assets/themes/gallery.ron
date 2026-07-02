@@ -17,7 +17,7 @@
       selector: Class("gallery.top_bar"),
       setter: (
         layout: (
-          padding: Var("space-xl"),
+          padding: Var("space-md"),
           gap: Var("gap-lg"),
           corner_radius: Var("radius-lg"),
           border_width: Var("border-thin"),
@@ -35,25 +35,7 @@
       setter: (
         layout: (
           gap: Var("gap-sm"),
-        ),
-      ),
-    ),
-    (
-      selector: Class("gallery.logo"),
-      setter: (
-        layout: (
-          padding: Var("space-lg"),
-          corner_radius: Var("radius-md"),
-          border_width: Var("border-thin"),
-        ),
-        colors: (
-          bg: Var("surface-accent"),
-          border: Var("surface-accent"),
-          text: Var("text-on-accent"),
-        ),
-        text: (
-          size: 20.0,
-          text_align: Center,
+          align_items: Center,
         ),
       ),
     ),
@@ -64,7 +46,8 @@
           text: Var("text-heading"),
         ),
         text: (
-          size: 24.0,
+          size: 18.0,
+          weight: 600,
         ),
       ),
     ),
@@ -76,6 +59,35 @@
         ),
         text: (
           size: Var("text-sm"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("gallery.search_row"),
+      setter: (
+        layout: (
+          align_items: Center,
+          gap: Var("gap-md"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("gallery.search"),
+      setter: (
+        layout: (
+          padding: Var("space-md"),
+        ),
+        colors: (
+          bg: Var("surface-subtle"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("gallery.tools"),
+      setter: (
+        layout: (
+          gap: Var("gap-sm"),
+          align_items: Center,
         ),
       ),
     ),
@@ -104,11 +116,20 @@
       ),
     ),
     (
+      selector: Class("gallery.content_area"),
+      setter: (
+        layout: (
+          gap: Var("gap-md"),
+          align_items: Stretch,
+        ),
+      ),
+    ),
+    (
       selector: Class("gallery.sidebar"),
       setter: (
         layout: (
           padding: Var("space-md"),
-          gap: Var("gap-sm"),
+          gap: Var("gap-xs"),
           corner_radius: Var("radius-lg"),
           border_width: Var("border-thin"),
         ),
@@ -119,20 +140,37 @@
       ),
     ),
     (
+      selector: Class("gallery.sidebar_category"),
+      setter: (
+        layout: (
+          padding: Var("space-sm"),
+        ),
+        colors: (
+          text: Var("text-secondary"),
+        ),
+        text: (
+          size: 11.0,
+          weight: 600,
+        ),
+      ),
+    ),
+    (
       selector: Class("gallery.sidebar_button"),
       setter: (
         layout: (
-          padding: Var("space-md"),
+          padding: 8.0,
           corner_radius: Var("radius-md"),
-          border_width: Var("border-thin"),
+          border_width: 0.0,
           justify_content: Start,
         ),
         colors: (
-          bg: Var("surface-subtle"),
+          bg: Var("transparent"),
           hover_bg: Var("surface-subtle-hover"),
           pressed_bg: Var("surface-subtle-pressed"),
-          border: Var("border-default"),
           text: Var("text-primary"),
+        ),
+        text: (
+          size: Var("text-sm"),
         ),
       ),
     ),
@@ -143,7 +181,6 @@
           bg: Var("surface-accent"),
           hover_bg: Var("surface-accent-hover"),
           pressed_bg: Var("surface-accent-pressed"),
-          border: Var("surface-accent"),
           text: Var("text-on-accent"),
         ),
       ),
@@ -152,7 +189,7 @@
       selector: Class("gallery.content_scroll"),
       setter: (
         layout: (
-          padding: Var("space-sm"),
+          padding: Var("space-md"),
           corner_radius: Var("radius-lg"),
           border_width: Var("border-thin"),
         ),
@@ -179,7 +216,22 @@
           text: Var("text-heading"),
         ),
         text: (
-          size: 20.0,
+          size: 24.0,
+          weight: 700,
+        ),
+      ),
+    ),
+    (
+      selector: Class("gallery.page_description"),
+      setter: (
+        layout: (
+          padding: 8.0,
+        ),
+        colors: (
+          text: Var("text-secondary"),
+        ),
+        text: (
+          size: 14.0,
         ),
       ),
     ),
@@ -216,6 +268,7 @@
         ),
         text: (
           size: Var("text-md"),
+          weight: 600,
         ),
       ),
     ),
@@ -417,6 +470,7 @@
         ),
         text: (
           size: 32.0,
+          weight: 700,
         ),
       ),
     ),
@@ -428,6 +482,7 @@
         ),
         text: (
           size: 24.0,
+          weight: 600,
         ),
       ),
     ),

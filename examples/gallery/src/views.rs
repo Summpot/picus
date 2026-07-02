@@ -1,8 +1,8 @@
 //! UiComponentTemplate implementations for the gallery layout structure.
 //!
 //! In Fluent UI terms, these are the "app shell" components that define
-//! the overall page layout — analogous to the Fluent UI `App` wrapper
-//! and `ThemeProvider` with their style injection pattern.
+//! the overall page layout — analogous to the Fluent UI `FluentProvider`
+//! wrapping the entire application with consistent styling.
 
 use std::sync::Arc;
 
@@ -20,16 +20,10 @@ use picus_core::{
 use crate::state::GalleryState;
 
 /// Root gallery component: renders a full-viewport flex column layout.
-///
-/// This corresponds to Fluent UI's `FluentProvider` or `ThemeProvider`
-/// wrapping the entire application with consistent styling.
 #[derive(Component, Debug, Clone, Copy, Default)]
 pub struct GalleryRoot;
 
 /// Status bar component: displays the most recent user interaction event.
-///
-/// Similar to Fluent UI's playground/example status indicators that
-/// show the latest action performed on a control.
 #[derive(Component, Debug, Clone, Copy, Default)]
 pub struct GalleryStatus;
 

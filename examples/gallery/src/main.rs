@@ -8,7 +8,7 @@
 //! ## Architecture
 //!
 //! - [`helpers`] — Shared utilities (card, grid, note, placeholder, canvas/image helpers)
-//! - [`state`] — `GalleryPage` enum, `GalleryState`/`GalleryRuntime` resources
+//! - [`state`] — `GalleryPage` enum, `GalleryState`/`GalleryRuntime` resources, `NavCategory`
 //! - [`views`] — `UiComponentTemplate` implementations for `GalleryRoot` and `GalleryStatus`
 //! - [`events`] — Event dispatch for all component interactions
 //! - [`pages`] — 15 page modules, each showcasing a component category
@@ -20,15 +20,14 @@
 //! | `pages/buttons.rs`     | `Button.stories.tsx` variants      |
 //! | `pages/inputs.rs`      | `TextField`, `ComboBox` examples   |
 //! | `pages/selection.rs`   | `Checkbox`, `Radio` examples       |
-//! | `pages/lists.rs`       | `DetailsList`, `TreeView` examples |
-//! | `pages/overlay.rs`     | `Dialog`, `Toast` examples         |
-//! | Sidebar navigation     | Fluent UI nav/component picker      |
+//! | Sidebar nav categories | Fluent UI Storybook sidebar groups |
+//! | Top search bar         | Storybook search                   |
 //! | Status bar events      | Storybook action logger            |
 //! | `gallery.ron` theme    | Fluent UI `makeStyles` tokens      |
 
 use picus_core::{
-    AppPicusExt, PicusPlugin, UiBadge, UiButton, UiFlexColumn, UiFlexRow, UiLabel, UiRoot,
-    UiScrollView, UiTabBar, UiThemePicker,
+    AppPicusExt, PicusPlugin, UiAvatar, UiBadge, UiButton, UiFlexColumn, UiFlexRow, UiLabel,
+    UiRoot, UiScrollView, UiSearch, UiTabBar, UiThemePicker, avatar_sizes,
     bevy_app::{App, Startup, Update},
     bevy_ecs::{hierarchy::ChildOf, prelude::*},
     run_app_with_window_options,
@@ -43,13 +42,13 @@ mod state;
 mod views;
 
 use events::drain_gallery_events;
-use helpers::{PAGE_CONTENT, PAGE_VIEWPORT, class, classes};
+use helpers::{PAGE_CONTENT, PAGE_VIEWPORT, class, classes, sidebar_category_header};
 use state::{GalleryPage, GalleryRuntime, GalleryState};
 use views::{GalleryRoot, GalleryStatus};
 
 /// Build the full gallery application tree.
 ///
-/// Creates the top bar, sidebar navigation, page tab bar, and spawns
+/// Creates the top bar, sidebar navigation, page content area, and spawns
 /// all 15 component showcase pages.
 fn setup_gallery(mut commands: Commands) {
     let root = commands
@@ -64,19 +63,32 @@ fn setup_gallery(mut commands: Commands) {
         .spawn((UiFlexRow, class("gallery.body"), ChildOf(root)))
         .id();
 
+    // --- Sidebar with Fluent UI-style category navigation ---
     let sidebar = commands
         .spawn((UiFlexColumn, class("gallery.sidebar"), ChildOf(body)))
         .id();
 
     let mut nav_buttons = Vec::new();
-    for page in GalleryPage::ALL {
-        let mut names = vec!["gallery.sidebar_button"];
-        if page == GalleryPage::Buttons {
-            names.push("gallery.sidebar_button.active");
+
+    for (i, page) in GalleryPage::ALL.iter().enumerate() {
+        // Check if we need to insert a category header
+        if let Some(cat) = GalleryPage::CATEGORIES
+            .iter()
+            .find(|cat| cat.first_page_index == i)
+        {
+            sidebar_category_header(&mut commands, sidebar, cat.label);
         }
+
+        let names = if *page == GalleryPage::Buttons {
+            vec!["gallery.sidebar_button", "gallery.sidebar_button.active"]
+        } else {
+            vec!["gallery.sidebar_button"]
+        };
+
+        let button_text = format!("{}  {}", page.icon(), page.label());
         let button = commands
             .spawn((
-                UiButton::new(page.label()),
+                UiButton::new(button_text),
                 classes(&names),
                 ChildOf(sidebar),
             ))
@@ -84,14 +96,21 @@ fn setup_gallery(mut commands: Commands) {
         nav_buttons.push(button);
     }
 
+    // --- Main content area ---
+    let content_area = commands
+        .spawn((UiFlexColumn, class("gallery.content_area"), ChildOf(body)))
+        .id();
+
+    // Page tab bar (hidden headers) for content switching
     let pages_tab_bar = commands
         .spawn((
             UiTabBar::new(GalleryPage::ALL.map(GalleryPage::label)).with_hidden_headers(),
             class("gallery.content_scroll"),
-            ChildOf(body),
+            ChildOf(content_area),
         ))
         .id();
 
+    // Spawn all pages
     let open_dialog_btn = spawn_page(
         &mut commands,
         pages_tab_bar,
@@ -101,6 +120,7 @@ fn setup_gallery(mut commands: Commands) {
     let runtime_refs = GalleryRuntime {
         pages_tab_bar,
         nav_buttons,
+        search_input: Entity::PLACEHOLDER,
         open_dialog_btn,
         persistent_toast_btn: spawn_page(
             &mut commands,
@@ -192,15 +212,20 @@ fn setup_gallery(mut commands: Commands) {
     commands.insert_resource(runtime_refs);
 }
 
-/// Create the top bar with branding, subtitle, theme picker, and badge.
+/// Create the top bar with branding, search, theme picker, and badge.
 fn spawn_top_bar(commands: &mut Commands, root: Entity) {
     let top = commands
         .spawn((UiFlexRow, class("gallery.top_bar"), ChildOf(root)))
         .id();
+
+    // Brand area: avatar + title
     let brand = commands
         .spawn((UiFlexRow, class("gallery.brand"), ChildOf(top)))
         .id();
-    commands.spawn((UiLabel::new("P"), class("gallery.logo"), ChildOf(brand)));
+    commands.spawn((
+        UiAvatar::new("P").with_size(avatar_sizes::MD),
+        ChildOf(brand),
+    ));
     let title_col = commands
         .spawn((UiFlexColumn, class("gallery.brand"), ChildOf(brand)))
         .id();
@@ -210,16 +235,27 @@ fn spawn_top_bar(commands: &mut Commands, root: Entity) {
         ChildOf(title_col),
     ));
     commands.spawn((
-        UiLabel::new("MewUI FBA gallery inspired example, rebuilt with ECS-native Picus controls"),
+        UiLabel::new("Component showcase"),
         class("gallery.subtitle"),
         ChildOf(title_col),
     ));
 
+    // Search bar (middle area)
+    let search_row = commands
+        .spawn((UiFlexRow, class("gallery.search_row"), ChildOf(top)))
+        .id();
+    commands.spawn((
+        UiSearch::new("Find a component…"),
+        class("gallery.search"),
+        ChildOf(search_row),
+    ));
+
+    // Tools: theme picker + badge
     let tools = commands
-        .spawn((UiFlexRow, class("gallery.brand"), ChildOf(top)))
+        .spawn((UiFlexRow, class("gallery.tools"), ChildOf(top)))
         .id();
     commands.spawn((UiThemePicker::fluent(), ChildOf(tools)));
-    commands.spawn((UiBadge::new("FBA parity pass"), ChildOf(tools)));
+    commands.spawn((UiBadge::new("FBA parity"), ChildOf(tools)));
 }
 
 /// Spawn a single gallery page inside the pages tab bar.
@@ -244,6 +280,11 @@ fn spawn_page(
     commands.spawn((
         UiLabel::new(page.label()),
         class("gallery.section_title"),
+        ChildOf(page_col),
+    ));
+    commands.spawn((
+        UiLabel::new(page.description()),
+        class("gallery.page_description"),
         ChildOf(page_col),
     ));
     build(commands, page_col)
@@ -296,7 +337,7 @@ mod tests {
     }
 
     #[test]
-    fn gallery_pages_match_mewui_gallery_sections() {
+    fn gallery_pages_match_fluent_ui_sections() {
         let labels = GalleryPage::ALL.map(GalleryPage::label);
         assert_eq!(
             labels,
@@ -318,5 +359,11 @@ mod tests {
                 "Overlay",
             ],
         );
+    }
+
+    #[test]
+    fn gallery_categories_cover_all_pages() {
+        let total: usize = GalleryPage::CATEGORIES.iter().map(|c| c.page_count).sum();
+        assert_eq!(total, GalleryPage::ALL.len());
     }
 }
