@@ -50,6 +50,9 @@ cross-cutting design decisions that code comments cannot express well.
    - Temporary local Cargo `[patch]` or path overrides are allowed for validation;
      remove them unless they are part of the intended design.
 
+8. **Commit messages**
+   - All commit messages must be written in English.
+
 ## 2. Workspace
 
 `picus` is a Bevy-first UI framework that combines ECS state management with a
