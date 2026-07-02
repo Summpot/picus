@@ -16,9 +16,9 @@ use crate::ecs::{
     UiDataTable, UiDatePicker, UiDatePickerPanel, UiDialog, UiDropdownMenu, UiFlexColumn,
     UiFlexRow, UiGrid, UiGroupBox, UiImage, UiLabel, UiListView, UiMenuBar, UiMenuBarItem,
     UiMenuItemPanel, UiMultilineTextInput, UiOverlayRoot, UiPasswordInput, UiPopover,
-    UiProgressBar, UiRadioGroup, UiRoot, UiScrollView, UiSlider, UiSpinner, UiSplitPane, UiSwitch,
-    UiTabBar, UiTable, UiTextInput, UiThemePicker, UiThemePickerMenu, UiToast, UiTooltip,
-    UiTreeNode,
+    UiProgressBar, UiRadioGroup, UiResponsiveGrid, UiResponsiveRow, UiRoot, UiScrollView, UiSlider,
+    UiSpinner, UiSplitPane, UiSwitch, UiTabBar, UiTable, UiTextInput, UiThemePicker,
+    UiThemePickerMenu, UiToast, UiTooltip, UiTreeNode, UiVisibleResponsive,
 };
 
 /// Register non-UI-component foundational projectors.
@@ -28,6 +28,9 @@ pub fn register_core_projectors(registry: &mut UiProjectorRegistry) {
         .register_component::<UiFlexColumn>(layout::project_flex_column)
         .register_component::<UiFlexRow>(layout::project_flex_row)
         .register_component::<UiGrid>(layout::project_grid)
+        .register_component::<UiResponsiveRow>(layout::project_responsive_row)
+        .register_component::<UiVisibleResponsive>(layout::project_visible_responsive)
+        .register_component::<UiResponsiveGrid>(layout::project_responsive_grid)
         .register_component::<UiLabel>(elements::project_label)
         .register_component::<UiOverlayRoot>(overlay::project_overlay_root);
 }

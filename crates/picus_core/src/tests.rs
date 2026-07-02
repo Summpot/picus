@@ -4110,7 +4110,7 @@ fn scroll_view_geometry_sync_expands_viewport_width_to_parent_width() {
         "viewport width should stretch beyond the initial seed width, got {}",
         scroll.viewport_size.x
     );
-    assert_eq!(scroll.viewport_size.y, 220.0);
+    assert_eq!(scroll.viewport_size.y, 218.0);
 }
 
 #[test]

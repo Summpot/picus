@@ -14,7 +14,7 @@ use bevy_window::{
 };
 
 use crate::{
-    AppPicusExt, OverlayStack,
+    AppBreakpoints, AppPicusExt, OverlayStack, WindowSize,
     components::register_builtin_ui_components,
     events::UiEventQueue,
     fonts::{XilemFontBridge, collect_bevy_font_assets, sync_fonts_to_xilem},
@@ -41,6 +41,7 @@ use crate::{
         sync_style_targets, sync_stylesheet_asset_events, sync_ui_interaction_markers,
     },
     synthesize::{SynthesizedUiViews, UiSynthesisStats, synthesize_ui},
+    track_window_size,
     widget_actions::{
         handle_scroll_view_wheel, handle_tooltip_hovers, handle_widget_actions,
         sync_scroll_view_layout_geometry, tick_auto_dismiss,
@@ -100,6 +101,8 @@ impl Plugin for PicusPlugin {
             .init_resource::<StyleAssetEventCursor>()
             .init_resource::<XilemFontBridge>()
             .init_resource::<AppI18n>()
+            .init_resource::<AppBreakpoints>()
+            .init_resource::<WindowSize>()
             .init_resource::<OverlayStack>()
             .init_resource::<OverlayPointerRoutingState>()
             .init_non_send::<MasonryRuntime>()
@@ -116,6 +119,7 @@ impl Plugin for PicusPlugin {
             .add_systems(
                 PreUpdate,
                 (
+                    track_window_size,
                     collect_bevy_font_assets,
                     sync_fonts_to_xilem,
                     initialize_masonry_runtime_from_primary_window,

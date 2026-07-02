@@ -214,5 +214,31 @@ pub fn register_builtin_ui_components(app: &mut App) {
         .register_ui_component::<date_picker::UiDatePicker>()
         .register_ui_component::<date_picker::UiDatePickerPanel>()
         .register_ui_component::<theme_picker::UiThemePicker>()
-        .register_ui_component::<theme_picker::UiThemePickerMenu>();
+        .register_ui_component::<theme_picker::UiThemePickerMenu>()
+        // Responsive layout components
+        .register_ui_component::<crate::UiResponsiveRow>()
+        .register_ui_component::<crate::UiVisibleResponsive>()
+        .register_ui_component::<crate::UiResponsiveGrid>();
+}
+
+// ---------------------------------------------------------------------------
+// UiComponentTemplate implementations for responsive layout types
+// ---------------------------------------------------------------------------
+
+impl UiComponentTemplate for crate::UiResponsiveRow {
+    fn project(component: &Self, ctx: ProjectionCtx<'_>) -> UiView {
+        crate::projection::layout::project_responsive_row(component, ctx)
+    }
+}
+
+impl UiComponentTemplate for crate::UiVisibleResponsive {
+    fn project(component: &Self, ctx: ProjectionCtx<'_>) -> UiView {
+        crate::projection::layout::project_visible_responsive(component, ctx)
+    }
+}
+
+impl UiComponentTemplate for crate::UiResponsiveGrid {
+    fn project(component: &Self, ctx: ProjectionCtx<'_>) -> UiView {
+        crate::projection::layout::project_responsive_grid(component, ctx)
+    }
 }

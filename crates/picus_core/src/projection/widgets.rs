@@ -286,7 +286,7 @@ pub(crate) fn project_scroll_view(scroll_view: &UiScrollView, ctx: ProjectionCtx
     let viewport_surface = apply_widget_style(
         sized_box(portal)
             .width(Dim::Stretch)
-            .height(Dim::Fixed(Length::px(viewport_h))),
+            .height(Dim::Stretch),
         &viewport_style,
     );
 

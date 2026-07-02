@@ -26,8 +26,8 @@
 //! | `gallery.ron` theme    | Fluent UI `makeStyles` tokens      |
 
 use picus_core::{
-    AppPicusExt, PicusPlugin, UiAvatar, UiBadge, UiButton, UiFlexColumn, UiFlexRow, UiLabel,
-    UiRoot, UiScrollView, UiSearch, UiTabBar, UiThemePicker, avatar_sizes,
+    AppPicusExt, InlineStyle, LayoutStyle, PicusPlugin, UiAvatar, UiBadge, UiButton, UiFlexColumn,
+    UiFlexRow, UiLabel, UiRoot, UiScrollView, UiSearch, UiTabBar, UiThemePicker, avatar_sizes,
     bevy_app::{App, Startup, Update},
     bevy_ecs::{hierarchy::ChildOf, prelude::*},
     run_app_with_window_options,
@@ -60,7 +60,18 @@ fn setup_gallery(mut commands: Commands) {
     commands.spawn((GalleryStatus, class("gallery.status"), ChildOf(root)));
 
     let body = commands
-        .spawn((UiFlexRow, class("gallery.body"), ChildOf(root)))
+        .spawn((
+            UiFlexRow,
+            class("gallery.body"),
+            InlineStyle {
+                layout: LayoutStyle {
+                    flex_grow: Some(1.0),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            ChildOf(root),
+        ))
         .id();
 
     // --- Sidebar with Fluent UI-style category navigation ---
@@ -96,9 +107,20 @@ fn setup_gallery(mut commands: Commands) {
         nav_buttons.push(button);
     }
 
-    // --- Main content area ---
+    // --- Main content area (flex_grow:1 to fill remaining row width) ---
     let content_area = commands
-        .spawn((UiFlexColumn, class("gallery.content_area"), ChildOf(body)))
+        .spawn((
+            UiFlexColumn,
+            class("gallery.content_area"),
+            InlineStyle {
+                layout: LayoutStyle {
+                    flex_grow: Some(1.0),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            ChildOf(body),
+        ))
         .id();
 
     // Page tab bar (hidden headers) for content switching

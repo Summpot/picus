@@ -104,6 +104,10 @@ pub struct LayoutStyle {
     pub justify_content: Option<JustifyContent>,
     pub align_items: Option<AlignItems>,
     pub scale: Option<f64>,
+    /// Flex grow factor. When this entity is a child of a flex container,
+    /// it will take remaining space proportional to this factor.
+    /// `None` = `0.0` (no grow).
+    pub flex_grow: Option<f64>,
 }
 
 /// Inline color style that can be attached to entities.
@@ -145,10 +149,10 @@ pub enum JustifyContent {
 /// Cross-axis alignment for flex layouts.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
 pub enum AlignItems {
-    #[default]
     Start,
     Center,
     End,
+    #[default]
     Stretch,
 }
 
@@ -347,6 +351,7 @@ pub struct LayoutStyleValue {
     pub justify_content: Option<StyleValue<JustifyContent>>,
     pub align_items: Option<StyleValue<AlignItems>>,
     pub scale: Option<StyleValue<f64>>,
+    pub flex_grow: Option<StyleValue<f64>>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -405,6 +410,7 @@ impl From<LayoutStyle> for LayoutStyleValue {
             justify_content: value.justify_content.map(StyleValue::value),
             align_items: value.align_items.map(StyleValue::value),
             scale: value.scale.map(StyleValue::value),
+            flex_grow: value.flex_grow.map(StyleValue::value),
         }
     }
 }
@@ -1100,6 +1106,7 @@ pub struct ResolvedLayoutStyle {
     pub justify_content: JustifyContent,
     pub align_items: AlignItems,
     pub scale: f64,
+    pub flex_grow: f64,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
@@ -1168,6 +1175,9 @@ fn merge_layout_values(dst: &mut LayoutStyleValue, src: &LayoutStyleValue) {
     }
     if src.scale.is_some() {
         dst.scale = src.scale.clone();
+    }
+    if src.flex_grow.is_some() {
+        dst.flex_grow = src.flex_grow.clone();
     }
 }
 
@@ -1252,6 +1262,9 @@ fn merge_inline_layout_values(dst: &mut LayoutStyleValue, src: &LayoutStyle) {
     }
     if let Some(scale) = src.scale {
         dst.scale = Some(StyleValue::value(scale));
+    }
+    if let Some(flex_grow) = src.flex_grow {
+        dst.flex_grow = Some(StyleValue::value(flex_grow));
     }
 }
 
@@ -1498,6 +1511,7 @@ fn to_resolved_layout(layout: &LayoutStyle) -> ResolvedLayoutStyle {
         justify_content: layout.justify_content.unwrap_or_default(),
         align_items: layout.align_items.unwrap_or_default(),
         scale: layout.scale.unwrap_or(1.0),
+        flex_grow: layout.flex_grow.unwrap_or(0.0),
     }
 }
 
@@ -1678,6 +1692,10 @@ fn resolve_layout_style(
             .scale
             .as_ref()
             .map(|value| resolve_f64_value(tokens, value, "layout.scale")),
+        flex_grow: layout
+            .flex_grow
+            .as_ref()
+            .map(|value| resolve_f64_value(tokens, value, "layout.flex_grow")),
     }
 }
 
@@ -2725,6 +2743,8 @@ struct LayoutStyleDef {
     align_items: OptionalLiteralValueDef<AlignItems>,
     #[serde(default)]
     scale: OptionalStyleValueDef<f64>,
+    #[serde(default)]
+    flex_grow: OptionalStyleValueDef<f64>,
 }
 
 impl LayoutStyleDef {
@@ -2737,6 +2757,7 @@ impl LayoutStyleDef {
             justify_content: self.justify_content.into_option().map(StyleValue::Value),
             align_items: self.align_items.into_option().map(StyleValue::Value),
             scale: into_style_value(self.scale.into_option(), Ok)?,
+            flex_grow: into_style_value(self.flex_grow.into_option(), Ok)?,
         })
     }
 }
