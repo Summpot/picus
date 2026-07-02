@@ -1937,6 +1937,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "example_ui_showcase"
+version = "0.1.0"
+dependencies = [
+ "bevy_ecs",
+ "picus_core",
+ "shared_utils",
+ "tracing",
+ "tracing-subscriber",
+ "unic-langid",
+]
+
+[[package]]
 name = "exr"
 version = "1.74.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
