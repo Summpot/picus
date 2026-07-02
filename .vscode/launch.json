@@ -5,16 +5,6 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Debug unit tests in library 'picus_activation'",
-            "type": "lldb",
-            "request": "launch",
-            "cargo": {
-                "args": [
-                    "test",
-                    "--package=picus-activation"
-                ]
-            }
-        },
         {
             "name": "Debug unit tests in library 'picus'",
             "type": "lldb",

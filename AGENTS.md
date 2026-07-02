@@ -69,11 +69,9 @@ Crates:
   `picus_widget` and `xilem_core`.
 - `picus_surface`: Vello/wgpu rendering surface for an externally owned Bevy
   window.
-- `picus_activation`: single-instance activation, custom URI protocol handling,
-  IPC forwarding, and platform registration.
 
 Example applications live under `examples/`: `async_downloader`, `calculator`,
-`chess_game`, `game_2048`, `overlay_hit_routing`, `pixcus`, `shared_utils`,
+`chess_game`, `game_2048`, `overlay_hit_routing`, `shared_utils`,
 `timer`, `todo_list`, and `gallery`.
 
 ## 3. Runtime Architecture
@@ -249,24 +247,12 @@ paths through `AppPicusExt`.
 `AppI18n` is the synchronous i18n registry. `LocalizeText` resolves through the
 active bundle and falls back to the key or explicit fallback text.
 
-## 10. Surface and Activation
+## 10. Surface
 
 `picus_surface` owns wgpu instance/device/queue state, surface configuration,
 DPI-aware scene rendering, swapchain presentation, and the Windows AMD premultiplied
 alpha compatibility path. It attaches through raw window handles and tracks physical
 size, logical size, and scale factor.
-
-`picus_activation` provides:
-
-- `bootstrap(config)` returning either `Primary(ActivationService)` or
-  `SecondaryForwarded`.
-- Single-instance ownership and secondary-to-primary forwarding.
-- Custom URI protocol registration on Windows, Linux, and macOS.
-- Non-macOS IPC forwarding through rotating one-shot rendezvous endpoints.
-- macOS activation through Apple Events and bundle-aware Launch Services
-  registration.
-- Startup URI collection from process arguments and subsequent URI delivery through
-  `ActivationService::drain_uris()`.
 
 ## 11. Plugin and App Helpers
 
@@ -283,19 +269,7 @@ Use two UI composition layers:
 - ECS components registered through `register_ui_component::<T>()` for reusable UI
   regions.
 
-## 12. Example UX Contracts
-
-`pixcus` authentication lives in the sidebar footer. The unauthenticated state opens
-a modal OAuth dialog; the authenticated state shows an avatar trigger with a compact
-logout popover.
-
-Selecting a Pixiv illustration opens a `UiDialog` artwork detail modal sized from
-current `ViewportMetrics`. The modal uses a two-column layout: large artwork on the
-left and a dedicated `UiScrollView` metadata rail on the right. Long captions and
-tags scroll in that rail, and the built-in Lucide close control remains visible in
-the dialog chrome.
-
-## 13. Reference Files
+## 12. Reference Files
 
 - Styling: `crates/picus_core/src/styling.rs`
 - Plugin wiring: `crates/picus_core/src/plugin.rs`
@@ -304,9 +278,8 @@ the dialog chrome.
 - ECS button views: `crates/picus_core/src/views/ecs_button_view.rs`
 - Theme bundle: `crates/picus_core/src/theme/fluent_theme.ron`
 - Surface bridge: `crates/picus_surface/`
-- Activation: `crates/picus_activation/`
 
-## 14. Non-Goals
+## 13. Non-Goals
 
 - Retained UI rendering does not use Bevy render-graph integration.
 - Built-in interactive controls do not use user-facing closure event handlers.

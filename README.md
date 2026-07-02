@@ -20,7 +20,6 @@ The workspace currently contains these crates:
 - **picus_widget** — Picus-owned retained widget/property backend
 - **picus_view** — Picus-owned Xilem-compatible retained view adapter
 - **picus_surface** — Vello rendering bridge for window surfaces
-- **picus_activation** — deep linking and single-instance support
 
 This README covers the `picus_core` crate, which provides the complete UI framework experience. The companion crates provide the retained runtime, rendering, and platform integration.
 
@@ -157,10 +156,6 @@ A low-level bridge that attaches a Vello renderer to an external Bevy window. `p
 
 `picus_view` is the Picus-owned Xilem-compatible view adapter. It builds on `picus_widget` and `xilem_core` without depending on upstream `masonry` or upstream `xilem`.
 
-### picus_activation
-
-Handles deep linking, single-instance enforcement, and custom URI protocol registration. Useful for applications that need to respond to custom URL schemes or ensure only one instance runs at a time. Like `picus_surface`, this is an implementation detail for most users.
-
 ---
 
 ## Examples
@@ -177,7 +172,6 @@ The workspace includes several example applications:
 | `todo_list` | `example_todo_list` | Task management with add/remove |
 | `game_2048` | `example_game_2048` | Classic 2048 game implementation |
 | `overlay_hit_routing` | `example_overlay_hit_routing` | Overlay interaction patterns |
-| `pixcus` | `example_pixcus` | Image browsing application |
 
 Run any example from the repository root:
 
