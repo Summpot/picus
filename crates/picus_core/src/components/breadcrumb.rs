@@ -12,7 +12,9 @@ pub struct UiBreadcrumbItem {
 impl UiBreadcrumbItem {
     #[must_use]
     pub fn new(label: impl Into<String>) -> Self {
-        Self { label: label.into() }
+        Self {
+            label: label.into(),
+        }
     }
 }
 

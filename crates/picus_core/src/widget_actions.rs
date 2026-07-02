@@ -57,10 +57,7 @@ pub enum WidgetUiAction {
     /// Sort a data table by a column.
     SortDataTableColumn { table: Entity, column: usize },
     /// Change a rating value.
-    RatingChanged {
-        rating: Entity,
-        value: f64,
-    },
+    RatingChanged { rating: Entity, value: f64 },
     /// Drag an ECS scroll-thumb by a physical pixel delta.
     DragScrollThumb {
         thumb: Entity,

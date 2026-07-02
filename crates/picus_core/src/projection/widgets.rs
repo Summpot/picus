@@ -18,15 +18,14 @@ use picus_view::view::{
 
 use crate::{
     ecs::{
-        AnchoredTo, OverlayComputedPosition, PartScrollBarHorizontal, PartScrollBarVertical,
-        PartScrollThumbHorizontal, PartScrollThumbVertical, PartScrollViewport, ScrollAxis,
-        SplitDirection, ToastKind, UiCanvas, UiCanvasCommand, UiCanvasPathCommand,
-        UiCanvasPosition, UiColorPicker, UiColorPickerPanel, UiDataTable, UiDatePicker,
-        UiDatePickerPanel, UiDivider, UiGroupBox, UiListSelectionMode, UiListView, UiMenuBar,
-        UiMenuBarItem, UiMenuItemPanel, UiRadioGroup, UiScrollView, UiSortDirection, UiSpinner,
-        UiSearch, UiSplitPane,
-        UiBreadcrumbItem, UiMessageBar, MessageBarKind,
-        UiTabBar, UiTable, UiToast, UiTooltip, UiTreeNode,
+        AnchoredTo, MessageBarKind, OverlayComputedPosition, PartScrollBarHorizontal,
+        PartScrollBarVertical, PartScrollThumbHorizontal, PartScrollThumbVertical,
+        PartScrollViewport, ScrollAxis, SplitDirection, ToastKind, UiBreadcrumbItem, UiCanvas,
+        UiCanvasCommand, UiCanvasPathCommand, UiCanvasPosition, UiColorPicker, UiColorPickerPanel,
+        UiDataTable, UiDatePicker, UiDatePickerPanel, UiDivider, UiGroupBox, UiListSelectionMode,
+        UiListView, UiMenuBar, UiMenuBarItem, UiMenuItemPanel, UiMessageBar, UiRadioGroup,
+        UiScrollView, UiSearch, UiSortDirection, UiSpinner, UiSplitPane, UiTabBar, UiTable,
+        UiToast, UiTooltip, UiTreeNode,
     },
     overlay::OverlayUiAction,
     styling::{
@@ -725,7 +724,10 @@ pub(crate) fn project_tab_bar(tab_bar: &UiTabBar, ctx: ProjectionCtx<'_>) -> UiV
             );
 
             let mut indicator_style = pipe_style.clone();
-            indicator_style.transition = Some(crate::StyleTransition { duration: 0.12, easing: None });
+            indicator_style.transition = Some(crate::StyleTransition {
+                duration: 0.12,
+                easing: None,
+            });
             indicator_style.layout.scale = if is_active { 1.0 } else { 0.45 };
             indicator_style.colors.bg = Some(if is_active {
                 pipe_color
@@ -1771,7 +1773,11 @@ pub(crate) fn project_divider(div: &UiDivider, ctx: ProjectionCtx<'_>) -> UiView
 /// Project a `UiToolbar` marker as a horizontal flex row with toolbar styling.
 pub(crate) fn project_toolbar(ctx: ProjectionCtx<'_>) -> UiView {
     let style = resolve_style(ctx.world, ctx.entity);
-    let children: Vec<_> = ctx.children.into_iter().map(|c| c.into_any_flex()).collect();
+    let children: Vec<_> = ctx
+        .children
+        .into_iter()
+        .map(|c| c.into_any_flex())
+        .collect();
     Arc::new(apply_widget_style(
         apply_flex_alignment(flex_row(children), &style),
         &style,
@@ -1785,7 +1791,11 @@ pub(crate) fn project_toolbar(ctx: ProjectionCtx<'_>) -> UiView {
 /// Project a `UiCard` marker as a vertical flex container with card styling.
 pub(crate) fn project_card(ctx: ProjectionCtx<'_>) -> UiView {
     let style = resolve_style(ctx.world, ctx.entity);
-    let children: Vec<_> = ctx.children.into_iter().map(|c| c.into_any_flex()).collect();
+    let children: Vec<_> = ctx
+        .children
+        .into_iter()
+        .map(|c| c.into_any_flex())
+        .collect();
     Arc::new(apply_widget_style(
         apply_flex_alignment(flex_col(children), &style),
         &style,
@@ -1884,7 +1894,12 @@ pub(crate) fn project_message_bar(bar: &UiMessageBar, ctx: ProjectionCtx<'_>) ->
 
     Arc::new(apply_widget_style(
         apply_flex_alignment(
-            flex_row(row_children.into_iter().map(|v| v.into_any_flex()).collect::<Vec<_>>()),
+            flex_row(
+                row_children
+                    .into_iter()
+                    .map(|v| v.into_any_flex())
+                    .collect::<Vec<_>>(),
+            ),
             &style,
         ),
         &style,
@@ -1920,10 +1935,8 @@ pub(crate) fn project_search(search: &UiSearch, ctx: ProjectionCtx<'_>) -> UiVie
     );
 
     let row: UiView = Arc::new(
-        flex_row(
-            vec![icon.into_any_flex(), placeholder.into_any_flex()]
-        )
-        .gap(masonry_core::layout::Length::px(style.layout.gap)),
+        flex_row(vec![icon.into_any_flex(), placeholder.into_any_flex()])
+            .gap(masonry_core::layout::Length::px(style.layout.gap)),
     );
 
     Arc::new(apply_widget_style(row, &style))

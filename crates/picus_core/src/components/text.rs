@@ -1,8 +1,6 @@
 use bevy_ecs::prelude::*;
 
-use crate::{
-    ProjectionCtx, UiView, TypographyPreset, components::UiComponentTemplate,
-};
+use crate::{ProjectionCtx, TypographyPreset, UiView, components::UiComponentTemplate};
 
 /// A text element that applies a Fluent v9 typography preset.
 ///

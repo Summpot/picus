@@ -1,8 +1,6 @@
 use bevy_ecs::{entity::Entity, prelude::*};
 
-use crate::{
-    ProjectionCtx, UiView, components::UiComponentTemplate,
-};
+use crate::{ProjectionCtx, UiView, components::UiComponentTemplate};
 
 /// A hyperlink-style text component (Fluent v9 Link).
 ///

@@ -1619,7 +1619,10 @@ fn resolve_transition_value(
             },
             _ => {
                 warn_missing_or_invalid_token(token, field, "Transition|Float");
-                StyleTransition { duration: 0.0, easing: None }
+                StyleTransition {
+                    duration: 0.0,
+                    easing: None,
+                }
             }
         },
     }

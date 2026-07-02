@@ -142,7 +142,9 @@ pub fn pick_avatar_color_index(name: &str) -> usize {
     if name.is_empty() {
         return 0;
     }
-    let hash: u64 = name.bytes().fold(0u64, |acc, b| acc.wrapping_mul(31).wrapping_add(b as u64));
+    let hash: u64 = name
+        .bytes()
+        .fold(0u64, |acc, b| acc.wrapping_mul(31).wrapping_add(b as u64));
     hash as usize % AVATAR_COLOR_CLASSES.len()
 }
 

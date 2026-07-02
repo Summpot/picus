@@ -11,7 +11,9 @@ use bevy_ecs::{
 use bevy_time::Time;
 
 pub mod interpolation {
-    #[derive(bevy_ecs::component::Component, Debug, Clone, Copy, Default, PartialEq, serde::Deserialize)]
+    #[derive(
+        bevy_ecs::component::Component, Debug, Clone, Copy, Default, PartialEq, serde::Deserialize,
+    )]
     pub enum EaseKind {
         #[default]
         Linear,
@@ -35,7 +37,8 @@ pub mod interpolation {
         let mut t = target_x; // initial guess
         for _ in 0..MAX_ITER {
             let x = cubic_bezier_sample(t, x1, x2);
-            let dx = 3.0 * (1.0 - t).powi(2) * x1 + 3.0 * (1.0 - t) * t * (x2 - x1) * 2.0
+            let dx = 3.0 * (1.0 - t).powi(2) * x1
+                + 3.0 * (1.0 - t) * t * (x2 - x1) * 2.0
                 + 3.0 * t.powi(2) * (1.0 - x2);
             if dx.abs() < EPSILON {
                 break;

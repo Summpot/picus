@@ -4,18 +4,16 @@ use super::{
 };
 use crate::{
     ecs::{
-        LocalizeText, UiAvatar, UiBadge, UiButton, UiCheckbox, UiImage, UiLabel,
-        UiLink, UiMultilineTextInput, UiPasswordInput, UiProgressBar, UiRating, UiSlider,
-        UiSwitch, UiText, UiTextInput, TypographyPreset,
+        LocalizeText, TypographyPreset, UiAvatar, UiBadge, UiButton, UiCheckbox, UiImage, UiLabel,
+        UiLink, UiMultilineTextInput, UiPasswordInput, UiProgressBar, UiRating, UiSlider, UiSwitch,
+        UiText, UiTextInput,
     },
     i18n::resolve_localized_text,
     styling::{
         apply_direct_widget_style, apply_label_style, apply_widget_style, font_stack_from_style,
         resolve_style, resolve_style_for_entity_classes,
     },
-    views::{
-        ecs_button, ecs_button_with_child, ecs_slider, ecs_text_input,
-    },
+    views::{ecs_button, ecs_button_with_child, ecs_slider, ecs_text_input},
     widget_actions::WidgetUiAction,
 };
 use bevy_ecs::prelude::*;
@@ -336,9 +334,7 @@ pub(crate) fn project_rating(rating: &UiRating, ctx: ProjectionCtx<'_>) -> UiVie
             value: star_value,
         };
 
-        let star_view: UiView = Arc::new(
-            ecs_button(entity, action, star_char),
-        );
+        let star_view: UiView = Arc::new(ecs_button(entity, action, star_char));
         star_views.push(star_view);
     }
 
@@ -499,17 +495,18 @@ pub(crate) fn project_avatar(avatar: &UiAvatar, ctx: ProjectionCtx<'_>) -> UiVie
         crate::AVATAR_COLOR_CLASSES[idx]
     });
 
-    let color_style =
-        resolve_style_for_entity_classes(ctx.world, ctx.entity, [color_class]);
+    let color_style = resolve_style_for_entity_classes(ctx.world, ctx.entity, [color_class]);
 
     // Get an appropriate font size: ~40% of avatar size, clamped.
     let font_size = (size_f64 as f32 * 0.40).clamp(8.0, AVATAR_DEFAULT_FONT_SIZE * 2.0);
 
     // Background colour from the avatar colour class, or fallback to accent.
-    let bg_color = color_style
-        .colors
-        .bg
-        .unwrap_or(style.colors.bg.unwrap_or(crate::xilem::Color::from_rgb8(0x00, 0x78, 0xD4)));
+    let bg_color = color_style.colors.bg.unwrap_or(
+        style
+            .colors
+            .bg
+            .unwrap_or(crate::xilem::Color::from_rgb8(0x00, 0x78, 0xD4)),
+    );
     let text_color = color_style
         .colors
         .text
@@ -550,7 +547,11 @@ pub(crate) fn project_link(link_component: &UiLink, ctx: ProjectionCtx<'_>) -> U
     let label_child = apply_label_style(label(text), &style);
 
     Arc::new(apply_direct_widget_style(
-        ecs_button_with_child(ctx.entity, crate::UiLinkAction::new(ctx.entity), label_child),
+        ecs_button_with_child(
+            ctx.entity,
+            crate::UiLinkAction::new(ctx.entity),
+            label_child,
+        ),
         &style,
     ))
 }
@@ -562,8 +563,7 @@ pub(crate) fn project_link(link_component: &UiLink, ctx: ProjectionCtx<'_>) -> U
 /// engine applies the correct font-size / weight / line-height.
 pub(crate) fn project_text(text_component: &UiText, ctx: ProjectionCtx<'_>) -> UiView {
     let mut style = resolve_style(ctx.world, ctx.entity);
-    let display_text =
-        resolve_localized_text(ctx.world, ctx.entity, &text_component.text);
+    let display_text = resolve_localized_text(ctx.world, ctx.entity, &text_component.text);
 
     // Determine the typography preset: prefer an explicit one on the component,
     // then check for a separate TypographyPreset component, finally default.

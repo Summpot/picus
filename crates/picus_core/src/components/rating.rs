@@ -120,7 +120,12 @@ mod tests {
 
     #[test]
     fn rating_size_font_sizes_are_positive() {
-        for size in &[RatingSize::Small, RatingSize::Medium, RatingSize::Large, RatingSize::ExtraLarge] {
+        for size in &[
+            RatingSize::Small,
+            RatingSize::Medium,
+            RatingSize::Large,
+            RatingSize::ExtraLarge,
+        ] {
             assert!(size.star_font_size() > 0.0);
         }
     }

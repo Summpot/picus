@@ -1079,7 +1079,10 @@ fn sync_style_targets_restarts_tween_when_current_differs_but_target_unchanged()
                 bg: Some(base),
                 ..ColorStyle::default()
             },
-            transition: Some(crate::StyleTransition { duration: 0.2, easing: None }),
+            transition: Some(crate::StyleTransition {
+                duration: 0.2,
+                easing: None,
+            }),
             ..StyleSetter::default()
         },
     );
