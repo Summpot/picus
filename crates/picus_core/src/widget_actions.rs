@@ -13,9 +13,10 @@ use crate::{
     UiCheckboxChanged, UiDataTable, UiDataTableSelectionChanged, UiDataTableSortChanged,
     UiListSelectionMode, UiListView, UiListViewSelectionChanged, UiMultilineTextInput,
     UiMultilineTextInputChanged, UiOverlayRoot, UiPasswordInput, UiPasswordInputChanged,
-    UiRadioGroup, UiRadioGroupChanged, UiScrollView, UiScrollViewChanged, UiSlider,
-    UiSliderChanged, UiSwitch, UiSwitchChanged, UiTabBar, UiTabChanged, UiTextInput,
-    UiTextInputChanged, UiTooltip, UiTreeNode, UiTreeNodeToggled, events::UiEventQueue,
+    UiRadioGroup, UiRadioGroupChanged, UiRating, UiRatingChanged, UiScrollView,
+    UiScrollViewChanged, UiSlider, UiSliderChanged, UiSwitch, UiSwitchChanged, UiTabBar,
+    UiTabChanged, UiTextInput, UiTextInputChanged, UiTooltip, UiTreeNode, UiTreeNodeToggled,
+    events::UiEventQueue,
 };
 
 /// Internal action enum for non-overlay widget interactions.
@@ -55,6 +56,11 @@ pub enum WidgetUiAction {
     SelectDataTableRow { table: Entity, row: usize },
     /// Sort a data table by a column.
     SortDataTableColumn { table: Entity, column: usize },
+    /// Change a rating value.
+    RatingChanged {
+        rating: Entity,
+        value: f64,
+    },
     /// Drag an ECS scroll-thumb by a physical pixel delta.
     DragScrollThumb {
         thumb: Entity,
@@ -409,6 +415,20 @@ pub fn handle_widget_actions(world: &mut World) {
                         );
                     }
                 }
+            }
+
+            WidgetUiAction::RatingChanged { rating, value } => {
+                if world.get_entity(rating).is_err() {
+                    continue;
+                }
+
+                if let Some(mut rating_state) = world.get_mut::<UiRating>(rating) {
+                    rating_state.value = value.clamp(0.0, f64::from(rating_state.max));
+                }
+
+                world
+                    .resource::<UiEventQueue>()
+                    .push_typed(rating, UiRatingChanged { rating, value });
             }
 
             WidgetUiAction::SetSliderValue { slider, value } => {

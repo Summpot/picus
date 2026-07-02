@@ -5,14 +5,17 @@ use super::{
 use crate::{
     ecs::{
         LocalizeText, UiAvatar, UiBadge, UiButton, UiCheckbox, UiImage, UiLabel,
-        UiMultilineTextInput, UiPasswordInput, UiProgressBar, UiSlider, UiSwitch, UiTextInput,
+        UiMultilineTextInput, UiPasswordInput, UiProgressBar, UiRating, UiSlider, UiSwitch,
+        UiTextInput,
     },
     i18n::resolve_localized_text,
     styling::{
         apply_direct_widget_style, apply_label_style, apply_widget_style, font_stack_from_style,
         resolve_style, resolve_style_for_entity_classes,
     },
-    views::{ecs_button_with_child, ecs_slider, ecs_text_input},
+    views::{
+        ecs_button_with_child, ecs_slider, ecs_text_input, ecs_text_button,
+    },
     widget_actions::WidgetUiAction,
 };
 use bevy_ecs::prelude::*;
@@ -303,6 +306,43 @@ pub(crate) fn project_progress_bar(progress: &UiProgressBar, ctx: ProjectionCtx<
             .height(Dim::Fixed(Length::px(PROGRESS_BAR_HEIGHT))),
         &style,
     ))
+}
+
+const RATING_FILLED_STAR: &str = "\u{2605}"; // ★
+const RATING_OUTLINE_STAR: &str = "\u{2606}"; // ☆
+
+pub(crate) fn project_rating(rating: &UiRating, ctx: ProjectionCtx<'_>) -> UiView {
+    let font_size = rating.size.star_font_size();
+    let max_stars = rating.max.max(1);
+    let current_value = rating.value;
+
+    let star_color = crate::xilem::Color::from_rgb8(0xE3, 0xA9, 0x5C);
+
+    let mut star_views: Vec<UiView> = Vec::with_capacity(max_stars as usize);
+
+    for i in 1..=max_stars {
+        let star_value = f64::from(i);
+        let is_filled = star_value <= current_value;
+
+        let star_char = if is_filled {
+            RATING_FILLED_STAR
+        } else {
+            RATING_OUTLINE_STAR
+        };
+
+        let star_view: UiView = Arc::new(
+            label(star_char)
+                .text_size(font_size)
+                .color(star_color),
+        );
+        star_views.push(star_view);
+    }
+
+    Arc::new(
+        flex_row(star_views)
+            .cross_axis_alignment(CrossAxisAlignment::Center)
+            .gap(Length::px(4.0)),
+    )
 }
 
 pub(crate) fn project_text_input(input: &UiTextInput, ctx: ProjectionCtx<'_>) -> UiView {

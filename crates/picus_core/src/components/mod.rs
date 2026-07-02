@@ -17,6 +17,7 @@ mod date_picker;
 mod dialog;
 mod grid;
 mod group_box;
+mod rating;
 mod image;
 mod list_view;
 mod menu;
@@ -57,6 +58,7 @@ pub use multiline_text_input::*;
 pub use password_input::*;
 pub use popover::*;
 pub use progress_bar::*;
+pub use rating::*;
 pub use radio_group::*;
 pub use scroll_view::*;
 pub use slider::*;
@@ -153,6 +155,7 @@ pub fn register_builtin_ui_components(app: &mut App) {
         .register_ui_component::<badge::UiBadge>()
         .register_ui_component::<canvas::UiCanvas>()
         .register_ui_component::<checkbox::UiCheckbox>()
+        .register_ui_component::<rating::UiRating>()
         .register_ui_component::<slider::UiSlider>()
         .register_ui_component::<switch::UiSwitch>()
         .register_ui_component::<text_input::UiTextInput>()
