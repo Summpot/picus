@@ -166,6 +166,10 @@ pub enum TextAlign {
 pub struct StyleTransition {
     /// Duration in seconds.
     pub duration: f32,
+    /// Optional easing curve for the transition.
+    /// When `None`, the default easing (QuadraticInOut) is used.
+    #[serde(default)]
+    pub easing: Option<EaseKind>,
 }
 
 /// Cached resolved style used by projectors.
@@ -387,6 +391,8 @@ pub enum TokenValue {
     FontFamily(Vec<String>),
     BoxShadow(BoxShadow),
     Transition(StyleTransition),
+    /// Cubic bezier curve control points (x1, y1, x2, y2).
+    Curve(f32, f32, f32, f32),
 }
 
 impl From<LayoutStyle> for LayoutStyleValue {
@@ -1609,10 +1615,11 @@ fn resolve_transition_value(
             Some(TokenValue::Transition(value)) => *value,
             Some(TokenValue::Float(value)) => StyleTransition {
                 duration: *value as f32,
+                easing: None,
             },
             _ => {
                 warn_missing_or_invalid_token(token, field, "Transition|Float");
-                StyleTransition { duration: 0.0 }
+                StyleTransition { duration: 0.0, easing: None }
             }
         },
     }
@@ -2053,13 +2060,15 @@ fn spawn_color_style_tween(
     start: CurrentColorStyle,
     end: CurrentColorStyle,
     duration_secs: f32,
+    easing: Option<EaseKind>,
 ) {
     let duration = Duration::from_secs_f32(duration_secs.max(0.0));
+    let ease = easing.unwrap_or(EaseKind::QuadraticInOut);
 
     world.entity_mut(entity).insert((
         TimeSpan::try_from(Duration::ZERO..duration)
             .expect("style tween duration range should be valid"),
-        EaseKind::QuadraticInOut,
+        ease,
         ComponentTween::new_target(entity, ColorStyleLens { start, end }),
         TimeRunner::new(duration),
         TimeContext::<()>::default(),
@@ -2319,6 +2328,7 @@ pub fn sync_style_targets(world: &mut World) {
                                     start,
                                     end,
                                     transition.duration,
+                                    transition.easing,
                                 );
                             } else {
                                 clear_style_managed_tween(world, entity);
@@ -2789,6 +2799,8 @@ enum TokenDef {
     FontFamily(Vec<String>),
     BoxShadow(BoxShadowDef),
     Transition(StyleTransition),
+    /// Cubic bezier curve control points.
+    Curve(f32, f32, f32, f32),
 }
 
 impl TokenDef {
@@ -2799,6 +2811,7 @@ impl TokenDef {
             Self::FontFamily(value) => Ok(TokenValue::FontFamily(value)),
             Self::BoxShadow(value) => Ok(TokenValue::BoxShadow(value.into_box_shadow()?)),
             Self::Transition(value) => Ok(TokenValue::Transition(value)),
+            Self::Curve(x1, y1, x2, y2) => Ok(TokenValue::Curve(x1, y1, x2, y2)),
         }
     }
 }

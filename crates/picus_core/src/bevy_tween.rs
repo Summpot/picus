@@ -11,12 +11,44 @@ use bevy_ecs::{
 use bevy_time::Time;
 
 pub mod interpolation {
-    #[derive(bevy_ecs::component::Component, Debug, Clone, Copy, Default, PartialEq)]
+    #[derive(bevy_ecs::component::Component, Debug, Clone, Copy, Default, PartialEq, serde::Deserialize)]
     pub enum EaseKind {
         #[default]
         Linear,
         QuadraticInOut,
         ElasticOut,
+        /// Cubic bezier curve with control points (x1, y1, x2, y2).
+        /// Maps to CSS `cubic-bezier(x1, y1, x2, y2)`.
+        CubicBezier(f32, f32, f32, f32),
+        /// Preset: Fluent `curveDecelerateMax` = cubic-bezier(0.1, 0.9, 0.2, 1)
+        DecelerateMax,
+        /// Preset: Fluent `curveDecelerateMin` = cubic-bezier(0.33, 0, 0.1, 1)
+        DecelerateMin,
+        /// Preset: Fluent `curveEasyEase` = cubic-bezier(0.33, 0, 0.67, 1)
+        EasyEase,
+    }
+
+    /// Find `t` such that `cubic_bezier(t, x1, x2) == target_x` using Newton-Raphson.
+    fn cubic_root(x1: f32, x2: f32, target_x: f32) -> f32 {
+        const EPSILON: f32 = 1.0 / 512.0;
+        const MAX_ITER: u32 = 8;
+        let mut t = target_x; // initial guess
+        for _ in 0..MAX_ITER {
+            let x = cubic_bezier_sample(t, x1, x2);
+            let dx = 3.0 * (1.0 - t).powi(2) * x1 + 3.0 * (1.0 - t) * t * (x2 - x1) * 2.0
+                + 3.0 * t.powi(2) * (1.0 - x2);
+            if dx.abs() < EPSILON {
+                break;
+            }
+            t -= (x - target_x) / dx;
+            t = t.clamp(0.0, 1.0);
+        }
+        t.clamp(0.0, 1.0)
+    }
+
+    /// Evaluate cubic bezier at `t` for X or Y coordinate with control points (a, b).
+    fn cubic_bezier_sample(t: f32, a: f32, b: f32) -> f32 {
+        3.0 * (1.0 - t).powi(2) * t * a + 3.0 * (1.0 - t) * t.powi(2) * b + t.powi(3)
     }
 
     impl EaseKind {
@@ -41,6 +73,22 @@ pub mod interpolation {
                         let c4 = (2.0 * std::f32::consts::PI) / 3.0;
                         2.0_f32.powf(-10.0 * t) * ((t * 10.0 - 0.75) * c4).sin() + 1.0
                     }
+                }
+                Self::CubicBezier(x1, y1, x2, y2) => {
+                    let t_param = cubic_root(x1, x2, t);
+                    cubic_bezier_sample(t_param, y1, y2)
+                }
+                Self::DecelerateMax => {
+                    let t_param = cubic_root(0.1, 0.2, t);
+                    cubic_bezier_sample(t_param, 0.9, 1.0)
+                }
+                Self::DecelerateMin => {
+                    let t_param = cubic_root(0.33, 0.1, t);
+                    cubic_bezier_sample(t_param, 0.0, 1.0)
+                }
+                Self::EasyEase => {
+                    let t_param = cubic_root(0.33, 0.67, t);
+                    cubic_bezier_sample(t_param, 0.0, 1.0)
                 }
             }
         }
