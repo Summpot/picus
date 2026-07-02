@@ -5,8 +5,8 @@ use super::{
 use crate::{
     ecs::{
         LocalizeText, UiAvatar, UiBadge, UiButton, UiCheckbox, UiImage, UiLabel,
-        UiMultilineTextInput, UiPasswordInput, UiProgressBar, UiRating, UiSlider, UiSwitch,
-        UiTextInput,
+        UiMultilineTextInput, UiPasswordInput, UiProgressBar, UiRating, UiRatingChanged, UiSlider,
+        UiSwitch, UiTextInput,
     },
     i18n::resolve_localized_text,
     styling::{
@@ -14,7 +14,7 @@ use crate::{
         resolve_style, resolve_style_for_entity_classes,
     },
     views::{
-        ecs_button_with_child, ecs_slider, ecs_text_input, ecs_text_button,
+        ecs_button, ecs_button_with_child, ecs_slider, ecs_text_input, ecs_text_button,
     },
     widget_actions::WidgetUiAction,
 };
@@ -312,6 +312,7 @@ const RATING_FILLED_STAR: &str = "\u{2605}"; // ★
 const RATING_OUTLINE_STAR: &str = "\u{2606}"; // ☆
 
 pub(crate) fn project_rating(rating: &UiRating, ctx: ProjectionCtx<'_>) -> UiView {
+    let entity = ctx.entity;
     let font_size = rating.size.star_font_size();
     let max_stars = rating.max.max(1);
     let current_value = rating.value;
@@ -330,10 +331,13 @@ pub(crate) fn project_rating(rating: &UiRating, ctx: ProjectionCtx<'_>) -> UiVie
             RATING_OUTLINE_STAR
         };
 
+        let action = WidgetUiAction::RatingChanged {
+            rating: entity,
+            value: star_value,
+        };
+
         let star_view: UiView = Arc::new(
-            label(star_char)
-                .text_size(font_size)
-                .color(star_color),
+            ecs_button(entity, action, star_char),
         );
         star_views.push(star_view);
     }
