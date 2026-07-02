@@ -39,7 +39,8 @@ pub struct SelectionColor {
 impl Property for SelectionColor {
     fn static_default() -> &'static Self {
         static DEFAULT: SelectionColor = SelectionColor {
-            color: AlphaColor::from_rgb8(70, 130, 255),
+            // Fluent v9 brandWeb (#0078D4)
+            color: AlphaColor::from_rgb8(0x00, 0x78, 0xD4),
         };
         &DEFAULT
     }

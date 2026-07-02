@@ -282,12 +282,12 @@ impl<ChildA: Widget + ?Sized, ChildB: Widget + ?Sized> Split<ChildA, ChildB> {
     /// Returns the color of the splitter bar.
     fn bar_color(&self, ctx: &PaintCtx<'_>) -> Color {
         if !self.draggable || ctx.is_disabled() {
-            return theme::ZYNC_700;
+            return theme::BORDER_DEFAULT;
         }
         if ctx.is_active() || ctx.is_hovered() || ctx.is_focus_target() {
-            theme::ZYNC_600
+            theme::BRAND_COLOR
         } else {
-            theme::ZYNC_500
+            theme::BORDER_DEFAULT
         }
     }
 
