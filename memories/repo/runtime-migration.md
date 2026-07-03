@@ -1,4 +1,0 @@
-- `picus_ui_runtime` now owns the retained `layers`, `properties`, `theme`, and `widgets` sources directly, including local `step_input.rs`, `text_area.rs`, and `virtual_scroll.rs` modules.
-- `crates/picus_ui_runtime/src/widgets/mod.rs` no longer uses any `#[path = "../../../picus_masonry/src/..."]` imports.
-- `crates/picus_masonry/src/` is now reduced to the compatibility facade `lib.rs`; obsolete `theme.rs`, `layers/`, `properties/`, and `widgets/` implementation sources were removed.
-- Validation checkpoint after finishing the source migration: `cargo fmt --all`, `cargo test`, and `cargo clippy --all-targets --all-features -- -D warnings` all passed.
