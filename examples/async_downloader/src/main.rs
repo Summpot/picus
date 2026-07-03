@@ -9,10 +9,12 @@ use picus_core::{
     AppPicusExt, PicusPlugin, ProjectionCtx, StyleClass, UiDialog, UiEventQueue, UiRoot,
     UiThemePicker, UiView, apply_label_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
-    bevy_ecs::{hierarchy::ChildOf, prelude::*},
+    bevy_ecs::prelude::*,
     bevy_tasks::{IoTaskPool, TaskPoolBuilder},
     button, emit_ui_action, resolve_style, resolve_style_for_classes, rfd,
-    run_app_with_window_options, spawn_in_overlay_root, switch, text_input,
+    run_app_with_window_options,
+    scene::{CommandsSceneExt, bsn},
+    spawn_in_overlay_root, switch, text_input,
     xilem::{
         core::fork,
         view::{
@@ -77,22 +79,22 @@ enum DownloadEvent {
     WorkerFailed(String),
 }
 
-#[derive(Component, Debug, Clone, Copy)]
+#[derive(Component, Debug, Clone, Copy, Default)]
 struct DownloadRootView;
 
-#[derive(Component, Debug, Clone, Copy)]
+#[derive(Component, Debug, Clone, Copy, Default)]
 struct DownloadTitle;
 
-#[derive(Component, Debug, Clone, Copy)]
+#[derive(Component, Debug, Clone, Copy, Default)]
 struct DownloadUrlRow;
 
-#[derive(Component, Debug, Clone, Copy)]
+#[derive(Component, Debug, Clone, Copy, Default)]
 struct DownloadActionRow;
 
-#[derive(Component, Debug, Clone, Copy)]
+#[derive(Component, Debug, Clone, Copy, Default)]
 struct DownloadDialogModeRow;
 
-#[derive(Component, Debug, Clone, Copy)]
+#[derive(Component, Debug, Clone, Copy, Default)]
 struct DownloadProgressPanel;
 
 #[derive(Component, Debug, Clone, Copy)]
@@ -419,20 +421,19 @@ fn project_download_progress_panel(_: &DownloadProgressPanel, ctx: ProjectionCtx
 }
 
 fn setup_download_world(mut commands: Commands) {
-    let root = commands
-        .spawn((
-            UiRoot,
-            DownloadRootView,
-            StyleClass(vec!["download.root".to_string()]),
-        ))
-        .id();
-
-    commands.spawn((UiThemePicker::fluent(), ChildOf(root)));
-    commands.spawn((DownloadTitle, ChildOf(root)));
-    commands.spawn((DownloadUrlRow, ChildOf(root)));
-    commands.spawn((DownloadActionRow, ChildOf(root)));
-    commands.spawn((DownloadDialogModeRow, ChildOf(root)));
-    commands.spawn((DownloadProgressPanel, ChildOf(root)));
+    commands.spawn_scene(bsn! {
+        UiRoot
+        DownloadRootView
+        StyleClass(vec!["download.root".to_string()])
+        Children [
+            UiThemePicker,
+            DownloadTitle,
+            DownloadUrlRow,
+            DownloadActionRow,
+            DownloadDialogModeRow,
+            DownloadProgressPanel,
+        ]
+    });
 }
 
 fn drain_download_events(world: &mut World) {

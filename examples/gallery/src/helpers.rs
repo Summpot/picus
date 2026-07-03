@@ -7,7 +7,9 @@ use bevy_ecs::{hierarchy::ChildOf, prelude::*};
 use bevy_math::Vec2;
 use picus_core::{
     StyleClass, UiAvatar, UiCanvas, UiCanvasCommand, UiCanvasPathCommand, UiDivider, UiFlexColumn,
-    UiGrid, UiImage, UiLabel, avatar_sizes, xilem::Color,
+    UiGrid, UiImage, UiLabel, avatar_sizes,
+    scene::{CommandsSceneExt, bsn, template_value},
+    xilem::Color,
 };
 
 /// Create a single class name for an entity.
@@ -23,70 +25,88 @@ pub fn classes(names: &[&str]) -> StyleClass {
 
 /// Create a card container (UiFlexColumn with "gallery.card" class) inside `parent`.
 pub fn card(commands: &mut Commands, parent: Entity, title: &str) -> Entity {
-    let card = commands
-        .spawn((UiFlexColumn, class("gallery.card"), ChildOf(parent)))
-        .id();
-    commands.spawn((
-        UiLabel::new(title),
-        class("gallery.card_title"),
-        ChildOf(card),
-    ));
-    card
+    commands
+        .spawn_scene(bsn! {
+            UiFlexColumn
+            template_value(class("gallery.card"))
+            ChildOf(parent)
+            Children [
+                (
+                    template_value(UiLabel::new(title))
+                    template_value(class("gallery.card_title"))
+                ),
+            ]
+        })
+        .id()
 }
 
 /// Create a grid container inside `parent` with the given number of columns.
 pub fn grid(commands: &mut Commands, parent: Entity, columns: u32) -> Entity {
     commands
-        .spawn((
-            UiGrid::new(columns, 1),
-            class("gallery.card_grid"),
-            ChildOf(parent),
-        ))
+        .spawn_scene(bsn! {
+            template_value(UiGrid::new(columns, 1))
+            template_value(class("gallery.card_grid"))
+            ChildOf(parent)
+        })
         .id()
 }
 
 /// Add a descriptive note label inside `parent`.
 pub fn note(commands: &mut Commands, parent: Entity, text: impl Into<String>) {
-    commands.spawn((UiLabel::new(text), class("gallery.note"), ChildOf(parent)));
+    let text = text.into();
+    commands.spawn_scene(bsn! {
+        template_value(UiLabel::new(text))
+        template_value(class("gallery.note"))
+        ChildOf(parent)
+    });
 }
 
 /// Add a placeholder card inside `parent` for a feature that is not yet implemented.
 pub fn placeholder(commands: &mut Commands, parent: Entity, title: &str, reason: &str) {
-    let panel = commands
-        .spawn((UiFlexColumn, class("gallery.placeholder"), ChildOf(parent)))
-        .id();
-    commands.spawn((
-        UiLabel::new(title),
-        class("gallery.card_title"),
-        ChildOf(panel),
-    ));
-    commands.spawn((UiLabel::new(reason), class("gallery.note"), ChildOf(panel)));
+    commands.spawn_scene(bsn! {
+        UiFlexColumn
+        template_value(class("gallery.placeholder"))
+        ChildOf(parent)
+        Children [
+            (
+                template_value(UiLabel::new(title))
+                template_value(class("gallery.card_title"))
+            ),
+            (
+                template_value(UiLabel::new(reason))
+                template_value(class("gallery.note"))
+            ),
+        ]
+    });
 }
 
 /// Add a category section header with divider in the sidebar.
 #[allow(dead_code)]
 pub fn sidebar_category_header(commands: &mut Commands, parent: Entity, label: &str) {
-    commands.spawn((
-        UiLabel::new(label),
-        class("gallery.sidebar_category"),
-        ChildOf(parent),
-    ));
+    commands.spawn_scene(bsn! {
+        template_value(UiLabel::new(label))
+        template_value(class("gallery.sidebar_category"))
+        ChildOf(parent)
+    });
 }
 
 /// Add a page description label.
 #[allow(dead_code)]
 pub fn page_description(commands: &mut Commands, parent: Entity, text: &str) {
-    commands.spawn((
-        UiLabel::new(text),
-        class("gallery.page_description"),
-        ChildOf(parent),
-    ));
+    commands.spawn_scene(bsn! {
+        template_value(UiLabel::new(text))
+        template_value(class("gallery.page_description"))
+        ChildOf(parent)
+    });
 }
 
 /// Add a horizontal divider.
 #[allow(dead_code)]
 pub fn divider(commands: &mut Commands, parent: Entity) {
-    commands.spawn((UiDivider::horizontal(), ChildOf(parent)));
+    commands.spawn_scene(bsn! {
+        template_value(UiDivider::horizontal())
+        ChildOf(parent)
+    });
 }
 
 /// Create a sample canvas widget demonstrating Picus canvas drawing capabilities.

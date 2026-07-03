@@ -11,6 +11,7 @@ use picus_core::{
     button, checkbox, emit_ui_action,
     masonry_core::layout::Length,
     resolve_style, resolve_style_for_classes, resolve_style_for_entity_classes, run_app,
+    scene::{Scene, WorldSceneExt, bsn, template_value},
     xilem::{
         InsertNewline,
         view::{
@@ -24,8 +25,9 @@ use shared_utils::init_logging;
 
 const LIST_VIEWPORT_HEIGHT: f64 = 360.0;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
 enum FilterType {
+    #[default]
     All,
     Active,
     Completed,
@@ -61,28 +63,28 @@ struct TodoRuntime {
     list_container: Entity,
 }
 
-#[derive(Component, Debug, Clone, Copy)]
+#[derive(Component, Debug, Clone, Copy, Default)]
 struct TodoRootView;
 
-#[derive(Component, Debug, Clone, Copy)]
+#[derive(Component, Debug, Clone, Copy, Default)]
 struct TodoHeader;
 
-#[derive(Component, Debug, Clone, Copy)]
+#[derive(Component, Debug, Clone, Copy, Default)]
 struct TodoInputArea;
 
-#[derive(Component, Debug, Clone, Copy)]
+#[derive(Component, Debug, Clone, Copy, Default)]
 struct TodoListContainer;
 
-#[derive(Component, Debug, Clone)]
+#[derive(Component, Debug, Clone, Default)]
 struct TodoItem {
     text: String,
     completed: bool,
 }
 
-#[derive(Component, Debug, Clone, Copy)]
+#[derive(Component, Debug, Clone, Copy, Default)]
 struct TodoFilterBar;
 
-#[derive(Component, Debug, Clone, Copy)]
+#[derive(Component, Debug, Clone, Copy, Default)]
 struct FilterToggle(FilterType);
 
 fn project_todo_root(_: &TodoRootView, ctx: ProjectionCtx<'_>) -> UiView {
@@ -272,68 +274,77 @@ fn spawn_todo_item(world: &mut World, text: String, done: bool) -> Entity {
 }
 
 fn setup_todo_world(mut commands: Commands) {
-    let root = commands
-        .spawn((
-            UiRoot,
-            TodoRootView,
-            StyleClass(vec!["todo.root".to_string()]),
-        ))
-        .id();
+    commands.queue(|world: &mut World| {
+        let root = world
+            .spawn_scene(todo_root_scene())
+            .expect("todo BSN scene should spawn")
+            .id();
+        let list_container = world
+            .get::<Children>(root)
+            .and_then(|children| children.get(3).copied())
+            .expect("todo root BSN scene should include list container as fourth child");
 
-    commands.spawn((UiThemePicker::fluent(), ChildOf(root)));
-    commands.spawn((
-        TodoHeader,
-        StyleClass(vec!["todo.header".to_string()]),
-        ChildOf(root),
-    ));
-    commands.spawn((
-        TodoInputArea,
-        StyleClass(vec!["todo.input-area".to_string()]),
-        ChildOf(root),
-    ));
+        world.insert_resource(TodoRuntime { list_container });
+    });
+}
 
-    let list_container = commands
-        .spawn((
-            TodoListContainer,
-            StyleClass(vec!["todo.list-container".to_string()]),
-            ChildOf(root),
-        ))
-        .id();
+fn todo_root_scene() -> impl Scene {
+    bsn! {
+        UiRoot
+        TodoRootView
+        StyleClass(vec!["todo.root".to_string()])
+        Children [
+            UiThemePicker,
+            (
+                TodoHeader
+                StyleClass(vec!["todo.header".to_string()])
+            ),
+            (
+                TodoInputArea
+                StyleClass(vec!["todo.input-area".to_string()])
+            ),
+            (
+                TodoListContainer
+                StyleClass(vec!["todo.list-container".to_string()])
+                Children [{ initial_todo_item_scenes() }]
+            ),
+            (
+                TodoFilterBar
+                StyleClass(vec!["todo.filter-bar".to_string()])
+                Children [
+                    (
+                        FilterToggle(FilterType::All)
+                        StyleClass(vec!["todo.filter-toggle".to_string()])
+                    ),
+                    (
+                        FilterToggle(FilterType::Active)
+                        StyleClass(vec!["todo.filter-toggle".to_string()])
+                    ),
+                    (
+                        FilterToggle(FilterType::Completed)
+                        StyleClass(vec!["todo.filter-toggle".to_string()])
+                    ),
+                ]
+            ),
+        ]
+    }
+}
 
-    let footer_bar = commands
-        .spawn((
-            TodoFilterBar,
-            StyleClass(vec!["todo.filter-bar".to_string()]),
-            ChildOf(root),
-        ))
-        .id();
-    commands.spawn((
-        FilterToggle(FilterType::All),
-        StyleClass(vec!["todo.filter-toggle".to_string()]),
-        ChildOf(footer_bar),
-    ));
-    commands.spawn((
-        FilterToggle(FilterType::Active),
-        StyleClass(vec!["todo.filter-toggle".to_string()]),
-        ChildOf(footer_bar),
-    ));
-    commands.spawn((
-        FilterToggle(FilterType::Completed),
-        StyleClass(vec!["todo.filter-toggle".to_string()]),
-        ChildOf(footer_bar),
-    ));
-
-    commands.insert_resource(TodoRuntime { list_container });
-
-    for i in 1..=120 {
-        commands.spawn((
-            StyleClass(vec!["todo.item".to_string()]),
-            TodoItem {
+fn initial_todo_item_scenes() -> Vec<impl Scene> {
+    (1..=120)
+        .map(|i| {
+            todo_item_scene(TodoItem {
                 text: format!("Sample task #{i}"),
                 completed: i % 3 == 0,
-            },
-            ChildOf(list_container),
-        ));
+            })
+        })
+        .collect()
+}
+
+fn todo_item_scene(item: TodoItem) -> impl Scene {
+    bsn! {
+        StyleClass(vec!["todo.item".to_string()])
+        template_value(item)
     }
 }
 

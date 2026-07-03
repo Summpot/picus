@@ -9,7 +9,7 @@ use picus_core::{
     AppPicusExt, PicusPlugin, ProjectionCtx, StyleClass, UiEventQueue, UiRoot, UiThemePicker,
     UiView, apply_label_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
-    bevy_ecs::{hierarchy::ChildOf, prelude::*},
+    bevy_ecs::prelude::*,
     button, emit_ui_action,
     masonry_core::{
         imaging::{Painter, record::Scene},
@@ -18,7 +18,9 @@ use picus_core::{
         properties::Padding,
     },
     resolve_style, resolve_style_for_classes, resolve_style_for_entity_classes,
-    run_app_with_window_options, slider,
+    run_app_with_window_options,
+    scene::{CommandsSceneExt, bsn},
+    slider,
     xilem::{
         Color,
         core::fork,
@@ -67,25 +69,25 @@ enum TimerEvent {
     Tick,
 }
 
-#[derive(Component, Debug, Clone, Copy)]
+#[derive(Component, Debug, Clone, Copy, Default)]
 struct TimerRootView;
 
-#[derive(Component, Debug, Clone, Copy)]
+#[derive(Component, Debug, Clone, Copy, Default)]
 struct TimerTitle;
 
-#[derive(Component, Debug, Clone, Copy)]
+#[derive(Component, Debug, Clone, Copy, Default)]
 struct TimerDialView;
 
-#[derive(Component, Debug, Clone, Copy)]
+#[derive(Component, Debug, Clone, Copy, Default)]
 struct TimerElapsedRow;
 
-#[derive(Component, Debug, Clone, Copy)]
+#[derive(Component, Debug, Clone, Copy, Default)]
 struct TimerProgressRow;
 
-#[derive(Component, Debug, Clone, Copy)]
+#[derive(Component, Debug, Clone, Copy, Default)]
 struct TimerDurationRow;
 
-#[derive(Component, Debug, Clone, Copy)]
+#[derive(Component, Debug, Clone, Copy, Default)]
 struct TimerUiComponentsRow;
 
 fn clamp01(v: f64) -> f64 {
@@ -351,21 +353,20 @@ fn project_timer_ui_components_row(_: &TimerUiComponentsRow, ctx: ProjectionCtx<
 }
 
 fn setup_timer_world(mut commands: Commands) {
-    let root = commands
-        .spawn((
-            UiRoot,
-            TimerRootView,
-            StyleClass(vec!["timer.root".to_string()]),
-        ))
-        .id();
-
-    commands.spawn((UiThemePicker::fluent(), ChildOf(root)));
-    commands.spawn((TimerTitle, ChildOf(root)));
-    commands.spawn((TimerDialView, ChildOf(root)));
-    commands.spawn((TimerElapsedRow, ChildOf(root)));
-    commands.spawn((TimerProgressRow, ChildOf(root)));
-    commands.spawn((TimerDurationRow, ChildOf(root)));
-    commands.spawn((TimerUiComponentsRow, ChildOf(root)));
+    commands.spawn_scene(bsn! {
+        UiRoot
+        TimerRootView
+        StyleClass(vec!["timer.root".to_string()])
+        Children [
+            UiThemePicker,
+            TimerTitle,
+            TimerDialView,
+            TimerElapsedRow,
+            TimerProgressRow,
+            TimerDurationRow,
+            TimerUiComponentsRow,
+        ]
+    });
 }
 
 fn drain_timer_events_and_tick(world: &mut World) {

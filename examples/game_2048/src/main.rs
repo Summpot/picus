@@ -20,7 +20,7 @@ use picus_core::{
     AppPicusExt, PicusPlugin, ProjectionCtx, StyleClass, UiEventQueue, UiRoot, UiThemePicker,
     UiView, apply_label_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
-    bevy_ecs::{hierarchy::ChildOf, prelude::*},
+    bevy_ecs::prelude::*,
     bevy_input::{ButtonInput, keyboard::KeyCode},
     bevy_window::WindowResized,
     button, emit_ui_action,
@@ -29,6 +29,7 @@ use picus_core::{
         core::{MessageCtx, MessageResult, Mut, View, ViewId, ViewMarker, ViewPathTracker},
     },
     resolve_style, resolve_style_for_classes, run_app_with_window_options,
+    scene::{CommandsSceneExt, Scene, SceneList, bsn, bsn_list, template_value},
     xilem::{
         Color,
         style::Style as _,
@@ -89,8 +90,9 @@ impl GameLayoutMetrics {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 enum MoveDirection {
+    #[default]
     Up,
     Down,
     Left,
@@ -102,6 +104,12 @@ enum GameEvent {
     Move(MoveDirection),
     Undo,
     Restart,
+}
+
+impl Default for GameEvent {
+    fn default() -> Self {
+        Self::Move(MoveDirection::default())
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -453,17 +461,18 @@ impl Default for Game2048State {
     }
 }
 
-#[derive(Component, Debug, Clone, Copy)]
+#[derive(Component, Debug, Clone, Copy, Default)]
 struct GameRoot;
 
-#[derive(Component, Debug, Clone, Copy)]
+#[derive(Component, Debug, Clone, Copy, Default)]
 struct HeaderBlock;
 
-#[derive(Component, Debug, Clone, Copy)]
+#[derive(Component, Debug, Clone, Copy, Default)]
 struct ScoreStrip;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default)]
 enum ScoreKind {
+    #[default]
     Score,
     Best,
     Moves,
@@ -490,44 +499,44 @@ impl ScoreKind {
     }
 }
 
-#[derive(Component, Debug, Clone, Copy)]
+#[derive(Component, Debug, Clone, Copy, Default)]
 struct ScoreCard {
     kind: ScoreKind,
 }
 
-#[derive(Component, Debug, Clone, Copy)]
+#[derive(Component, Debug, Clone, Copy, Default)]
 struct StatusLine;
 
-#[derive(Component, Debug, Clone, Copy)]
+#[derive(Component, Debug, Clone, Copy, Default)]
 struct GameFlowRow;
 
-#[derive(Component, Debug, Clone, Copy)]
+#[derive(Component, Debug, Clone, Copy, Default)]
 struct BoardContainer;
 
-#[derive(Component, Debug, Clone, Copy)]
+#[derive(Component, Debug, Clone, Copy, Default)]
 struct BoardRow;
 
-#[derive(Component, Debug, Clone, Copy)]
+#[derive(Component, Debug, Clone, Copy, Default)]
 struct TileCell {
     index: usize,
 }
 
-#[derive(Component, Debug, Clone, Copy)]
+#[derive(Component, Debug, Clone, Copy, Default)]
 struct UiComponentsPad;
 
-#[derive(Component, Debug, Clone, Copy)]
+#[derive(Component, Debug, Clone, Copy, Default)]
 struct SidePanel;
 
-#[derive(Component, Debug, Clone, Copy)]
+#[derive(Component, Debug, Clone, Copy, Default)]
 struct UiComponentsRow;
 
-#[derive(Component, Debug, Clone, Copy)]
+#[derive(Component, Debug, Clone, Copy, Default)]
 struct UiComponentButton {
     action: GameEvent,
     label: &'static str,
 }
 
-#[derive(Component, Debug, Clone, Copy)]
+#[derive(Component, Debug, Clone, Copy, Default)]
 struct HintLine;
 
 struct HotkeyCaptureWidget<W: Widget + FromDynWidget + ?Sized> {
@@ -983,188 +992,182 @@ fn project_hint_line(_: &HintLine, ctx: ProjectionCtx<'_>) -> UiView {
     ))
 }
 
-fn spawn_ui_component_button(
-    commands: &mut Commands,
-    parent: Entity,
-    label_text: &'static str,
-    action: GameEvent,
-    variant_class: &'static str,
-) {
-    commands.spawn((
-        UiComponentButton {
-            action,
-            label: label_text,
-        },
-        StyleClass(vec![
-            "g2048.ui-component.button".to_string(),
-            variant_class.to_string(),
-        ]),
-        ChildOf(parent),
-    ));
+fn setup_game_world(mut commands: Commands) {
+    commands.spawn_scene(game_scene());
 }
 
-fn setup_game_world(mut commands: Commands) {
-    let root = commands
-        .spawn((UiRoot, GameRoot, StyleClass(vec!["g2048.root".to_string()])))
-        .id();
+fn game_scene() -> impl Scene {
+    bsn! {
+        UiRoot
+        GameRoot
+        StyleClass(vec!["g2048.root".to_string()])
+        Children [
+            UiThemePicker,
+            (
+                HeaderBlock
+                StyleClass(vec!["g2048.header".to_string()])
+            ),
+            (
+                ScoreStrip
+                StyleClass(vec!["g2048.score-strip".to_string()])
+                Children [{ score_card_scenes() }]
+            ),
+            (
+                GameFlowRow
+                StyleClass(vec!["g2048.flow".to_string()])
+                Children [
+                    { board_scene() },
+                    { side_panel_scene() },
+                ]
+            ),
+        ]
+    }
+}
 
-    commands.spawn((UiThemePicker::fluent(), ChildOf(root)));
-
-    commands.spawn((
-        HeaderBlock,
-        StyleClass(vec!["g2048.header".to_string()]),
-        ChildOf(root),
-    ));
-
-    let score_strip = commands
-        .spawn((
-            ScoreStrip,
-            StyleClass(vec!["g2048.score-strip".to_string()]),
-            ChildOf(root),
-        ))
-        .id();
-
-    for kind in [
+fn score_card_scenes() -> Vec<impl Scene> {
+    [
         ScoreKind::Score,
         ScoreKind::Best,
         ScoreKind::Moves,
         ScoreKind::Peak,
-    ] {
-        commands.spawn((
-            ScoreCard { kind },
-            StyleClass(vec!["g2048.score-card".to_string()]),
-            ChildOf(score_strip),
-        ));
+    ]
+    .into_iter()
+    .map(score_card_scene)
+    .collect()
+}
+
+fn score_card_scene(kind: ScoreKind) -> impl Scene {
+    bsn! {
+        template_value(ScoreCard { kind })
+        StyleClass(vec!["g2048.score-card".to_string()])
     }
+}
 
-    let flow = commands
-        .spawn((
-            GameFlowRow,
-            StyleClass(vec!["g2048.flow".to_string()]),
-            ChildOf(root),
-        ))
-        .id();
+fn board_scene() -> impl SceneList {
+    bsn_list![
+        (
+            BoardContainer
+            StyleClass(vec!["g2048.board".to_string()])
+            Children [{ board_row_scenes() }]
+        )
+    ]
+}
 
-    let board = commands
-        .spawn((
-            BoardContainer,
-            StyleClass(vec!["g2048.board".to_string()]),
-            ChildOf(flow),
-        ))
-        .id();
+fn board_row_scenes() -> Vec<impl Scene> {
+    (0..BOARD_SIDE).map(board_row_scene).collect()
+}
 
-    for row in 0..BOARD_SIDE {
-        let row_entity = commands
-            .spawn((
-                BoardRow,
-                StyleClass(vec!["g2048.board-row".to_string()]),
-                ChildOf(board),
-            ))
-            .id();
+fn board_row_scene(row: usize) -> impl Scene {
+    let cells = (0..BOARD_SIDE)
+        .map(move |col| tile_cell_scene(row * BOARD_SIDE + col))
+        .collect::<Vec<_>>();
 
-        for col in 0..BOARD_SIDE {
-            let index = row * BOARD_SIDE + col;
-            commands.spawn((
-                TileCell { index },
-                StyleClass(vec!["g2048.tile-host".to_string()]),
-                ChildOf(row_entity),
-            ));
-        }
+    bsn! {
+        BoardRow
+        StyleClass(vec!["g2048.board-row".to_string()])
+        Children [{ cells }]
     }
+}
 
-    let side_panel = commands
-        .spawn((
-            SidePanel,
-            StyleClass(vec!["g2048.side-panel".to_string()]),
-            ChildOf(flow),
-        ))
-        .id();
+fn tile_cell_scene(index: usize) -> impl Scene {
+    bsn! {
+        template_value(TileCell { index })
+        StyleClass(vec!["g2048.tile-host".to_string()])
+    }
+}
 
-    commands.spawn((
-        StatusLine,
-        StyleClass(vec!["g2048.status-host".to_string()]),
-        ChildOf(side_panel),
-    ));
+fn side_panel_scene() -> impl SceneList {
+    bsn_list![
+        (
+            SidePanel
+            StyleClass(vec!["g2048.side-panel".to_string()])
+            Children [
+                (
+                    StatusLine
+                    StyleClass(vec!["g2048.status-host".to_string()])
+                ),
+                { ui_components_scene() },
+                (
+                    HintLine
+                    StyleClass(vec!["g2048.hint".to_string()])
+                ),
+            ]
+        )
+    ]
+}
 
-    let ui_components = commands
-        .spawn((
-            UiComponentsPad,
-            StyleClass(vec!["g2048.ui-components".to_string()]),
-            ChildOf(side_panel),
-        ))
-        .id();
+fn ui_components_scene() -> impl SceneList {
+    bsn_list![
+        (
+            UiComponentsPad
+            StyleClass(vec!["g2048.ui-components".to_string()])
+            Children [
+                { ui_components_row_scene(vec![
+                    ui_component_button_scene(
+                        "↑ Up",
+                        GameEvent::Move(MoveDirection::Up),
+                        "g2048.ui-component.button.primary",
+                    ),
+                ]) },
+                { ui_components_row_scene(vec![
+                    ui_component_button_scene(
+                        "← Left",
+                        GameEvent::Move(MoveDirection::Left),
+                        "g2048.ui-component.button.primary",
+                    ),
+                    ui_component_button_scene(
+                        "↓ Down",
+                        GameEvent::Move(MoveDirection::Down),
+                        "g2048.ui-component.button.primary",
+                    ),
+                    ui_component_button_scene(
+                        "→ Right",
+                        GameEvent::Move(MoveDirection::Right),
+                        "g2048.ui-component.button.primary",
+                    ),
+                ]) },
+                { ui_components_row_scene(vec![
+                    ui_component_button_scene(
+                        "↶ Undo",
+                        GameEvent::Undo,
+                        "g2048.ui-component.button.secondary",
+                    ),
+                    ui_component_button_scene(
+                        "↺ New Game",
+                        GameEvent::Restart,
+                        "g2048.ui-component.button.danger",
+                    ),
+                ]) },
+            ]
+        )
+    ]
+}
 
-    let row_top = commands
-        .spawn((
-            UiComponentsRow,
-            StyleClass(vec!["g2048.ui-component-row".to_string()]),
-            ChildOf(ui_components),
-        ))
-        .id();
-    spawn_ui_component_button(
-        &mut commands,
-        row_top,
-        "↑ Up",
-        GameEvent::Move(MoveDirection::Up),
-        "g2048.ui-component.button.primary",
-    );
+fn ui_components_row_scene(buttons: Vec<impl Scene>) -> impl SceneList {
+    bsn_list![
+        (
+            UiComponentsRow
+            StyleClass(vec!["g2048.ui-component-row".to_string()])
+            Children [{ buttons }]
+        )
+    ]
+}
 
-    let row_middle = commands
-        .spawn((
-            UiComponentsRow,
-            StyleClass(vec!["g2048.ui-component-row".to_string()]),
-            ChildOf(ui_components),
-        ))
-        .id();
-    spawn_ui_component_button(
-        &mut commands,
-        row_middle,
-        "← Left",
-        GameEvent::Move(MoveDirection::Left),
-        "g2048.ui-component.button.primary",
-    );
-    spawn_ui_component_button(
-        &mut commands,
-        row_middle,
-        "↓ Down",
-        GameEvent::Move(MoveDirection::Down),
-        "g2048.ui-component.button.primary",
-    );
-    spawn_ui_component_button(
-        &mut commands,
-        row_middle,
-        "→ Right",
-        GameEvent::Move(MoveDirection::Right),
-        "g2048.ui-component.button.primary",
-    );
-
-    let row_bottom = commands
-        .spawn((
-            UiComponentsRow,
-            StyleClass(vec!["g2048.ui-component-row".to_string()]),
-            ChildOf(ui_components),
-        ))
-        .id();
-    spawn_ui_component_button(
-        &mut commands,
-        row_bottom,
-        "↶ Undo",
-        GameEvent::Undo,
-        "g2048.ui-component.button.secondary",
-    );
-    spawn_ui_component_button(
-        &mut commands,
-        row_bottom,
-        "↺ New Game",
-        GameEvent::Restart,
-        "g2048.ui-component.button.danger",
-    );
-
-    commands.spawn((
-        HintLine,
-        StyleClass(vec!["g2048.hint".to_string()]),
-        ChildOf(side_panel),
-    ));
+fn ui_component_button_scene(
+    label_text: &'static str,
+    action: GameEvent,
+    variant_class: &'static str,
+) -> impl Scene {
+    bsn! {
+        template_value(UiComponentButton {
+            action,
+            label: label_text,
+        })
+        StyleClass(vec![
+            "g2048.ui-component.button".to_string(),
+            variant_class.to_string(),
+        ])
+    }
 }
 
 fn drain_game_events(world: &mut World) {

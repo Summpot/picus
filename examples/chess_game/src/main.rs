@@ -8,14 +8,16 @@ use picus_core::{
     AppPicusExt, PicusPlugin, ProjectionCtx, StyleClass, UiEventQueue, UiRoot, UiThemePicker,
     UiView, apply_label_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
-    bevy_ecs::{hierarchy::ChildOf, prelude::*},
+    bevy_ecs::prelude::*,
     button, button_with_child, checkbox,
     masonry_core::{
         dpi::LogicalSize,
         layout::{AsUnit, Length},
         properties::Padding,
     },
-    resolve_style, resolve_style_for_classes, run_app_with_window_options, slider,
+    resolve_style, resolve_style_for_classes, run_app_with_window_options,
+    scene::{CommandsSceneExt, bsn},
+    slider,
     xilem::{
         Color,
         style::Style as _,
@@ -420,13 +422,13 @@ fn tick_once(
     }
 }
 
-#[derive(Component, Debug, Clone, Copy)]
+#[derive(Component, Debug, Clone, Copy, Default)]
 struct ChessRootView;
 
-#[derive(Component, Debug, Clone, Copy)]
+#[derive(Component, Debug, Clone, Copy, Default)]
 struct ChessUiComponentsPanel;
 
-#[derive(Component, Debug, Clone, Copy)]
+#[derive(Component, Debug, Clone, Copy, Default)]
 struct ChessBoardPanel;
 
 fn build_chess_board_view(world: &World, ui: &ChessUiResource, action_entity: Entity) -> UiView {
@@ -622,17 +624,16 @@ fn project_chess_board_panel(_: &ChessBoardPanel, ctx: ProjectionCtx<'_>) -> UiV
 }
 
 fn setup_chess_world(mut commands: Commands) {
-    let root = commands
-        .spawn((
-            UiRoot,
-            ChessRootView,
-            StyleClass(vec!["chess.root".to_string()]),
-        ))
-        .id();
-
-    commands.spawn((UiThemePicker::fluent(), ChildOf(root)));
-    commands.spawn((ChessUiComponentsPanel, ChildOf(root)));
-    commands.spawn((ChessBoardPanel, ChildOf(root)));
+    commands.spawn_scene(bsn! {
+        UiRoot
+        ChessRootView
+        StyleClass(vec!["chess.root".to_string()])
+        Children [
+            UiThemePicker,
+            ChessUiComponentsPanel,
+            ChessBoardPanel,
+        ]
+    });
 }
 
 fn drain_events_and_tick(world: &mut World) {

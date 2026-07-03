@@ -4,8 +4,9 @@ use picus_core::{
     AppPicusExt, PicusPlugin, ProjectionCtx, StyleClass, UiEventQueue, UiRoot, UiThemePicker,
     UiView, apply_label_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
-    bevy_ecs::{hierarchy::ChildOf, prelude::*},
+    bevy_ecs::prelude::*,
     button, resolve_style, resolve_style_for_classes, run_app_with_window_options,
+    scene::{CommandsSceneExt, Scene, SceneList, bsn, bsn_list, template_value},
     xilem::{
         view::{FlexExt as _, flex_col, flex_row, label},
         winit::{dpi::LogicalSize, error::EventLoopError},
@@ -251,20 +252,21 @@ fn format_number(value: f64) -> String {
     }
 }
 
-#[derive(Component, Debug, Clone, Copy)]
+#[derive(Component, Debug, Clone, Copy, Default)]
 struct CalcRoot;
 
-#[derive(Component, Debug, Clone, Copy)]
+#[derive(Component, Debug, Clone, Copy, Default)]
 struct CalcDisplayPanel;
 
-#[derive(Component, Debug, Clone, Copy)]
+#[derive(Component, Debug, Clone, Copy, Default)]
 struct CalcKeypad;
 
-#[derive(Component, Debug, Clone, Copy)]
+#[derive(Component, Debug, Clone, Copy, Default)]
 struct CalcButtonRow;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 enum CalcButtonKind {
+    #[default]
     Digit,
     Action,
     Operator,
@@ -275,6 +277,16 @@ struct CalcButtonSpec {
     label: &'static str,
     event: CalcEvent,
     kind: CalcButtonKind,
+}
+
+impl Default for CalcButtonSpec {
+    fn default() -> Self {
+        Self {
+            label: "",
+            event: CalcEvent::ClearAll,
+            kind: CalcButtonKind::default(),
+        }
+    }
 }
 
 fn calc_button_rows() -> Vec<Vec<CalcButtonSpec>> {
@@ -462,18 +474,44 @@ fn project_calc_button_component(button_data: &CalcButtonSpec, ctx: ProjectionCt
 }
 
 fn setup_calculator_world(mut commands: Commands) {
-    let root = commands
-        .spawn((UiRoot, CalcRoot, StyleClass(vec!["calc.root".to_string()])))
-        .id();
-    commands.spawn((UiThemePicker::fluent(), ChildOf(root)));
-    commands.spawn((CalcDisplayPanel, ChildOf(root)));
+    commands.spawn_scene(bsn! {
+        UiRoot
+        CalcRoot
+        StyleClass(vec!["calc.root".to_string()])
+        Children [
+            UiThemePicker,
+            CalcDisplayPanel,
+            { calc_keypad_scene() },
+        ]
+    });
+}
 
-    let keypad = commands.spawn((CalcKeypad, ChildOf(root))).id();
-    for row in calc_button_rows() {
-        let row_entity = commands.spawn((CalcButtonRow, ChildOf(keypad))).id();
-        for button_spec in row {
-            commands.spawn((button_spec, ChildOf(row_entity)));
-        }
+fn calc_keypad_scene() -> impl SceneList {
+    let rows = calc_button_rows()
+        .into_iter()
+        .map(calc_button_row_scene)
+        .collect::<Vec<_>>();
+
+    bsn_list![
+        (
+            CalcKeypad
+            Children [{ rows }]
+        )
+    ]
+}
+
+fn calc_button_row_scene(row: Vec<CalcButtonSpec>) -> impl Scene {
+    let buttons = row.into_iter().map(calc_button_scene).collect::<Vec<_>>();
+
+    bsn! {
+        CalcButtonRow
+        Children [{ buttons }]
+    }
+}
+
+fn calc_button_scene(button_spec: CalcButtonSpec) -> impl Scene {
+    bsn! {
+        template_value(button_spec)
     }
 }
 
@@ -525,8 +563,6 @@ fn main() -> Result<(), EventLoopError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use picus_core::bevy_ecs::schedule::Schedule;
-
     #[test]
     fn embedded_calculator_theme_ron_parses() {
         picus_core::parse_stylesheet_ron(include_str!("../assets/themes/calculator.ron"))
@@ -535,15 +571,24 @@ mod tests {
 
     #[test]
     fn setup_spawns_componentized_keypad_entities() {
-        let mut world = World::new();
-        let mut schedule = Schedule::default();
-        schedule.add_systems(setup_calculator_world);
-        schedule.run(&mut world);
+        let mut app = App::new();
+        app.add_plugins(PicusPlugin)
+            .insert_resource(CalculatorEngine::default())
+            .register_ui_component::<CalcRoot>()
+            .register_ui_component::<CalcDisplayPanel>()
+            .register_ui_component::<CalcKeypad>()
+            .register_ui_component::<CalcButtonRow>()
+            .register_ui_component::<CalcButtonSpec>()
+            .add_systems(Startup, setup_calculator_world);
 
-        let mut row_query = world.query::<&CalcButtonRow>();
-        let mut key_query = world.query::<&CalcButtonSpec>();
+        app.update();
 
-        assert_eq!(row_query.iter(&world).count(), 5);
-        assert_eq!(key_query.iter(&world).count(), 20);
+        let mut row_query = app.world_mut().query::<&CalcButtonRow>();
+        let row_count = row_query.iter(app.world()).count();
+        let mut key_query = app.world_mut().query::<&CalcButtonSpec>();
+        let key_count = key_query.iter(app.world()).count();
+
+        assert_eq!(row_count, 5);
+        assert_eq!(key_count, 20);
     }
 }

@@ -32,6 +32,7 @@ use picus_core::{
     bevy_app::{App, Startup, Update},
     bevy_ecs::{hierarchy::ChildOf, prelude::*},
     run_app_with_window_options,
+    scene::{CommandsSceneExt, bsn, template_value},
     xilem::winit::{dpi::LogicalSize, error::EventLoopError},
 };
 use shared_utils::init_logging;
@@ -53,27 +54,35 @@ use views::{GalleryRoot, GalleryStatus};
 /// all 16 component showcase pages.
 fn setup_gallery(mut commands: Commands) {
     let root = commands
-        .spawn((UiRoot, GalleryRoot, class("gallery.root")))
+        .spawn_scene(bsn! {
+            UiRoot
+            GalleryRoot
+            template_value(class("gallery.root"))
+        })
         .id();
 
     spawn_top_bar(&mut commands, root);
 
-    commands.spawn((GalleryStatus, class("gallery.status"), ChildOf(root)));
+    commands.spawn_scene(bsn! {
+        GalleryStatus
+        template_value(class("gallery.status"))
+        ChildOf(root)
+    });
 
     // --- Body: UiNavigationView handles sidebar + content area layout ---
     let body = commands
-        .spawn((
-            UiFlexColumn,
-            class("gallery.body"),
-            InlineStyle {
+        .spawn_scene(bsn! {
+            UiFlexColumn
+            template_value(class("gallery.body"))
+            template_value(InlineStyle {
                 layout: LayoutStyle {
                     flex_grow: Some(1.0),
                     ..Default::default()
                 },
                 ..Default::default()
-            },
-            ChildOf(root),
-        ))
+            })
+            ChildOf(root)
+        })
         .id();
 
     // Build navigation items from all gallery pages (with Lucide icon glyphs)
@@ -86,18 +95,18 @@ fn setup_gallery(mut commands: Commands) {
         .collect();
 
     let nav_view = commands
-        .spawn((
-            UiNavigationView::new(nav_items),
-            class("gallery.nav_view"),
-            InlineStyle {
+        .spawn_scene(bsn! {
+            template_value(UiNavigationView::new(nav_items))
+            template_value(class("gallery.nav_view"))
+            template_value(InlineStyle {
                 layout: LayoutStyle {
                     flex_grow: Some(1.0),
                     ..Default::default()
                 },
                 ..Default::default()
-            },
-            ChildOf(body),
-        ))
+            })
+            ChildOf(body)
+        })
         .id();
 
     // Spawn all pages as children of the navigation view
@@ -211,48 +220,52 @@ fn setup_gallery(mut commands: Commands) {
 
 /// Create the top bar with branding, search, theme picker, and badge.
 fn spawn_top_bar(commands: &mut Commands, root: Entity) {
-    let top = commands
-        .spawn((UiFlexRow, class("gallery.top_bar"), ChildOf(root)))
-        .id();
-
-    // Brand area: avatar + title
-    let brand = commands
-        .spawn((UiFlexRow, class("gallery.brand"), ChildOf(top)))
-        .id();
-    commands.spawn((
-        UiAvatar::new("P").with_size(avatar_sizes::MD),
-        ChildOf(brand),
-    ));
-    let title_col = commands
-        .spawn((UiFlexColumn, class("gallery.brand"), ChildOf(brand)))
-        .id();
-    commands.spawn((
-        UiLabel::new("Picus Gallery"),
-        class("gallery.title"),
-        ChildOf(title_col),
-    ));
-    commands.spawn((
-        UiLabel::new("Component showcase"),
-        class("gallery.subtitle"),
-        ChildOf(title_col),
-    ));
-
-    // Search bar (middle area)
-    let search_row = commands
-        .spawn((UiFlexRow, class("gallery.search_row"), ChildOf(top)))
-        .id();
-    commands.spawn((
-        UiSearch::new("Find a component\u{2026}"),
-        class("gallery.search"),
-        ChildOf(search_row),
-    ));
-
-    // Tools: theme picker + badge
-    let tools = commands
-        .spawn((UiFlexRow, class("gallery.tools"), ChildOf(top)))
-        .id();
-    commands.spawn((UiThemePicker::fluent(), ChildOf(tools)));
-    commands.spawn((UiBadge::new("FBA parity"), ChildOf(tools)));
+    commands.spawn_scene(bsn! {
+        UiFlexRow
+        template_value(class("gallery.top_bar"))
+        ChildOf(root)
+        Children [
+            (
+                UiFlexRow
+                template_value(class("gallery.brand"))
+                Children [
+                    template_value(UiAvatar::new("P").with_size(avatar_sizes::MD)),
+                    (
+                        UiFlexColumn
+                        template_value(class("gallery.brand"))
+                        Children [
+                            (
+                                template_value(UiLabel::new("Picus Gallery"))
+                                template_value(class("gallery.title"))
+                            ),
+                            (
+                                template_value(UiLabel::new("Component showcase"))
+                                template_value(class("gallery.subtitle"))
+                            ),
+                        ]
+                    ),
+                ]
+            ),
+            (
+                UiFlexRow
+                template_value(class("gallery.search_row"))
+                Children [
+                    (
+                        template_value(UiSearch::new("Find a component\u{2026}"))
+                        template_value(class("gallery.search"))
+                    ),
+                ]
+            ),
+            (
+                UiFlexRow
+                template_value(class("gallery.tools"))
+                Children [
+                    UiThemePicker,
+                    template_value(UiBadge::new("FBA parity")),
+                ]
+            ),
+        ]
+    });
 }
 
 /// Spawn a single gallery page inside the navigation view.
@@ -263,27 +276,33 @@ fn spawn_page(
     build: fn(&mut Commands, Entity) -> Entity,
 ) -> Entity {
     let scroll = commands
-        .spawn((
-            UiScrollView::new(PAGE_VIEWPORT, PAGE_CONTENT)
-                .with_vertical_scrollbar(true)
-                .with_horizontal_scrollbar(false),
-            class("gallery.content_scroll"),
-            ChildOf(nav_view),
-        ))
+        .spawn_scene(bsn! {
+            template_value(
+                UiScrollView::new(PAGE_VIEWPORT, PAGE_CONTENT)
+                    .with_vertical_scrollbar(true)
+                    .with_horizontal_scrollbar(false)
+            )
+            template_value(class("gallery.content_scroll"))
+            ChildOf(nav_view)
+        })
         .id();
     let page_col = commands
-        .spawn((UiFlexColumn, class("gallery.page"), ChildOf(scroll)))
+        .spawn_scene(bsn! {
+            UiFlexColumn
+            template_value(class("gallery.page"))
+            ChildOf(scroll)
+            Children [
+                (
+                    template_value(UiLabel::new(page.label()))
+                    template_value(class("gallery.section_title"))
+                ),
+                (
+                    template_value(UiLabel::new(page.description()))
+                    template_value(class("gallery.page_description"))
+                ),
+            ]
+        })
         .id();
-    commands.spawn((
-        UiLabel::new(page.label()),
-        class("gallery.section_title"),
-        ChildOf(page_col),
-    ));
-    commands.spawn((
-        UiLabel::new(page.description()),
-        class("gallery.page_description"),
-        ChildOf(page_col),
-    ));
     build(commands, page_col)
 }
 
