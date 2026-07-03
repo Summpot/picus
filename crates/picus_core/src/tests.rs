@@ -682,6 +682,57 @@ fn navigation_view_tracks_invisible_primary_window_resizes() {
 }
 
 #[test]
+fn navigation_view_clips_content_to_container_not_window() {
+    let mut app = App::new();
+    app.add_plugins(PicusPlugin);
+
+    let mut window = Window {
+        visible: false,
+        ..Default::default()
+    };
+    window.resolution.set(480.0, 360.0);
+    let window_entity = app.world_mut().spawn((window, PrimaryWindow)).id();
+
+    let nav = spawn_navigation_clipping_probe(&mut app);
+
+    app.update();
+
+    resize_primary_window(&mut app, window_entity, 480.0, 360.0);
+
+    let nav_rect = widget_rect_for_entity(&app, nav);
+    let nav_subtree = widget_ids_for_entity_subtree(&app, nav);
+    let portal_rects = portal_rects_for_entity(&app, nav);
+
+    assert!(
+        portal_rects.len() >= 3,
+        "navigation view should wrap its root, sidebar, and content in portals, got {portal_rects:?}"
+    );
+    assert!(
+        portal_rects
+            .iter()
+            .all(|rect| rect.min.y >= nav_rect.min.y - 1.0 && rect.max.y <= nav_rect.max.y + 1.0),
+        "portal viewports should stay inside nav rect {nav_rect:?}, got {portal_rects:?}"
+    );
+    assert!(
+        nav_rect.max.y + 4.0 < 360.0,
+        "test setup should leave window space below the nav, got nav rect {nav_rect:?}"
+    );
+
+    let outside_nav_position = Vec2::new(
+        (nav_rect.min.x + nav_rect.width() * 0.5).max(1.0),
+        nav_rect.max.y + 4.0,
+    );
+    let hit_path = hit_path_for_position(&mut app, window_entity, outside_nav_position);
+
+    assert!(
+        hit_path
+            .iter()
+            .all(|widget_id| !nav_subtree.contains(widget_id)),
+        "nav content should be clipped by the nav container before window clipping; hit path outside nav at {outside_nav_position:?} still included nav subtree: {hit_path:?}"
+    );
+}
+
+#[test]
 fn ui_event_queue_drains_typed_actions() {
     let mut app = App::new();
     app.add_plugins(PicusPlugin)
@@ -2717,6 +2768,76 @@ fn spawn_navigation_height_probe(app: &mut App) -> Entity {
     nav
 }
 
+fn spawn_navigation_clipping_probe(app: &mut App) -> Entity {
+    let root = app.world_mut().spawn((UiRoot, crate::UiFlexColumn)).id();
+    let nav = app
+        .world_mut()
+        .spawn((
+            crate::UiNavigationView::new([
+                crate::NavigationViewItem::new("First"),
+                crate::NavigationViewItem::new("Second"),
+            ]),
+            crate::InlineStyle {
+                layout: crate::LayoutStyle {
+                    flex_grow: Some(1.0),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            ChildOf(root),
+        ))
+        .id();
+    let scroll = app
+        .world_mut()
+        .spawn((
+            crate::UiScrollView::new(Vec2::new(1040.0, 560.0), Vec2::new(1040.0, 5200.0))
+                .with_vertical_scrollbar(true)
+                .with_horizontal_scrollbar(false),
+            ChildOf(nav),
+        ))
+        .id();
+    let page = app
+        .world_mut()
+        .spawn((crate::UiFlexColumn, ChildOf(scroll)))
+        .id();
+
+    for index in 0..80 {
+        app.world_mut().spawn((
+            crate::UiLabel::new(format!("Overflow row {index}")),
+            ChildOf(page),
+        ));
+    }
+
+    app.world_mut().spawn((
+        crate::UiLabel::new("Footer below navigation"),
+        ChildOf(root),
+    ));
+
+    nav
+}
+
+fn widget_rect_for_entity(app: &App, entity: Entity) -> Rect {
+    let runtime = app.world().non_send::<crate::MasonryRuntime>();
+    let widget_id = runtime
+        .find_widget_id_for_entity_bits(entity.to_bits(), false)
+        .expect("entity should resolve to a Masonry widget");
+    let widget = runtime
+        .render_root
+        .get_widget(widget_id)
+        .expect("widget id should resolve in render tree");
+    let ctx = widget.ctx();
+    let origin = ctx.window_origin();
+    let size = ctx.border_box_size();
+
+    Rect {
+        min: Vec2::new(origin.x as f32, origin.y as f32),
+        max: Vec2::new(
+            (origin.x + size.width) as f32,
+            (origin.y + size.height) as f32,
+        ),
+    }
+}
+
 fn widget_height_for_entity(app: &App, entity: Entity) -> f64 {
     let runtime = app.world().non_send::<crate::MasonryRuntime>();
     let widget_id = runtime
@@ -2755,6 +2876,69 @@ fn resize_masonry_runtime(app: &mut App, width: u32, height: u32) {
         .render_root
         .handle_window_event(WindowEvent::Resize(PhysicalSize::new(width, height)));
     let _ = runtime.render_root.redraw();
+}
+
+fn widget_ids_for_entity_subtree(app: &App, entity: Entity) -> Vec<WidgetId> {
+    fn collect_widget_ids(widget: WidgetRef<'_, dyn Widget>, ids: &mut Vec<WidgetId>) {
+        if widget.ctx().is_stashed() {
+            return;
+        }
+
+        ids.push(widget.id());
+
+        for child in widget.children() {
+            collect_widget_ids(child, ids);
+        }
+    }
+
+    let runtime = app.world().non_send::<crate::MasonryRuntime>();
+    let widget_id = runtime
+        .find_widget_id_for_entity_bits(entity.to_bits(), false)
+        .expect("entity should resolve to a Masonry widget");
+    let widget = runtime
+        .render_root
+        .get_widget(widget_id)
+        .expect("widget id should resolve in render tree");
+    let mut ids = Vec::new();
+    collect_widget_ids(widget, &mut ids);
+    ids
+}
+
+fn portal_rects_for_entity(app: &App, entity: Entity) -> Vec<Rect> {
+    fn collect_portal_rects(widget: WidgetRef<'_, dyn Widget>, rects: &mut Vec<Rect>) {
+        if widget.ctx().is_stashed() {
+            return;
+        }
+
+        if widget.short_type_name() == "Portal" {
+            let ctx = widget.ctx();
+            let origin = ctx.window_origin();
+            let size = ctx.border_box_size();
+            rects.push(Rect {
+                min: Vec2::new(origin.x as f32, origin.y as f32),
+                max: Vec2::new(
+                    (origin.x + size.width) as f32,
+                    (origin.y + size.height) as f32,
+                ),
+            });
+        }
+
+        for child in widget.children() {
+            collect_portal_rects(child, rects);
+        }
+    }
+
+    let runtime = app.world().non_send::<crate::MasonryRuntime>();
+    let widget_id = runtime
+        .find_widget_id_for_entity_bits(entity.to_bits(), false)
+        .expect("entity should resolve to a Masonry widget");
+    let widget = runtime
+        .render_root
+        .get_widget(widget_id)
+        .expect("widget id should resolve in render tree");
+    let mut rects = Vec::new();
+    collect_portal_rects(widget, &mut rects);
+    rects
 }
 
 fn open_combo_dropdown(app: &mut App, combo: Entity) -> Entity {

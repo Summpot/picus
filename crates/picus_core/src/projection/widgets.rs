@@ -395,7 +395,7 @@ pub(crate) fn project_scroll_view(scroll_view: &UiScrollView, ctx: ProjectionCtx
         top_row.push(vertical_bar);
     }
 
-    let mut rows = vec![flex_row(top_row).gap(Length::px(0.0)).into_any_flex()];
+    let mut rows = vec![flex_item(flex_row(top_row).gap(Length::px(0.0)), 1.0).into_any_flex()];
 
     if let Some(horizontal_bar) = horizontal_bar_view {
         let mut bottom_row = vec![horizontal_bar];
@@ -410,10 +410,23 @@ pub(crate) fn project_scroll_view(scroll_view: &UiScrollView, ctx: ProjectionCtx
         rows.push(flex_row(bottom_row).gap(Length::px(0.0)).into_any_flex());
     }
 
-    Arc::new(apply_widget_style(
-        apply_flex_alignment(flex_col(rows), &style).gap(Length::px(0.0)),
-        &style,
-    ))
+    Arc::new(
+        sized_box(apply_widget_style(
+            apply_flex_alignment(flex_col(rows), &style)
+                .gap(Length::px(0.0))
+                .dims(
+                    Dimensions::AUTO
+                        .with_width(Dim::Stretch)
+                        .with_height(Dim::Stretch),
+                ),
+            &style,
+        ))
+        .dims(
+            Dimensions::AUTO
+                .with_width(Dim::Stretch)
+                .with_height(Dim::Stretch),
+        ),
+    )
 }
 
 // ---------------------------------------------------------------------------
@@ -2047,9 +2060,20 @@ pub(crate) fn project_navigation_view(nav: &UiNavigationView, ctx: ProjectionCtx
         .cloned()
         .unwrap_or_else(|| Arc::new(label("")));
 
-    let content_area = flex_col(vec![
+    let content_body = flex_col(vec![
         flex_item(content, 1.0), // flex:1 preserved via From<FlexItem>, NOT .into_any_flex()
     ])
+    .dims(
+        Dimensions::AUTO
+            .with_width(Dim::Stretch)
+            .with_height(Dim::Stretch),
+    );
+    let content_area = sized_box(
+        scroll_portal(content_body, Point::ORIGIN)
+            .constrain_horizontal(true)
+            .constrain_vertical(true)
+            .content_must_fill(true),
+    )
     .dims(
         Dimensions::AUTO
             .with_width(Dim::Stretch)
@@ -2067,9 +2091,13 @@ pub(crate) fn project_navigation_view(nav: &UiNavigationView, ctx: ProjectionCtx
         sidebar_portal.into_any_flex(),
         flex_item(content_area, 1.0).into(), // .into() preserves flex params via From<FlexItem>
     ]);
+    let clipped_row = scroll_portal(row, Point::ORIGIN)
+        .constrain_horizontal(true)
+        .constrain_vertical(true)
+        .content_must_fill(true);
 
     Arc::new(
-        sized_box(apply_widget_style(row, &style)).dims(
+        sized_box(apply_widget_style(clipped_row, &style)).dims(
             Dimensions::AUTO
                 .with_width(Dim::Stretch)
                 .with_height(Dim::Stretch),
