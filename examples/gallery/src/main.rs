@@ -108,7 +108,7 @@ fn setup_gallery(mut commands: Commands) {
         GalleryPage::Buttons,
         pages::buttons::spawn_buttons_page,
     );
-    let runtime_refs = GalleryRuntime {
+    let mut runtime_refs = GalleryRuntime {
         nav_view,
         search_input: Entity::PLACEHOLDER,
         open_dialog_btn,
@@ -160,12 +160,7 @@ fn setup_gallery(mut commands: Commands) {
             GalleryPage::Layout,
             pages::layout::spawn_layout_page,
         ),
-        locale_combo: spawn_page(
-            &mut commands,
-            nav_view,
-            GalleryPage::I18n,
-            pages::i18n::spawn_i18n_page,
-        ),
+        locale_combo: Entity::PLACEHOLDER,
     };
 
     spawn_page(
@@ -174,6 +169,13 @@ fn setup_gallery(mut commands: Commands) {
         GalleryPage::Typography,
         pages::typography::spawn_typography_page,
     );
+    let locale_combo = spawn_page(
+        &mut commands,
+        nav_view,
+        GalleryPage::I18n,
+        pages::i18n::spawn_i18n_page,
+    );
+    runtime_refs.locale_combo = locale_combo;
     spawn_page(
         &mut commands,
         nav_view,
@@ -371,12 +373,12 @@ mod tests {
                 "Panels",
                 "Layout",
                 "Typography",
+                "I18n",
                 "Media",
                 "Shapes",
                 "Icons",
                 "Transitions",
                 "Overlay",
-                "I18n",
             ],
         );
     }

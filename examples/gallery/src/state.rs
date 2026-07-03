@@ -52,12 +52,12 @@ impl GalleryPage {
         Self::Panels,
         Self::Layout,
         Self::Typography,
+        Self::I18n,
         Self::Media,
         Self::Shapes,
         Self::Icons,
         Self::Transitions,
         Self::Overlay,
-        Self::I18n,
     ];
 
     /// Sidebar category groups — matches the Fluent UI pattern of
@@ -77,20 +77,15 @@ impl GalleryPage {
         NavCategory {
             label: "Layout & Panels",
             first_page_index: 7,
-            page_count: 3,
+            page_count: 4,
         },
         NavCategory {
             label: "Display",
-            first_page_index: 10,
+            first_page_index: 11,
             page_count: 4,
         },
         NavCategory {
             label: "Overlay & Motion",
-            first_page_index: 14,
-            page_count: 1,
-        },
-        NavCategory {
-            label: "I18n & Localization",
             first_page_index: 15,
             page_count: 1,
         },
