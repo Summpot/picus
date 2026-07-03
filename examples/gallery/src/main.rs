@@ -89,6 +89,13 @@ fn setup_gallery(mut commands: Commands) {
         .spawn((
             UiNavigationView::new(nav_items),
             class("gallery.nav_view"),
+            InlineStyle {
+                layout: LayoutStyle {
+                    flex_grow: Some(1.0),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
             ChildOf(body),
         ))
         .id();
