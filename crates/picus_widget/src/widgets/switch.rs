@@ -221,7 +221,7 @@ impl Widget for Switch {
     ) {
         let is_disabled = ctx.is_disabled();
 
-        let size = ctx.border_box_size();
+        let size = ctx.border_box().size();
 
         let border_box_translation = ctx.border_box_translation();
         let cache = ctx.property_cache();

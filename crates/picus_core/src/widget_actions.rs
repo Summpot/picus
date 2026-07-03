@@ -211,7 +211,7 @@ fn portal_geometry_from_subtree(widget: WidgetRef<'_, dyn Widget>) -> Option<(Ve
     }
 
     if widget.short_type_name() == "Portal" {
-        let viewport_size = widget.ctx().border_box_size();
+        let viewport_size = widget.ctx().border_box().size();
         let viewport = Vec2::new(viewport_size.width as f32, viewport_size.height as f32);
 
         let content = widget
@@ -219,7 +219,7 @@ fn portal_geometry_from_subtree(widget: WidgetRef<'_, dyn Widget>) -> Option<(Ve
             .into_iter()
             .find(|child| !child.ctx().is_stashed() && child.short_type_name() != "ScrollBar")
             .map(|child| {
-                let size = child.ctx().border_box_size();
+                let size = child.ctx().border_box().size();
                 Vec2::new(size.width as f32, size.height as f32)
             })
             .unwrap_or(viewport);

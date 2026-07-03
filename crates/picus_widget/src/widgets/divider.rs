@@ -736,7 +736,7 @@ impl Widget for Divider {
         painter: &mut Painter<'_>,
     ) {
         // TODO: Replace with snap-aware paint helper once that exists.
-        let one_dp = 1. / ctx.get_scale_factor();
+        let one_dp = 1. / ctx.scale_factor();
 
         let cache = ctx.property_cache();
         let color = props.get::<ContentColor>(cache);

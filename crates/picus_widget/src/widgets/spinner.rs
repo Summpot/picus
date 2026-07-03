@@ -110,7 +110,7 @@ impl Widget for Spinner {
         let color = props.get::<ContentColor>(cache);
 
         let t = self.t;
-        let size = ctx.content_box_size();
+        let size = ctx.content_box().size();
         let center = Point::new(size.width / 2.0, size.height / 2.0);
         let scale_factor = size.width.min(size.height) / 40.0;
 

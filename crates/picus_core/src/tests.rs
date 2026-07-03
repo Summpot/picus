@@ -2699,8 +2699,8 @@ fn widget_center_for_widget_id(app: &App, widget_id: WidgetId) -> Vec2 {
         .expect("widget id should resolve in render tree");
 
     let ctx = widget.ctx();
-    let origin = ctx.window_origin();
-    let size = ctx.border_box_size();
+    let origin = ctx.to_window(masonry_core::kurbo::Point::ZERO);
+    let size = ctx.border_box().size();
     Vec2::new(
         (origin.x + size.width * 0.5) as f32,
         (origin.y + size.height * 0.5) as f32,
@@ -2715,7 +2715,7 @@ fn widget_inset_point_for_widget_id(app: &App, widget_id: WidgetId, inset: f64) 
         .expect("widget id should resolve in render tree");
 
     let ctx = widget.ctx();
-    let origin = ctx.window_origin();
+    let origin = ctx.to_window(masonry_core::kurbo::Point::ZERO);
     Vec2::new((origin.x + inset) as f32, (origin.y + inset) as f32)
 }
 
@@ -2826,8 +2826,8 @@ fn widget_rect_for_entity(app: &App, entity: Entity) -> Rect {
         .get_widget(widget_id)
         .expect("widget id should resolve in render tree");
     let ctx = widget.ctx();
-    let origin = ctx.window_origin();
-    let size = ctx.border_box_size();
+    let origin = ctx.to_window(masonry_core::kurbo::Point::ZERO);
+    let size = ctx.border_box().size();
 
     Rect {
         min: Vec2::new(origin.x as f32, origin.y as f32),
@@ -2848,8 +2848,8 @@ fn widget_height_for_entity(app: &App, entity: Entity) -> f64 {
         .get_widget(widget_id)
         .expect("widget id should resolve in render tree")
         .ctx()
-        .border_box_size()
-        .height
+        .border_box()
+        .height()
 }
 
 fn resize_primary_window(app: &mut App, window_entity: Entity, width: f32, height: f32) {
@@ -2912,8 +2912,8 @@ fn portal_rects_for_entity(app: &App, entity: Entity) -> Vec<Rect> {
 
         if widget.short_type_name() == "Portal" {
             let ctx = widget.ctx();
-            let origin = ctx.window_origin();
-            let size = ctx.border_box_size();
+            let origin = ctx.to_window(masonry_core::kurbo::Point::ZERO);
+            let size = ctx.border_box().size();
             rects.push(Rect {
                 min: Vec2::new(origin.x as f32, origin.y as f32),
                 max: Vec2::new(
@@ -3007,8 +3007,8 @@ fn collect_widget_bounds_by_short_name(
 
     if widget.short_type_name() == short_type_name {
         let ctx = widget.ctx();
-        let origin = ctx.window_origin();
-        let size = ctx.border_box_size();
+        let origin = ctx.to_window(masonry_core::kurbo::Point::ZERO);
+        let size = ctx.border_box().size();
         bounds.push(Rect::from_corners(
             Vec2::new(origin.x as f32, origin.y as f32),
             Vec2::new(
@@ -4480,8 +4480,8 @@ fn scroll_view_left_aligns_narrow_content_after_viewport_stretch() {
         .get_widget(label_widget_id)
         .expect("label widget id should resolve");
 
-    let scroll_x = scroll_widget.ctx().window_origin().x;
-    let label_x = label_widget.ctx().window_origin().x;
+    let scroll_x = scroll_widget.ctx().to_window(masonry_core::kurbo::Point::ZERO).x;
+    let label_x = label_widget.ctx().to_window(masonry_core::kurbo::Point::ZERO).x;
 
     assert!(
         (label_x - scroll_x).abs() <= 4.0,

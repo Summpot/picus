@@ -1189,8 +1189,8 @@ fn collect_entity_hit_boxes(widget: WidgetRef<'_, dyn Widget>, out: &mut Vec<Ent
     };
 
     let ctx = widget.ctx();
-    let origin = ctx.window_origin();
-    let size = ctx.border_box_size();
+    let origin = ctx.to_window(masonry_core::kurbo::Point::ZERO);
+    let size = ctx.border_box().size();
     out.push(EntityHitBox {
         entity,
         rect: OverlayAnchorRect {

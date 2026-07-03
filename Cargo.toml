@@ -45,10 +45,10 @@ reqwest = { version = "0.13", default-features = false, features = ["blocking", 
 rfd = "0.17"
 fluent = "0.17"
 unic-langid = { version = "0.9", features = ["macros"] }
-masonry_core = { git = "https://github.com/linebender/xilem.git", rev = "72c6517ad035f352c70f939f4754a3f79fca23fd" }
-masonry_imaging = { git = "https://github.com/linebender/xilem.git", rev = "72c6517ad035f352c70f939f4754a3f79fca23fd", features = ["imaging_vello"] }
-masonry_winit = { git = "https://github.com/linebender/xilem.git", rev = "72c6517ad035f352c70f939f4754a3f79fca23fd" }
-xilem_core = { git = "https://github.com/linebender/xilem.git", rev = "72c6517ad035f352c70f939f4754a3f79fca23fd" }
+masonry_core = { git = "https://github.com/linebender/xilem.git", rev = "4b1922c9728f7b86642b6759c6608f32e0badec2" }
+masonry_imaging = { git = "https://github.com/linebender/xilem.git", rev = "4b1922c9728f7b86642b6759c6608f32e0badec2", features = ["imaging_vello"] }
+masonry_winit = { git = "https://github.com/linebender/xilem.git", rev = "4b1922c9728f7b86642b6759c6608f32e0badec2" }
+xilem_core = { git = "https://github.com/linebender/xilem.git", rev = "4b1922c9728f7b86642b6759c6608f32e0badec2" }
 picus_widget = { path = "crates/picus_widget" }
 picus_view = { path = "crates/picus_view" }
 vello = { version = "0.8.0", default-features = false, features = ["wgpu"] }

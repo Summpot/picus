@@ -446,7 +446,7 @@ mod tests {
             .get_widget(widget_id)
             .expect("widget id should resolve in render tree")
             .ctx()
-            .border_box_size()
+            .border_box().size()
             .height
     }
 }

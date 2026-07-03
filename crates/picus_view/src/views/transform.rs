@@ -117,6 +117,7 @@ where
         mut element: Mut<'_, Self::Element>,
         app_state: &mut State,
     ) {
+        let transform_before = element.ctx.transform();
         self.child.rebuild(
             &prev.child,
             &mut view_state.child,
@@ -124,7 +125,7 @@ where
             element.reborrow_mut(),
             app_state,
         );
-        let transform_changed = element.ctx.transform_has_changed();
+        let transform_changed = element.ctx.transform() != transform_before;
         // If the child view changed the transform, we know we're out of date.
         if transform_changed {
             // If it has changed the transform, then we know that it will only be due to effects
