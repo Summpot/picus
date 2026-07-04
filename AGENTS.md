@@ -14,8 +14,7 @@ cross-cutting design decisions that code comments cannot express well.
 2. **Verification**
    - Add or update tests for behavior changes.
    - Use Rust 1.95.0 or newer for Bevy 0.19 workspace checks.
-   - Run `cargo build` and `cargo test` once per change set.
-   - Run `cargo clippy --all-targets --all-features -- -D warnings` before committing.
+   - Run `cargo check` and `cargo test` once per change set.
    - Leave no compiler or Clippy warnings.
 
 3. **Rust dependencies**
@@ -33,28 +32,11 @@ cross-cutting design decisions that code comments cannot express well.
    - Do not use dots in Fluent message IDs; Fluent reserves dots for attributes.
    - Style class names may use dots, such as `todo.root`.
 
-6. **Autonomy**
-   - Execute straightforward tasks directly.
-   - Ask the user only for architecture-level choices with meaningful trade-offs.
-
-7. **Third-party dependencies**
-   - Core Linebender dependencies track official upstream only. Prefer crates.io
-     releases when every needed crate is published; otherwise use official
-     `https://github.com/linebender/xilem.git` Git dependencies pinned by commit.
-   - Do not depend directly on upstream `masonry` or upstream `xilem`.
-   - `picus_widget` is the Picus-owned retained widget backend, and
-     `picus_view` is the Picus-owned Xilem-compatible view adapter on top.
-   - Do not reintroduce `third_party` submodules or user-fork dependencies unless
-     a required capability cannot be expressed against official upstream crates.
-   - Temporary local Cargo `[patch]` or path overrides are allowed for validation;
-     remove them unless they are part of the intended design.
-
-8. **Commit messages**
-   - All commit messages must be written in English.
-
-9. **Code formatting**
+6. **Committing**
    - Run `cargo fmt` only before committing, as part of the final pre-commit workflow.
+   - Run `cargo clippy --all-targets --all-features -- -D warnings` before committing.
    - Formatting-only changes are not semantic modifications. Do not rebuild or retest after a pure formatting change.
+   - All commit messages must be written in English.
 
 ## 2. Workspace
 
@@ -357,22 +339,3 @@ Use two UI composition layers:
 - Rust view helpers for reusable local fragments.
 - ECS components registered through `register_ui_component::<T>()` for reusable UI
   regions.
-
-## 13. Reference Files
-
-- Styling: `crates/picus_core/src/styling.rs`
-- Plugin wiring: `crates/picus_core/src/plugin.rs`
-- Built-in components: `crates/picus_core/src/components/`
-- ECS button widget: `crates/picus_core/src/widgets/ecs_button_widget.rs`
-- ECS button views: `crates/picus_core/src/views/ecs_button_view.rs`
-- Theme bundle: `crates/picus_core/src/theme/fluent_theme.ron`
-- Surface bridge: `crates/picus_surface/`
-
-## 14. Non-Goals
-
-- Retained UI rendering does not use Bevy render-graph integration.
-- Built-in interactive controls do not use user-facing closure event handlers.
-- Styling does not implement full CSS cascade semantics.
-- Inherited style contexts are unsupported; styles are per-entity with selector
-  matching.
-- External `.bsn` files are not the primary Picus UI authoring path.
