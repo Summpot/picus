@@ -1,6 +1,9 @@
 use crate::helpers::{card, grid, note, placeholder};
 use bevy_ecs::{hierarchy::ChildOf, prelude::*};
-use picus_core::{UiButton, UiDataColumn, UiDataRow, UiDataTable};
+use picus_core::{
+    scene::{CommandsSceneExt, bsn, template_value},
+    UiButton, UiDataColumn, UiDataRow, UiDataTable,
+};
 
 /// DataTable / GridView component examples.
 ///
@@ -9,27 +12,29 @@ pub fn spawn_grid_view_page(commands: &mut Commands, parent: Entity) -> Entity {
     let g = grid(commands, parent, 2);
 
     let data = card(commands, g, "DataTable / GridView");
-    commands.spawn((
-        UiDataTable::new([
-            UiDataColumn::new("file", "File").width(180.0),
-            UiDataColumn::new("kind", "Kind"),
-            UiDataColumn::new("size", "Size"),
-            UiDataColumn::new("changed", "Changed"),
-        ])
-        .with_row(UiDataRow::new(
-            "1",
-            ["fba_gallery.cs", "C# sample", "120 KB", "2026-05-21"],
-        ))
-        .with_row(UiDataRow::new(
-            "2",
-            ["main.rs", "Rust example", "42 KB", "2026-05-24"],
-        ))
-        .with_row(UiDataRow::new(
-            "3",
-            ["gallery.ron", "Theme", "12 KB", "2026-05-24"],
-        )),
-        ChildOf(data),
-    ));
+    commands.spawn_scene(bsn! {
+        template_value(
+            UiDataTable::new([
+                UiDataColumn::new("file", "File").width(180.0),
+                UiDataColumn::new("kind", "Kind"),
+                UiDataColumn::new("size", "Size"),
+                UiDataColumn::new("changed", "Changed"),
+            ])
+            .with_row(UiDataRow::new(
+                "1",
+                ["fba_gallery.cs", "C# sample", "120 KB", "2026-05-21"],
+            ))
+            .with_row(UiDataRow::new(
+                "2",
+                ["main.rs", "Rust example", "42 KB", "2026-05-24"],
+            ))
+            .with_row(UiDataRow::new(
+                "3",
+                ["gallery.ron", "Theme", "12 KB", "2026-05-24"],
+            ))
+        )
+        ChildOf(data)
+    });
 
     let visual = card(commands, g, "Template Columns");
     note(
@@ -45,6 +50,9 @@ pub fn spawn_grid_view_page(commands: &mut Commands, parent: Entity) -> Entity {
     );
 
     commands
-        .spawn((UiButton::new("Native Message Placeholder"), ChildOf(visual)))
+        .spawn_scene(bsn! {
+            template_value(UiButton::new("Native Message Placeholder"))
+            ChildOf(visual)
+        })
         .id()
 }

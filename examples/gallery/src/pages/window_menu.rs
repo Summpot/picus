@@ -4,7 +4,10 @@
 
 use crate::helpers::{card, grid, note, placeholder};
 use bevy_ecs::{hierarchy::ChildOf, prelude::*};
-use picus_core::{UiButton, UiMenuBar, UiMenuBarItem, UiMenuItem};
+use picus_core::{
+    scene::{CommandsSceneExt, bsn, template_value},
+    UiButton, UiMenuBar, UiMenuBarItem, UiMenuItem,
+};
 
 /// MenuBar and window menu component examples.
 ///
@@ -14,9 +17,14 @@ pub fn spawn_window_menu_page(commands: &mut Commands, parent: Entity) -> Entity
     let g = grid(commands, parent, 2);
 
     let menu = card(commands, g, "MenuBar");
-    let menu_bar = commands.spawn((UiMenuBar, ChildOf(menu))).id();
-    commands.spawn((
-        UiMenuBarItem::new(
+    let menu_bar = commands
+        .spawn_scene(bsn! {
+            UiMenuBar
+            ChildOf(menu)
+        })
+        .id();
+    commands.spawn_scene(bsn! {
+        template_value(UiMenuBarItem::new(
             "File",
             vec![
                 UiMenuItem::new("New", "new"),
@@ -24,27 +32,27 @@ pub fn spawn_window_menu_page(commands: &mut Commands, parent: Entity) -> Entity
                 UiMenuItem::new("Save", "save"),
                 UiMenuItem::new("Exit", "exit"),
             ],
-        ),
-        ChildOf(menu_bar),
-    ));
-    commands.spawn((
-        UiMenuBarItem::new(
+        ))
+        ChildOf(menu_bar)
+    });
+    commands.spawn_scene(bsn! {
+        template_value(UiMenuBarItem::new(
             "Edit",
             vec![
                 UiMenuItem::new("Undo", "undo"),
                 UiMenuItem::new("Redo", "redo"),
                 UiMenuItem::new("Preferences", "prefs"),
             ],
-        ),
-        ChildOf(menu_bar),
-    ));
-    commands.spawn((
-        UiMenuBarItem::new(
+        ))
+        ChildOf(menu_bar)
+    });
+    commands.spawn_scene(bsn! {
+        template_value(UiMenuBarItem::new(
             "Help",
             vec![UiMenuItem::new("About Picus Gallery", "about")],
-        ),
-        ChildOf(menu_bar),
-    ));
+        ))
+        ChildOf(menu_bar)
+    });
     note(
         commands,
         menu,
@@ -59,6 +67,9 @@ pub fn spawn_window_menu_page(commands: &mut Commands, parent: Entity) -> Entity
     );
 
     commands
-        .spawn((UiButton::new("Warning Toast"), ChildOf(menu)))
+        .spawn_scene(bsn! {
+            template_value(UiButton::new("Warning Toast"))
+            ChildOf(menu)
+        })
         .id()
 }

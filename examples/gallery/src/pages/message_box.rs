@@ -1,6 +1,9 @@
 use crate::helpers::{card, grid, note, placeholder};
 use bevy_ecs::{hierarchy::ChildOf, prelude::*};
-use picus_core::UiButton;
+use picus_core::{
+    scene::{CommandsSceneExt, bsn, template_value},
+    UiButton,
+};
 
 /// Dialog and message box component examples.
 ///
@@ -10,11 +13,23 @@ pub fn spawn_message_box_page(commands: &mut Commands, parent: Entity) -> Entity
 
     let dialog = card(commands, g, "Dialog / MessageBox");
     let error_btn = commands
-        .spawn((UiButton::new("Show Error Toast"), ChildOf(dialog)))
+        .spawn_scene(bsn! {
+            template_value(UiButton::new("Show Error Toast"))
+            ChildOf(dialog)
+        })
         .id();
-    commands.spawn((UiButton::new("Info Dialog"), ChildOf(dialog)));
-    commands.spawn((UiButton::new("Warning Dialog"), ChildOf(dialog)));
-    commands.spawn((UiButton::new("Error Dialog"), ChildOf(dialog)));
+    commands.spawn_scene(bsn! {
+        template_value(UiButton::new("Info Dialog"))
+        ChildOf(dialog)
+    });
+    commands.spawn_scene(bsn! {
+        template_value(UiButton::new("Warning Dialog"))
+        ChildOf(dialog)
+    });
+    commands.spawn_scene(bsn! {
+        template_value(UiButton::new("Error Dialog"))
+        ChildOf(dialog)
+    });
     note(
         commands,
         dialog,

@@ -4,7 +4,10 @@
 
 use crate::helpers::{card, class, grid, placeholder};
 use bevy_ecs::{hierarchy::ChildOf, prelude::*};
-use picus_core::{PicusIcon, UiLabel};
+use picus_core::{
+    scene::{CommandsSceneExt, bsn, template_value},
+    PicusIcon, UiLabel,
+};
 
 /// PicusIcon glyph grid component examples.
 ///
@@ -24,12 +27,16 @@ pub fn spawn_icons_page(commands: &mut Commands, parent: Entity) -> Entity {
         ("Theme", PicusIcon::SunMoon),
     ] {
         let c = card(commands, g, name);
-        commands.spawn((
-            UiLabel::new(icon.glyph().to_string()),
-            class("gallery.icon"),
-            ChildOf(c),
-        ));
-        commands.spawn((UiLabel::new(name), class("gallery.icon_label"), ChildOf(c)));
+        commands.spawn_scene(bsn! {
+            template_value(UiLabel::new(icon.glyph().to_string()))
+            template_value(class("gallery.icon"))
+            ChildOf(c)
+        });
+        commands.spawn_scene(bsn! {
+            template_value(UiLabel::new(name))
+            template_value(class("gallery.icon_label"))
+            ChildOf(c)
+        });
     }
 
     placeholder(

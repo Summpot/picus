@@ -4,7 +4,10 @@
 
 use crate::helpers::{card, class, generated_image, grid, note, placeholder, sample_canvas};
 use bevy_ecs::{hierarchy::ChildOf, prelude::*};
-use picus_core::UiImage;
+use picus_core::{
+    scene::{CommandsSceneExt, bsn, template_value},
+    UiImage,
+};
 
 /// Image, Canvas media, and video/animated image component examples.
 ///
@@ -14,11 +17,11 @@ pub fn spawn_media_page(commands: &mut Commands, parent: Entity) -> Entity {
     let g = grid(commands, parent, 2);
 
     let generated = card(commands, g, "Image");
-    commands.spawn((
-        generated_image(),
-        class("gallery.image"),
-        ChildOf(generated),
-    ));
+    commands.spawn_scene(bsn! {
+        template_value(generated_image())
+        template_value(class("gallery.image"))
+        ChildOf(generated)
+    });
     note(
         commands,
         generated,
@@ -26,11 +29,11 @@ pub fn spawn_media_page(commands: &mut Commands, parent: Entity) -> Entity {
     );
 
     let empty = card(commands, g, "Image fallback");
-    commands.spawn((
-        UiImage::empty().with_alt_text("Image resource unavailable"),
-        class("gallery.image"),
-        ChildOf(empty),
-    ));
+    commands.spawn_scene(bsn! {
+        template_value(UiImage::empty().with_alt_text("Image resource unavailable"))
+        template_value(class("gallery.image"))
+        ChildOf(empty)
+    });
     placeholder(
         commands,
         empty,
@@ -39,7 +42,11 @@ pub fn spawn_media_page(commands: &mut Commands, parent: Entity) -> Entity {
     );
 
     let canvas = card(commands, g, "Canvas media");
-    commands.spawn((sample_canvas(), class("gallery.canvas"), ChildOf(canvas)));
+    commands.spawn_scene(bsn! {
+        template_value(sample_canvas())
+        template_value(class("gallery.canvas"))
+        ChildOf(canvas)
+    });
 
     placeholder(
         commands,
