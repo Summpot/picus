@@ -213,9 +213,9 @@ Interactive controls use the ECS event route:
 - `picus_core::retained_bridge` is an internal ECS-to-retained adapter layer.
   It may bind entities, retained widget messages, and `UiEventQueue`, but it is
   not an application API and must not be made public as a module.
-- Raw retained widgets remain private implementation details. Do not re-export
-  them with `xilem_*` aliases from Picus-facing APIs; projection internals that
-  need low-level widgets import them directly from `picus_view::view`.
+- Raw retained widgets remain private implementation details. Projection
+  internals that need low-level widgets import them directly from
+  `picus_view::view`.
 - Text input, slider, switch, and checkbox helpers map retained widget actions into
   `UiEventQueue`. Do not expose the old Xilem app-state callback model in
   Picus-facing view APIs.
