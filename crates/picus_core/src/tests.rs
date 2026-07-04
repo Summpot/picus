@@ -15,7 +15,7 @@ use crate::bevy_tween::{
 use crate::{
     AppI18n, AppPicusExt, ColorStyle, InteractionState, PicusPlugin, ProjectionCtx, Selector,
     StyleRule, StyleSetter, StyleSheet, SyncTextSource, UiEventQueue, UiProjectorRegistry, UiRoot,
-    UiView, bubble_ui_pointer_events, button_view, ensure_overlay_defaults, ensure_overlay_root,
+    UiView, bubble_ui_pointer_events, ensure_overlay_defaults, ensure_overlay_root,
     ensure_overlay_root_entity, handle_overlay_actions, register_builtin_projectors,
     reparent_overlay_entities, resolve_style, resolve_style_for_entity_classes,
     spawn_in_overlay_root, synthesize_roots_with_stats,
@@ -54,12 +54,16 @@ enum DialogCloseTestAction {
 }
 
 fn project_test_root(_: &TestRoot, ctx: ProjectionCtx<'_>) -> UiView {
-    Arc::new(button_view(ctx.entity, TestAction::Clicked, "Click"))
+    Arc::new(crate::retained_bridge::button_view(
+        ctx.entity,
+        TestAction::Clicked,
+        "Click",
+    ))
 }
 
 fn project_toast_probe(_: &ToastProbe, ctx: ProjectionCtx<'_>) -> UiView {
     Arc::new(
-        crate::xilem::view::transformed(crate::views::opaque_hitbox_for_entity(
+        crate::xilem::view::transformed(crate::retained_bridge::opaque_hitbox_for_entity(
             ctx.entity,
             crate::xilem::view::label("Toast"),
         ))

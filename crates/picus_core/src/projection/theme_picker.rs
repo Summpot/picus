@@ -15,7 +15,7 @@ use crate::{
         apply_direct_widget_style, apply_flex_alignment, apply_label_style, apply_widget_style,
         resolve_style, resolve_style_for_classes,
     },
-    views::{button_with_child_view, opaque_hitbox_for_entity},
+    retained_bridge::{button_with_child_view, opaque_hitbox_for_entity},
 };
 
 use super::{

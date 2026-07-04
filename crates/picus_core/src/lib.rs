@@ -74,10 +74,11 @@ pub mod synthesize;
 pub mod templates;
 pub mod titlebar_system;
 pub mod validation;
-pub mod views;
 pub mod widget_actions;
-pub mod widgets;
 pub mod xilem;
+
+mod retained_bridge;
+mod retained_widgets;
 
 pub use bevy_app;
 pub use bevy_asset;
@@ -117,8 +118,11 @@ pub use synthesize::*;
 pub use templates::*;
 pub use titlebar_system::*;
 pub use validation::*;
-pub use views::*;
 pub use widget_actions::*;
+pub use retained_bridge::{
+    ButtonView, ButtonWithChildView, CheckboxView, SliderView, SwitchView, button,
+    button_with_child, checkbox, slider, switch, text_input,
+};
 
 pub mod prelude {
     //! Convenience exports for Picus internals and legacy `picus_core` users.
@@ -164,8 +168,7 @@ pub mod prelude {
         UiThemePickerOption, UiTitleBar, UiToast, UiToolbar, UiTooltip, UiTreeNode,
         UiTreeNodeToggled, UiView, UiVisibleResponsive, UiWindow, WidgetUiAction, WindowRuntime,
         WindowSize, XilemFontBridge, bubble_ui_pointer_events, button, button_with_child, checkbox,
-        collect_bevy_font_assets, dismiss_overlays_on_click, button_view, button_with_child_view,
-        checkbox_view, slider_view, switch_view, text_input_view, emit_ui_action,
+        collect_bevy_font_assets, dismiss_overlays_on_click, emit_ui_action,
         ensure_overlay_root, ensure_overlay_root_entity, ensure_template_part,
         expand_builtin_ui_component_templates, find_template_part, gather_ui_roots,
         handle_global_overlay_clicks, handle_overlay_actions, handle_tooltip_hovers,

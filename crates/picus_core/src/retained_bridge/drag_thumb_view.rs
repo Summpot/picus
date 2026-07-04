@@ -5,7 +5,7 @@ use xilem_core::{MessageCtx, MessageResult, Mut, View, ViewMarker};
 
 use crate::{
     ScrollAxis,
-    widgets::{DragThumbWidget, DragThumbWidgetAction},
+    retained_widgets::{DragThumbWidget, DragThumbWidgetAction},
 };
 
 /// Picus action-dispatched view backed by a custom draggable thumb widget.

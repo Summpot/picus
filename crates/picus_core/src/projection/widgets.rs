@@ -37,7 +37,7 @@ use crate::{
         ResolvedStyle, apply_direct_widget_style, apply_flex_alignment, apply_label_style,
         apply_widget_style, font_stack_from_style, resolve_style, resolve_style_for_classes,
     },
-    views::{
+    retained_bridge::{
         button_view, button_with_child_view, drag_thumb_view, radio_button_view,
         opaque_hitbox_for_entity, scroll_portal,
     },
@@ -1256,7 +1256,7 @@ pub(crate) fn project_menu_item_panel(_: &UiMenuItemPanel, ctx: ProjectionCtx<'_
         .dims((Length::px(panel_width), Length::px(panel_height)));
 
     Arc::new(
-        transformed(crate::views::opaque_hitbox_for_entity(
+        transformed(crate::retained_bridge::opaque_hitbox_for_entity(
             ctx.entity,
             apply_widget_style(scrollable, &menu_style),
         ))
@@ -1461,7 +1461,7 @@ pub(crate) fn project_color_picker_panel(
     );
 
     Arc::new(
-        transformed(crate::views::opaque_hitbox_for_entity(
+        transformed(crate::retained_bridge::opaque_hitbox_for_entity(
             ctx.entity, panel_view,
         ))
         .translate(pos),
@@ -1761,7 +1761,7 @@ pub(crate) fn project_date_picker_panel(
     );
 
     Arc::new(
-        transformed(crate::views::opaque_hitbox_for_entity(
+        transformed(crate::retained_bridge::opaque_hitbox_for_entity(
             ctx.entity, panel_view,
         ))
         .translate(pos),
@@ -2293,7 +2293,7 @@ pub(crate) fn project_time_picker_panel(
     );
 
     Arc::new(
-        transformed(crate::views::opaque_hitbox_for_entity(
+        transformed(crate::retained_bridge::opaque_hitbox_for_entity(
             ctx.entity, panel_view,
         ))
         .translate(pos),
@@ -2428,7 +2428,7 @@ pub(crate) fn project_context_menu(menu: &UiContextMenu, ctx: ProjectionCtx<'_>)
         .dims((Length::px(panel_width), Length::px(panel_height)));
 
     Arc::new(
-        transformed(crate::views::opaque_hitbox_for_entity(
+        transformed(crate::retained_bridge::opaque_hitbox_for_entity(
             ctx.entity,
             apply_widget_style(scrollable, &menu_style),
         ))

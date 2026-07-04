@@ -5,48 +5,42 @@ use masonry_core::{
     accesskit::{Node, Role},
     core::keyboard::{Key, NamedKey},
     core::{
-        AccessCtx, AccessEvent, ArcStr, ChildrenIds, EventCtx, LayoutCtx, MeasureCtx, NewWidget,
-        PaintCtx, PointerButton, PointerButtonEvent, PointerEvent, PropertiesMut, PropertiesRef,
-        Property, RegisterCtx, TextEvent, Update, UpdateCtx, UsesProperty, Widget, WidgetMut,
-        WidgetPod,
+        AccessCtx, AccessEvent, ChildrenIds, EventCtx, LayoutCtx, MeasureCtx, NewWidget, PaintCtx,
+        PointerButton, PointerButtonEvent, PointerEvent, PropertiesMut, PropertiesRef, Property,
+        RegisterCtx, TextEvent, Update, UpdateCtx, UsesProperty, Widget, WidgetMut, WidgetPod,
     },
     imaging::Painter,
     kurbo::{Axis, Size},
     layout::{LayoutSize, LenReq, Length, SizeDef},
     properties::{Background, BorderColor, BorderWidth, CornerRadius, Padding},
 };
-use picus_view::picus_widget::{properties::ContentColor, widgets::Label};
+use picus_view::picus_widget::properties::ContentColor;
 
-use crate::{
-    events::{UiEvent, push_global_ui_event},
-    styling::UiInteractionEvent,
-    widgets::HitTransparentWidget,
-};
+use crate::{events::{push_global_ui_event, UiEvent}, styling::UiInteractionEvent};
 
-/// Internal action used to force Xilem driver ticks for ECS button state changes.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ActionButtonWidgetAction {
-    StateChanged,
-}
+use super::{ActionButtonWidgetAction, HitTransparentWidget};
 
-/// Masonry widget that emits typed ECS actions without user-facing closures.
-pub struct ActionButtonWidget<A> {
+/// Masonry button widget that hosts an arbitrary child while dispatching typed ECS actions.
+pub struct ActionButtonWithChildWidget<A> {
     entity: Entity,
     action: A,
-    label: WidgetPod<HitTransparentWidget>,
+    child: WidgetPod<HitTransparentWidget>,
     hovered: bool,
     pressed: bool,
 }
 
-impl<A> UsesProperty<ContentColor> for ActionButtonWidget<A> where A: Clone + Send + Sync + 'static {}
+impl<A> UsesProperty<ContentColor> for ActionButtonWithChildWidget<A> where
+    A: Clone + Send + Sync + 'static
+{
+}
 
-impl<A> ActionButtonWidget<A> {
+impl<A> ActionButtonWithChildWidget<A> {
     #[must_use]
-    pub fn new(entity: Entity, action: A, label: impl Into<ArcStr>) -> Self {
+    pub fn new(entity: Entity, action: A, child: NewWidget<impl Widget + ?Sized>) -> Self {
         Self {
             entity,
             action,
-            label: NewWidget::new(HitTransparentWidget::new(Label::new(label).prepare())).to_pod(),
+            child: NewWidget::new(HitTransparentWidget::new(child)).to_pod(),
             hovered: false,
             pressed: false,
         }
@@ -58,7 +52,7 @@ impl<A> ActionButtonWidget<A> {
     }
 }
 
-impl<A> ActionButtonWidget<A>
+impl<A> ActionButtonWithChildWidget<A>
 where
     A: Clone + Send + Sync + 'static,
 {
@@ -70,11 +64,8 @@ where
         this.widget.action = action;
     }
 
-    pub fn set_label(this: &mut WidgetMut<'_, Self>, label: impl Into<ArcStr>) {
-        let mut wrapper = this.ctx.get_mut(&mut this.widget.label);
-        let mut child = HitTransparentWidget::child_mut(&mut wrapper);
-        let mut label_widget = child.downcast::<Label>();
-        Label::set_text(&mut label_widget, label);
+    pub fn child_mut<'t>(this: &'t mut WidgetMut<'_, Self>) -> WidgetMut<'t, HitTransparentWidget> {
+        this.ctx.get_mut(&mut this.widget.child)
     }
 
     fn push_action(&self) {
@@ -114,7 +105,7 @@ where
     }
 }
 
-impl<A> Widget for ActionButtonWidget<A>
+impl<A> Widget for ActionButtonWithChildWidget<A>
 where
     A: Clone + Send + Sync + 'static,
 {
@@ -178,7 +169,7 @@ where
     }
 
     fn register_children(&mut self, ctx: &mut RegisterCtx<'_>) {
-        ctx.register_child(&mut self.label);
+        ctx.register_child(&mut self.child);
     }
 
     fn update(&mut self, ctx: &mut UpdateCtx<'_>, _props: &mut PropertiesMut<'_>, event: &Update) {
@@ -228,7 +219,7 @@ where
         let context_size = LayoutSize::maybe(axis.cross(), cross_length);
 
         ctx.compute_length(
-            &mut self.label,
+            &mut self.child,
             auto_length,
             context_size,
             axis,
@@ -237,12 +228,12 @@ where
     }
 
     fn layout(&mut self, ctx: &mut LayoutCtx<'_>, _props: &PropertiesRef<'_>, size: Size) {
-        let child_size = ctx.compute_size(&mut self.label, SizeDef::fit(size), size.into());
-        ctx.run_layout(&mut self.label, child_size);
+        let child_size = ctx.compute_size(&mut self.child, SizeDef::fit(size), size.into());
+        ctx.run_layout(&mut self.child, child_size);
 
         let child_origin = ((size - child_size).to_vec2() * 0.5).to_point();
-        ctx.place_child(&mut self.label, child_origin);
-        ctx.derive_baselines(&self.label);
+        ctx.place_child(&mut self.child, child_origin);
+        ctx.derive_baselines(&self.child);
     }
 
     fn paint(
@@ -267,7 +258,7 @@ where
     }
 
     fn children_ids(&self) -> ChildrenIds {
-        ChildrenIds::from_slice(&[self.label.id()])
+        ChildrenIds::from_slice(&[self.child.id()])
     }
 
     fn accepts_focus(&self) -> bool {

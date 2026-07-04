@@ -51,8 +51,8 @@ crates are not dependencies and should not be reintroduced.
 Crates:
 
 - `picus`: application-facing facade with grouped public modules (`app`,
-  `components`, `views`, `styling`, `events`, `overlay`, `runtime`, `i18n`, and
-  `scene`) plus transitional root re-exports.
+  `components`, `projection`, `styling`, `events`, `overlay`, `runtime`,
+  `i18n`, and `scene`) plus transitional root re-exports.
 - `picus_core`: implementation crate for ECS-driven UI projection, styling,
   overlays, built-in components, fonts, icons, and runtime integration.
 - `picus_widget`: Picus-owned retained widget/property backend and the long-term
@@ -206,12 +206,16 @@ Interactive controls use the ECS event route:
 
 - `ButtonView` and `ButtonWithChildView` emit pointer interaction events and
   typed actions through `UiEventQueue`.
-- `picus::views` and `picus_core::views` expose Picus action helpers only
-  (`button`, `button_with_child`, `text_input`, `slider`, `switch`, `checkbox`,
-  and internal projector helper names such as `button_view`). Do not re-export
-  raw retained widgets with `xilem_*` aliases from Picus-facing APIs; projection
-  internals that need low-level widgets import them directly from
-  `picus_view::view`.
+- Public action helpers (`button`, `button_with_child`, `text_input`, `slider`,
+  `switch`, and `checkbox`) are imported from `picus::components`,
+  `picus::projection`, or `picus::prelude`; do not expose a public
+  `picus::views` compatibility module.
+- `picus_core::retained_bridge` is an internal ECS-to-retained adapter layer.
+  It may bind entities, retained widget messages, and `UiEventQueue`, but it is
+  not an application API and must not be made public as a module.
+- Raw retained widgets remain private implementation details. Do not re-export
+  them with `xilem_*` aliases from Picus-facing APIs; projection internals that
+  need low-level widgets import them directly from `picus_view::view`.
 - Text input, slider, switch, and checkbox helpers map retained widget actions into
   `UiEventQueue`. Do not expose the old Xilem app-state callback model in
   Picus-facing view APIs.

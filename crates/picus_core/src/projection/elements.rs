@@ -15,7 +15,7 @@ use crate::{
         ResolvedStyle, apply_direct_widget_style, apply_label_style, apply_widget_style,
         font_stack_from_style, resolve_style, resolve_style_for_entity_classes,
     },
-    views::{button_view, button_with_child_view, slider_view, text_input_view},
+    retained_bridge::{button_view, button_with_child_view, slider_view, text_input_view},
     widget_actions::WidgetUiAction,
 };
 use bevy_ecs::prelude::*;

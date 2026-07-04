@@ -9,7 +9,7 @@ use crate::{
     projection::{UiProjectorRegistry, UiView},
     runtime::MasonryRuntime,
     styling::InteractionState,
-    views::entity_scope,
+    retained_bridge::entity_scope,
 };
 
 /// Snapshot containing synthesized views for the current frame, grouped by

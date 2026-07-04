@@ -2,7 +2,7 @@ use bevy_ecs::entity::Entity;
 use picus_view::{Pod, ViewCtx, WidgetView};
 use xilem_core::{MessageCtx, MessageResult, Mut, View, ViewMarker};
 
-use crate::widgets::{ActionButtonWidgetAction, ActionButtonWithChildWidget, HitTransparentWidget};
+use crate::retained_widgets::{ActionButtonWidgetAction, ActionButtonWithChildWidget, HitTransparentWidget};
 
 /// Picus action-dispatched button view that accepts an arbitrary child widget view.
 #[must_use = "View values do nothing unless returned into the synthesized UI tree."]

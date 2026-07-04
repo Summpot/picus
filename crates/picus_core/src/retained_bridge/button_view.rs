@@ -3,7 +3,7 @@ use masonry_core::core::ArcStr;
 use picus_view::{Pod, ViewCtx};
 use xilem_core::{MessageCtx, MessageResult, Mut, View, ViewMarker};
 
-use crate::widgets::{ActionButtonWidget, ActionButtonWidgetAction};
+use crate::retained_widgets::{ActionButtonWidget, ActionButtonWidgetAction};
 
 /// Picus action-dispatched view backed by Masonry's native `Button` widget.
 #[must_use = "View values do nothing unless returned into the synthesized UI tree."]

@@ -17,7 +17,7 @@ pub mod app {
     };
 }
 
-/// ECS authoring components and component registration contracts.
+/// ECS authoring components, helper views, and component registration contracts.
 pub mod components {
     pub use picus_core::{
         AppBreakpoints, AutoDismiss, AvatarShape, BuiltinUiAction, ButtonAppearance,
@@ -45,17 +45,16 @@ pub mod components {
         UiSplitPane, UiStreamingMarkdown, UiSwitch, UiSwitchChanged, UiTabBar, UiTabChanged,
         UiTable, UiText, UiTextInput, UiTextInputChanged, UiThemePicker, UiThemePickerChanged,
         UiThemePickerMenu, UiThemePickerOption, UiTitleBar, UiToast, UiToolbar, UiTooltip,
-        UiTreeNode, UiTreeNodeToggled, UiView, UiVisibleResponsive, UiWindow,
+        UiTreeNode, UiTreeNodeToggled, UiView, UiVisibleResponsive, UiWindow, button,
+        button_with_child, checkbox, slider, switch, text_input,
     };
 }
 
-/// View helpers for custom `UiComponentTemplate` projectors.
-pub mod views {
+/// Low-level projection helpers for custom `UiComponentTemplate` implementations.
+pub mod projection {
     pub use picus_core::{
-        ButtonView, ButtonWithChildView, CheckboxView, DragThumbView, SliderView,
-        SwitchView, button, button_view, button_with_child, button_with_child_view, checkbox,
-        checkbox_view, drag_thumb_view, entity_scope, opaque_hitbox, opaque_hitbox_for_entity,
-        scroll_portal, slider, slider_view, switch, switch_view, text_input, text_input_view,
+        ButtonView, ButtonWithChildView, CheckboxView, ProjectionCtx, SliderView, SwitchView,
+        UiView, button, button_with_child, checkbox, slider, switch, text_input,
     };
 }
 
@@ -129,6 +128,9 @@ pub mod scene {
 
 /// Common imports for Picus applications.
 pub mod prelude {
-    pub use crate::{app::*, components::*, events::*, i18n::*, overlay::*, runtime::*, scene::*, styling::*, views::*};
+    pub use crate::{
+        app::*, components::*, events::*, i18n::*, overlay::*, projection::*, runtime::*,
+        scene::*, styling::*,
+    };
     pub use picus_core::{bevy_ecs::hierarchy::{ChildOf, Children}, impl_ui_component_template};
 }

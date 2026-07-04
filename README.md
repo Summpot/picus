@@ -22,7 +22,7 @@ The workspace currently contains these crates:
 - **picus_view** — Picus-owned Xilem-compatible retained view adapter
 - **picus_surface** — Vello rendering bridge for window surfaces
 
-This README covers the `picus` crate, which provides the complete UI framework experience through grouped public modules such as `picus::app`, `picus::components`, `picus::views`, `picus::styling`, and `picus::overlay`. The companion crates provide the retained runtime, rendering, and platform integration.
+This README covers the `picus` crate, which provides the complete UI framework experience through grouped public modules such as `picus::app`, `picus::components`, `picus::projection`, `picus::styling`, and `picus::overlay`. The companion crates provide the retained runtime, rendering, and platform integration.
 
 ---
 
@@ -204,8 +204,8 @@ real entity reference when the value matters at runtime.
 The main application-facing crate. It provides grouped modules for clearer imports:
 
 - `picus::app` for plugins, runners, and Bevy re-exports
-- `picus::components` for ECS authoring components
-- `picus::views` for projector view helpers
+- `picus::components` for ECS authoring components and common action helpers
+- `picus::projection` for low-level custom projector helpers
 - `picus::styling` for style resolution and theme APIs
 - `picus::events` for `UiEventQueue`, typed events, and widget actions
 - `picus::overlay`, `picus::runtime`, `picus::i18n`, and `picus::scene` for focused subsystems
@@ -280,14 +280,13 @@ Application code depends on `picus`, not `picus_core`. Prefer grouped imports wh
 ```rust
 use picus::{
     app::{AppPicusExt, PicusPlugin, run_app},
-    components::{UiComponentTemplate, UiRoot, UiView},
+    components::{UiComponentTemplate, UiRoot, UiView, button},
     events::UiEventQueue,
     runtime::ProjectionCtx,
-    views::button,
 };
 ```
 
-View helpers such as `button`, `checkbox`, `slider`, `switch`, and `text_input` are Picus-native helpers that emit typed actions into `UiEventQueue`. Raw retained widgets are internal implementation details imported from `picus_view::view` by projectors when needed.
+Helper views such as `button`, `checkbox`, `slider`, `switch`, and `text_input` are Picus-native helpers that emit typed actions into `UiEventQueue`. Import them from `picus::components` or `picus::prelude` with the rest of the authoring surface. Raw retained widgets are internal implementation details imported from `picus_view::view` by projectors when needed.
 
 ---
 

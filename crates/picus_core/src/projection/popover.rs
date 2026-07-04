@@ -8,7 +8,7 @@ use picus_view::view::{CrossAxisAlignment, FlexExt as _, flex_col, label, sized_
 use crate::{
     ecs::{OverlayComputedPosition, UiPopover},
     styling::{ResolvedStyle, apply_flex_alignment, apply_widget_style, resolve_style},
-    views::opaque_hitbox_for_entity,
+    retained_bridge::opaque_hitbox_for_entity,
 };
 
 use super::{
