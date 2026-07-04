@@ -62,9 +62,52 @@ Crates:
 - `picus_surface`: Vello/wgpu rendering surface for an externally owned Bevy
   window.
 
+Embedded fork crates under `thirdparty/CodeWhale/crates/*` are picus workspace
+members (see `members` in the root `Cargo.toml`) so their `*.workspace = true`
+inheritance resolves against the picus root. Their `version`/`license`/`repository`
+are pinned per-crate (not inherited) to preserve the fork's identity
+(`codewhale-*` v0.8.66). The fork's own `thirdparty/CodeWhale/Cargo.toml`
+workspace root is excluded from picus to avoid dual membership; it is kept for
+standalone maintenance of the fork. Shared dep versions
+(`tokio = "full"`, `chrono` with `serde`, `reqwest` with `stream`+`socks`,
+`rusqlite` bundled, etc.) are unified in the picus `[workspace.dependencies]`
+table to stay compatible with the fork's own manifest.
+
 Example applications live under `examples/`: `async_downloader`, `calculator`,
 `chess_game`, `game_2048`, `gallery`, `overlay_hit_routing`, `picuscode`,
 `shared_utils`, `timer`, and `todo_list`.
+
+## 2.1. example_picuscode / CodeWhale integration
+
+`example_picuscode` is a Codex-desktop-style GUI for CodeWhale. It embeds the
+CodeWhale runtime in-process via a dedicated bridge thread (see
+`examples/picuscode/src/bridge.rs`):
+
+- A background thread owns a tokio `Runtime` plus `codewhale_core::Runtime`,
+  `codewhale_config::ConfigStore`, and `codewhale_state::StateStore`.
+- Config and state resolve against the same default `~/.codewhale/` paths an
+  installed `codewhale` binary uses, so picuscode is fully config- and
+  state-compatible with the user's installed CodeWhale.
+- The ECS world talks to the bridge through `crossbeam_channel`: it pushes
+  `BridgeRequest` values and polls `BridgeEvent` values each `PreUpdate` frame,
+  keeping async runtime off the Bevy render thread.
+- Model turns stream through the OpenAI-compatible `/chat/completions` SSE
+  endpoint using `codewhale_config::resolve_runtime_options` + `ModelRegistry`
+  for provider/model/api-key resolution, so the same provider setup an
+  installed codewhale uses is honored. Only `WireFormat::ChatCompletions`
+  providers are streamed in this phase; Anthropic Messages / Responses API
+  support is a follow-up.
+- The UI shell: a primary chat window (sidebar thread list + streaming
+  `UiStreamingMarkdown` transcript + composer + status bar) plus secondary
+  About and Settings windows bound via `UiWindow`.
+- `spawn_bridge_with_config_path(Option<PathBuf>)` exists for tests so they
+  never touch the user's real `~/.codewhale/` config.
+
+Phase 1 covers thread lifecycle (create/list/read/rename/archive), config
+get/set/list/reload, and streaming chat. Full TUI feature parity (diff/patch
+viewing, tool-call approval, MCP management, hooks, execpolicy, context/fleet/
+skills) is tracked as follow-up work; the bridge already exposes the
+`codewhale-protocol` `EventFrame` surface needed to render those frames as UI.
 
 ## 3. Runtime Architecture
 

@@ -1,222 +1,69 @@
-//! picuscode: a Codex-desktop-style example verifying the three P0 features.
+//! picuscode: a Codex-desktop-style GUI for CodeWhale.
 //!
-//! - **P0-1 multi-window**: a primary chat window plus a secondary "About"
-//!   window, both driven by `MasonryRuntime`. The secondary window's `UiRoot`
-//!   carries a `UiWindow` binding so it synthesizes into its own window.
-//! - **P0-2 Markdown**: a static `UiMarkdown` welcome card renders headings,
-//!   lists, inline emphasis, and a syntax-highlighted Rust code block.
-//! - **P0-3 streaming markdown**: a simulated CodeWhale reply appends
-//!   `ResponseDelta` events into a `UiStreamingMarkdown` each frame, flushing
-//!   completed paragraphs into the cached prefix so only the in-progress tail is
-//!   re-parsed.
+//! Architecture:
+//! - A background thread ([`bridge::spawn_bridge`]) owns the CodeWhale
+//!   `Runtime`, `ConfigStore`, and `StateStore`, talking to the ECS world
+//!   through crossbeam channels. Config and state persist to the same
+//!   `~/.codewhale/` files an installed `codewhale` binary uses, so the two
+//!   are interchangeable.
+//! - The UI is a Bevy + Picus ECS tree: a primary chat window (sidebar thread
+//!   list + streaming transcript + composer) plus secondary About and
+//!   Settings windows bound via `UiWindow`.
+//! - Model turns stream through the OpenAI-compatible `/chat/completions`
+//!   endpoint using provider/model/api_key resolved from the real codewhale
+//!   config, so the same provider setup an installed codewhale uses is
+//!   honored here.
 
-use std::sync::Arc;
+// Event-routing logic uses `let`-chain guards for clarity; collapsing the
+// nested `if`s would obscure the active-thread/response-id matching.
+#![allow(clippy::collapsible_if)]
 
+use std::collections::BTreeMap;
+
+use bevy_ecs::prelude::*;
 use bevy_window::Window;
 use picus::{
-    AppPicusExt, PicusPlugin, ProjectionCtx, StyleClass, UiEventQueue, UiMarkdown, UiRoot,
-    UiStreamingMarkdown, UiView, UiWindow, WorldSceneExt, apply_widget_style,
+    AppPicusExt, PicusPlugin, StyleClass, UiEventQueue, UiMarkdown, UiRoot, UiStreamingMarkdown,
+    UiWindow, WorldSceneExt,
     bevy_app::{App, PostStartup, PreUpdate, Startup},
-    bevy_ecs::{
-        entity::Entity,
-        hierarchy::ChildOf,
-        prelude::*,
-    },
-    button, emit_ui_action, text_input,
-    masonry_core::layout::{Dim, Length},
-    resolve_style,
     scene::{CommandsSceneExt, bsn},
-    xilem::{
-        InsertNewline,
-        style::Style as _,
-        view::{FlexExt as _, flex_col, flex_row, label, sized_box},
-        winit::{error::EventLoopError},
-    },
+    xilem::winit::error::EventLoopError,
 };
 use shared_utils::init_logging;
 
-/// Actions emitted by picuscode UI controls.
-///
-/// Button helpers emit the bare action variant, so each control maps to one
-/// distinct variant here.
-#[derive(Debug, Clone, PartialEq, Eq)]
-enum PicusCodeAction {
-    Send,
-    ComposerChanged(String),
-    OpenAbout,
-    CloseAbout,
-}
+mod action;
+mod bridge;
+mod settings;
+mod state;
+mod ui;
 
-/// Small local mirror of the CodeWhale app-server thread request boundary.
-///
-/// CodeWhale exposes `ThreadRequest::Message { thread_id, input }`; keeping
-/// the example's mock turn client at this shape lets the future integration
-/// replace only the transport layer.
-#[derive(Debug, Clone, PartialEq, Eq)]
-enum CodeWhaleThreadRequest {
-    Message { thread_id: String, input: String },
-}
+use action::PicusCodeAction;
+use bridge::{BridgeEvent, BridgeRequest, ChatMessage};
+use state::{
+    AboutRootView, ChatBodyView, ChatRootView, ChatTitleBarView, ComposerView, PicusState,
+    SettingsFormView, SettingsRootView, SidebarColumnView, StatusLineView, TranscriptColumnView,
+};
 
-/// Small local mirror of the CodeWhale streaming frames this example consumes.
-#[derive(Debug, Clone, PartialEq, Eq)]
-enum CodeWhaleEventFrame {
-    /// Maps to CodeWhale `EventFrame::ResponseStart`.
-    Start { response_id: String },
-    /// Maps to CodeWhale `EventFrame::ResponseDelta`.
-    Delta { response_id: String, delta: String },
-    /// Maps to CodeWhale `EventFrame::ResponseEnd`.
-    End { response_id: String },
-}
-
-/// One in-flight mock turn, using the same lifecycle as CodeWhale streaming.
-#[derive(Debug)]
-struct CodeWhaleMockTurn {
-    response_id: String,
-    tokens: Vec<String>,
-    next_token: usize,
-    started: bool,
-}
-
-impl CodeWhaleMockTurn {
-    fn new(request: CodeWhaleThreadRequest, turn_index: u64) -> Self {
-        let CodeWhaleThreadRequest::Message { thread_id, input } = request;
-        Self {
-            response_id: format!("{thread_id}:mock-turn-{turn_index}"),
-            tokens: simulated_reply_tokens(&input),
-            next_token: 0,
-            started: false,
-        }
-    }
-
-    fn next_frame(&mut self) -> Option<CodeWhaleEventFrame> {
-        if !self.started {
-            self.started = true;
-            return Some(CodeWhaleEventFrame::Start {
-                response_id: self.response_id.clone(),
-            });
-        }
-
-        if let Some(delta) = self.tokens.get(self.next_token).cloned() {
-            self.next_token += 1;
-            return Some(CodeWhaleEventFrame::Delta {
-                response_id: self.response_id.clone(),
-                delta,
-            });
-        }
-
-        Some(CodeWhaleEventFrame::End {
-            response_id: self.response_id.clone(),
-        })
-    }
-}
-
-/// Per-session chat state stored as a resource.
-#[derive(Resource, Debug)]
-struct ChatState {
-    /// Stable demo thread id matching CodeWhale's thread message API.
-    thread_id: String,
-    /// Incrementing mock turn counter used to build CodeWhale-like response ids.
-    next_turn_index: u64,
-    /// The mock CodeWhale turn currently producing streaming frames.
-    current_turn: Option<CodeWhaleMockTurn>,
-    /// Current CodeWhale response id, when a stream is active.
-    active_response_id: Option<String>,
-    /// Whether a streaming turn is currently active.
-    streaming: bool,
-    /// Current composer draft text.
-    draft: String,
-    /// Whether the About window is open.
-    about_open: bool,
-    /// Entity of the About window (when open).
-    about_window: Option<Entity>,
-    /// Entity of the About `UiRoot` (when open).
-    about_root: Option<Entity>,
-    /// Entity of the transcript column (for appending new messages).
-    transcript_column: Entity,
-    /// Entity of the current turn's `UiStreamingMarkdown` component holder.
-    streaming_entity: Entity,
-}
-
-/// Marker for the root of the primary chat window.
-#[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq)]
-struct ChatRootView;
-
-/// Marker for the title bar row.
-#[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq)]
-struct ChatTitleBarView;
-
-/// Marker for the transcript column (messages stack here).
-#[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq)]
-struct TranscriptColumnView;
-
-/// Marker for the composer row.
-#[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq)]
-struct ComposerView;
-
-/// Marker for the status line.
-#[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq)]
-struct StatusLineView;
-
-/// Marker for the secondary About window root.
-#[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq)]
-struct AboutRootView;
-
-/// A static welcome markdown blob shown at the top of the transcript.
+/// A static welcome markdown blob shown when no thread is selected.
 const WELCOME_MARKDOWN: &str = "\
 # picuscode
 
-A minimal **Codex-desktop**-style demo verifying the three P0 features:
+A **Codex-desktop**-style GUI for CodeWhale, built on Picus.
 
-- Multi-window runtime (primary chat + secondary About window)
-- Markdown rendering with syntax highlighting
-- Streaming markdown for live LLM-style output
+- Left: your CodeWhale threads (shared with the installed `codewhale` CLI).
+- Center: streaming assistant replies rendered as Markdown.
+- Bottom: composer — type a message and press **Send**.
+- Title bar: **+ New** thread, **Settings** (provider/model/key), **About**.
 
-Try typing a message below and pressing **Send** to watch a simulated \
-streaming reply render token-by-token.
+Config and state persist to `~/.codewhale/`, so picuscode and your installed
+`codewhale` stay in sync.
 
 ```rust
-fn main() {
-    let greeting = \"Hello from picus!\";
-    println!(\"{greeting}\");
-}
+// picuscode embeds codewhale-core in-process:
+let bridge = picuscode::bridge::spawn_bridge();
+bridge.send(BridgeRequest::SendMessage { thread_id, input });
 ```
 ";
-
-/// A canned multi-token assistant reply used to simulate CodeWhale streaming.
-fn simulated_reply_tokens(input: &str) -> Vec<String> {
-    let reply = format!(
-        "\
-Sure — treating your prompt as a CodeWhale `ThreadRequest::Message` input:
-
-> {input}
-
-Here is how the three P0 pieces fit together:
-
-1. The *multi-window runtime* keys a `WindowRuntime` per Bevy window entity,
-   so each OS window owns its own `RenderRoot` and view tree.
-2. **Markdown** rendering parses with `pulldown-cmark` and highlights fenced
-   code blocks via `syntect`.
-3. **Streaming markdown** caches the completed prefix and only re-parses the
-   in-progress tail each frame - that keeps per-frame cost flat as the reply
-   grows.
-
-```rust
-// Streaming append is just:
-streaming.append(token);
-streaming.flush_completed();
-```
-
-This mock emits `ResponseStart`, `ResponseDelta`, and `ResponseEnd`, matching
-the CodeWhale app-server event names the real adapter will consume.
-
-> Tip: open the About window from the title bar to see a second OS window.
-"
-    );
-    reply
-        .split_whitespace()
-        .map(|w| format!("{w} "))
-        .collect()
-}
 
 fn setup_chat_world(mut commands: Commands) {
     commands.spawn_scene(bsn! {
@@ -229,8 +76,18 @@ fn setup_chat_world(mut commands: Commands) {
                 StyleClass(vec!["picuscode.titlebar".to_string()])
             ),
             (
-                TranscriptColumnView
-                StyleClass(vec!["picuscode.transcript".to_string()])
+                ChatBodyView
+                StyleClass(vec!["picuscode.body".to_string()])
+                Children [
+                    (
+                        SidebarColumnView
+                        StyleClass(vec!["picuscode.sidebar".to_string()])
+                    ),
+                    (
+                        TranscriptColumnView
+                        StyleClass(vec!["picuscode.transcript".to_string()])
+                    ),
+                ]
             ),
             (
                 ComposerView
@@ -247,7 +104,7 @@ fn setup_chat_world(mut commands: Commands) {
 fn spawn_about_window(world: &mut World) -> (Entity, Entity) {
     let window = Window {
         title: "About picuscode".to_string(),
-        resolution: bevy_window::WindowResolution::new(480, 360),
+        resolution: bevy_window::WindowResolution::new(480, 420),
         ..Default::default()
     };
     let window_entity = world.spawn(window).id();
@@ -268,338 +125,567 @@ fn spawn_about_window(world: &mut World) -> (Entity, Entity) {
     (about_entity, window_entity)
 }
 
-picus::impl_ui_component_template!(ChatRootView, project_chat_root);
-picus::impl_ui_component_template!(ChatTitleBarView, project_title_bar);
-picus::impl_ui_component_template!(TranscriptColumnView, project_transcript_column);
-picus::impl_ui_component_template!(ComposerView, project_composer);
-picus::impl_ui_component_template!(StatusLineView, project_status_line);
-picus::impl_ui_component_template!(AboutRootView, project_about_root);
+fn spawn_settings_window(world: &mut World) -> (Entity, Entity) {
+    let window = Window {
+        title: "picuscode Settings".to_string(),
+        resolution: bevy_window::WindowResolution::new(560, 480),
+        ..Default::default()
+    };
+    let window_entity = world.spawn(window).id();
 
-fn project_chat_root(_: &ChatRootView, ctx: ProjectionCtx<'_>) -> UiView {
-    let style = resolve_style(ctx.world, ctx.entity);
-    let children = ctx
-        .children
-        .into_iter()
-        .map(|child| child.into_any_flex())
-        .collect::<Vec<_>>();
-    Arc::new(apply_widget_style(
-        picus::xilem::view::flex_col(children)
-            .width(Dim::Stretch)
-            .height(Dim::Stretch)
-            .gap(Length::px(style.layout.gap)),
-        &style,
-    ))
-}
-
-fn project_title_bar(_: &ChatTitleBarView, ctx: ProjectionCtx<'_>) -> UiView {
-    let style = resolve_style(ctx.world, ctx.entity);
-    let title = label("picuscode").text_size(16.0);
-    let about_btn = button(ctx.entity, PicusCodeAction::OpenAbout, "About");
-    Arc::new(apply_widget_style(
-        flex_row(vec![
-            sized_box(title).flex(1.0).into_any_flex(),
-            about_btn.into_any_flex(),
-        ])
-        .gap(Length::px(8.0)),
-        &style,
-    ))
-}
-
-fn project_transcript_column(_: &TranscriptColumnView, ctx: ProjectionCtx<'_>) -> UiView {
-    let style = resolve_style(ctx.world, ctx.entity);
-    let children = ctx
-        .children
-        .into_iter()
-        .map(|child| child.into_any_flex())
-        .collect::<Vec<_>>();
-    Arc::new(apply_widget_style(
-        picus::xilem::view::sized_box(flex_col(children).gap(Length::px(12.0)))
-            .width(Dim::Stretch)
-            .height(Dim::Stretch),
-        &style,
-    ))
-}
-
-fn project_composer(_: &ComposerView, ctx: ProjectionCtx<'_>) -> UiView {
-    let style = resolve_style(ctx.world, ctx.entity);
-    let draft = ctx
-        .world
-        .get_resource::<ChatState>()
-        .map(|state| state.draft.clone())
-        .unwrap_or_default();
-    let input_entity = ctx.entity;
-    let enter_entity = ctx.entity;
-    let input = text_input(
-        input_entity,
-        draft,
-        PicusCodeAction::ComposerChanged,
-    )
-    .placeholder("Message CodeWhale...")
-    .insert_newline(InsertNewline::OnShiftEnter)
-    .on_enter(move |_| {
-        emit_ui_action(enter_entity, PicusCodeAction::Send);
-    });
-    let send_btn = button(ctx.entity, PicusCodeAction::Send, "Send");
-    Arc::new(apply_widget_style(
-        flex_row(vec![
-            input.flex(1.0).into_any_flex(),
-            send_btn.into_any_flex(),
-        ])
-        .gap(Length::px(8.0)),
-        &style,
-    ))
-}
-
-fn project_status_line(_: &StatusLineView, ctx: ProjectionCtx<'_>) -> UiView {
-    let style = resolve_style(ctx.world, ctx.entity);
-    let text = ctx
-        .world
-        .get_resource::<ChatState>()
-        .map(|state| {
-            if state.streaming {
-                match &state.active_response_id {
-                    Some(response_id) => format!("Streaming {response_id}"),
-                    None => "Starting CodeWhale turn".to_string(),
-                }
-            } else if state.about_open {
-                "About window open".to_string()
-            } else {
-                "Ready".to_string()
-            }
+    let settings_entity = world
+        .spawn_scene(bsn! {
+            UiRoot
+            UiWindow(window_entity)
+            SettingsRootView
+            StyleClass(vec!["picuscode.settings.root".to_string()])
+            Children [
+                (SettingsFormView StyleClass(vec!["picuscode.settings.form".to_string()])),
+            ]
         })
-        .unwrap_or_else(|| "Ready".to_string());
-    Arc::new(apply_widget_style(label(text).text_size(12.0), &style))
+        .expect("settings BSN scene should spawn")
+        .id();
+
+    (settings_entity, window_entity)
 }
 
-fn project_about_root(_: &AboutRootView, ctx: ProjectionCtx<'_>) -> UiView {
-    let style = resolve_style(ctx.world, ctx.entity);
-    let close_btn = button(ctx.entity, PicusCodeAction::CloseAbout, "Close");
-    let children = ctx
-        .children
-        .into_iter()
-        .map(|child| child.into_any_flex())
-        .collect::<Vec<_>>();
-    let mut all = children;
-    all.push(close_btn.into_any_flex());
-    Arc::new(apply_widget_style(
-        flex_col(all)
-            .width(Dim::Stretch)
-            .height(Dim::Stretch)
-            .gap(Length::px(12.0)),
-        &style,
-    ))
-}
+picus::impl_ui_component_template!(ChatRootView, ui::project_chat_root);
+picus::impl_ui_component_template!(ChatTitleBarView, ui::project_title_bar);
+picus::impl_ui_component_template!(ChatBodyView, ui::project_chat_body);
+picus::impl_ui_component_template!(SidebarColumnView, ui::project_sidebar_column);
+picus::impl_ui_component_template!(TranscriptColumnView, ui::project_transcript_column);
+picus::impl_ui_component_template!(ComposerView, ui::project_composer);
+picus::impl_ui_component_template!(StatusLineView, ui::project_status_line);
+picus::impl_ui_component_template!(AboutRootView, ui::project_about_root);
+picus::impl_ui_component_template!(SettingsRootView, ui::project_settings_root);
+picus::impl_ui_component_template!(SettingsFormView, ui::project_settings_form);
 
-/// System: spawn the initial welcome markdown + streaming reply holder as
-/// children of the transcript column, then seed `ChatState`.
-fn seed_transcript(world: &mut World) {
+/// System: locate the sidebar + transcript entities, spawn the bridge, and
+/// insert the shared `PicusState` resource. Requests an initial thread list
+/// and config list so the first frame has real data.
+fn seed_picus_state(world: &mut World) {
+    let sidebar_column = {
+        let mut q = world.query_filtered::<Entity, With<SidebarColumnView>>();
+        q.iter(world)
+            .next()
+            .expect("sidebar column should exist after setup")
+    };
     let transcript_column = {
-        let mut query = world.query_filtered::<Entity, With<TranscriptColumnView>>();
-        query
-            .iter(world)
+        let mut q = world.query_filtered::<Entity, With<TranscriptColumnView>>();
+        q.iter(world)
             .next()
             .expect("transcript column should exist after setup")
     };
 
-    let welcome = world
-        .spawn((
-            UiMarkdown::new(WELCOME_MARKDOWN),
-            ChildOf(transcript_column),
-        ))
-        .id();
+    // Seed a welcome markdown so the transcript isn't empty before a thread
+    // is selected.
+    world.spawn((
+        UiMarkdown::new(WELCOME_MARKDOWN),
+        bevy_ecs::hierarchy::ChildOf(transcript_column),
+    ));
 
-    let _ = welcome;
+    let bridge = bridge::spawn_bridge();
 
-    world.insert_resource(ChatState {
-        thread_id: "picuscode-demo-thread".to_string(),
-        next_turn_index: 1,
-        current_turn: None,
+    // Kick off the initial data loads.
+    let _ = bridge.tx.send(BridgeRequest::ListThreads);
+    let _ = bridge.tx.send(BridgeRequest::ConfigList);
+
+    world.insert_resource(PicusState {
+        bridge,
+        threads: Vec::new(),
+        active_thread: None,
+        messages: Vec::new(),
         active_response_id: None,
         streaming: false,
+        status: "Ready".to_string(),
         draft: String::new(),
         about_open: false,
         about_window: None,
         about_root: None,
+        settings_open: false,
+        settings_window: None,
+        settings_root: None,
         transcript_column,
         streaming_entity: Entity::PLACEHOLDER,
+        sidebar_column,
+        config_values: BTreeMap::new(),
+        config_edits: BTreeMap::new(),
+        config_status: None,
     });
 }
 
-/// System: drain UI actions, start streaming turns, and append simulated
-/// tokens to the active streaming markdown each frame.
+/// System: drain bridge events into `PicusState` and trigger transcript
+/// rebuilds when the message set changes.
+fn poll_bridge_events(world: &mut World) {
+    let Some(events) = world
+        .get_resource::<PicusState>()
+        .map(|s| s.bridge.events.clone())
+    else {
+        return;
+    };
+
+    let mut transcript_rebuild = false;
+    let mut threads_changed = false;
+
+    while let Ok(event) = events.recv() {
+        match event {
+            BridgeEvent::Ready => {}
+            BridgeEvent::Threads(threads) => {
+                if let Some(mut s) = world.get_resource_mut::<PicusState>() {
+                    s.threads = threads;
+                }
+                threads_changed = true;
+            }
+            BridgeEvent::ThreadCreated { thread } => {
+                if let Some(mut s) = world.get_resource_mut::<PicusState>() {
+                    s.active_thread = Some(thread.id.clone());
+                    s.messages = Vec::new();
+                    s.status = "New thread".to_string();
+                }
+                transcript_rebuild = true;
+                let _ = world
+                    .get_resource::<PicusState>()
+                    .unwrap()
+                    .bridge
+                    .tx
+                    .send(BridgeRequest::ListThreads);
+            }
+            BridgeEvent::ThreadHistory {
+                thread_id,
+                messages,
+                thread: _,
+            } => {
+                if let Some(mut s) = world.get_resource_mut::<PicusState>() {
+                    if s.active_thread.as_deref() == Some(thread_id.as_str()) {
+                        s.messages = messages;
+                        transcript_rebuild = true;
+                    }
+                }
+            }
+            BridgeEvent::TurnStarted {
+                thread_id,
+                response_id,
+            } => {
+                if let Some(mut s) = world.get_resource_mut::<PicusState>() {
+                    if s.active_thread.as_deref() == Some(thread_id.as_str()) {
+                        s.status = format!("Streaming {response_id}");
+                        s.active_response_id = Some(response_id);
+                        s.streaming = true;
+                    }
+                }
+            }
+            BridgeEvent::TurnDelta {
+                thread_id,
+                response_id,
+                delta,
+            } => {
+                let active_ok = world
+                    .get_resource::<PicusState>()
+                    .is_some_and(|s| {
+                        s.active_thread.as_deref() == Some(thread_id.as_str())
+                            && s.active_response_id.as_deref() == Some(response_id.as_str())
+                    });
+                if active_ok {
+                    let entity = world.resource::<PicusState>().streaming_entity;
+                    if let Some(mut streaming) = world.get_mut::<UiStreamingMarkdown>(entity) {
+                        streaming.append(&delta);
+                        if delta.ends_with("\n\n") || delta.ends_with("```\n") {
+                            streaming.flush_completed();
+                        }
+                    }
+                }
+            }
+            BridgeEvent::TurnEnded {
+                thread_id,
+                response_id,
+                ok,
+            } => {
+                let is_active = world
+                    .get_resource::<PicusState>()
+                    .is_some_and(|s| {
+                        s.active_thread.as_deref() == Some(thread_id.as_str())
+                            && s.active_response_id.as_deref() == Some(response_id.as_str())
+                    });
+                if is_active {
+                    let entity = world.resource::<PicusState>().streaming_entity;
+                    if let Some(mut streaming) = world.get_mut::<UiStreamingMarkdown>(entity) {
+                        streaming.finish();
+                    }
+                    if let Some(mut s) = world.get_resource_mut::<PicusState>() {
+                        s.streaming = false;
+                        s.active_response_id = None;
+                        s.status = if ok {
+                            "Ready".to_string()
+                        } else {
+                            "Turn failed — see status".to_string()
+                        };
+                    }
+                    // Reload history so the persisted assistant message shows
+                    // up if the streaming entity was never created (e.g. on
+                    // error before first delta).
+                    if let Some(s) = world.get_resource::<PicusState>() {
+                        if let Some(tid) = s.active_thread.clone() {
+                            let _ = s.bridge.tx.send(BridgeRequest::ReadThread {
+                                thread_id: tid,
+                            });
+                        }
+                    }
+                }
+            }
+            BridgeEvent::TurnError {
+                thread_id: _,
+                response_id: _,
+                message,
+            } => {
+                if let Some(mut s) = world.get_resource_mut::<PicusState>() {
+                    s.streaming = false;
+                    s.active_response_id = None;
+                    s.status = format!("Error: {message}");
+                }
+            }
+            BridgeEvent::ConfigListed(values) => {
+                if let Some(mut s) = world.get_resource_mut::<PicusState>() {
+                    s.config_values = values;
+                }
+            }
+            BridgeEvent::ConfigGot { key, value } => {
+                if let Some(mut s) = world.get_resource_mut::<PicusState>() {
+                    s.config_values.insert(key, value.unwrap_or_default());
+                }
+            }
+            BridgeEvent::ConfigResult { ok, error } => {
+                if let Some(mut s) = world.get_resource_mut::<PicusState>() {
+                    s.config_status = if ok {
+                        Some("Saved.".to_string())
+                    } else {
+                        Some(format!("Save failed: {}", error.unwrap_or_default()))
+                    };
+                }
+                // Refresh the config list so the panel reflects the new state.
+                if let Some(s) = world.get_resource::<PicusState>() {
+                    let _ = s.bridge.tx.send(BridgeRequest::ConfigList);
+                }
+            }
+        }
+    }
+
+    if transcript_rebuild {
+        rebuild_transcript(world);
+    }
+    if threads_changed {
+        // The sidebar reads `PicusState.threads` directly in its project fn,
+        // so no entity rebuild is needed — picus re-projects on the next
+        // synthesis pass because the resource changed.
+    }
+}
+
+/// Rebuilds the transcript column children from `PicusState.messages`.
+///
+/// Despawns all existing children of the transcript column, spawns a
+/// `UiMarkdown` for each persisted message, and leaves room for the active
+/// streaming entity (which is created separately on `Send`).
+fn rebuild_transcript(world: &mut World) {
+    let (transcript_column, messages, active_thread) = {
+        let s = world.resource::<PicusState>();
+        (
+            s.transcript_column,
+            s.messages.clone(),
+            s.active_thread.clone(),
+        )
+    };
+
+    // Despawn existing children of the transcript column.
+    let children_to_despawn: Vec<Entity> = {
+        let mut q = world.query::<(Entity, &bevy_ecs::hierarchy::ChildOf)>();
+        q.iter(world)
+            .filter(|(_, parent)| parent.parent() == transcript_column)
+            .map(|(e, _)| e)
+            .collect()
+    };
+    for e in children_to_despawn {
+        if let Ok(ent) = world.get_entity_mut(e) {
+            ent.despawn();
+        }
+    }
+
+    if active_thread.is_none() {
+        // Show the welcome markdown when no thread is selected.
+        world.spawn((
+            UiMarkdown::new(WELCOME_MARKDOWN),
+            bevy_ecs::hierarchy::ChildOf(transcript_column),
+        ));
+        if let Some(mut s) = world.get_resource_mut::<PicusState>() {
+            s.streaming_entity = Entity::PLACEHOLDER;
+        }
+        return;
+    }
+
+    for m in &messages {
+        let rendered = render_message_markdown(m);
+        world.spawn((
+            UiMarkdown::new(rendered),
+            bevy_ecs::hierarchy::ChildOf(transcript_column),
+        ));
+    }
+}
+
+fn render_message_markdown(m: &ChatMessage) -> String {
+    match m.role.as_str() {
+        "user" => format!("**You:** {}", m.content),
+        "assistant" => m.content.clone(),
+        "system" | "history" => format!("> _system:_ {}", m.content),
+        other => format!("**{other}:** {}", m.content),
+    }
+}
+
+/// System: drain UI actions and dispatch them to the bridge or window
+/// lifecycle.
 fn handle_picuscode_actions(world: &mut World) {
     let actions = world
         .resource_mut::<UiEventQueue>()
         .drain_actions::<PicusCodeAction>();
 
     let mut to_send = false;
+    let mut to_cancel = false;
     let mut to_open_about = false;
     let mut to_close_about = false;
+    let mut to_open_settings = false;
+    let mut to_close_settings = false;
+    let mut to_new_thread = false;
+    let mut to_reload_config = false;
     let mut latest_draft = None;
+    let mut select_thread: Option<String> = None;
+    let mut set_config: Option<(String, String)> = None;
+    let mut rename_thread: Option<String> = None;
 
     for event in actions {
         match event.action {
             PicusCodeAction::Send => to_send = true,
             PicusCodeAction::ComposerChanged(value) => latest_draft = Some(value),
+            PicusCodeAction::CancelTurn => to_cancel = true,
+            PicusCodeAction::NewThread => to_new_thread = true,
+            PicusCodeAction::SelectThread(id) => select_thread = Some(id),
             PicusCodeAction::OpenAbout => to_open_about = true,
             PicusCodeAction::CloseAbout => to_close_about = true,
+            PicusCodeAction::OpenSettings => to_open_settings = true,
+            PicusCodeAction::CloseSettings => to_close_settings = true,
+            PicusCodeAction::RefreshConfig => {
+                if let Some(s) = world.get_resource::<PicusState>() {
+                    let _ = s.bridge.tx.send(BridgeRequest::ConfigList);
+                }
+            }
+            PicusCodeAction::SetConfig(k, v) => set_config = Some((k, v)),
+            PicusCodeAction::ReloadConfig => to_reload_config = true,
+            PicusCodeAction::RenameThread(name) => rename_thread = Some(name),
         }
     }
 
     if let Some(draft) = latest_draft {
-        world.resource_mut::<ChatState>().draft = draft;
+        if let Some(mut s) = world.get_resource_mut::<PicusState>() {
+            s.draft = draft;
+        }
     }
 
     if to_close_about {
-        let close_targets = {
-            let mut state = world.resource_mut::<ChatState>();
-            let about_root = state.about_root.take();
-            let about_window = state.about_window.take();
-            if about_window.is_some() {
-                state.about_open = false;
-            }
-            about_window.map(|window| (about_root, window))
-        };
+        close_secondary_window(world, false);
+    }
+    if to_close_settings {
+        close_secondary_window(world, true);
+    }
+    if to_open_about {
+        open_secondary_window(world, false);
+    }
+    if to_open_settings {
+        open_secondary_window(world, true);
+        if let Some(s) = world.get_resource::<PicusState>() {
+            let _ = s.bridge.tx.send(BridgeRequest::ConfigList);
+        }
+    }
 
-        if let Some((about_root, about_window)) = close_targets {
-            if let Some(root) = about_root
-                && let Ok(entity) = world.get_entity_mut(root)
-            {
-                entity.despawn();
+    if to_new_thread {
+        if let Some(s) = world.get_resource::<PicusState>() {
+            let _ = s.bridge.tx.send(BridgeRequest::CreateThread);
+        }
+    }
+
+    if to_reload_config {
+        if let Some(s) = world.get_resource::<PicusState>() {
+            let _ = s.bridge.tx.send(BridgeRequest::ConfigReload);
+        }
+    }
+
+    if let Some(id) = select_thread {
+        if let Some(mut s) = world.get_resource_mut::<PicusState>() {
+            if s.active_thread.as_deref() != Some(id.as_str()) {
+                s.active_thread = Some(id.clone());
+                s.messages = Vec::new();
+                s.streaming = false;
+                s.active_response_id = None;
+                s.status = format!("Loading {id}");
+                let _ = s.bridge.tx.send(BridgeRequest::ReadThread {
+                    thread_id: id.clone(),
+                });
             }
-            if let Ok(entity) = world.get_entity_mut(about_window) {
-                entity.despawn();
+        }
+        rebuild_transcript(world);
+    }
+
+    if let Some((key, value)) = set_config {
+        if let Some(s) = world.get_resource::<PicusState>() {
+            let _ = s.bridge.tx.send(BridgeRequest::ConfigSet { key, value });
+        }
+    }
+
+    if let Some(name) = rename_thread {
+        if let Some(s) = world.get_resource::<PicusState>() {
+            if let Some(tid) = s.active_thread.clone() {
+                let _ = s.bridge.tx.send(BridgeRequest::SetThreadName {
+                    thread_id: tid,
+                    name,
+                });
             }
         }
     }
 
-    if to_open_about {
-        let should_open = {
-            let mut state = world.resource_mut::<ChatState>();
-            if state.about_open {
-                false
-            } else {
-                state.about_open = true;
-                true
+    if to_cancel {
+        if let Some(s) = world.get_resource::<PicusState>() {
+            if let Some(tid) = s.active_thread.clone() {
+                let _ = s.bridge.tx.send(BridgeRequest::CancelTurn { thread_id: tid });
             }
-        };
-
-        if should_open {
-            let (about_root, about_window) = spawn_about_window(world);
-            let mut state = world.resource_mut::<ChatState>();
-            state.about_root = Some(about_root);
-            state.about_window = Some(about_window);
         }
     }
 
     if to_send {
-        let (can_send, draft, thread_id, turn_index, transcript) = {
-            let state = world.resource::<ChatState>();
-            (
-                !state.streaming && !state.draft.is_empty(),
-                state.draft.clone(),
-                state.thread_id.clone(),
-                state.next_turn_index,
-                state.transcript_column,
-            )
-        };
-        if can_send {
-            world.spawn((
-                picus::UiMarkdown::new(format!("**You:** {draft}")),
-                ChildOf(transcript),
-            ));
+        start_send_turn(world);
+    }
+}
 
-            let streaming_entity = world
-                .spawn((UiStreamingMarkdown::new(), ChildOf(transcript)))
-                .id();
-
-            {
-                let mut state = world.resource_mut::<ChatState>();
-                state.streaming = true;
-                state.active_response_id = None;
-                state.current_turn = Some(CodeWhaleMockTurn::new(
-                    CodeWhaleThreadRequest::Message {
-                        thread_id,
-                        input: draft.clone(),
-                    },
-                    turn_index,
-                ));
-                state.next_turn_index += 1;
-                state.draft.clear();
-                state.streaming_entity = streaming_entity;
+fn start_send_turn(world: &mut World) {
+    let (can_send, draft, thread_id, transcript) = {
+        let s = world.resource::<PicusState>();
+        (
+            !s.streaming && s.active_thread.is_some() && !s.draft.is_empty(),
+            s.draft.clone(),
+            s.active_thread.clone(),
+            s.transcript_column,
+        )
+    };
+    if !can_send {
+        if let Some(mut s) = world.get_resource_mut::<PicusState>() {
+            if s.active_thread.is_none() {
+                s.status = "Create or select a thread first".to_string();
+            } else if s.draft.is_empty() {
+                s.status = "Composer is empty".to_string();
             }
         }
-    }
-
-    stream_next_token(world);
-}
-
-fn streaming_entity_id(world: &World) -> Entity {
-    world
-        .resource::<ChatState>()
-        .streaming_entity
-}
-
-fn stream_next_token(world: &mut World) {
-    let should_stream = world.resource::<ChatState>().streaming;
-    if !should_stream {
         return;
     }
-
-    let entity = streaming_entity_id(world);
-
-    let frame = {
-        let mut state = world.resource_mut::<ChatState>();
-        state
-            .current_turn
-            .as_mut()
-            .and_then(CodeWhaleMockTurn::next_frame)
-    };
-
-    let Some(frame) = frame else {
+    let Some(thread_id) = thread_id else {
         return;
     };
 
-    match frame {
-        CodeWhaleEventFrame::Start { response_id } => {
-            world.resource_mut::<ChatState>().active_response_id = Some(response_id);
-        }
-        CodeWhaleEventFrame::Delta { response_id, delta } => {
-            let accepts_delta = world
-                .resource::<ChatState>()
-                .active_response_id
-                .as_deref()
-                .is_some_and(|active| active == response_id);
-            if accepts_delta
-                && let Some(mut streaming) = world.get_mut::<UiStreamingMarkdown>(entity)
-            {
-                let should_flush = delta.ends_with("\n\n")
-                    || delta.ends_with("``` ")
-                    || delta.ends_with(": ");
-                streaming.append(&delta);
-                if should_flush {
-                    streaming.flush_completed();
-                }
-            }
-        }
-        CodeWhaleEventFrame::End { response_id } => {
-            let should_finish = {
-                let mut state = world.resource_mut::<ChatState>();
-                if state.active_response_id.as_deref() == Some(response_id.as_str()) {
-                    state.streaming = false;
-                    state.current_turn = None;
-                    state.active_response_id = None;
-                    true
-                } else {
-                    false
-                }
-            };
+    // Spawn the user bubble + a streaming markdown holder for the assistant.
+    world.spawn((
+        UiMarkdown::new(format!("**You:** {draft}")),
+        bevy_ecs::hierarchy::ChildOf(transcript),
+    ));
+    let streaming_entity = world
+        .spawn((UiStreamingMarkdown::new(), bevy_ecs::hierarchy::ChildOf(transcript)))
+        .id();
 
-            if should_finish
-                && let Some(mut streaming) = world.get_mut::<UiStreamingMarkdown>(entity)
-            {
-                streaming.finish();
+    {
+        let mut s = world.resource_mut::<PicusState>();
+        s.streaming_entity = streaming_entity;
+        s.streaming = true;
+        s.active_response_id = None;
+        s.status = "Starting turn".to_string();
+        s.draft.clear();
+    }
+
+    if let Some(s) = world.get_resource::<PicusState>() {
+        let _ = s
+            .bridge
+            .tx
+            .send(BridgeRequest::SendMessage { thread_id, input: draft });
+    }
+}
+
+fn open_secondary_window(world: &mut World, settings: bool) {
+    let should_open = {
+        let mut s = world.resource_mut::<PicusState>();
+        if settings {
+            if s.settings_open {
+                false
+            } else {
+                s.settings_open = true;
+                true
             }
+        } else if s.about_open {
+            false
+        } else {
+            s.about_open = true;
+            true
+        }
+    };
+
+    if should_open {
+        if settings {
+            let (root, window) = spawn_settings_window(world);
+            let mut s = world.resource_mut::<PicusState>();
+            s.settings_root = Some(root);
+            s.settings_window = Some(window);
+        } else {
+            let (root, window) = spawn_about_window(world);
+            let mut s = world.resource_mut::<PicusState>();
+            s.about_root = Some(root);
+            s.about_window = Some(window);
+        }
+    }
+}
+
+fn close_secondary_window(world: &mut World, settings: bool) {
+    let close_targets = {
+        let mut s = world.resource_mut::<PicusState>();
+        if settings {
+            let root = s.settings_root.take();
+            let window = s.settings_window.take();
+            if window.is_some() {
+                s.settings_open = false;
+            }
+            window.map(|w| (root, w))
+        } else {
+            let root = s.about_root.take();
+            let window = s.about_window.take();
+            if window.is_some() {
+                s.about_open = false;
+            }
+            window.map(|w| (root, w))
+        }
+    };
+
+    if let Some((root, window)) = close_targets {
+        if let Some(root) = root
+            && let Ok(entity) = world.get_entity_mut(root)
+        {
+            entity.despawn();
+        }
+        if let Ok(entity) = world.get_entity_mut(window) {
+            entity.despawn();
+        }
+    }
+}
+
+/// Periodically request a thread list refresh so newly created threads (from
+/// other codewhale clients) show up.
+fn refresh_thread_list(period: std::time::Duration) -> impl std::ops::FnMut(&mut World) {
+    let mut last = std::time::Instant::now();
+    move |world: &mut World| {
+        if last.elapsed() < period {
+            return;
+        }
+        last = std::time::Instant::now();
+        if let Some(s) = world.get_resource::<PicusState>() {
+            let _ = s.bridge.tx.send(BridgeRequest::ListThreads);
         }
     }
 }
@@ -612,13 +698,18 @@ fn build_picuscode_app() -> App {
         .load_style_sheet_ron(include_str!("../assets/themes/picuscode.ron"))
         .register_ui_component::<ChatRootView>()
         .register_ui_component::<ChatTitleBarView>()
+        .register_ui_component::<ChatBodyView>()
+        .register_ui_component::<SidebarColumnView>()
         .register_ui_component::<TranscriptColumnView>()
         .register_ui_component::<ComposerView>()
         .register_ui_component::<StatusLineView>()
         .register_ui_component::<AboutRootView>()
+        .register_ui_component::<SettingsRootView>()
+        .register_ui_component::<SettingsFormView>()
         .add_systems(Startup, setup_chat_world)
-        .add_systems(PostStartup, seed_transcript)
-        .add_systems(PreUpdate, handle_picuscode_actions);
+        .add_systems(PostStartup, seed_picus_state)
+        .add_systems(PreUpdate, (handle_picuscode_actions, poll_bridge_events))
+        .add_systems(PreUpdate, refresh_thread_list(std::time::Duration::from_secs(3)));
 
     app
 }
@@ -629,8 +720,8 @@ fn main() -> Result<(), EventLoopError> {
         "picuscode",
         |options| {
             options.with_initial_inner_size(picus::xilem::winit::dpi::LogicalSize::new(
+                960.0,
                 720.0,
-                640.0,
             ))
         },
     )
@@ -638,124 +729,9 @@ fn main() -> Result<(), EventLoopError> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[test]
     fn embedded_picuscode_theme_ron_parses() {
         picus::parse_stylesheet_ron(include_str!("../assets/themes/picuscode.ron"))
             .expect("embedded picuscode stylesheet should parse");
-    }
-
-    #[test]
-    fn mock_turn_uses_codewhale_streaming_lifecycle() {
-        let mut turn = CodeWhaleMockTurn::new(
-            CodeWhaleThreadRequest::Message {
-                thread_id: "thread-a".to_string(),
-                input: "hello".to_string(),
-            },
-            7,
-        );
-
-        assert_eq!(
-            turn.next_frame(),
-            Some(CodeWhaleEventFrame::Start {
-                response_id: "thread-a:mock-turn-7".to_string(),
-            })
-        );
-
-        let Some(CodeWhaleEventFrame::Delta { response_id, delta }) = turn.next_frame() else {
-            panic!("mock turn should emit at least one response delta");
-        };
-        assert_eq!(response_id, "thread-a:mock-turn-7");
-        assert!(!delta.is_empty());
-
-        while let Some(frame) = turn.next_frame() {
-            if frame
-                == (CodeWhaleEventFrame::End {
-                    response_id: "thread-a:mock-turn-7".to_string(),
-                })
-            {
-                return;
-            }
-        }
-
-        panic!("mock turn should finish with ResponseEnd");
-    }
-
-    #[test]
-    fn stream_next_token_finishes_active_turn() {
-        let mut world = World::new();
-        world.insert_resource(UiEventQueue::default());
-        let transcript = world.spawn_empty().id();
-        let streaming_entity = world
-            .spawn((UiStreamingMarkdown::new(), ChildOf(transcript)))
-            .id();
-        world.insert_resource(ChatState {
-            thread_id: "thread-a".to_string(),
-            next_turn_index: 2,
-            current_turn: Some(CodeWhaleMockTurn::new(
-                CodeWhaleThreadRequest::Message {
-                    thread_id: "thread-a".to_string(),
-                    input: "hello".to_string(),
-                },
-                1,
-            )),
-            active_response_id: None,
-            streaming: true,
-            draft: String::new(),
-            about_open: false,
-            about_window: None,
-            about_root: None,
-            transcript_column: transcript,
-            streaming_entity,
-        });
-
-        for _ in 0..512 {
-            stream_next_token(&mut world);
-            if !world.resource::<ChatState>().streaming {
-                break;
-            }
-        }
-
-        let state = world.resource::<ChatState>();
-        assert!(!state.streaming);
-        assert!(state.current_turn.is_none());
-        assert!(state.active_response_id.is_none());
-    }
-
-    #[test]
-    fn send_click_action_starts_codewhale_turn() {
-        let mut world = World::new();
-        world.insert_resource(UiEventQueue::default());
-        let composer = world.spawn_empty().id();
-        let transcript = world.spawn_empty().id();
-        world.insert_resource(ChatState {
-            thread_id: "thread-a".to_string(),
-            next_turn_index: 1,
-            current_turn: None,
-            active_response_id: None,
-            streaming: false,
-            draft: "hello from click".to_string(),
-            about_open: false,
-            about_window: None,
-            about_root: None,
-            transcript_column: transcript,
-            streaming_entity: Entity::PLACEHOLDER,
-        });
-
-        world
-            .resource::<UiEventQueue>()
-            .push_typed(composer, PicusCodeAction::Send);
-
-        handle_picuscode_actions(&mut world);
-
-        let state = world.resource::<ChatState>();
-        assert!(state.streaming);
-        assert_eq!(state.draft, "");
-        assert_eq!(state.next_turn_index, 2);
-        assert!(state.current_turn.is_some());
-        assert!(state.active_response_id.is_some());
-        assert_ne!(state.streaming_entity, Entity::PLACEHOLDER);
-        assert!(world.get::<UiStreamingMarkdown>(state.streaming_entity).is_some());
     }
 }

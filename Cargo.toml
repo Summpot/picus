@@ -16,12 +16,35 @@ members = [
 	"examples/shared_utils",
 	"examples/timer",
 	"examples/todo_list",
+	# CodeWhale fork crates embedded by example_picuscode. They are path deps
+	# and picus workspace members so their `*.workspace = true` inheritance
+	# resolves against this root; see `workspace.dependencies` below for the
+	# shared dep versions, which are kept compatible with the fork's own
+	# `thirdparty/CodeWhale/Cargo.toml` workspace manifest.
+	"thirdparty/CodeWhale/crates/protocol",
+	"thirdparty/CodeWhale/crates/secrets",
+	"thirdparty/CodeWhale/crates/execpolicy",
+	"thirdparty/CodeWhale/crates/config",
+	"thirdparty/CodeWhale/crates/agent",
+	"thirdparty/CodeWhale/crates/state",
+	"thirdparty/CodeWhale/crates/tools",
+	"thirdparty/CodeWhale/crates/mcp",
+	"thirdparty/CodeWhale/crates/hooks",
+	"thirdparty/CodeWhale/crates/core",
+]
+exclude = [
+	# The fork's own workspace root is kept for standalone maintenance, but
+	# its crate members are claimed by the picus workspace above, so exclude
+	# the fork root to avoid a dual-membership conflict.
+	"thirdparty/CodeWhale",
 ]
 
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
+repository = "https://github.com/AnomalyCo/picus"
+rust-version = "1.88"
 
 [workspace.dependencies]
 bevy_a11y = { version = "=0.19.0", default-features = false }
@@ -38,11 +61,9 @@ bevy_window = { version = "=0.19.0", default-features = false, features = ["std"
 bevy_winit = { version = "=0.19.0", default-features = false }
 crossbeam-queue = "0.3"
 crossbeam-channel = "0.5"
-tokio = { version = "1.52", features = ["rt-multi-thread"] }
 smallvec = "1.15.2"
 accesskit = "0.24.1"
 num-traits = "0.2"
-reqwest = { version = "0.13", default-features = false, features = ["blocking", "json", "form", "rustls"] }
 rfd = "0.17"
 fluent = "0.17"
 unic-langid = { version = "0.9", features = ["macros"] }
@@ -65,17 +86,58 @@ pollster = "0.4"
 anyhow = "1"
 arboard = "3"
 base64 = "0.22"
-chrono = { version = "0.4", default-features = false, features = ["clock"] }
 image = { version = "0.25", default-features = true }
 md5 = "0.8"
 serde_json = "1"
 sha2 = "0.11"
+uuid = { version = "1.11", features = ["v4"] }
 webbrowser = "1"
+
+# Shared dep versions for the embedded CodeWhale fork crates. Kept aligned
+# with `thirdparty/CodeWhale/Cargo.toml` so the fork can still build
+# standalone against the same versions.
+async-trait = "0.1.89"
+dirs = "6.0.0"
+rusqlite = { version = "0.39.0", features = ["bundled"] }
+semver = "1.0.28"
+thiserror = "2.0"
+tempfile = "3.27"
+toml = "1.0.6"
+toml_edit = "0.25.12"
+libc = "0.2"
+tracing-appender = "0.2"
+# chrono: unify picus (clock) and codewhale (serde) features.
+chrono = { version = "0.4.43", default-features = false, features = ["clock", "serde"] }
+# tokio: codewhale needs `full`; picus only needed rt-multi-thread (subset).
+tokio = { version = "1.50.0", features = ["full"] }
+# reqwest: unify picus + codewhale feature sets and add `stream` for SSE
+# streaming of chat-completion deltas in example_picuscode.
+reqwest = { version = "0.13.1", default-features = false, features = ["blocking", "json", "form", "rustls", "stream", "socks"] }
 
 picus_core = { path = "crates/picus_core" }
 picus = { path = "crates/picus" }
 picus_surface = { path = "crates/picus_surface" }
 shared_utils = { path = "examples/shared_utils" }
+
+# CodeWhale fork (thirdparty) — embedded in-process by example_picuscode.
+# These crates remain members of thirdparty/CodeWhale's own workspace, so
+# their internal `.workspace = true` deps resolve there; picus only references
+# them by path. Config/state persistence shares `~/.codewhale/` with an
+# installed codewhale binary, keeping config compatibility.
+codewhale-protocol = { path = "thirdparty/CodeWhale/crates/protocol" }
+codewhale-secrets = { path = "thirdparty/CodeWhale/crates/secrets" }
+codewhale-execpolicy = { path = "thirdparty/CodeWhale/crates/execpolicy" }
+codewhale-config = { path = "thirdparty/CodeWhale/crates/config" }
+codewhale-agent = { path = "thirdparty/CodeWhale/crates/agent" }
+codewhale-state = { path = "thirdparty/CodeWhale/crates/state" }
+codewhale-tools = { path = "thirdparty/CodeWhale/crates/tools" }
+codewhale-mcp = { path = "thirdparty/CodeWhale/crates/mcp" }
+codewhale-hooks = { path = "thirdparty/CodeWhale/crates/hooks" }
+codewhale-core = { path = "thirdparty/CodeWhale/crates/core" }
+
+# Used by example_picuscode for SSE streaming of chat-completion deltas.
+futures = "0.3"
+async-stream = "0.3"
 
 [workspace.lints.clippy]
 doc_markdown = "warn"
