@@ -43,6 +43,7 @@ use crate::{
     runtime::{
         MasonryRuntime, initialize_masonry_runtime_from_windows, inject_bevy_input_into_masonry,
         paint_masonry_ui, rebuild_masonry_runtime, sync_masonry_ime_state_to_bevy_window,
+        sync_masonry_window_lifecycle,
     },
     styling::{
         ActiveStyleSheet, ActiveStyleSheetAsset, ActiveStyleSheetSelectors,
@@ -148,6 +149,7 @@ impl Plugin for PicusPlugin {
                     collect_bevy_font_assets,
                     sync_fonts_to_xilem,
                     initialize_masonry_runtime_from_windows,
+                    sync_masonry_window_lifecycle,
                     track_drag_state,
                     dispatch_drag_events,
                     bubble_ui_pointer_events,

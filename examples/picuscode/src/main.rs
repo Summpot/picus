@@ -21,7 +21,7 @@
 use std::collections::BTreeMap;
 
 use bevy_ecs::prelude::*;
-use bevy_window::Window;
+use bevy_window::{Window, WindowClosed};
 use picus::{
     AppPicusExt, PicusPlugin, StyleClass, UiEventQueue, UiMarkdown, UiRoot, UiScrollView,
     UiStreamingMarkdown, UiWindow, WorldSceneExt,
@@ -677,6 +677,35 @@ fn close_secondary_window(world: &mut World, settings: bool) {
     }
 }
 
+fn handle_secondary_window_closed(
+    mut closed_windows: MessageReader<WindowClosed>,
+    state: Option<ResMut<PicusState>>,
+    mut commands: Commands,
+) {
+    let Some(mut state) = state else {
+        closed_windows.clear();
+        return;
+    };
+
+    for event in closed_windows.read() {
+        if state.about_window == Some(event.window) {
+            state.about_window = None;
+            state.about_open = false;
+            if let Some(root) = state.about_root.take() {
+                commands.entity(root).despawn();
+            }
+        }
+
+        if state.settings_window == Some(event.window) {
+            state.settings_window = None;
+            state.settings_open = false;
+            if let Some(root) = state.settings_root.take() {
+                commands.entity(root).despawn();
+            }
+        }
+    }
+}
+
 /// Periodically request a thread list refresh so newly created threads (from
 /// other codewhale clients) show up.
 fn refresh_thread_list(period: std::time::Duration) -> impl std::ops::FnMut(&mut World) {
@@ -710,7 +739,15 @@ fn build_picuscode_app() -> App {
         .register_ui_component::<SettingsFormView>()
         .add_systems(Startup, setup_chat_world)
         .add_systems(PostStartup, seed_picus_state)
-        .add_systems(PreUpdate, (handle_picuscode_actions, poll_bridge_events))
+        .add_systems(
+            PreUpdate,
+            (
+                handle_secondary_window_closed,
+                handle_picuscode_actions,
+                poll_bridge_events,
+            )
+                .chain(),
+        )
         .add_systems(PreUpdate, refresh_thread_list(std::time::Duration::from_secs(3)));
 
     app

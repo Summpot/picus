@@ -141,6 +141,9 @@ Runtime invariants:
 - Secondary windows are auto-attached as they appear; headless contexts (tests
   without a winit handle) create a fallback 1024×768 runtime so synthesis and
   hit-testing still work.
+- Window runtimes are pruned when their Bevy window is closing or has lost its
+  `Window` component, dropping retained surfaces before the native window is
+  destroyed.
 - Retained UI rendering does not depend on Bevy render-graph integration.
 - The paint pass redraws Masonry Core, renders through `picus_surface`, blits to the
   swapchain, presents, and requests the next redraw, iterating every attached window.

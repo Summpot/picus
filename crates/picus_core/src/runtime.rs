@@ -9,7 +9,7 @@ use crate::xilem::winit::window::Window as XilemWinitWindow;
 use bevy_ecs::{
     entity::Entity,
     message::MessageReader,
-    prelude::{Added, FromWorld, NonSendMut, Query, Res, ResMut, With, World},
+    prelude::{Added, FromWorld, NonSendMut, Query, Res, ResMut, With, Without, World},
 };
 use bevy_input::{
     ButtonState,
@@ -19,7 +19,7 @@ use bevy_input::{
 use bevy_math::Vec2;
 use bevy_time::Time;
 use bevy_window::{
-    CursorLeft, CursorMoved, Ime as BevyIme, PrimaryWindow, RawHandleWrapper, Window,
+    ClosingWindow, CursorLeft, CursorMoved, Ime as BevyIme, PrimaryWindow, RawHandleWrapper, Window,
     WindowFocused, WindowResized, WindowScaleFactorChanged, WindowWrapper,
 };
 use masonry_core::{
@@ -1288,6 +1288,29 @@ pub fn initialize_masonry_runtime_from_windows(
     }
 }
 
+/// Drop retained UI and surface state for Bevy windows that are already closing
+/// or whose [`Window`] component has been removed.
+pub fn sync_masonry_window_lifecycle(
+    runtime: Option<NonSendMut<MasonryRuntime>>,
+    window_query: Query<(), With<Window>>,
+    closing_window_query: Query<(), With<ClosingWindow>>,
+    mut synthesized: ResMut<SynthesizedUiViews>,
+) {
+    let Some(mut runtime) = runtime else {
+        return;
+    };
+
+    let stale_windows = runtime
+        .window_entities()
+        .filter(|entity| !window_query.contains(*entity) || closing_window_query.contains(*entity))
+        .collect::<Vec<_>>();
+
+    for window_entity in stale_windows {
+        runtime.remove_window(window_entity);
+        synthesized.windows.remove(&window_entity);
+    }
+}
+
 /// PostUpdate rebuild step: diff each window's synthesized root against its
 /// retained Masonry tree.
 pub fn rebuild_masonry_runtime(world: &mut World) {
@@ -1310,7 +1333,11 @@ pub fn rebuild_masonry_runtime(world: &mut World) {
 
 /// Last-stage paint pass: submit each window's Masonry scene through Vello and
 /// present to the corresponding Bevy window.
-pub fn paint_masonry_ui(runtime: Option<NonSendMut<MasonryRuntime>>, time: Res<Time>) {
+pub fn paint_masonry_ui(
+    runtime: Option<NonSendMut<MasonryRuntime>>,
+    active_window_query: Query<(), (With<Window>, Without<ClosingWindow>)>,
+    time: Res<Time>,
+) {
     let Some(mut runtime) = runtime else {
         return;
     };
@@ -1318,6 +1345,11 @@ pub fn paint_masonry_ui(runtime: Option<NonSendMut<MasonryRuntime>>, time: Res<T
     let window_entities: Vec<Entity> = runtime.window_entities().collect();
 
     for window_entity in window_entities {
+        if !active_window_query.contains(window_entity) {
+            runtime.remove_window(window_entity);
+            continue;
+        }
+
         let Some(metrics) = bevy_winit::WINIT_WINDOWS.with(|winit_windows| {
             let winit_windows = winit_windows.borrow();
             winit_windows
@@ -1362,6 +1394,7 @@ pub fn paint_masonry_ui(runtime: Option<NonSendMut<MasonryRuntime>>, time: Res<T
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bevy_app::{App, Update};
 
     #[test]
     fn logical_character_keys_map_to_text_keys() {
@@ -1413,5 +1446,51 @@ mod tests {
         // `primary_window` field is cleared, but `primary_window()` falls back
         // to the first remaining window when no explicit primary is set.
         assert_eq!(runtime.primary_window(), Some(b));
+    }
+
+    #[test]
+    fn window_lifecycle_sync_removes_closing_and_removed_windows() {
+        let mut app = App::new();
+        app.init_resource::<SynthesizedUiViews>();
+        app.init_non_send::<MasonryRuntime>();
+        app.add_systems(Update, sync_masonry_window_lifecycle);
+
+        let active = app.world_mut().spawn(Window::default()).id();
+        let closing = app
+            .world_mut()
+            .spawn((Window::default(), ClosingWindow))
+            .id();
+        let removed = app.world_mut().spawn(Window::default()).id();
+
+        {
+            let mut runtime = app.world_mut().non_send_mut::<MasonryRuntime>();
+            runtime.ensure_window(active, false);
+            runtime.ensure_window(closing, false);
+            runtime.ensure_window(removed, false);
+        }
+
+        {
+            let mut synthesized = app.world_mut().resource_mut::<SynthesizedUiViews>();
+            synthesized.windows.insert(active, Arc::new(label("active")));
+            synthesized
+                .windows
+                .insert(closing, Arc::new(label("closing")));
+            synthesized
+                .windows
+                .insert(removed, Arc::new(label("removed")));
+        }
+
+        app.world_mut().entity_mut(removed).despawn();
+        app.update();
+
+        let runtime = app.world().non_send::<MasonryRuntime>();
+        assert!(runtime.has_window(active));
+        assert!(!runtime.has_window(closing));
+        assert!(!runtime.has_window(removed));
+
+        let synthesized = app.world().resource::<SynthesizedUiViews>();
+        assert!(synthesized.windows.contains_key(&active));
+        assert!(!synthesized.windows.contains_key(&closing));
+        assert!(!synthesized.windows.contains_key(&removed));
     }
 }
