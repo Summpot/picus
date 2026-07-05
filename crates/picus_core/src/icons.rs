@@ -33,6 +33,14 @@ pub enum PicusIcon {
     Send,
     /// Circular refresh (for reload buttons).
     RefreshCw,
+    /// Pointer/click target glyph (for button examples).
+    Pointer,
+    /// Text cursor in an input field (for input examples).
+    TextCursorInput,
+    /// Checked square (for selection examples).
+    CheckSquare,
+    /// Menu bars and command menus.
+    Menu,
     /// Information glyph (for About).
     Info,
     /// Filled stop circle (for cancel-turn button).
@@ -47,6 +55,26 @@ pub enum PicusIcon {
     User,
     /// Sparkles (for "new" / AI accents).
     Sparkles,
+    /// Simple list glyph.
+    List,
+    /// Data table / grid glyph.
+    Table,
+    /// Panel layout glyph.
+    LayoutPanelLeft,
+    /// Grid layout glyph.
+    LayoutGrid,
+    /// Typography glyph.
+    Type,
+    /// Image/media glyph.
+    Image,
+    /// Stacked images glyph.
+    Images,
+    /// Basic square/shape glyph.
+    Square,
+    /// Layer stack glyph.
+    Layers,
+    /// Globe glyph.
+    Globe,
     /// Spinning loader (idle/thinking indicator).
     Loader,
     /// Folder (for workspace / cwd display).
@@ -76,6 +104,10 @@ impl PicusIcon {
             Self::MessageSquare => lucide_icons::Icon::MessageSquare,
             Self::Send => lucide_icons::Icon::Send,
             Self::RefreshCw => lucide_icons::Icon::RefreshCw,
+            Self::Pointer => lucide_icons::Icon::Pointer,
+            Self::TextCursorInput => lucide_icons::Icon::TextCursorInput,
+            Self::CheckSquare => lucide_icons::Icon::CheckSquare,
+            Self::Menu => lucide_icons::Icon::Menu,
             Self::Info => lucide_icons::Icon::Info,
             Self::StopCircle => lucide_icons::Icon::CircleStop,
             Self::Archive => lucide_icons::Icon::Archive,
@@ -83,6 +115,16 @@ impl PicusIcon {
             Self::Bot => lucide_icons::Icon::Bot,
             Self::User => lucide_icons::Icon::User,
             Self::Sparkles => lucide_icons::Icon::Sparkles,
+            Self::List => lucide_icons::Icon::List,
+            Self::Table => lucide_icons::Icon::Table,
+            Self::LayoutPanelLeft => lucide_icons::Icon::LayoutPanelLeft,
+            Self::LayoutGrid => lucide_icons::Icon::LayoutGrid,
+            Self::Type => lucide_icons::Icon::Type,
+            Self::Image => lucide_icons::Icon::Image,
+            Self::Images => lucide_icons::Icon::Images,
+            Self::Square => lucide_icons::Icon::Square,
+            Self::Layers => lucide_icons::Icon::Layers,
+            Self::Globe => lucide_icons::Icon::Globe,
             Self::Loader => lucide_icons::Icon::Loader,
             Self::Folder => lucide_icons::Icon::Folder,
         }

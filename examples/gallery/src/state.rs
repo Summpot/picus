@@ -8,6 +8,7 @@
 //! are organized under category headings.
 
 use bevy_ecs::prelude::*;
+use picus::PicusIcon;
 
 /// A sidebar category heading that groups related pages.
 #[allow(dead_code)]
@@ -158,24 +159,24 @@ impl GalleryPage {
     }
 
     /// Icon glyph for this page (used in the sidebar nav).
-    pub fn icon(self) -> &'static str {
+    pub const fn icon(self) -> PicusIcon {
         match self {
-            Self::Buttons => "\u{f118}",     // pointer
-            Self::Inputs => "\u{f11d}",      // text-cursor-input
-            Self::Selection => "\u{f11b}",   // check-square
-            Self::WindowMenu => "\u{f0c9}",  // menu
-            Self::MessageBox => "\u{f100}",  // message-square
-            Self::Lists => "\u{f10a}",       // list
-            Self::GridView => "\u{f0ca}",    // table
-            Self::Panels => "\u{f10b}",      // layout-panel
-            Self::Layout => "\u{f12e}",      // grid-3x3
-            Self::Typography => "\u{f12f}",  // type
-            Self::Media => "\u{f121}",       // image
-            Self::Shapes => "\u{f0c8}",      // square
-            Self::Icons => "\u{f128}",       // icons
-            Self::Transitions => "\u{f12c}", // sparkles
-            Self::Overlay => "\u{f11f}",     // layers
-            Self::I18n => "\u{f0ac}",        // globe
+            Self::Buttons => PicusIcon::Pointer,
+            Self::Inputs => PicusIcon::TextCursorInput,
+            Self::Selection => PicusIcon::CheckSquare,
+            Self::WindowMenu => PicusIcon::Menu,
+            Self::MessageBox => PicusIcon::MessageSquare,
+            Self::Lists => PicusIcon::List,
+            Self::GridView => PicusIcon::Table,
+            Self::Panels => PicusIcon::LayoutPanelLeft,
+            Self::Layout => PicusIcon::LayoutGrid,
+            Self::Typography => PicusIcon::Type,
+            Self::Media => PicusIcon::Image,
+            Self::Shapes => PicusIcon::Square,
+            Self::Icons => PicusIcon::Images,
+            Self::Transitions => PicusIcon::Sparkles,
+            Self::Overlay => PicusIcon::Layers,
+            Self::I18n => PicusIcon::Globe,
         }
     }
 }

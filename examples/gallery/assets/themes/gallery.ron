@@ -126,11 +126,11 @@
       ),
     ),
     (
-      selector: Class("gallery.sidebar"),
+      selector: Class("nav.sidebar"),
       setter: (
         layout: (
           padding: Var("space-md"),
-          gap: Var("gap-xs"),
+          gap: Var("space-xs"),
           corner_radius: Var("radius-lg"),
           border_width: Var("border-thin"),
         ),
@@ -156,7 +156,7 @@
       ),
     ),
     (
-      selector: Class("gallery.sidebar_button"),
+      selector: Class("nav.item"),
       setter: (
         layout: (
           padding: 8.0,
@@ -176,7 +176,7 @@
       ),
     ),
     (
-      selector: Class("gallery.sidebar_button.active"),
+      selector: Class("nav.item.active"),
       setter: (
         colors: (
           bg: Var("surface-accent"),

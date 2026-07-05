@@ -90,7 +90,7 @@ fn setup_gallery(mut commands: Commands) {
         .iter()
         .map(|page| {
             NavigationViewItem::new(page.label())
-                .with_icon(page.icon().chars().next().unwrap_or('?'))
+                .with_icon(page.icon().glyph())
         })
         .collect();
 
@@ -374,6 +374,29 @@ mod tests {
         let sheet = picus::parse_stylesheet_ron(include_str!("../assets/themes/gallery.ron"))
             .expect("embedded gallery stylesheet should parse");
         assert_eq!(sheet.default_variant.as_deref(), Some("dark"));
+    }
+
+    #[test]
+    fn gallery_theme_styles_navigation_view_sidebar() {
+        let app = build_gallery_app();
+
+        let sidebar = picus::resolve_style_for_classes(app.world(), ["nav.sidebar"]);
+        let item = picus::resolve_style_for_classes(app.world(), ["nav.item"]);
+        let active_item =
+            picus::resolve_style_for_classes(app.world(), ["nav.item", "nav.item.active"]);
+
+        assert!(
+            sidebar.colors.bg.is_some() && sidebar.colors.border.is_some(),
+            "gallery navigation sidebar should resolve visible panel colors, got {sidebar:?}"
+        );
+        assert!(
+            item.colors.text.is_some() && item.layout.padding > 0.0,
+            "gallery navigation items should resolve visible text and spacing, got {item:?}"
+        );
+        assert!(
+            active_item.colors.bg.is_some() && active_item.colors.text.is_some(),
+            "gallery active navigation item should resolve visible selected colors, got {active_item:?}"
+        );
     }
 
     #[test]
