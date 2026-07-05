@@ -397,6 +397,26 @@
       ),
     ),
     (
+      selector: Class("picuscode.text-input"),
+      setter: (
+        layout: (
+          padding: Var("space-sm"),
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+          align_items: Center,
+        ),
+        colors: (
+          bg: Var("surface-elevated"),
+          border: Var("border-default"),
+          text: Var("text-primary"),
+        ),
+        text: (
+          size: Var("font-size-body1"),
+          text_align: Start,
+        ),
+      ),
+    ),
+    (
       selector: Class("picuscode.status"),
       setter: (
         layout: (

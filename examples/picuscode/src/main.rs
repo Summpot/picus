@@ -462,8 +462,10 @@ fn handle_picuscode_actions(world: &mut World) {
     let mut to_close_settings = false;
     let mut to_new_thread = false;
     let mut to_reload_config = false;
+    let mut to_apply_config_edits = false;
     let mut latest_draft = None;
     let mut select_thread: Option<String> = None;
+    let mut config_edits: Vec<(String, String)> = Vec::new();
     let mut set_config: Option<(String, String)> = None;
     let mut rename_thread: Option<String> = None;
 
@@ -483,6 +485,8 @@ fn handle_picuscode_actions(world: &mut World) {
                     let _ = s.bridge.tx.send(BridgeRequest::ConfigList);
                 }
             }
+            PicusCodeAction::EditConfig(k, v) => config_edits.push((k, v)),
+            PicusCodeAction::ApplyConfigEdits => to_apply_config_edits = true,
             PicusCodeAction::SetConfig(k, v) => set_config = Some((k, v)),
             PicusCodeAction::ReloadConfig => to_reload_config = true,
             PicusCodeAction::RenameThread(name) => rename_thread = Some(name),
@@ -499,6 +503,9 @@ fn handle_picuscode_actions(world: &mut World) {
         close_secondary_window(world, false);
     }
     if to_close_settings {
+        if let Some(mut s) = world.get_resource_mut::<PicusState>() {
+            s.config_edits.clear();
+        }
         close_secondary_window(world, true);
     }
     if to_open_about {
@@ -518,8 +525,34 @@ fn handle_picuscode_actions(world: &mut World) {
     }
 
     if to_reload_config {
-        if let Some(s) = world.get_resource::<PicusState>() {
+        if let Some(mut s) = world.get_resource_mut::<PicusState>() {
+            s.config_edits.clear();
             let _ = s.bridge.tx.send(BridgeRequest::ConfigReload);
+        }
+    }
+
+    if !config_edits.is_empty() {
+        if let Some(mut s) = world.get_resource_mut::<PicusState>() {
+            for (key, value) in config_edits {
+                s.config_edits.insert(key, value);
+            }
+            let count = s.config_edits.len();
+            s.config_status = Some(format!("{count} unsaved change(s)."));
+        }
+    }
+
+    if to_apply_config_edits {
+        if let Some(mut s) = world.get_resource_mut::<PicusState>() {
+            let edits = std::mem::take(&mut s.config_edits);
+            if edits.is_empty() {
+                s.config_status = Some("No changes to save.".to_string());
+            } else {
+                let count = edits.len();
+                for (key, value) in edits {
+                    let _ = s.bridge.tx.send(BridgeRequest::ConfigSet { key, value });
+                }
+                s.config_status = Some(format!("Saving {count} change(s)..."));
+            }
         }
     }
 

@@ -100,7 +100,9 @@ CodeWhale runtime in-process via a dedicated bridge thread (see
 - The UI shell: a primary chat window (status-rich title bar, thread sidebar
   with per-thread previews, scrollable streaming `UiStreamingMarkdown`
   transcript, composer, and status bar) plus secondary About and grouped
-  Settings windows bound via `UiWindow`.
+  Settings windows bound via `UiWindow`. Settings edits are staged in
+  `PicusState::config_edits` and persisted through the bridge only when the
+  user presses Save.
 - `spawn_bridge_with_config_path(Option<PathBuf>)` exists for tests so they
   never touch the user's real `~/.codewhale/` config.
 

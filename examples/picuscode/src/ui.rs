@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
 use picus::{
-    ProjectionCtx, UiView, apply_label_style, apply_widget_style,
+    ProjectionCtx, UiView, apply_direct_text_input_style, apply_label_style, apply_widget_style,
     bevy_ecs::hierarchy::Children,
     button_with_child, emit_ui_action,
     icon::icon,
@@ -254,12 +254,16 @@ pub fn project_composer(_: &ComposerView, ctx: ProjectionCtx<'_>) -> UiView {
     let draft_count = draft_len(&draft);
     let input_entity = ctx.entity;
     let enter_entity = ctx.entity;
-    let input = text_input(input_entity, draft, PicusCodeAction::ComposerChanged)
-        .placeholder("Message CodeWhale...")
-        .insert_newline(InsertNewline::OnShiftEnter)
-        .on_enter(move |_| {
-            emit_ui_action(enter_entity, PicusCodeAction::Send);
-        });
+    let input_style = resolve_style_for_classes(ctx.world, ["picuscode.text-input"]);
+    let input = apply_direct_text_input_style(
+        text_input(input_entity, draft, PicusCodeAction::ComposerChanged)
+            .placeholder("Message CodeWhale...")
+            .insert_newline(InsertNewline::OnShiftEnter)
+            .on_enter(move |_| {
+                emit_ui_action(enter_entity, PicusCodeAction::Send);
+            }),
+        &input_style,
+    );
     let action_btn = if streaming {
         toolbar_button(
             &ctx,
@@ -358,6 +362,12 @@ pub fn project_about_root(_: &AboutRootView, ctx: ProjectionCtx<'_>) -> UiView {
 pub fn project_settings_root(_: &SettingsRootView, ctx: ProjectionCtx<'_>) -> UiView {
     let style = resolve_style(ctx.world, ctx.entity);
     let close_btn = toolbar_button(&ctx, PicusCodeAction::CloseSettings, "Close", PicusIcon::X);
+    let save_btn = toolbar_button(
+        &ctx,
+        PicusCodeAction::ApplyConfigEdits,
+        "Save",
+        PicusIcon::Check,
+    );
     let reload_btn = toolbar_button(
         &ctx,
         PicusCodeAction::ReloadConfig,
@@ -373,6 +383,7 @@ pub fn project_settings_root(_: &SettingsRootView, ctx: ProjectionCtx<'_>) -> Ui
     all.push(
         flex_row(vec![
             sized_box(reload_btn).flex(1.0).into_any_flex(),
+            save_btn.into_any_flex(),
             close_btn.into_any_flex(),
         ])
         .cross_axis_alignment(CrossAxisAlignment::Center)
@@ -396,12 +407,18 @@ pub fn project_settings_form(_: &SettingsFormView, ctx: ProjectionCtx<'_>) -> Ui
     rows.push(settings_header(&ctx, state).into_any_flex());
 
     let values = state.map(|s| s.config_values.clone()).unwrap_or_default();
-    let active_provider = values.get("provider").cloned().unwrap_or_default();
+    let edits = state.map(|s| s.config_edits.clone()).unwrap_or_default();
+    let active_provider = edits
+        .get("provider")
+        .or_else(|| values.get("provider"))
+        .cloned()
+        .unwrap_or_default();
     rows.push(
         settings_section(
             &ctx,
             "Connection",
             &values,
+            &edits,
             &active_provider,
             &[
                 ("provider", "Provider", ConfigScope::Top),
@@ -417,6 +434,7 @@ pub fn project_settings_form(_: &SettingsFormView, ctx: ProjectionCtx<'_>) -> Ui
             &ctx,
             "Runtime",
             &values,
+            &edits,
             &active_provider,
             &[
                 ("auth.mode", "Auth Mode", ConfigScope::Top),
@@ -430,6 +448,7 @@ pub fn project_settings_form(_: &SettingsFormView, ctx: ProjectionCtx<'_>) -> Ui
             &ctx,
             "Safety",
             &values,
+            &edits,
             &active_provider,
             &[
                 ("approval_policy", "Approval Policy", ConfigScope::Top),
@@ -761,22 +780,30 @@ fn settings_section(
     ctx: &ProjectionCtx<'_>,
     title: &'static str,
     values: &std::collections::BTreeMap<String, String>,
+    edits: &std::collections::BTreeMap<String, String>,
     active_provider: &str,
     fields: &[(&'static str, &'static str, ConfigScope)],
 ) -> UiView {
     let style = resolve_style_for_classes(ctx.world, ["picuscode.settings.section"]);
+    let input_style = resolve_style_for_classes(ctx.world, ["picuscode.text-input"]);
     let mut rows =
         vec![text_view(ctx, ["picuscode.settings.section.title"], title).into_any_flex()];
     for (key, display, scope) in fields {
         let current = resolve_config_field(values, active_provider, key, *scope);
-        let key_string = (*key).to_string();
+        let target_key = config_field_target_key(active_provider, key, *scope);
+        let display_value = display_config_field_value(key, &current, edits.get(&target_key));
+        let placeholder = config_field_placeholder(key);
         let row = flex_row(vec![
             sized_box(text_view(ctx, ["picuscode.settings.label"], *display))
                 .width(Length::px(132.0))
                 .into_any_flex(),
-            text_input(ctx.entity, current, move |v| {
-                PicusCodeAction::SetConfig(key_string.clone(), v)
-            })
+            apply_direct_text_input_style(
+                text_input(ctx.entity, display_value, move |v| {
+                    PicusCodeAction::EditConfig(target_key.clone(), v)
+                })
+                .placeholder(placeholder),
+                &input_style,
+            )
             .flex(1.0)
             .into_any_flex(),
         ])
@@ -816,6 +843,39 @@ fn resolve_config_field(
             values.get(key).cloned().unwrap_or_default()
         }
     }
+}
+
+fn config_field_target_key(active_provider: &str, key: &str, scope: ConfigScope) -> String {
+    match scope {
+        ConfigScope::Top => key.to_string(),
+        ConfigScope::ProviderOrTop if !active_provider.is_empty() => {
+            format!("providers.{active_provider}.{key}")
+        }
+        ConfigScope::ProviderOrTop => key.to_string(),
+    }
+}
+
+fn config_field_placeholder(key: &str) -> &'static str {
+    if is_sensitive_config_key(key) {
+        "Paste new key to update"
+    } else {
+        ""
+    }
+}
+
+fn display_config_field_value(key: &str, value: &str, edit: Option<&String>) -> String {
+    if let Some(edit) = edit {
+        return edit.clone();
+    }
+    if is_sensitive_config_key(key) {
+        String::new()
+    } else {
+        value.to_string()
+    }
+}
+
+fn is_sensitive_config_key(key: &str) -> bool {
+    key == "api_key" || key.ends_with(".api_key")
 }
 
 fn config_summary_value(state: &PicusState, key: &str, fallback: &str) -> String {
@@ -876,6 +936,8 @@ fn truncate_preview(s: &str, max: usize) -> String {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeMap;
+
     use super::*;
 
     #[test]
@@ -899,5 +961,79 @@ mod tests {
     #[test]
     fn timestamp_format_is_stable() {
         assert_eq!(format_timestamp(0), "1970-01-01 00:00 UTC");
+    }
+
+    #[test]
+    fn settings_provider_scoped_field_reads_active_provider_value() {
+        let mut values = BTreeMap::new();
+        values.insert("provider".to_string(), "openrouter".to_string());
+        values.insert("model".to_string(), "root-model".to_string());
+        values.insert(
+            "providers.openrouter.model".to_string(),
+            "provider-model".to_string(),
+        );
+
+        assert_eq!(
+            resolve_config_field(
+                &values,
+                "openrouter",
+                "model",
+                ConfigScope::ProviderOrTop
+            ),
+            "provider-model"
+        );
+    }
+
+    #[test]
+    fn settings_provider_scoped_field_writes_active_provider_key() {
+        assert_eq!(
+            config_field_target_key("openrouter", "model", ConfigScope::ProviderOrTop),
+            "providers.openrouter.model"
+        );
+        assert_eq!(
+            config_field_target_key("", "model", ConfigScope::ProviderOrTop),
+            "model"
+        );
+        assert_eq!(
+            config_field_target_key("openrouter", "provider", ConfigScope::Top),
+            "provider"
+        );
+    }
+
+    #[test]
+    fn settings_staged_provider_controls_provider_scoped_target_key() {
+        let mut values = BTreeMap::new();
+        values.insert("provider".to_string(), "deepseek".to_string());
+        let mut edits = BTreeMap::new();
+        edits.insert("provider".to_string(), "openrouter".to_string());
+
+        let active_provider = edits
+            .get("provider")
+            .or_else(|| values.get("provider"))
+            .cloned()
+            .unwrap_or_default();
+
+        assert_eq!(active_provider, "openrouter");
+        assert_eq!(
+            config_field_target_key(&active_provider, "model", ConfigScope::ProviderOrTop),
+            "providers.openrouter.model"
+        );
+    }
+
+    #[test]
+    fn settings_api_key_field_does_not_display_redacted_secret_as_editable_value() {
+        assert_eq!(display_config_field_value("api_key", "sk-d***cret", None), "");
+        assert_eq!(
+            config_field_placeholder("api_key"),
+            "Paste new key to update"
+        );
+        assert_eq!(
+            display_config_field_value("api_key", "sk-d***cret", Some(&"sk-live".to_string())),
+            "sk-live"
+        );
+        assert_eq!(
+            display_config_field_value("model", "glm-5.2", None),
+            "glm-5.2"
+        );
     }
 }

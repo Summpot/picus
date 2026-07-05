@@ -28,7 +28,11 @@ pub enum PicusCodeAction {
     CloseSettings,
     /// Request a config list refresh.
     RefreshConfig,
-    /// Set a config key (key|value payload).
+    /// Stage a config edit (key|value payload).
+    EditConfig(String, String),
+    /// Persist staged settings edits.
+    ApplyConfigEdits,
+    /// Set a config key immediately (key|value payload).
     SetConfig(String, String),
     /// Reload config from disk.
     ReloadConfig,
