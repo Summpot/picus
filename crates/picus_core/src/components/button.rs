@@ -122,3 +122,104 @@ impl UiComponentTemplate for UiButton {
         crate::projection::elements::project_button(component, ctx)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::test_helpers::*;
+    use crate::{PicusPlugin, UiRoot};
+    use bevy_app::App;
+    use bevy_ecs::hierarchy::ChildOf;
+    use bevy_window::{PrimaryWindow, Window};
+
+    #[test]
+    fn ui_button_projects_to_action_button_with_child_widget() {
+        let mut app = App::new();
+        app.add_plugins(PicusPlugin);
+
+        let mut window = Window::default();
+        window.resolution.set(800.0, 600.0);
+        app.world_mut().spawn((window, PrimaryWindow));
+
+        let root = app.world_mut().spawn((UiRoot, crate::UiFlexColumn)).id();
+        let button = app
+            .world_mut()
+            .spawn((crate::UiButton::new("Action"), ChildOf(root)))
+            .id();
+
+        app.update();
+
+        let debug = format!("entity={}", button.to_bits());
+        let widget_id = {
+            let runtime = app.world().non_send::<crate::MasonryRuntime>();
+            let root = runtime
+                .primary()
+                .expect("primary window runtime should exist")
+                .render_root
+                .get_layer_root(0);
+            find_widget_id_by_debug_text(root, &debug)
+                .expect("UiButton should project an entity-tagged action button widget")
+        };
+
+        let short_type = {
+            let runtime = app.world().non_send::<crate::MasonryRuntime>();
+            runtime
+                .primary()
+                .expect("primary window runtime should exist")
+                .render_root
+                .get_widget(widget_id)
+                .map(|widget| widget.short_type_name().to_string())
+                .unwrap_or_default()
+        };
+
+        assert_eq!(short_type, "ActionButtonWithChildWidget");
+    }
+
+    #[test]
+    fn ui_button_disabled_does_not_project_action_button_widget() {
+        let mut app = App::new();
+        app.add_plugins(PicusPlugin);
+
+        let mut window = Window::default();
+        window.resolution.set(800.0, 600.0);
+        app.world_mut().spawn((window, PrimaryWindow));
+
+        let root = app.world_mut().spawn((UiRoot, crate::UiFlexColumn)).id();
+        let button = app
+            .world_mut()
+            .spawn((
+                crate::UiButton::new("Disabled").disabled(true),
+                ChildOf(root),
+            ))
+            .id();
+
+        app.update();
+
+        // A disabled button should NOT project an ActionButtonWithChildWidget;
+        // it renders as a plain styled container so it cannot emit click actions.
+        let debug = format!("entity={}", button.to_bits());
+        let runtime = app.world().non_send::<crate::MasonryRuntime>();
+        let root = runtime
+            .primary()
+            .expect("primary window runtime should exist")
+            .render_root
+            .get_layer_root(0);
+        let widget_id = find_widget_id_by_debug_text(root, &debug);
+        assert!(
+            widget_id.is_none(),
+            "disabled UiButton should not project an entity-tagged action button widget"
+        );
+    }
+
+    #[test]
+    fn ui_button_disabled_builder_sets_disabled_field() {
+        let button = crate::UiButton::new("Label").disabled(true);
+        assert!(
+            button.disabled,
+            "disabled(true) should set the disabled field"
+        );
+        let enabled = crate::UiButton::new("Label").disabled(false);
+        assert!(!enabled.disabled);
+        let default = crate::UiButton::new("Label");
+        assert!(!default.disabled, "default UiButton should not be disabled");
+    }
+}

@@ -208,7 +208,10 @@ mod tests {
         ensure_latency_bounded_winit_settings(&mut app);
 
         let settings = app.world().resource::<WinitSettings>();
-        assert_eq!(settings.focused_mode, WinitSettings::desktop_app().focused_mode);
+        assert_eq!(
+            settings.focused_mode,
+            WinitSettings::desktop_app().focused_mode
+        );
         assert_eq!(
             settings.unfocused_mode,
             WinitSettings::desktop_app().unfocused_mode

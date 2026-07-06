@@ -30,8 +30,7 @@ use crate::{
         UiGradientStop, UiGroupBox, UiListSelectionMode, UiListView, UiMenuBar, UiMenuBarItem,
         UiMenuItemPanel, UiMessageBar, UiNavigationItem, UiNavigationView, UiRadioGroup,
         UiScrollView, UiSearch, UiSortDirection, UiSpinner, UiSplitPane, UiTabBar, UiTable,
-        UiTimePicker,
-        UiTimePickerPanel, UiToast, UiTooltip, UiTreeNode,
+        UiTimePicker, UiTimePickerPanel, UiToast, UiTooltip, UiTreeNode,
     },
     icons::LUCIDE_FONT_FAMILY,
     overlay::OverlayUiAction,
@@ -1969,15 +1968,13 @@ pub(crate) fn project_navigation_view(nav: &UiNavigationView, ctx: ProjectionCtx
             .with_width(Dim::Stretch)
             .with_height(Dim::Stretch),
     );
-    let content_area = sized_box(
-        apply_widget_style(
-            scroll_portal(content_body, Point::ORIGIN)
-                .constrain_horizontal(true)
-                .constrain_vertical(true)
-                .content_must_fill(true),
-            &content_style,
-        ),
-    )
+    let content_area = sized_box(apply_widget_style(
+        scroll_portal(content_body, Point::ORIGIN)
+            .constrain_horizontal(true)
+            .constrain_vertical(true)
+            .content_must_fill(true),
+        &content_style,
+    ))
     .dims(
         Dimensions::AUTO
             .with_width(Dim::Stretch)

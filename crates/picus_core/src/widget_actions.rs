@@ -965,3 +965,475 @@ pub fn handle_tooltip_hovers(
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+
+    #[test]
+    fn direct_slider_action_updates_slider_state() {
+        let mut world = World::new();
+        world.insert_resource(UiEventQueue::default());
+
+        let slider = world
+            .spawn((crate::UiSlider::new(0.0, 100.0, 10.0).with_step(5.0),))
+            .id();
+
+        world.resource::<UiEventQueue>().push_typed(
+            slider,
+            crate::WidgetUiAction::SetSliderValue {
+                slider,
+                value: 42.0,
+            },
+        );
+
+        crate::handle_widget_actions(&mut world);
+
+        let slider_state = world
+            .get::<crate::UiSlider>(slider)
+            .expect("slider should exist");
+        assert_eq!(slider_state.value, 40.0);
+
+        let changed = world
+            .resource_mut::<UiEventQueue>()
+            .drain_actions::<crate::UiSliderChanged>();
+        assert_eq!(changed.len(), 1);
+        assert_eq!(changed[0].action.value, 40.0);
+    }
+
+    #[test]
+    fn direct_checkbox_action_sets_checkbox_state() {
+        let mut world = World::new();
+        world.insert_resource(UiEventQueue::default());
+
+        let checkbox = world.spawn((crate::UiCheckbox::new("demo", false),)).id();
+
+        world.resource::<UiEventQueue>().push_typed(
+            checkbox,
+            crate::WidgetUiAction::SetCheckbox {
+                checkbox,
+                checked: true,
+            },
+        );
+
+        crate::handle_widget_actions(&mut world);
+
+        let checkbox_state = world
+            .get::<crate::UiCheckbox>(checkbox)
+            .expect("checkbox should exist");
+        assert!(checkbox_state.checked);
+
+        let changed = world
+            .resource_mut::<UiEventQueue>()
+            .drain_actions::<crate::UiCheckboxChanged>();
+        assert_eq!(changed.len(), 1);
+        assert!(changed[0].action.checked);
+    }
+
+    #[test]
+    fn indeterminate_checkbox_toggle_transitions_to_checked() {
+        let mut world = World::new();
+        world.insert_resource(UiEventQueue::default());
+
+        let checkbox = world
+            .spawn((crate::UiCheckbox::new("tri-state", false).indeterminate(true),))
+            .id();
+
+        world
+            .resource::<UiEventQueue>()
+            .push_typed(checkbox, crate::WidgetUiAction::ToggleCheckbox { checkbox });
+        crate::handle_widget_actions(&mut world);
+
+        let state = world
+            .get::<crate::UiCheckbox>(checkbox)
+            .expect("checkbox should exist");
+        assert!(!state.indeterminate, "indeterminate should clear on toggle");
+        assert!(state.checked, "indeterminate toggle should land on checked");
+
+        let changed = world
+            .resource_mut::<UiEventQueue>()
+            .drain_actions::<crate::UiCheckboxChanged>();
+        assert_eq!(changed.len(), 1);
+        assert!(changed[0].action.checked);
+        assert!(!changed[0].action.indeterminate);
+    }
+
+    #[test]
+    fn direct_text_input_actions_update_new_input_state() {
+        let mut world = World::new();
+        world.insert_resource(UiEventQueue::default());
+
+        let password = world
+            .spawn((crate::UiPasswordInput::new("pw").with_mask('*'),))
+            .id();
+        let multiline = world
+            .spawn((crate::UiMultilineTextInput::new("before"),))
+            .id();
+
+        world.resource::<UiEventQueue>().push_typed(
+            password,
+            crate::WidgetUiAction::SetPasswordInputDisplay {
+                input: password,
+                display_value: "**d".to_string(),
+            },
+        );
+        world.resource::<UiEventQueue>().push_typed(
+            multiline,
+            crate::WidgetUiAction::SetMultilineTextInput {
+                input: multiline,
+                value: "a\nb".to_string(),
+            },
+        );
+
+        crate::handle_widget_actions(&mut world);
+
+        let password_state = world
+            .get::<crate::UiPasswordInput>(password)
+            .expect("password input should exist");
+        assert_eq!(password_state.value, "pwd");
+        let multiline_state = world
+            .get::<crate::UiMultilineTextInput>(multiline)
+            .expect("multiline input should exist");
+        assert_eq!(multiline_state.value, "a\nb");
+
+        let password_changed = world
+            .resource_mut::<UiEventQueue>()
+            .drain_actions::<crate::UiPasswordInputChanged>();
+        assert_eq!(password_changed.len(), 1);
+        assert_eq!(password_changed[0].action.value, "pwd");
+
+        let multiline_changed = world
+            .resource_mut::<UiEventQueue>()
+            .drain_actions::<crate::UiMultilineTextInputChanged>();
+        assert_eq!(multiline_changed.len(), 1);
+        assert_eq!(multiline_changed[0].action.value, "a\nb");
+    }
+
+    #[test]
+    fn new_input_options_enforce_read_only_and_max_length() {
+        let mut world = World::new();
+        world.insert_resource(UiEventQueue::default());
+
+        let password = world
+            .spawn((crate::UiPasswordInput::new("pw")
+                .with_mask('*')
+                .with_max_length(3),))
+            .id();
+        let read_only = world
+            .spawn((crate::UiPasswordInput::new("stay").read_only(true),))
+            .id();
+        let multiline = world
+            .spawn((crate::UiMultilineTextInput::new("before").with_max_length(4),))
+            .id();
+
+        world.resource::<UiEventQueue>().push_typed(
+            password,
+            crate::WidgetUiAction::SetPasswordInputDisplay {
+                input: password,
+                display_value: "**def".to_string(),
+            },
+        );
+        world.resource::<UiEventQueue>().push_typed(
+            read_only,
+            crate::WidgetUiAction::SetPasswordInputDisplay {
+                input: read_only,
+                display_value: "changed".to_string(),
+            },
+        );
+        world.resource::<UiEventQueue>().push_typed(
+            multiline,
+            crate::WidgetUiAction::SetMultilineTextInput {
+                input: multiline,
+                value: "abcdef".to_string(),
+            },
+        );
+
+        crate::handle_widget_actions(&mut world);
+
+        assert_eq!(
+            world
+                .get::<crate::UiPasswordInput>(password)
+                .expect("password input should exist")
+                .value,
+            "pwd"
+        );
+        assert_eq!(
+            world
+                .get::<crate::UiPasswordInput>(read_only)
+                .expect("read-only password input should exist")
+                .value,
+            "stay"
+        );
+        assert_eq!(
+            world
+                .get::<crate::UiMultilineTextInput>(multiline)
+                .expect("multiline input should exist")
+                .value,
+            "abcd"
+        );
+
+        let password_changed = world
+            .resource_mut::<UiEventQueue>()
+            .drain_actions::<crate::UiPasswordInputChanged>();
+        assert_eq!(password_changed.len(), 1);
+
+        let multiline_changed = world
+            .resource_mut::<UiEventQueue>()
+            .drain_actions::<crate::UiMultilineTextInputChanged>();
+        assert_eq!(multiline_changed.len(), 1);
+        assert_eq!(multiline_changed[0].action.value, "abcd");
+    }
+
+    #[test]
+    fn direct_selection_actions_update_list_and_data_table_state() {
+        let mut world = World::new();
+        world.insert_resource(UiEventQueue::default());
+
+        let list = world
+            .spawn((crate::UiListView::new(["one", "two", "three"]),))
+            .id();
+        let table = world
+            .spawn((crate::UiDataTable::from_labels(["Name"]).with_cells("1", ["Ada"]),))
+            .id();
+
+        world.resource::<UiEventQueue>().push_typed(
+            list,
+            crate::WidgetUiAction::SelectListItem {
+                list_view: list,
+                index: 2,
+            },
+        );
+        world.resource::<UiEventQueue>().push_typed(
+            table,
+            crate::WidgetUiAction::SelectDataTableRow { table, row: 0 },
+        );
+
+        crate::handle_widget_actions(&mut world);
+
+        assert_eq!(
+            world
+                .get::<crate::UiListView>(list)
+                .expect("list view should exist")
+                .selected,
+            Some(2)
+        );
+        assert_eq!(
+            world
+                .get::<crate::UiDataTable>(table)
+                .expect("data table should exist")
+                .selected_row,
+            Some(0)
+        );
+
+        let list_changed = world
+            .resource_mut::<UiEventQueue>()
+            .drain_actions::<crate::UiListViewSelectionChanged>();
+        assert_eq!(list_changed.len(), 1);
+        assert_eq!(list_changed[0].action.selected, Some(2));
+        assert_eq!(list_changed[0].action.selected_indices, vec![2]);
+
+        let table_changed = world
+            .resource_mut::<UiEventQueue>()
+            .drain_actions::<crate::UiDataTableSelectionChanged>();
+        assert_eq!(table_changed.len(), 1);
+        assert_eq!(table_changed[0].action.selected_row, Some(0));
+        assert_eq!(table_changed[0].action.selected_rows, vec![0]);
+    }
+
+    #[test]
+    fn new_selection_options_support_multiple_and_data_table_sorting() {
+        let mut world = World::new();
+        world.insert_resource(UiEventQueue::default());
+
+        let list = world
+            .spawn((crate::UiListView::new(["one", "two", "three"])
+                .with_selection_mode(crate::UiListSelectionMode::Multiple)
+                .with_item_height(24.0)
+                .with_item_padding(3.0),))
+            .id();
+        let table = world
+            .spawn((crate::UiDataTable::new([
+                crate::UiDataColumn::new("name", "Name").width(120.0),
+                crate::UiDataColumn::new("role", "Role"),
+            ])
+            .with_selection_mode(crate::UiListSelectionMode::Multiple)
+            .striped(true)
+            .with_cells("2", ["Grace", "Admiral"])
+            .with_cells("1", ["Ada", "Engineer"]),))
+            .id();
+
+        for index in [0, 2, 0] {
+            world.resource::<UiEventQueue>().push_typed(
+                list,
+                crate::WidgetUiAction::SelectListItem {
+                    list_view: list,
+                    index,
+                },
+            );
+        }
+        world.resource::<UiEventQueue>().push_typed(
+            table,
+            crate::WidgetUiAction::SelectDataTableRow { table, row: 1 },
+        );
+        world.resource::<UiEventQueue>().push_typed(
+            table,
+            crate::WidgetUiAction::SortDataTableColumn { table, column: 0 },
+        );
+
+        crate::handle_widget_actions(&mut world);
+
+        let list_state = world
+            .get::<crate::UiListView>(list)
+            .expect("list view should exist");
+        assert_eq!(list_state.clamped_selected_indices(), vec![2]);
+        assert_eq!(list_state.selected, Some(2));
+
+        let table_state = world
+            .get::<crate::UiDataTable>(table)
+            .expect("data table should exist");
+        assert_eq!(table_state.clamped_selected_rows(), vec![1]);
+        assert_eq!(
+            table_state.sort,
+            Some(crate::UiDataTableSort::new(
+                0,
+                crate::UiSortDirection::Ascending
+            ))
+        );
+        assert_eq!(table_state.sorted_row_indices(), vec![1, 0]);
+
+        let list_changed = world
+            .resource_mut::<UiEventQueue>()
+            .drain_actions::<crate::UiListViewSelectionChanged>();
+        assert_eq!(list_changed.len(), 3);
+        assert_eq!(
+            list_changed.last().unwrap().action.selected_indices,
+            vec![2]
+        );
+
+        let sort_changed = world
+            .resource_mut::<UiEventQueue>()
+            .drain_actions::<crate::UiDataTableSortChanged>();
+        assert_eq!(sort_changed.len(), 1);
+        assert_eq!(
+            sort_changed[0].action.sort,
+            crate::UiDataTableSort::new(0, crate::UiSortDirection::Ascending)
+        );
+    }
+
+    #[test]
+    fn new_grid_canvas_and_image_options_are_data_complete() {
+        let tracks = crate::UiGrid::parse_tracks("Auto, *, 2*, 120px, 48")
+            .expect("grid track spec should parse");
+        assert_eq!(
+            tracks,
+            vec![
+                crate::UiGridLength::Auto,
+                crate::UiGridLength::Star(1.0),
+                crate::UiGridLength::Star(2.0),
+                crate::UiGridLength::Px(120.0),
+                crate::UiGridLength::Px(48.0),
+            ]
+        );
+
+        let grid = crate::UiGrid::new(1, 1)
+            .try_with_columns_spec("Auto 2* 80")
+            .expect("column spec should parse")
+            .with_auto_flow(crate::UiGridAutoFlow::Column)
+            .auto_indexing(false)
+            .show_grid_lines(true)
+            .share_star_size(true);
+        assert_eq!(grid.effective_columns(), 3);
+        assert_eq!(grid.auto_flow, crate::UiGridAutoFlow::Column);
+        assert!(!grid.auto_indexing);
+        assert!(grid.show_grid_lines);
+        assert!(grid.share_star_size);
+
+        let cell = crate::UiGridCell::row(1).with_column(2).with_span(3, 2);
+        assert!(cell.has_row);
+        assert!(cell.has_column);
+        assert_eq!(cell.row_span, 2);
+        assert_eq!(cell.column_span, 3);
+
+        let canvas = crate::UiCanvas::new()
+            .with_command(crate::UiCanvasCommand::FillCanvas {
+                color: crate::xilem::Color::from_rgb8(0, 0, 0),
+            })
+            .with_command(crate::UiCanvasCommand::FillPath {
+                commands: vec![
+                    crate::UiCanvasPathCommand::MoveTo { x: 0.0, y: 0.0 },
+                    crate::UiCanvasPathCommand::LineTo { x: 8.0, y: 0.0 },
+                    crate::UiCanvasPathCommand::LineTo { x: 8.0, y: 8.0 },
+                    crate::UiCanvasPathCommand::ClosePath,
+                ],
+                color: crate::xilem::Color::from_rgb8(255, 0, 0),
+            });
+        assert_eq!(canvas.commands.len(), 2);
+        assert_eq!(
+            crate::UiCanvasPosition::new(12.0, 24.0).offset((0.0, 0.0)),
+            (12.0, 24.0)
+        );
+
+        // Right/bottom anchoring resolves against the canvas size.
+        let right_bottom = crate::UiCanvasPosition::default()
+            .with_right(10.0)
+            .with_bottom(20.0);
+        assert_eq!(
+            right_bottom.offset((300.0, 200.0)),
+            (290.0, 180.0),
+            "right/bottom should offset from the far edges of the canvas"
+        );
+
+        // Gradient commands carry their stops through the canvas component.
+        let gradient_canvas =
+            crate::UiCanvas::new().with_command(crate::UiCanvasCommand::FillLinearGradientRect {
+                x: 0.0,
+                y: 0.0,
+                width: 100.0,
+                height: 100.0,
+                start_x: 0.0,
+                start_y: 0.0,
+                end_x: 100.0,
+                end_y: 0.0,
+                stops: vec![
+                    crate::UiGradientStop::new(0.0, crate::xilem::Color::from_rgb8(0, 0, 0)),
+                    crate::UiGradientStop::new(1.0, crate::xilem::Color::from_rgb8(255, 255, 255)),
+                ],
+            });
+        assert_eq!(gradient_canvas.commands.len(), 1);
+
+        let image = crate::UiImage::from_bgra8(2, 1, vec![0, 0, 255, 255, 0, 255, 0, 128])
+            .quality(masonry_core::peniko::ImageQuality::High)
+            .alpha(0.5)
+            .view_box(crate::UiImageViewBox::pixels(0.0, 0.0, 1.0, 1.0))
+            .alignment(
+                crate::UiImageAlignmentX::Right,
+                crate::UiImageAlignmentY::Bottom,
+            );
+        assert_eq!(image.source_size(), Some((2, 1)));
+        assert_eq!(image.peek_rgba8(0, 0), Some([255, 0, 0, 255]));
+        assert_eq!(image.peek_rgba8(1, 0), Some([0, 255, 0, 128]));
+        assert_eq!(
+            image
+                .peek_color(1, 0)
+                .expect("pixel should exist")
+                .to_rgba8()
+                .to_u8_array(),
+            [0, 255, 0, 128]
+        );
+    }
+
+    #[test]
+    fn data_row_accepts_image_cell_templates() {
+        let row = crate::UiDataRow::new("1", ["text", "more text"])
+            .with_cell_image(0, crate::UiImage::empty().with_alt_text("icon"));
+        assert!(matches!(row.cells[0], crate::UiDataCell::Image(_)));
+        assert!(matches!(row.cells[1], crate::UiDataCell::Text(_)));
+        assert_eq!(
+            row.cells[0].text(),
+            "icon",
+            "image cell text falls back to alt_text"
+        );
+        assert_eq!(row.cells[1].text(), "more text");
+    }
+}

@@ -88,3 +88,83 @@ pub fn register_builtin_projectors(registry: &mut UiProjectorRegistry) {
         .register_component::<UiThemePickerMenu>(theme_picker::project_theme_picker_menu)
         .register_component::<UiNavigationView>(widgets::project_navigation_view);
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use crate::{UiEventQueue, bubble_ui_pointer_events};
+    use bevy_ecs::hierarchy::ChildOf;
+    use bevy_ecs::prelude::*;
+    use bevy_input::mouse::MouseButton;
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    #[test]
+    fn pointer_hits_bubble_to_parent_until_consumed() {
+        let mut world = World::new();
+        world.insert_resource(UiEventQueue::default());
+
+        let root = world.spawn_empty().id();
+        let parent = world
+            .spawn((ChildOf(root), crate::StopUiPointerPropagation))
+            .id();
+        let child = world.spawn((ChildOf(parent),)).id();
+
+        world.resource::<UiEventQueue>().push_typed(
+            child,
+            crate::UiPointerHitEvent {
+                target: child,
+                position: (12.0, 24.0),
+                button: MouseButton::Left,
+                phase: crate::UiPointerPhase::Pressed,
+            },
+        );
+
+        bubble_ui_pointer_events(&mut world);
+
+        let bubbled = world
+            .resource_mut::<UiEventQueue>()
+            .drain_actions::<crate::UiPointerEvent>();
+
+        assert_eq!(bubbled.len(), 2);
+        assert_eq!(bubbled[0].entity, child);
+        assert_eq!(bubbled[0].action.current_target, child);
+        assert!(!bubbled[0].action.consumed);
+
+        assert_eq!(bubbled[1].entity, parent);
+        assert_eq!(bubbled[1].action.current_target, parent);
+        assert!(bubbled[1].action.consumed);
+    }
+
+    #[test]
+    fn projector_registry_last_registered_component_projector_wins() {
+        #[derive(Component, Debug, Clone, Copy)]
+        struct OverrideProbe;
+
+        static LAST_PROJECTOR: AtomicUsize = AtomicUsize::new(0);
+
+        fn project_first(_: &OverrideProbe, _ctx: ProjectionCtx<'_>) -> UiView {
+            LAST_PROJECTOR.store(1, Ordering::SeqCst);
+            Arc::new(crate::xilem::view::label("first"))
+        }
+
+        fn project_second(_: &OverrideProbe, _ctx: ProjectionCtx<'_>) -> UiView {
+            LAST_PROJECTOR.store(2, Ordering::SeqCst);
+            Arc::new(crate::xilem::view::label("second"))
+        }
+
+        let mut world = World::new();
+        let entity = world.spawn((OverrideProbe,)).id();
+
+        let mut registry = UiProjectorRegistry::default();
+        registry
+            .register_component::<OverrideProbe>(project_first)
+            .register_component::<OverrideProbe>(project_second);
+
+        LAST_PROJECTOR.store(0, Ordering::SeqCst);
+        let projected = registry.project_node(&world, entity, entity.to_bits(), Vec::new());
+        assert!(projected.is_some());
+        assert_eq!(LAST_PROJECTOR.load(Ordering::SeqCst), 2);
+    }
+}

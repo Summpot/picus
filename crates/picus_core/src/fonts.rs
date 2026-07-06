@@ -102,3 +102,19 @@ pub fn sync_fonts_to_xilem(
         runtime.register_fonts_all(font_bytes);
     }
 }
+
+#[cfg(test)]
+mod tests {
+
+    #[test]
+    fn xilem_font_bridge_deduplicates_same_font_bytes() {
+        let mut bridge = crate::XilemFontBridge::default();
+        assert!(bridge.register_font_bytes(b"font-data"));
+        assert!(!bridge.register_font_bytes(b"font-data"));
+    }
+
+    #[test]
+    fn lucide_font_family_matches_upstream_identifier() {
+        assert_eq!(crate::LUCIDE_FONT_FAMILY, "lucide");
+    }
+}

@@ -688,11 +688,13 @@ mod tests {
             default_font_stack: vec!["Noto Sans CJK SC".to_string(), "sans-serif".to_string()],
             ..AppI18n::default()
         };
-        let mut sheet = StyleSheet::default();
-        sheet.font_family = Some(StyleValue::value(vec![
-            "Segoe UI".to_string(),
-            "sans-serif".to_string(),
-        ]));
+        let sheet = StyleSheet {
+            font_family: Some(StyleValue::value(vec![
+                "Segoe UI".to_string(),
+                "sans-serif".to_string(),
+            ])),
+            ..StyleSheet::default()
+        };
         world.insert_resource(i18n);
         world.insert_resource(sheet);
 

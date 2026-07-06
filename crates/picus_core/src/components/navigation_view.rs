@@ -124,8 +124,8 @@ impl UiComponentTemplate for UiNavigationItem {
 
 pub(crate) fn sync_navigation_view_item_templates(world: &mut World) {
     let nav_entities = {
-        let mut query = world
-            .query_filtered::<Entity, (With<UiNavigationView>, Changed<UiNavigationView>)>();
+        let mut query =
+            world.query_filtered::<Entity, (With<UiNavigationView>, Changed<UiNavigationView>)>();
         query.iter(world).collect::<Vec<_>>()
     };
 
@@ -135,7 +135,10 @@ pub(crate) fn sync_navigation_view_item_templates(world: &mut World) {
 }
 
 fn sync_navigation_view_item_entities(world: &mut World, nav: Entity) {
-    let Some(item_count) = world.get::<UiNavigationView>(nav).map(|view| view.items.len()) else {
+    let Some(item_count) = world
+        .get::<UiNavigationView>(nav)
+        .map(|view| view.items.len())
+    else {
         return;
     };
 
@@ -169,8 +172,8 @@ fn sync_navigation_view_item_entities(world: &mut World, nav: Entity) {
         let _ = world.despawn(entity);
     }
 
-    for index in 0..item_count {
-        if by_index[index].is_none() {
+    for (index, item) in by_index.iter().enumerate().take(item_count) {
+        if item.is_none() {
             world.spawn((UiNavigationItem { nav, index }, ChildOf(nav)));
         }
     }

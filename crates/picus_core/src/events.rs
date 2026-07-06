@@ -257,3 +257,36 @@ pub(crate) fn push_global_ui_event(event: UiEvent) {
 pub fn emit_ui_action<T: Any + Send + Sync>(entity: Entity, action: T) {
     push_global_ui_event(UiEvent::typed(entity, action));
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_helpers::*;
+    use crate::{AppPicusExt, PicusPlugin, UiRoot};
+    use bevy_app::App;
+
+    #[test]
+    fn ui_event_queue_drains_typed_actions() {
+        let mut app = App::new();
+        app.add_plugins(PicusPlugin)
+            .register_projector::<TestRoot>(project_test_root);
+
+        let root = app.world_mut().spawn((UiRoot, TestRoot)).id();
+
+        // Build synthesized tree + initial Masonry retained tree.
+        app.update();
+
+        app.world()
+            .resource::<UiEventQueue>()
+            .push_typed(root, TestAction::Clicked);
+
+        let actions = app
+            .world_mut()
+            .resource_mut::<UiEventQueue>()
+            .drain_actions::<TestAction>();
+
+        assert_eq!(actions.len(), 1);
+        assert_eq!(actions[0].entity, root);
+        assert_eq!(actions[0].action, TestAction::Clicked);
+    }
+}

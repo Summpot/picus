@@ -280,3 +280,103 @@ fn compose_window_root(roots: &[UiView]) -> UiView {
     use crate::runtime::compose_runtime_root as compose;
     compose(roots)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use crate::register_builtin_projectors;
+    use bevy_ecs::hierarchy::ChildOf;
+
+    #[test]
+    fn synthesis_stats_track_missing_entity() {
+        let mut world = World::new();
+        let mut registry = UiProjectorRegistry::default();
+        register_builtin_projectors(&mut registry);
+
+        let stale_root = world.spawn_empty().id();
+        assert!(world.despawn(stale_root));
+
+        let (_roots, stats) = synthesize_roots_with_stats(&world, &registry, [stale_root]);
+
+        assert_eq!(stats.root_count, 1);
+        assert_eq!(stats.node_count, 1);
+        assert_eq!(stats.missing_entity_count, 1);
+        assert_eq!(stats.cycle_count, 0);
+    }
+
+    #[test]
+    fn builtin_registry_projects_label() {
+        let mut world = World::new();
+        let mut registry = UiProjectorRegistry::default();
+        register_builtin_projectors(&mut registry);
+
+        let root = world.spawn((UiRoot, crate::UiLabel::new("ok"))).id();
+
+        let (roots, stats) = synthesize_roots_with_stats(&world, &registry, [root]);
+
+        assert_eq!(roots.len(), 1);
+        assert_eq!(stats.unhandled_count, 0);
+        assert_eq!(stats.missing_entity_count, 0);
+    }
+
+    #[test]
+    fn builtin_registry_projects_new_ui_primitives() {
+        let mut world = World::new();
+        world.insert_resource(crate::StyleSheet::default());
+        let mut registry = UiProjectorRegistry::default();
+        register_builtin_projectors(&mut registry);
+
+        let root = world.spawn((UiRoot, crate::UiFlexColumn)).id();
+        let grid = world.spawn((crate::UiGrid::new(2, 1), ChildOf(root))).id();
+        world.spawn((
+            crate::UiLabel::new("a"),
+            crate::UiGridCell::new(0, 0),
+            ChildOf(grid),
+        ));
+        world.spawn((
+            crate::UiLabel::new("b"),
+            crate::UiGridCell::new(1, 0),
+            ChildOf(grid),
+        ));
+        world.spawn((
+            crate::UiCanvas::new()
+                .with_alt_text("drawing")
+                .with_command(crate::UiCanvasCommand::FillRect {
+                    x: 0.0,
+                    y: 0.0,
+                    width: 8.0,
+                    height: 8.0,
+                    color: crate::xilem::Color::from_rgb8(255, 0, 0),
+                }),
+            ChildOf(root),
+        ));
+        world.spawn((
+            crate::UiImage::from_rgba8(1, 1, vec![255, 0, 0, 255]).with_alt_text("pixel"),
+            ChildOf(root),
+        ));
+        world.spawn((
+            crate::UiPasswordInput::new("secret").with_placeholder("password"),
+            ChildOf(root),
+        ));
+        world.spawn((
+            crate::UiMultilineTextInput::new("line one\nline two").with_placeholder("notes"),
+            ChildOf(root),
+        ));
+        world.spawn((
+            crate::UiListView::new(["alpha", "beta"]).with_selected(1),
+            ChildOf(root),
+        ));
+        world.spawn((
+            crate::UiDataTable::from_labels(["Name", "Role"])
+                .with_cells("1", ["Ada", "Engineer"])
+                .with_selected_row(0),
+            ChildOf(root),
+        ));
+
+        let (_roots, stats) = synthesize_roots_with_stats(&world, &registry, [root]);
+
+        assert_eq!(stats.unhandled_count, 0);
+        assert_eq!(stats.missing_entity_count, 0);
+    }
+}

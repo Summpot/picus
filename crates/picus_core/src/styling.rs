@@ -1524,11 +1524,9 @@ fn selector_matches_class_context(
                     .map(|state| state.focused)
             })
             .unwrap_or(false),
-        Selector::And(selectors) => selectors
-            .iter()
-            .all(|selector| {
-                selector_matches_class_context(world, entity, pseudo_state, selector, has_class)
-            }),
+        Selector::And(selectors) => selectors.iter().all(|selector| {
+            selector_matches_class_context(world, entity, pseudo_state, selector, has_class)
+        }),
         Selector::Descendant {
             ancestor,
             descendant,
@@ -1537,13 +1535,7 @@ fn selector_matches_class_context(
                 return false;
             };
 
-            selector_matches_class_context(
-                world,
-                Some(entity),
-                pseudo_state,
-                descendant,
-                has_class,
-            )
+            selector_matches_class_context(world, Some(entity), pseudo_state, descendant, has_class)
                 && entity_has_matching_ancestor(world, entity, ancestor)
         }
     }
@@ -1766,7 +1758,8 @@ fn resolve_font_family_value(
 }
 
 fn resolve_stylesheet_font_family(sheet: &StyleSheet) -> Option<Vec<String>> {
-    sheet.font_family
+    sheet
+        .font_family
         .as_ref()
         .and_then(|value| resolve_font_family_value(&sheet.tokens, value, "font_family"))
 }
@@ -2109,11 +2102,7 @@ pub fn resolve_style_for_classes_with_state<'a>(
 
     ResolvedStyle {
         layout: to_resolved_layout(&merged.layout),
-        colors: target_colors_for_state(
-            &merged.colors,
-            pseudo_state.hovered,
-            pseudo_state.pressed,
-        ),
+        colors: target_colors_for_state(&merged.colors, pseudo_state.hovered, pseudo_state.pressed),
         text: to_resolved_text(&merged.text),
         font_family: merged.font_family.or(default_font_family),
         box_shadow: merged.box_shadow,
@@ -3153,9 +3142,7 @@ impl<'de> Deserialize<'de> for FontFamilyStackDef {
             type Value = FontFamilyStackDef;
 
             fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                formatter.write_str(
-                    "a CSS font-family string or a sequence of font family names",
-                )
+                formatter.write_str("a CSS font-family string or a sequence of font family names")
             }
 
             fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
@@ -3178,9 +3165,8 @@ impl<'de> Deserialize<'de> for FontFamilyStackDef {
             where
                 A: serde::de::SeqAccess<'de>,
             {
-                let values =
-                    Vec::<String>::deserialize(SeqAccessDeserializer::new(seq))
-                        .map_err(de::Error::custom)?;
+                let values = Vec::<String>::deserialize(SeqAccessDeserializer::new(seq))
+                    .map_err(de::Error::custom)?;
                 let mut stack = Vec::new();
 
                 for value in values {
@@ -3808,5 +3794,1518 @@ impl AssetLoader for StyleSheetRonLoader {
 
     fn extensions(&self) -> &[&str] {
         &["ron"]
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_helpers::*;
+    use crate::{AppI18n, SyncTextSource};
+    use crate::{AppPicusExt, PicusPlugin, UiEventQueue, UiRoot};
+    use bevy_app::App;
+    use bevy_ecs::hierarchy::ChildOf;
+    use bevy_window::{PrimaryWindow, Window};
+    use picus_view::picus_widget::properties::ContentColor;
+
+    #[test]
+    fn plugin_registers_embedded_fluent_variants_without_activating_theme() {
+        let mut app = App::new();
+        app.add_plugins(PicusPlugin);
+
+        let active = app.world().resource::<crate::ActiveStyleSheetAsset>();
+        assert!(active.path.is_none());
+
+        let active_variant = app.world().resource::<crate::ActiveStyleVariant>();
+        assert_eq!(active_variant.0.as_deref(), None);
+
+        let applied_variant_before_update = app.world().resource::<crate::AppliedStyleVariant>();
+        assert_eq!(applied_variant_before_update.0.as_deref(), None);
+
+        let variants = app.world().resource::<crate::RegisteredStyleVariants>();
+        assert!(variants.variants.contains_key("dark"));
+        assert!(variants.variants.contains_key("light"));
+        assert!(variants.variants.contains_key("high-contrast"));
+
+        app.update();
+
+        let sheet = app.world().resource::<crate::StyleSheet>();
+        assert!(sheet.rules.is_empty());
+        assert!(sheet.tokens.is_empty());
+
+        let applied_variant = app.world().resource::<crate::AppliedStyleVariant>();
+        assert_eq!(applied_variant.0.as_deref(), None);
+    }
+    #[test]
+    fn no_active_theme_projects_label_text_as_transparent() {
+        let mut app = App::new();
+        app.add_plugins(PicusPlugin);
+
+        let mut window = Window::default();
+        window.resolution.set(320.0, 200.0);
+        app.world_mut().spawn((window, PrimaryWindow));
+
+        let root = app.world_mut().spawn((UiRoot, crate::UiFlexColumn)).id();
+        app.world_mut()
+            .spawn((crate::UiLabel::new("Hidden text"), ChildOf(root)));
+
+        app.update();
+        app.update();
+
+        let text_color = {
+            let runtime = app.world().non_send::<crate::MasonryRuntime>();
+            let window_runtime = runtime
+                .primary()
+                .expect("primary window runtime should exist");
+            let label = first_widget_by_short_name_and_debug_text(
+                window_runtime.render_root.get_layer_root(0),
+                "Label",
+                "Hidden text",
+            )
+            .expect("projected label should exist");
+            label.get_prop::<ContentColor>().color
+        };
+
+        assert_eq!(text_color, crate::xilem::Color::TRANSPARENT);
+    }
+    #[test]
+    fn markdown_projects_common_blocks_into_retained_labels() {
+        let mut app = App::new();
+        app.add_plugins(PicusPlugin);
+
+        let mut window = Window::default();
+        window.resolution.set(640.0, 480.0);
+        app.world_mut().spawn((window, PrimaryWindow));
+
+        let text_color = crate::xilem::Color::from_rgb8(0x11, 0x22, 0x33);
+        let root = app.world_mut().spawn((UiRoot, crate::UiFlexColumn)).id();
+        app.world_mut().spawn((
+            crate::UiMarkdown::new(
+                "# Markdown title\n\nSome **bold** and [link](https://example.com).\n\n- [x] Complete\n\n| Feature | Status |\n| :-- | --: |\n| Table | Done |\n\n```rust\nlet x = 1;\n```",
+            ),
+            crate::ColorStyle {
+                text: Some(text_color),
+                ..Default::default()
+            },
+            ChildOf(root),
+        ));
+
+        app.update();
+        app.update();
+
+        let runtime = app.world().non_send::<crate::MasonryRuntime>();
+        let window_runtime = runtime
+            .primary()
+            .expect("primary window runtime should exist");
+        let layer_root = window_runtime.render_root.get_layer_root(0);
+
+        let title =
+            first_widget_by_short_name_and_debug_text(layer_root, "Label", "Markdown title")
+                .expect("markdown heading should project as a label");
+        assert_eq!(title.get_prop::<ContentColor>().color, text_color);
+
+        for expected in [
+            "bold",
+            "link",
+            "☑ Complete",
+            "Feature",
+            "Done",
+            "let x = 1;",
+        ] {
+            assert!(
+                find_widget_id_by_debug_text(layer_root, expected).is_some(),
+                "markdown should project retained label text `{expected}`"
+            );
+        }
+    }
+    #[test]
+    fn no_active_theme_projects_markdown_without_backend_text_color() {
+        let mut app = App::new();
+        app.add_plugins(PicusPlugin);
+
+        let mut window = Window::default();
+        window.resolution.set(320.0, 200.0);
+        app.world_mut().spawn((window, PrimaryWindow));
+
+        let root = app.world_mut().spawn((UiRoot, crate::UiFlexColumn)).id();
+        app.world_mut().spawn((
+            crate::UiMarkdown::new("# Invisible title\n\nHidden paragraph"),
+            ChildOf(root),
+        ));
+
+        app.update();
+        app.update();
+
+        let runtime = app.world().non_send::<crate::MasonryRuntime>();
+        let window_runtime = runtime
+            .primary()
+            .expect("primary window runtime should exist");
+        let layer_root = window_runtime.render_root.get_layer_root(0);
+
+        assert!(
+            find_widget_id_by_debug_text(layer_root, "Invisible title").is_none(),
+            "un-themed markdown should not fall back to visible backend label text"
+        );
+    }
+    #[test]
+    fn no_active_theme_projects_text_input_text_as_transparent() {
+        let mut app = App::new();
+        app.add_plugins(PicusPlugin);
+
+        let mut window = Window::default();
+        window.resolution.set(320.0, 200.0);
+        app.world_mut().spawn((window, PrimaryWindow));
+
+        let root = app.world_mut().spawn((UiRoot, crate::UiFlexColumn)).id();
+        app.world_mut().spawn((
+            crate::UiTextInput::new("Typed").with_placeholder("Placeholder"),
+            ChildOf(root),
+        ));
+
+        app.update();
+        app.update();
+
+        let text_color = {
+            let runtime = app.world().non_send::<crate::MasonryRuntime>();
+            let window_runtime = runtime
+                .primary()
+                .expect("primary window runtime should exist");
+            let text_area = first_widget_by_short_name_and_debug_text(
+                window_runtime.render_root.get_layer_root(0),
+                "TextArea",
+                "Typed",
+            )
+            .expect("projected text input should build an inner TextArea");
+            text_area.get_prop::<ContentColor>().color
+        };
+
+        assert_eq!(text_color, crate::xilem::Color::TRANSPARENT);
+    }
+    #[test]
+    fn embedded_fluent_theme_defines_priority_control_visual_styles() {
+        let mut app = App::new();
+        app.add_plugins(PicusPlugin);
+        crate::set_active_style_variant_by_name(app.world_mut(), "dark");
+        app.update();
+
+        let badge = app.world_mut().spawn((crate::UiBadge::new("Beta"),)).id();
+        let progress = app
+            .world_mut()
+            .spawn((crate::UiProgressBar::determinate(0.5),))
+            .id();
+
+        let badge_style = resolve_style(app.world(), badge);
+        assert!(badge_style.layout.corner_radius > 20.0);
+        assert!(badge_style.colors.bg.is_some());
+        assert!(badge_style.colors.border.is_some());
+
+        let progress_style = resolve_style(app.world(), progress);
+        assert_eq!(progress_style.layout.padding, 0.0);
+        assert!(progress_style.layout.corner_radius > 20.0);
+        assert!(progress_style.colors.bg.is_some());
+
+        let checkbox_box = crate::resolve_style_for_classes(app.world(), ["template.checkbox.box"]);
+        assert!(checkbox_box.colors.bg.is_some());
+        assert!(checkbox_box.colors.border.is_some());
+
+        let switch_on = crate::resolve_style_for_classes(
+            app.world(),
+            ["template.switch.track", "template.switch.track.on"],
+        );
+        assert!(switch_on.colors.bg.is_some());
+        assert!(switch_on.colors.border.is_some());
+
+        let progress_fill =
+            crate::resolve_style_for_classes(app.world(), ["template.progress.fill"]);
+        assert!(progress_fill.colors.bg.is_some());
+    }
+    #[test]
+    fn embedded_fluent_theme_defines_interactive_state_defaults() {
+        fn token_color(world: &World, name: &str) -> crate::xilem::Color {
+            match world
+                .resource::<crate::StyleSheet>()
+                .tokens
+                .get(name)
+                .unwrap_or_else(|| panic!("missing color token `{name}`"))
+            {
+                crate::TokenValue::Color(color) => *color,
+                other => panic!("token `{name}` should be a color, got {other:?}"),
+            }
+        }
+
+        let mut app = App::new();
+        app.add_plugins(PicusPlugin);
+        crate::set_active_style_variant_by_name(app.world_mut(), "dark");
+        app.update();
+
+        let hovered = app
+            .world_mut()
+            .spawn((
+                crate::UiPasswordInput::default(),
+                InteractionState {
+                    hovered: true,
+                    pressed: false,
+                    focused: false,
+                },
+            ))
+            .id();
+        let pressed = app
+            .world_mut()
+            .spawn((
+                crate::UiTimePicker::default(),
+                InteractionState {
+                    hovered: false,
+                    pressed: true,
+                    focused: false,
+                },
+            ))
+            .id();
+
+        let password_hover = resolve_style(app.world(), hovered);
+        assert_eq!(
+            password_hover.colors.border,
+            Some(token_color(app.world(), "border-input-hover"))
+        );
+
+        let time_pressed = resolve_style(app.world(), pressed);
+        assert_eq!(
+            time_pressed.colors.bg,
+            Some(token_color(app.world(), "surface-subtle-pressed"))
+        );
+
+        let numeric_decrease =
+            resolve_style_for_entity_classes(app.world(), hovered, ["numericUpDown.decrease"]);
+        assert_eq!(
+            numeric_decrease.colors.bg,
+            Some(token_color(app.world(), "surface-subtle-hover"))
+        );
+
+        let context_item =
+            resolve_style_for_entity_classes(app.world(), pressed, ["overlay.context_menu.item"]);
+        assert_eq!(
+            context_item.colors.bg,
+            Some(token_color(app.world(), "surface-overlay-item-pressed"))
+        );
+
+        let list_item =
+            resolve_style_for_entity_classes(app.world(), hovered, ["widget.list_view.item"]);
+        assert_eq!(
+            list_item.colors.bg,
+            Some(token_color(app.world(), "surface-overlay-item-hover"))
+        );
+
+        let nav_item = resolve_style_for_entity_classes(app.world(), hovered, ["nav.item"]);
+        assert_eq!(
+            nav_item.colors.bg,
+            Some(token_color(app.world(), "surface-subtle-hover"))
+        );
+
+        let nav_sidebar = resolve_style_for_classes(app.world(), ["nav.sidebar"]);
+        assert_eq!(
+            nav_sidebar.colors.bg,
+            Some(token_color(app.world(), "surface-bg-secondary"))
+        );
+
+        let nav_content = resolve_style_for_classes(app.world(), ["nav.content"]);
+        assert_eq!(
+            nav_content.colors.bg,
+            Some(token_color(app.world(), "surface-panel"))
+        );
+
+        let switch_on = resolve_style_for_entity_classes(
+            app.world(),
+            hovered,
+            ["template.switch.track", "template.switch.track.on"],
+        );
+        assert_eq!(
+            switch_on.colors.bg,
+            Some(token_color(app.world(), "surface-accent-hover"))
+        );
+    }
+    #[test]
+    fn embedded_fluent_theme_does_not_style_picus_only_group_box() {
+        let mut app = App::new();
+        app.add_plugins(PicusPlugin);
+        crate::set_active_style_variant_by_name(app.world_mut(), "dark");
+        app.update();
+
+        let group_box = app
+            .world_mut()
+            .spawn((crate::UiGroupBox::new("Nested group"),))
+            .id();
+
+        let group_style = resolve_style(app.world(), group_box);
+        assert_eq!(group_style.layout.padding, 0.0);
+        assert_eq!(group_style.layout.border_width, 0.0);
+        assert!(group_style.colors.bg.is_none());
+        assert!(group_style.colors.border.is_none());
+
+        let title_style = crate::resolve_style_for_classes(app.world(), ["widget.group_box.title"]);
+        assert!(title_style.colors.text.is_none());
+    }
+    #[test]
+    fn active_style_variant_switches_automatically_without_install_calls() {
+        let mut app = App::new();
+        app.add_plugins(PicusPlugin);
+
+        crate::set_active_style_variant_by_name(app.world_mut(), "light");
+        app.update();
+
+        let light_surface = app
+            .world()
+            .resource::<crate::StyleSheet>()
+            .tokens
+            .get("surface-bg")
+            .cloned()
+            .expect("surface-bg should exist after active variant switch to light");
+
+        assert_eq!(
+            light_surface,
+            crate::TokenValue::Color(crate::xilem::Color::from_rgb8(0xFF, 0xFF, 0xFF))
+        );
+
+        let applied_variant = app.world().resource::<crate::AppliedStyleVariant>();
+        assert_eq!(applied_variant.0.as_deref(), Some("light"));
+    }
+    #[test]
+    fn active_style_variant_light_overrides_surface_bg_token() {
+        let mut app = App::new();
+        app.add_plugins(PicusPlugin);
+
+        crate::set_active_style_variant_by_name(app.world_mut(), "light");
+        app.update();
+
+        let sheet = app.world().resource::<crate::StyleSheet>();
+        let token = sheet
+            .tokens
+            .get("surface-bg")
+            .expect("surface-bg token should exist after fluent light activation");
+
+        assert!(matches!(
+            token,
+            crate::TokenValue::Color(color)
+                if *color == crate::xilem::Color::from_rgb8(0xFF, 0xFF, 0xFF)
+        ));
+    }
+    #[test]
+    fn active_style_variant_high_contrast_overrides_surface_bg_token() {
+        let mut app = App::new();
+        app.add_plugins(PicusPlugin);
+
+        crate::set_active_style_variant_by_name(app.world_mut(), "high-contrast");
+        app.update();
+
+        let sheet = app.world().resource::<crate::StyleSheet>();
+        let token = sheet
+            .tokens
+            .get("surface-bg")
+            .expect("surface-bg token should exist after fluent high-contrast activation");
+
+        assert!(matches!(
+            token,
+            crate::TokenValue::Color(color)
+                if *color == crate::xilem::Color::from_rgb8(0x00, 0x00, 0x00)
+        ));
+    }
+    #[test]
+    fn active_style_variant_api_switches_between_dark_light_and_high_contrast() {
+        let mut app = App::new();
+        app.add_plugins(PicusPlugin);
+
+        crate::set_active_style_variant_by_name(app.world_mut(), "light");
+        app.update();
+
+        let light_surface = app
+            .world()
+            .resource::<crate::StyleSheet>()
+            .tokens
+            .get("surface-bg")
+            .cloned()
+            .expect("surface-bg should exist after light activation");
+        assert_eq!(
+            light_surface,
+            crate::TokenValue::Color(crate::xilem::Color::from_rgb8(0xFF, 0xFF, 0xFF))
+        );
+
+        crate::set_active_style_variant_by_name(app.world_mut(), "dark");
+        app.update();
+
+        let dark_surface = app
+            .world()
+            .resource::<crate::StyleSheet>()
+            .tokens
+            .get("surface-bg")
+            .cloned()
+            .expect("surface-bg should exist after dark activation");
+        assert_eq!(
+            dark_surface,
+            crate::TokenValue::Color(crate::xilem::Color::from_rgb8(0x1F, 0x1F, 0x1F))
+        );
+
+        crate::set_active_style_variant_by_name(app.world_mut(), "high-contrast");
+        app.update();
+
+        let hc_surface = app
+            .world()
+            .resource::<crate::StyleSheet>()
+            .tokens
+            .get("surface-bg")
+            .cloned()
+            .expect("surface-bg should exist after high-contrast activation");
+        assert_eq!(
+            hc_surface,
+            crate::TokenValue::Color(crate::xilem::Color::from_rgb8(0x00, 0x00, 0x00))
+        );
+    }
+    #[test]
+    fn load_style_sheet_ron_applies_and_persists_across_variant_switches() {
+        let mut app = App::new();
+        app.add_plugins(PicusPlugin).load_style_sheet_ron(
+            r##"(
+                rules: [
+                    (
+                        selector: Class("demo.embedded"),
+                        setter: (
+                            colors: (
+                                bg: Hex("#123456"),
+                            ),
+                        ),
+                    ),
+                ],
+            )"##,
+        );
+
+        let entity = app
+            .world_mut()
+            .spawn((crate::StyleClass(vec!["demo.embedded".to_string()]),))
+            .id();
+
+        app.update();
+
+        let expected = crate::xilem::Color::from_rgb8(0x12, 0x34, 0x56);
+        assert_eq!(resolve_style(app.world(), entity).colors.bg, Some(expected));
+
+        crate::set_active_style_variant_by_name(app.world_mut(), "light");
+        app.update();
+
+        assert_eq!(resolve_style(app.world(), entity).colors.bg, Some(expected));
+    }
+    #[test]
+    fn load_style_sheet_ron_default_variant_applies_registered_variant_when_unset() {
+        let mut app = App::new();
+        app.add_plugins(PicusPlugin).load_style_sheet_ron(
+            r##"(
+                default_variant: "light",
+                rules: [
+                    (
+                        selector: Class("demo.uses-theme-token"),
+                        setter: (
+                            colors: (
+                                bg: Var("surface-bg"),
+                            ),
+                        ),
+                    ),
+                ],
+            )"##,
+        );
+
+        let active_variant = app.world().resource::<crate::ActiveStyleVariant>();
+        assert_eq!(active_variant.0.as_deref(), Some("light"));
+
+        let applied_variant = app.world().resource::<crate::AppliedStyleVariant>();
+        assert_eq!(applied_variant.0.as_deref(), Some("light"));
+
+        let entity = app
+            .world_mut()
+            .spawn((crate::StyleClass(vec!["demo.uses-theme-token".to_string()]),))
+            .id();
+
+        assert_eq!(
+            resolve_style(app.world(), entity).colors.bg,
+            Some(crate::xilem::Color::from_rgb8(0xFF, 0xFF, 0xFF))
+        );
+    }
+    #[test]
+    fn load_style_sheet_ron_default_variant_preserves_existing_active_variant() {
+        let mut app = App::new();
+        app.add_plugins(PicusPlugin);
+        crate::set_active_style_variant_by_name(app.world_mut(), "dark");
+        crate::apply_active_style_variant(app.world_mut())
+            .expect("embedded Fluent dark theme should apply");
+
+        app.load_style_sheet_ron(
+            r##"(
+                default_variant: "light",
+                rules: [],
+            )"##,
+        );
+
+        let active_variant = app.world().resource::<crate::ActiveStyleVariant>();
+        assert_eq!(active_variant.0.as_deref(), Some("dark"));
+
+        let applied_variant = app.world().resource::<crate::AppliedStyleVariant>();
+        assert_eq!(applied_variant.0.as_deref(), Some("dark"));
+    }
+    #[test]
+    fn parse_stylesheet_variants_merges_default_rules_and_variant_overrides() {
+        let ron_text = r##"(
+            default_variant: "dark",
+            rules: [
+                (
+                    selector: Class("demo.root"),
+                    setter: (
+                        colors: (
+                            bg: Var("surface-bg"),
+                        ),
+                    ),
+                ),
+            ],
+            variants: {
+                "dark": (
+                    tokens: {
+                        "surface-bg": Color(Hex("#111111")),
+                    },
+                ),
+                "light": (
+                    tokens: {
+                        "surface-bg": Color(Hex("#EEEEEE")),
+                    },
+                ),
+            },
+        )"##;
+
+        let variants = crate::parse_stylesheet_variants_ron_for_tests(ron_text)
+            .expect("variant bundle should parse in tests");
+
+        assert_eq!(variants.default_variant, "dark");
+        let dark = variants
+            .variants
+            .get("dark")
+            .expect("dark variant should exist");
+        let light = variants
+            .variants
+            .get("light")
+            .expect("light variant should exist");
+
+        assert_eq!(dark.rules.len(), 1);
+        assert_eq!(light.rules.len(), 1);
+        assert_eq!(
+            light.tokens.get("surface-bg"),
+            Some(&crate::TokenValue::Color(crate::xilem::Color::from_rgb8(
+                0xEE, 0xEE, 0xEE,
+            )))
+        );
+    }
+    #[test]
+    fn embedded_fluent_variants_inherit_shared_top_level_rules() {
+        let variants = crate::styling::parse_stylesheet_variants_ron_for_tests(
+            crate::styling::BUILTIN_FLUENT_THEME_RON,
+        )
+        .expect("embedded fluent theme bundle should parse");
+
+        let dark = variants
+            .variants
+            .get("dark")
+            .expect("dark variant should exist");
+        let light = variants
+            .variants
+            .get("light")
+            .expect("light variant should exist");
+        let high_contrast = variants
+            .variants
+            .get("high-contrast")
+            .expect("high-contrast variant should exist");
+
+        assert!(
+            !dark.rules.is_empty(),
+            "dark variant rules should be non-empty"
+        );
+        assert!(
+            !light.rules.is_empty(),
+            "light variant should inherit non-empty shared rules"
+        );
+        assert!(
+            !high_contrast.rules.is_empty(),
+            "high-contrast variant should inherit non-empty shared rules"
+        );
+
+        assert_eq!(light.rules.len(), dark.rules.len());
+        assert_eq!(high_contrast.rules.len(), dark.rules.len());
+    }
+    #[test]
+    fn apply_active_style_variant_applies_selected_registered_variant_to_runtime_sheet() {
+        let ron_text = r##"(
+            default_variant: "dark",
+            variants: {
+                "dark": (
+                    tokens: {
+                        "surface-bg": Color(Hex("#111111")),
+                    },
+                ),
+                "light": (
+                    tokens: {
+                        "surface-bg": Color(Hex("#F8F8F8")),
+                    },
+                ),
+            },
+        )"##;
+
+        let mut world = World::new();
+        crate::register_stylesheet_variants_ron(&mut world, ron_text)
+            .expect("style variants should register");
+        crate::set_active_style_variant_by_name(&mut world, "light");
+        crate::apply_active_style_variant(&mut world)
+            .expect("registered active style variant should apply");
+
+        let token = world
+            .resource::<crate::StyleSheet>()
+            .tokens
+            .get("surface-bg")
+            .cloned()
+            .expect("surface-bg should exist after variant application");
+
+        assert_eq!(
+            token,
+            crate::TokenValue::Color(crate::xilem::Color::from_rgb8(0xF8, 0xF8, 0xF8))
+        );
+    }
+    #[test]
+    fn resolve_style_for_entity_classes_applies_hover_pseudo_state() {
+        let mut world = World::new();
+        let mut sheet = StyleSheet::default();
+        let base = crate::xilem::Color::from_rgb8(0x11, 0x22, 0x33);
+        let hover = crate::xilem::Color::from_rgb8(0xAA, 0xBB, 0xCC);
+
+        sheet.set_class(
+            "test.button",
+            StyleSetter {
+                colors: ColorStyle {
+                    bg: Some(base),
+                    hover_bg: Some(hover),
+                    ..ColorStyle::default()
+                },
+                ..StyleSetter::default()
+            },
+        );
+        world.insert_resource(sheet);
+
+        let entity = world
+            .spawn((InteractionState {
+                hovered: true,
+                pressed: false,
+                focused: false,
+            },))
+            .id();
+        let resolved = resolve_style_for_entity_classes(&world, entity, ["test.button"]);
+
+        assert_eq!(resolved.colors.bg, Some(hover));
+    }
+    #[test]
+    fn resolve_style_without_any_style_source_has_no_theme_values() {
+        let mut world = World::new();
+        let entity = world.spawn_empty().id();
+
+        let resolved = resolve_style(&world, entity);
+
+        assert_eq!(resolved, crate::ResolvedStyle::default());
+    }
+    #[test]
+    fn selector_and_rule_applies_hover_and_pressed_states() {
+        let mut world = World::new();
+        let mut sheet = StyleSheet::default();
+
+        let base = crate::xilem::Color::from_rgb8(0x22, 0x22, 0x22);
+        let hover = crate::xilem::Color::from_rgb8(0x44, 0x44, 0x44);
+        let pressed = crate::xilem::Color::from_rgb8(0x66, 0x66, 0x66);
+
+        sheet.add_rule(StyleRule::new(
+            Selector::class("test.button"),
+            StyleSetter {
+                colors: ColorStyle {
+                    bg: Some(base),
+                    ..ColorStyle::default()
+                },
+                ..StyleSetter::default()
+            },
+        ));
+        sheet.add_rule(StyleRule::new(
+            Selector::and(vec![
+                Selector::class("test.button"),
+                Selector::pseudo(crate::PseudoClass::Hovered),
+            ]),
+            StyleSetter {
+                colors: ColorStyle {
+                    bg: Some(hover),
+                    ..ColorStyle::default()
+                },
+                ..StyleSetter::default()
+            },
+        ));
+        sheet.add_rule(StyleRule::new(
+            Selector::and(vec![
+                Selector::class("test.button"),
+                Selector::pseudo(crate::PseudoClass::Pressed),
+            ]),
+            StyleSetter {
+                colors: ColorStyle {
+                    bg: Some(pressed),
+                    ..ColorStyle::default()
+                },
+                ..StyleSetter::default()
+            },
+        ));
+
+        world.insert_resource(sheet);
+
+        let entity = world
+            .spawn((
+                crate::StyleClass(vec!["test.button".to_string()]),
+                InteractionState {
+                    hovered: true,
+                    pressed: true,
+                    focused: false,
+                },
+            ))
+            .id();
+
+        crate::mark_style_dirty(&mut world);
+        crate::sync_style_targets(&mut world);
+
+        let resolved = resolve_style(&world, entity);
+        assert_eq!(resolved.colors.bg, Some(pressed));
+    }
+    #[test]
+    fn selector_type_rule_matches_component_type() {
+        let mut world = World::new();
+        let mut sheet = StyleSheet::default();
+        let type_color = crate::xilem::Color::from_rgb8(0x12, 0x34, 0x56);
+
+        sheet.add_rule(StyleRule::new(
+            Selector::of_type::<TypeStyled>(),
+            StyleSetter {
+                colors: ColorStyle {
+                    bg: Some(type_color),
+                    ..ColorStyle::default()
+                },
+                ..StyleSetter::default()
+            },
+        ));
+        world.insert_resource(sheet);
+
+        let entity = world.spawn((TypeStyled,)).id();
+        crate::mark_style_dirty(&mut world);
+        crate::sync_style_targets(&mut world);
+
+        let resolved = resolve_style(&world, entity);
+        assert_eq!(resolved.colors.bg, Some(type_color));
+    }
+    #[test]
+    fn ui_root_background_uses_stylesheet_rules_and_class_overrides() {
+        let mut world = World::new();
+        let mut sheet = StyleSheet::default();
+
+        let base_bg = crate::xilem::Color::from_rgb8(0x22, 0x26, 0x2F);
+        let light_bg = crate::xilem::Color::from_rgb8(0xF4, 0xF7, 0xFF);
+
+        sheet.add_rule(StyleRule::new(
+            Selector::of_type::<UiRoot>(),
+            StyleSetter {
+                colors: ColorStyle {
+                    bg: Some(base_bg),
+                    ..ColorStyle::default()
+                },
+                ..StyleSetter::default()
+            },
+        ));
+
+        sheet.set_class(
+            "theme.light",
+            StyleSetter {
+                colors: ColorStyle {
+                    bg: Some(light_bg),
+                    ..ColorStyle::default()
+                },
+                ..StyleSetter::default()
+            },
+        );
+
+        world.insert_resource(sheet);
+
+        let root = world
+            .spawn((UiRoot, crate::StyleClass(vec!["theme.dark".to_string()])))
+            .id();
+
+        crate::mark_style_dirty(&mut world);
+        crate::sync_style_targets(&mut world);
+        assert_eq!(resolve_style(&world, root).colors.bg, Some(base_bg));
+
+        world.clear_trackers();
+        world
+            .entity_mut(root)
+            .insert(crate::StyleClass(vec!["theme.light".to_string()]));
+
+        crate::mark_style_dirty(&mut world);
+        crate::sync_style_targets(&mut world);
+        assert_eq!(resolve_style(&world, root).colors.bg, Some(light_bg));
+    }
+    #[test]
+    fn selector_descendant_rule_matches_nested_entity_and_updates_on_ancestor_change() {
+        let mut world = World::new();
+        let mut sheet = StyleSheet::default();
+
+        let dark_bg = crate::xilem::Color::from_rgb8(0x20, 0x2A, 0x44);
+        let light_bg = crate::xilem::Color::from_rgb8(0xE8, 0xEE, 0xFF);
+
+        sheet.add_rule(StyleRule::new(
+            Selector::descendant(
+                Selector::class("theme.dark"),
+                Selector::class("gallery.target"),
+            ),
+            StyleSetter {
+                colors: ColorStyle {
+                    bg: Some(dark_bg),
+                    ..ColorStyle::default()
+                },
+                ..StyleSetter::default()
+            },
+        ));
+
+        sheet.add_rule(StyleRule::new(
+            Selector::descendant(
+                Selector::class("theme.light"),
+                Selector::class("gallery.target"),
+            ),
+            StyleSetter {
+                colors: ColorStyle {
+                    bg: Some(light_bg),
+                    ..ColorStyle::default()
+                },
+                ..StyleSetter::default()
+            },
+        ));
+
+        world.insert_resource(sheet);
+
+        let root = world
+            .spawn((crate::StyleClass(vec!["theme.dark".to_string()]),))
+            .id();
+        let child = world
+            .spawn((
+                crate::StyleClass(vec!["gallery.target".to_string()]),
+                ChildOf(root),
+            ))
+            .id();
+
+        crate::mark_style_dirty(&mut world);
+        crate::sync_style_targets(&mut world);
+        assert_eq!(resolve_style(&world, child).colors.bg, Some(dark_bg));
+
+        world.clear_trackers();
+        world
+            .entity_mut(root)
+            .insert(crate::StyleClass(vec!["theme.light".to_string()]));
+
+        crate::mark_style_dirty(&mut world);
+        crate::sync_style_targets(&mut world);
+        assert_eq!(resolve_style(&world, child).colors.bg, Some(light_bg));
+    }
+    #[test]
+    fn sync_style_targets_restarts_tween_when_current_differs_but_target_unchanged() {
+        let mut world = World::new();
+        let mut sheet = StyleSheet::default();
+
+        let base = crate::xilem::Color::from_rgb8(0x20, 0x2A, 0x44);
+        let mid = crate::xilem::Color::from_rgb8(0x90, 0x99, 0xB3);
+
+        sheet.set_class(
+            "test.animated",
+            StyleSetter {
+                colors: ColorStyle {
+                    bg: Some(base),
+                    ..ColorStyle::default()
+                },
+                transition: Some(crate::StyleTransition {
+                    duration: 0.2,
+                    easing: None,
+                }),
+                ..StyleSetter::default()
+            },
+        );
+
+        world.insert_resource(sheet);
+
+        let entity = world
+            .spawn((crate::StyleClass(vec!["test.animated".to_string()]),))
+            .id();
+
+        crate::mark_style_dirty(&mut world);
+        crate::sync_style_targets(&mut world);
+
+        world.entity_mut(entity).insert(crate::CurrentColorStyle {
+            bg: Some(mid),
+            text: None,
+            border: None,
+            scale: 1.0,
+        });
+        world.entity_mut(entity).insert(crate::TargetColorStyle {
+            bg: Some(base),
+            text: None,
+            border: None,
+            scale: 1.0,
+        });
+        world.entity_mut(entity).insert(crate::StyleDirty);
+
+        crate::sync_style_targets(&mut world);
+
+        assert_eq!(
+            world
+                .get::<crate::TargetColorStyle>(entity)
+                .and_then(|target| target.bg),
+            Some(base)
+        );
+        assert!(world.get::<TimeRunner>(entity).is_some());
+        assert!(
+            world
+                .get::<ComponentTween<crate::ColorStyleLens>>(entity)
+                .is_some()
+        );
+    }
+    #[test]
+    fn pointer_left_does_not_clear_pressed_marker() {
+        let mut world = World::new();
+        world.insert_resource(UiEventQueue::default());
+        world.insert_resource(bevy_time::Time::<()>::default());
+
+        let entity = world
+            .spawn((crate::InteractionState {
+                hovered: true,
+                pressed: true,
+                focused: false,
+            },))
+            .id();
+
+        world
+            .resource::<UiEventQueue>()
+            .push_typed(entity, crate::UiInteractionEvent::PointerLeft);
+
+        crate::sync_ui_interaction_markers(&mut world);
+
+        let state = world
+            .get::<crate::InteractionState>(entity)
+            .expect("interaction state should exist");
+        assert!(!state.hovered);
+        assert!(state.pressed);
+    }
+    #[test]
+    fn debounced_hover_waits_before_setting_hovered_state() {
+        let mut world = World::new();
+        world.insert_resource(UiEventQueue::default());
+        world.insert_resource(bevy_time::Time::<()>::default());
+
+        let entity = world
+            .spawn((crate::styling::HoverDebounce {
+                enter_delay_secs: 0.05,
+            },))
+            .id();
+
+        world
+            .resource::<UiEventQueue>()
+            .push_typed(entity, crate::UiInteractionEvent::PointerEntered);
+
+        crate::sync_ui_interaction_markers(&mut world);
+
+        assert!(world.get::<crate::InteractionState>(entity).is_none());
+
+        world
+            .resource_mut::<bevy_time::Time<()>>()
+            .advance_by(Duration::from_millis(60));
+
+        let mut schedule = Schedule::default();
+        schedule.add_systems(crate::styling::activate_debounced_hovers);
+        schedule.run(&mut world);
+
+        let state = world
+            .get::<crate::InteractionState>(entity)
+            .expect("interaction state should exist after debounce elapses");
+        assert!(state.hovered);
+    }
+    #[test]
+    fn sync_style_targets_keeps_unmanaged_tween_anim() {
+        let mut world = World::new();
+
+        let duration = Duration::from_secs(1);
+        let entity = world.spawn_empty().id();
+        world.entity_mut(entity).insert((
+            TimeSpan::try_from(Duration::ZERO..duration)
+                .expect("test tween duration range should be valid"),
+            EaseKind::Linear,
+            ComponentTween::new_target(
+                entity,
+                crate::ColorStyleLens {
+                    start: crate::CurrentColorStyle {
+                        bg: Some(crate::xilem::Color::from_rgb8(0x10, 0x20, 0x30)),
+                        text: None,
+                        border: None,
+                        scale: 1.0,
+                    },
+                    end: crate::CurrentColorStyle {
+                        bg: Some(crate::xilem::Color::from_rgb8(0x40, 0x50, 0x60)),
+                        text: None,
+                        border: None,
+                        scale: 1.0,
+                    },
+                },
+            ),
+            TimeRunner::new(duration),
+            TimeContext::<()>::default(),
+        ));
+        world.entity_mut(entity).insert(crate::StyleDirty);
+
+        crate::sync_style_targets(&mut world);
+
+        assert!(world.get::<TimeRunner>(entity).is_some());
+        assert!(
+            world
+                .get::<ComponentTween<crate::ColorStyleLens>>(entity)
+                .is_some()
+        );
+    }
+    #[test]
+    fn resolve_style_for_classes_applies_font_family() {
+        let mut world = World::new();
+        let mut sheet = StyleSheet::default();
+
+        sheet.set_class(
+            "cjk-text",
+            StyleSetter {
+                font_family: Some(vec![
+                    "Primary Family".to_string(),
+                    "Fallback Family".to_string(),
+                ]),
+                ..StyleSetter::default()
+            },
+        );
+        world.insert_resource(sheet);
+
+        let resolved = crate::resolve_style_for_classes(&world, ["cjk-text"]);
+        assert_eq!(
+            resolved.font_family,
+            Some(vec![
+                "Primary Family".to_string(),
+                "Fallback Family".to_string()
+            ])
+        );
+    }
+    #[test]
+    fn stylesheet_font_family_accepts_css_stack_and_applies_as_default() {
+        let sheet = crate::parse_stylesheet_ron(
+            r#"(
+                font_family: (Var: "font-family-base"),
+                tokens: {
+                    "font-family-base": FontFamily("'Segoe UI', 'Segoe UI Web (West European)', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', sans-serif"),
+                },
+            )"#,
+        )
+        .expect("stylesheet font stack should parse");
+
+        assert_eq!(
+            sheet.tokens.get("font-family-base"),
+            Some(&crate::TokenValue::FontFamily(vec![
+                "Segoe UI".to_string(),
+                "Segoe UI Web (West European)".to_string(),
+                "system-ui".to_string(),
+                "Roboto".to_string(),
+                "Helvetica Neue".to_string(),
+                "sans-serif".to_string(),
+            ]))
+        );
+
+        let mut world = World::new();
+        let entity = world.spawn_empty().id();
+        world.insert_resource(sheet);
+
+        assert_eq!(
+            resolve_style(&world, entity).font_family,
+            Some(vec![
+                "Segoe UI".to_string(),
+                "Segoe UI Web (West European)".to_string(),
+                "system-ui".to_string(),
+                "Roboto".to_string(),
+                "Helvetica Neue".to_string(),
+                "sans-serif".to_string(),
+            ])
+        );
+    }
+    #[test]
+    fn stylesheet_rule_font_family_accepts_css_stack_string() {
+        let sheet = crate::parse_stylesheet_ron(
+            r#"(
+                rules: [
+                    (
+                        selector: Class("code"),
+                        setter: (
+                            font_family: "Consolas, 'Courier New', Courier, monospace",
+                        ),
+                    ),
+                ],
+            )"#,
+        )
+        .expect("rule font stack should parse");
+
+        let mut world = World::new();
+        world.insert_resource(sheet);
+
+        assert_eq!(
+            resolve_style_for_classes(&world, ["code"]).font_family,
+            Some(vec![
+                "Consolas".to_string(),
+                "Courier New".to_string(),
+                "Courier".to_string(),
+                "monospace".to_string(),
+            ])
+        );
+    }
+    #[test]
+    fn stylesheet_rule_font_family_accepts_token_reference() {
+        let sheet = crate::parse_stylesheet_ron(
+            r#"(
+                tokens: {
+                    "font-family-code": FontFamily("Consolas, monospace"),
+                },
+                rules: [
+                    (
+                        selector: Class("code"),
+                        setter: (
+                            font_family: (Var: "font-family-code"),
+                        ),
+                    ),
+                ],
+            )"#,
+        )
+        .expect("rule font stack token should parse");
+
+        let mut world = World::new();
+        world.insert_resource(sheet);
+
+        assert_eq!(
+            resolve_style_for_classes(&world, ["code"]).font_family,
+            Some(vec!["Consolas".to_string(), "monospace".to_string()])
+        );
+    }
+    #[test]
+    fn fluent_theme_resolves_base_font_family_for_type_ramp() {
+        let variants = crate::parse_stylesheet_variants_ron(crate::BUILTIN_FLUENT_THEME_RON)
+            .expect("embedded Fluent theme should parse");
+        let dark = variants
+            .variants
+            .get("dark")
+            .cloned()
+            .expect("dark Fluent variant should exist");
+
+        let mut world = World::new();
+        world.insert_resource(dark);
+
+        let resolved = resolve_style_for_classes(&world, ["type.body1"]);
+        assert_eq!(
+            resolved.font_family,
+            Some(vec![
+                "Segoe UI".to_string(),
+                "Segoe UI Web (West European)".to_string(),
+                "system-ui".to_string(),
+                "Roboto".to_string(),
+                "Helvetica Neue".to_string(),
+                "sans-serif".to_string(),
+            ])
+        );
+    }
+    #[test]
+    fn computed_style_lens_keeps_font_family_until_completion() {
+        let mut world = World::new();
+
+        let start = crate::ComputedStyle {
+            font_family: Some(vec!["Family A".to_string()]),
+            ..crate::ComputedStyle::default()
+        };
+        let end = crate::ComputedStyle {
+            font_family: Some(vec!["Family B".to_string()]),
+            ..crate::ComputedStyle::default()
+        };
+
+        let entity = world.spawn((start.clone(),)).id();
+        let lens = crate::ComputedStyleLens {
+            start: start.clone(),
+            end: end.clone(),
+        };
+
+        {
+            let target = world
+                .get_mut::<crate::ComputedStyle>(entity)
+                .expect("computed style should exist");
+            lens.interpolate(target.into_inner(), 0.5, 0.0);
+        }
+
+        assert_eq!(
+            world
+                .get::<crate::ComputedStyle>(entity)
+                .and_then(|style| style.font_family.clone()),
+            Some(vec!["Family A".to_string()])
+        );
+
+        {
+            let target = world
+                .get_mut::<crate::ComputedStyle>(entity)
+                .expect("computed style should exist");
+            lens.interpolate(target.into_inner(), 1.0, 0.0);
+        }
+
+        assert_eq!(
+            world
+                .get::<crate::ComputedStyle>(entity)
+                .and_then(|style| style.font_family.clone()),
+            Some(vec!["Family B".to_string()])
+        );
+    }
+    #[test]
+    fn register_i18n_bundle_stores_locale_font_stacks_in_app_i18n() {
+        let mut app = App::new();
+        app.add_plugins(PicusPlugin)
+            .register_i18n_bundle(
+                "en-US",
+                SyncTextSource::String(include_str!("../../../assets/locales/en-US/main.ftl")),
+                vec!["Inter", "sans-serif"],
+            )
+            .register_i18n_bundle(
+                "zh-CN",
+                SyncTextSource::String(include_str!("../../../assets/locales/zh-CN/main.ftl")),
+                vec!["Inter", "Noto Sans CJK SC", "sans-serif"],
+            );
+
+        {
+            let i18n = app.world().resource::<AppI18n>();
+            assert_eq!(
+                i18n.get_font_stack(),
+                vec!["Inter".to_string(), "sans-serif".to_string()]
+            );
+        }
+
+        app.world_mut().resource_mut::<AppI18n>().set_active_locale(
+            "zh-CN"
+                .parse()
+                .expect("zh-CN locale identifier should parse"),
+        );
+        {
+            let i18n = app.world().resource::<AppI18n>();
+            assert_eq!(
+                i18n.get_font_stack(),
+                vec![
+                    "Inter".to_string(),
+                    "Noto Sans CJK SC".to_string(),
+                    "sans-serif".to_string()
+                ]
+            );
+        }
+
+        app.world_mut().resource_mut::<AppI18n>().set_active_locale(
+            "ja-JP"
+                .parse()
+                .expect("ja-JP locale identifier should parse"),
+        );
+        assert_eq!(
+            app.world().resource::<AppI18n>().get_font_stack(),
+            vec!["Inter".to_string(), "sans-serif".to_string()]
+        );
+    }
+    #[test]
+    fn stylesheet_ron_parser_supports_tokens_and_var_values() {
+        let ron = r##"(
+        tokens: {
+            "demo-bg": Color(Hex("#112233")),
+            "radius": Float(6.0),
+        },
+      rules: [
+        (
+          selector: Class("demo.button"),
+          setter: (
+                                    layout: (
+                                            padding: 10.0,
+                                            corner_radius: Var("radius"),
+                                            justify_content: Start,
+                                            align_items: Center,
+                                            scale: 0.97,
+                                    ),
+                                    text: (text_align: Center),
+                                    colors: (bg: Var("demo-bg"), text: Hex("#f0f0f0")),
+          ),
+        ),
+        (
+          selector: And([Class("demo.button"), PseudoClass(Hovered)]),
+          setter: (
+                    colors: (hover_bg: Hex("#112233ff")),
+          ),
+        ),
+      ],
+    )"##;
+
+        let sheet = crate::styling::parse_stylesheet_ron_for_tests(ron)
+            .expect("stylesheet ron should parse");
+        assert_eq!(sheet.rules.len(), 2);
+        assert_eq!(sheet.tokens.len(), 2);
+
+        assert!(matches!(
+            &sheet.rules[0].selector,
+            crate::Selector::Class(name) if name == "demo.button"
+        ));
+        assert!(sheet.rules[0].setter.layout.padding.is_some());
+        assert!(sheet.rules[0].setter.colors.bg.is_some());
+        assert!(sheet.rules[0].setter.layout.justify_content.is_some());
+        assert!(sheet.rules[0].setter.layout.align_items.is_some());
+        assert!(sheet.rules[0].setter.layout.scale.is_some());
+        assert!(sheet.rules[0].setter.text.text_align.is_some());
+        assert!(matches!(
+            sheet.rules[0].setter.colors.bg.as_ref(),
+            Some(crate::StyleValue::Var(token)) if token == "demo-bg"
+        ));
+        assert!(matches!(
+            sheet.rules[0].setter.colors.text.as_ref(),
+            Some(crate::StyleValue::Value(color))
+                if *color == crate::xilem::Color::from_rgb8(0xF0, 0xF0, 0xF0)
+        ));
+
+        assert!(
+            matches!(&sheet.rules[1].selector, crate::Selector::And(parts) if !parts.is_empty())
+        );
+        assert!(matches!(
+            sheet.rules[1].setter.colors.hover_bg.as_ref(),
+            Some(crate::StyleValue::Value(color))
+                if *color == crate::xilem::Color::from_rgba8(0x11, 0x22, 0x33, 0xFF)
+        ));
+    }
+    #[test]
+    fn stylesheet_hex_literal_for_bg_is_not_treated_as_token_var() {
+        let ron = r##"(
+        rules: [
+            (
+                selector: Class("demo.hex"),
+                setter: (
+                    colors: (bg: Hex("#FFFFFF14")),
+                ),
+            ),
+        ],
+    )"##;
+
+        let sheet = crate::styling::parse_stylesheet_ron_for_tests(ron)
+            .expect("stylesheet ron should parse");
+
+        assert!(matches!(
+            sheet.rules[0].setter.colors.bg.as_ref(),
+            Some(crate::StyleValue::Value(color))
+                if *color == crate::xilem::Color::from_rgba8(0xFF, 0xFF, 0xFF, 0x14)
+        ));
+    }
+    #[test]
+    fn embedded_fluent_theme_color_fields_do_not_parse_hex_literals_as_var_tokens() {
+        let assert_not_hex_var = |value: &Option<crate::StyleValue<crate::xilem::Color>>,
+                                  field: &str,
+                                  selector: &str| {
+            if let Some(crate::StyleValue::Var(token)) = value {
+                assert!(
+                    !token.trim().starts_with('#'),
+                    "{selector} {field} parsed as Var token `{token}` but should be a literal color"
+                );
+            }
+        };
+
+        let variants = crate::styling::parse_stylesheet_variants_ron_for_tests(
+            crate::styling::BUILTIN_FLUENT_THEME_RON,
+        )
+        .expect("embedded fluent theme bundle should parse");
+
+        for (variant_name, sheet) in &variants.variants {
+            for rule in &sheet.rules {
+                let selector = format!("{variant_name}::{:?}", rule.selector);
+                let colors = &rule.setter.colors;
+                assert_not_hex_var(&colors.bg, "bg", &selector);
+                assert_not_hex_var(&colors.text, "text", &selector);
+                assert_not_hex_var(&colors.border, "border", &selector);
+                assert_not_hex_var(&colors.hover_bg, "hover_bg", &selector);
+                assert_not_hex_var(&colors.hover_text, "hover_text", &selector);
+                assert_not_hex_var(&colors.hover_border, "hover_border", &selector);
+                assert_not_hex_var(&colors.pressed_bg, "pressed_bg", &selector);
+                assert_not_hex_var(&colors.pressed_text, "pressed_text", &selector);
+                assert_not_hex_var(&colors.pressed_border, "pressed_border", &selector);
+            }
+        }
+    }
+    #[test]
+    fn stylesheet_var_missing_token_drops_that_declaration() {
+        let ron = r##"(
+        rules: [
+            (
+                selector: Class("demo.button"),
+                setter: (
+                    layout: (padding: Var("missing-padding")),
+                    colors: (bg: Var("missing-bg")),
+                ),
+            ),
+        ],
+    )"##;
+
+        let sheet = crate::styling::parse_stylesheet_ron_for_tests(ron)
+            .expect("stylesheet ron should parse");
+
+        let mut world = World::new();
+        world.insert_resource(sheet);
+
+        let entity = world
+            .spawn((crate::StyleClass(vec!["demo.button".to_string()]),))
+            .id();
+        crate::mark_style_dirty(&mut world);
+        crate::sync_style_targets(&mut world);
+
+        let resolved = crate::resolve_style(&world, entity);
+        assert_eq!(resolved.layout.padding, 0.0);
+        assert_eq!(resolved.colors.bg, None);
+    }
+    #[test]
+    fn stylesheet_box_shadow_token_parses_and_resolves() {
+        let ron = r##"(
+        tokens: {
+            "flyout-shadow": BoxShadow((
+                color: Rgba(0.0, 0.0, 0.0, 0.35),
+                offset_x: 0.0,
+                offset_y: 12.0,
+                blur: 24.0,
+            )),
+        },
+        rules: [
+            (
+                selector: Class("shadowed"),
+                setter: (
+                    box_shadow: Var("flyout-shadow"),
+                ),
+            ),
+        ],
+    )"##;
+
+        let sheet = crate::styling::parse_stylesheet_ron_for_tests(ron)
+            .expect("stylesheet ron should parse");
+
+        let mut world = World::new();
+        world.insert_resource(sheet);
+        let entity = world
+            .spawn((crate::StyleClass(vec!["shadowed".to_string()]),))
+            .id();
+
+        crate::mark_style_dirty(&mut world);
+        crate::sync_style_targets(&mut world);
+
+        let resolved = crate::resolve_style(&world, entity);
+        let expected = crate::xilem::style::BoxShadow::new(
+            crate::xilem::Color::from_rgba8(0, 0, 0, 89),
+            (0.0, 12.0),
+        )
+        .blur(crate::masonry_core::layout::Length::px(24.0));
+
+        assert_eq!(resolved.box_shadow, Some(expected));
     }
 }

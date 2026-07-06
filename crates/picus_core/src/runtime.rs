@@ -1590,7 +1590,12 @@ pub fn paint_masonry_ui(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_helpers::*;
+    use crate::{InteractionState, PicusPlugin, UiRoot};
     use bevy_app::{App, Update};
+    use bevy_ecs::hierarchy::ChildOf;
+    use bevy_input::touch::TouchPhase;
+    use picus_view::picus_widget::widgets::TextAction;
 
     #[test]
     fn logical_character_keys_map_to_text_keys() {
@@ -1690,5 +1695,470 @@ mod tests {
         assert!(synthesized.windows.contains_key(&active));
         assert!(!synthesized.windows.contains_key(&closing));
         assert!(!synthesized.windows.contains_key(&removed));
+    }
+
+    #[test]
+    fn input_bridge_uses_primary_window_cursor_for_click_and_emits_move_before_down_up() {
+        let mut app = App::new();
+        app.add_plugins(PicusPlugin);
+
+        let mut window = Window::default();
+        window.resolution.set(800.0, 600.0);
+        window.set_cursor_position(Some(Vec2::new(320.0, 180.0)));
+        let window_entity = app.world_mut().spawn((window, PrimaryWindow)).id();
+
+        app.update();
+
+        // CursorMoved payload is intentionally different from Window::cursor_position().
+        // The bridge should trust Window state.
+        app.world_mut().write_message(CursorMoved {
+            window: window_entity,
+            position: Vec2::new(12.0, 24.0),
+            delta: None,
+        });
+        app.update();
+
+        {
+            let mut runtime = app.world_mut().non_send_mut::<crate::MasonryRuntime>();
+            runtime
+                .primary_mut()
+                .unwrap()
+                .clear_pointer_trace_for_tests();
+        }
+
+        app.world_mut().write_message(MouseButtonInput {
+            button: MouseButton::Left,
+            state: ButtonState::Pressed,
+            window: window_entity,
+        });
+        app.world_mut().write_message(MouseButtonInput {
+            button: MouseButton::Left,
+            state: ButtonState::Released,
+            window: window_entity,
+        });
+
+        app.update();
+
+        let runtime = app.world().non_send::<crate::MasonryRuntime>();
+        assert_eq!(
+            runtime.primary().unwrap().pointer_position_for_tests(),
+            Vec2::new(320.0, 180.0)
+        );
+        assert_eq!(
+            runtime.primary().unwrap().pointer_trace_for_tests(),
+            &[
+                crate::runtime::PointerTraceEvent::Move,
+                crate::runtime::PointerTraceEvent::Down,
+                crate::runtime::PointerTraceEvent::Move,
+                crate::runtime::PointerTraceEvent::Up,
+            ]
+        );
+    }
+
+    #[test]
+    fn input_bridge_uses_primary_window_cursor_for_mouse_wheel_events() {
+        let mut app = App::new();
+        app.add_plugins(PicusPlugin);
+
+        let mut window = Window::default();
+        window.resolution.set(800.0, 600.0);
+        window.set_cursor_position(Some(Vec2::new(144.0, 96.0)));
+        let window_entity = app.world_mut().spawn((window, PrimaryWindow)).id();
+
+        app.update();
+
+        app.world_mut().write_message(CursorMoved {
+            window: window_entity,
+            position: Vec2::new(8.0, 8.0),
+            delta: None,
+        });
+        app.update();
+
+        {
+            let mut runtime = app.world_mut().non_send_mut::<crate::MasonryRuntime>();
+            runtime
+                .primary_mut()
+                .unwrap()
+                .clear_pointer_trace_for_tests();
+        }
+
+        app.world_mut().write_message(MouseWheel {
+            unit: MouseScrollUnit::Line,
+            x: 0.0,
+            y: -1.0,
+            window: window_entity,
+            phase: TouchPhase::Moved,
+        });
+
+        app.update();
+
+        let runtime = app.world().non_send::<crate::MasonryRuntime>();
+        assert_eq!(
+            runtime.primary().unwrap().pointer_position_for_tests(),
+            Vec2::new(144.0, 96.0)
+        );
+        assert_eq!(
+            runtime.primary().unwrap().pointer_trace_for_tests(),
+            &[
+                crate::runtime::PointerTraceEvent::Move,
+                crate::runtime::PointerTraceEvent::Scroll,
+            ]
+        );
+    }
+
+    #[test]
+    fn input_bridge_uses_primary_window_logical_size_for_resize_events() {
+        let mut app = App::new();
+        app.add_plugins(PicusPlugin);
+
+        let mut window = Window::default();
+        window.resolution.set(800.0, 600.0);
+        let window_entity = app.world_mut().spawn((window, PrimaryWindow)).id();
+
+        app.update();
+
+        {
+            let world = app.world_mut();
+            let mut query = world.query_filtered::<&mut Window, With<PrimaryWindow>>();
+            let mut primary_window = query
+                .single_mut(world)
+                .expect("primary window should exist");
+            primary_window.resolution.set(1280.0, 720.0);
+        }
+
+        // Event payload is intentionally stale/incorrect; bridge should trust Window state.
+        app.world_mut().write_message(WindowResized {
+            window: window_entity,
+            width: 1.0,
+            height: 1.0,
+        });
+
+        app.update();
+
+        let runtime = app.world().non_send::<crate::MasonryRuntime>();
+        assert_eq!(runtime.primary().unwrap().viewport_size(), (1280.0, 720.0));
+    }
+
+    #[test]
+    fn clicking_text_input_enables_window_ime() {
+        let mut app = App::new();
+        app.add_plugins(PicusPlugin);
+        crate::set_active_style_variant_by_name(app.world_mut(), "dark");
+
+        let mut window = Window::default();
+        window.resolution.set(800.0, 600.0);
+        let window_entity = app.world_mut().spawn((window, PrimaryWindow)).id();
+
+        let root = app.world_mut().spawn((UiRoot, crate::UiFlexColumn)).id();
+        let input = app
+            .world_mut()
+            .spawn((
+                crate::UiTextInput::new("").with_placeholder("Type here"),
+                ChildOf(root),
+            ))
+            .id();
+
+        app.update();
+        app.update();
+
+        assert!(
+            !app.world()
+                .get::<Window>(window_entity)
+                .expect("primary window should exist")
+                .ime_enabled
+        );
+
+        let input_center = widget_center_for_entity(&app, input);
+        send_primary_click(&mut app, window_entity, input_center);
+
+        assert!(
+            app.world()
+                .get::<Window>(window_entity)
+                .expect("primary window should exist")
+                .ime_enabled
+        );
+    }
+
+    #[test]
+    fn navigation_view_tracks_flex_column_window_height() {
+        let mut app = App::new();
+        app.add_plugins(PicusPlugin);
+
+        let mut window = Window {
+            visible: false,
+            ..Default::default()
+        };
+        window.resolution.set(480.0, 320.0);
+        let _window_entity = app.world_mut().spawn((window, PrimaryWindow)).id();
+
+        let nav = spawn_navigation_height_probe(&mut app);
+
+        app.update();
+
+        resize_masonry_runtime(&mut app, 480, 320);
+        let short_height = widget_height_for_entity(&app, nav);
+
+        resize_masonry_runtime(&mut app, 480, 640);
+        let tall_height = widget_height_for_entity(&app, nav);
+
+        assert!(
+            (short_height - 320.0).abs() <= 1.0,
+            "nav height should match short viewport, got {short_height}"
+        );
+        assert!(
+            (tall_height - 640.0).abs() <= 1.0,
+            "nav height should match tall viewport, got {tall_height}"
+        );
+    }
+
+    #[test]
+    fn navigation_view_tracks_invisible_primary_window_resizes() {
+        let mut app = App::new();
+        app.add_plugins(PicusPlugin);
+
+        let mut window = Window {
+            visible: false,
+            ..Default::default()
+        };
+        window.resolution.set(480.0, 320.0);
+        let window_entity = app.world_mut().spawn((window, PrimaryWindow)).id();
+
+        let nav = spawn_navigation_height_probe(&mut app);
+
+        app.update();
+
+        resize_primary_window(&mut app, window_entity, 480.0, 320.0);
+        let short_height = widget_height_for_entity(&app, nav);
+
+        resize_primary_window(&mut app, window_entity, 480.0, 640.0);
+        let tall_height = widget_height_for_entity(&app, nav);
+
+        assert!(
+            !app.world()
+                .get::<Window>(window_entity)
+                .expect("primary window should exist")
+                .visible
+        );
+        assert!(
+            (short_height - 320.0).abs() <= 1.0,
+            "nav height should match invisible window's short size, got {short_height}"
+        );
+        assert!(
+            (tall_height - 640.0).abs() <= 1.0,
+            "nav height should match invisible window's tall size, got {tall_height}"
+        );
+    }
+
+    #[test]
+    fn navigation_view_sidebar_items_are_ecs_interactive_entities() {
+        fn token_color(world: &World, name: &str) -> crate::xilem::Color {
+            match world
+                .resource::<crate::StyleSheet>()
+                .tokens
+                .get(name)
+                .unwrap_or_else(|| panic!("missing color token `{name}`"))
+            {
+                crate::TokenValue::Color(color) => *color,
+                other => panic!("token `{name}` should be a color, got {other:?}"),
+            }
+        }
+
+        let mut app = App::new();
+        app.add_plugins(PicusPlugin);
+        crate::set_active_style_variant_by_name(app.world_mut(), "dark");
+
+        let mut window = Window {
+            visible: false,
+            ..Default::default()
+        };
+        window.resolution.set(480.0, 320.0);
+        app.world_mut().spawn((window, PrimaryWindow));
+
+        let nav = spawn_navigation_height_probe(&mut app);
+        app.update();
+
+        let items = {
+            let mut query = app
+                .world_mut()
+                .query::<(Entity, &crate::UiNavigationItem)>();
+            let mut items = query
+                .iter(app.world())
+                .filter(|(_, item)| item.nav == nav)
+                .map(|(entity, item)| (entity, item.index))
+                .collect::<Vec<_>>();
+            items.sort_by_key(|(_, index)| *index);
+            items
+        };
+        assert_eq!(items.len(), 2);
+
+        let active_item = items[0].0;
+        let inactive_item = items[1].0;
+
+        app.world_mut()
+            .entity_mut(active_item)
+            .insert(InteractionState {
+                hovered: true,
+                pressed: false,
+                focused: false,
+            });
+        app.world_mut()
+            .entity_mut(inactive_item)
+            .insert(InteractionState {
+                hovered: true,
+                pressed: false,
+                focused: false,
+            });
+
+        let active_hover = crate::resolve_style_for_entity_classes(
+            app.world(),
+            active_item,
+            ["nav.item", "nav.item.active"],
+        );
+        let inactive_hover =
+            crate::resolve_style_for_entity_classes(app.world(), inactive_item, ["nav.item"]);
+
+        assert_eq!(
+            active_hover.colors.bg,
+            Some(token_color(app.world(), "surface-accent-hover"))
+        );
+        assert_eq!(
+            inactive_hover.colors.bg,
+            Some(token_color(app.world(), "surface-subtle-hover"))
+        );
+
+        {
+            let runtime = app.world().non_send::<crate::MasonryRuntime>();
+            let window_runtime = runtime
+                .primary()
+                .expect("primary window runtime should exist");
+            let debug_text = format!("entity={}", active_item.to_bits());
+            first_widget_by_short_name_and_debug_text(
+                window_runtime.render_root.get_layer_root(0),
+                "ActionButtonWithChildWidget",
+                &debug_text,
+            )
+            .expect("navigation view should project sidebar items as action buttons");
+        }
+    }
+
+    #[test]
+    fn navigation_view_clips_content_to_container_not_window() {
+        let mut app = App::new();
+        app.add_plugins(PicusPlugin);
+
+        let mut window = Window {
+            visible: false,
+            ..Default::default()
+        };
+        window.resolution.set(480.0, 360.0);
+        let window_entity = app.world_mut().spawn((window, PrimaryWindow)).id();
+
+        let nav = spawn_navigation_clipping_probe(&mut app);
+
+        app.update();
+
+        resize_primary_window(&mut app, window_entity, 480.0, 360.0);
+
+        let nav_rect = widget_rect_for_entity(&app, nav);
+        let nav_subtree = widget_ids_for_entity_subtree(&app, nav);
+        let portal_rects = portal_rects_for_entity(&app, nav);
+
+        assert!(
+            portal_rects.len() >= 3,
+            "navigation view should wrap its root, sidebar, and content in portals, got {portal_rects:?}"
+        );
+        assert!(
+            portal_rects.iter().all(
+                |rect| rect.min.y >= nav_rect.min.y - 1.0 && rect.max.y <= nav_rect.max.y + 1.0
+            ),
+            "portal viewports should stay inside nav rect {nav_rect:?}, got {portal_rects:?}"
+        );
+        assert!(
+            nav_rect.max.y + 4.0 < 360.0,
+            "test setup should leave window space below the nav, got nav rect {nav_rect:?}"
+        );
+
+        let outside_nav_position = Vec2::new(
+            (nav_rect.min.x + nav_rect.width() * 0.5).max(1.0),
+            nav_rect.max.y + 4.0,
+        );
+        let hit_path = hit_path_for_position(&mut app, window_entity, outside_nav_position);
+
+        assert!(
+            hit_path
+                .iter()
+                .all(|widget_id| !nav_subtree.contains(widget_id)),
+            "nav content should be clipped by the nav container before window clipping; hit path outside nav at {outside_nav_position:?} still included nav subtree: {hit_path:?}"
+        );
+    }
+
+    #[test]
+    /// Verifies that text input `on_changed` callbacks from the masonry widget tree
+    /// are routed to the ECS `UiEventQueue` as `WidgetUiAction::SetTextInput` events.
+    ///
+    /// The retained `TextInput` widget produces a `TextAction::Changed` when the user
+    /// types. This action is sent through `RenderRootSignal::Action`, which the window
+    /// runtime catches and re-dispatches through
+    /// `route_masonry_view_messages`, so `on_changed` reaches the ECS action path.
+    ///
+    /// Before the routing system was added, the `RenderRootSignal::Action` was
+    /// dropped by the per-window signal sink, so `on_changed`/`on_enter` callbacks
+    /// never fired and the composer draft stayed empty (see picuscode issue 4).
+    fn route_masonry_view_messages_dispatches_text_input_on_changed() {
+        let mut app = App::new();
+        app.add_plugins(PicusPlugin);
+
+        let mut window = Window::default();
+        window.resolution.set(480.0, 320.0);
+        app.world_mut().spawn((window, PrimaryWindow));
+
+        let root = app.world_mut().spawn((UiRoot, crate::UiFlexColumn)).id();
+        let input = app
+            .world_mut()
+            .spawn((
+                crate::UiTextInput::new("").with_placeholder("Type here"),
+                ChildOf(root),
+            ))
+            .id();
+
+        // Two updates so synthesis builds the retained tree and the widget map.
+        app.update();
+        app.update();
+
+        let text_area_id = {
+            let runtime = app.world().non_send::<crate::MasonryRuntime>();
+            let window_runtime = runtime
+                .primary()
+                .expect("primary window runtime should exist");
+            first_widget_id_by_short_name(window_runtime.render_root.get_layer_root(0), "TextArea")
+                .expect("text input should build an inner TextArea widget")
+        };
+
+        let routed = {
+            let mut runtime = app.world_mut().non_send_mut::<crate::MasonryRuntime>();
+            let window_runtime = runtime
+                .primary_mut()
+                .expect("primary window runtime should exist");
+            window_runtime.route_test_view_message(
+                Box::new(TextAction::Changed("h".to_string())),
+                text_area_id,
+            )
+        };
+        assert!(routed, "text input should register a view action source");
+
+        let changed: Vec<_> = app
+            .world_mut()
+            .resource_mut::<UiEventQueue>()
+            .drain_actions::<crate::WidgetUiAction>();
+        assert!(
+            changed.iter().any(|event| {
+                matches!(
+                    &event.action,
+                    crate::WidgetUiAction::SetTextInput { input: changed_input, value }
+                        if *changed_input == input && value == "h"
+                )
+            }),
+            "text_input on_changed should route through route_masonry_view_messages, got: {changed:?}"
+        );
     }
 }

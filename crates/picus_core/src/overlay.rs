@@ -2464,9 +2464,19 @@ mod tests {
         OVERLAY_ANCHOR_GAP, OverlayAnchorRect, OverlayPlacement, overlay_origin_for_placement,
         overlay_size_for_entity,
     };
-    use crate::UiDialog;
-    use bevy_ecs::world::World;
+    use crate::test_helpers::*;
+    use crate::{
+        AppPicusExt, PicusPlugin, UiDialog, UiEventQueue, UiRoot, ensure_overlay_defaults,
+        ensure_overlay_root, ensure_overlay_root_entity, handle_overlay_actions,
+        reparent_overlay_entities, spawn_in_overlay_root,
+    };
+    use bevy_app::App;
+    use bevy_ecs::{hierarchy::ChildOf, prelude::*};
+    use bevy_input::{ButtonInput, mouse::MouseButton};
+    use bevy_math::{Rect, Vec2};
+    use bevy_window::{PrimaryWindow, Window};
     use std::collections::HashMap;
+    use std::time::Duration;
 
     #[test]
     fn top_placement_is_horizontally_centered_on_anchor() {
@@ -2520,5 +2530,1499 @@ mod tests {
         let (width, height) = overlay_size_for_entity(&world, dialog, &HashMap::new());
 
         assert_eq!((width, height), (920.0, 760.0));
+    }
+
+    #[test]
+    fn ensure_overlay_root_spawns_once() {
+        let mut world = World::new();
+        world.spawn((UiRoot,));
+
+        ensure_overlay_root(&mut world);
+        ensure_overlay_root(&mut world);
+
+        let mut overlay_query = world.query_filtered::<Entity, With<crate::UiOverlayRoot>>();
+        let overlays = overlay_query.iter(&world).collect::<Vec<_>>();
+
+        assert_eq!(overlays.len(), 1);
+        assert!(world.get::<UiRoot>(overlays[0]).is_some());
+    }
+
+    #[test]
+    fn overlay_actions_toggle_and_select_combo_box() {
+        let mut world = World::new();
+        world.insert_resource(UiEventQueue::default());
+
+        let overlay_root = world.spawn((UiRoot, crate::UiOverlayRoot)).id();
+        let mut combo_box = crate::UiComboBox::new(vec![
+            crate::UiComboOption::new("one", "One"),
+            crate::UiComboOption::new("two", "Two"),
+        ]);
+        combo_box.selected = 0;
+        let combo = world.spawn((combo_box,)).id();
+
+        world
+            .resource::<UiEventQueue>()
+            .push_typed(combo, crate::OverlayUiAction::ToggleCombo);
+
+        handle_overlay_actions(&mut world);
+
+        let mut dropdown_query =
+            world.query::<(Entity, &crate::AnchoredTo, &crate::UiDropdownMenu)>();
+        let dropdowns = dropdown_query
+            .iter(&world)
+            .filter_map(|(entity, anchored_to, _)| (anchored_to.0 == combo).then_some(entity))
+            .collect::<Vec<_>>();
+
+        assert_eq!(dropdowns.len(), 1);
+        let dropdown = dropdowns[0];
+        let mut item_query = world.query::<(Entity, &crate::UiDropdownItem, &crate::StyleClass)>();
+        let items = item_query
+            .iter(&world)
+            .filter(|(_, item, _)| item.dropdown == dropdown)
+            .map(|(entity, item, classes)| (entity, *item, classes.clone()))
+            .collect::<Vec<_>>();
+
+        assert_eq!(items.len(), 2);
+        assert!(items.iter().any(|(_, item, classes)| {
+            item.index == 0
+                && classes
+                    .0
+                    .iter()
+                    .any(|class_name| class_name == "overlay.dropdown.item.selected")
+        }));
+
+        let second_item = items
+            .iter()
+            .find_map(|(entity, item, _)| (item.index == 1).then_some(*entity))
+            .expect("second dropdown item should exist");
+        assert!(
+            world
+                .get::<bevy_ecs::hierarchy::ChildOf>(dropdown)
+                .is_some()
+        );
+        assert_eq!(
+            world
+                .get::<bevy_ecs::hierarchy::ChildOf>(dropdown)
+                .expect("dropdown should be parented")
+                .parent(),
+            overlay_root
+        );
+        assert!(
+            world
+                .get::<crate::UiComboBox>(combo)
+                .expect("combo should exist")
+                .is_open
+        );
+
+        world.resource::<UiEventQueue>().push_typed(
+            second_item,
+            crate::OverlayUiAction::SelectComboItem { dropdown, index: 1 },
+        );
+
+        handle_overlay_actions(&mut world);
+
+        let combo_after = world
+            .get::<crate::UiComboBox>(combo)
+            .expect("combo should exist");
+        assert_eq!(combo_after.selected, 1);
+        assert!(!combo_after.is_open);
+        assert!(world.get_entity(dropdown).is_err());
+        assert!(world.get_entity(second_item).is_err());
+    }
+
+    #[test]
+    fn overlay_actions_toggle_and_select_theme_picker() {
+        let mut world = World::new();
+        world.insert_resource(UiEventQueue::default());
+
+        let overlay_root = world.spawn((UiRoot, crate::UiOverlayRoot)).id();
+        let picker = world.spawn((crate::UiThemePicker::fluent(),)).id();
+
+        world
+            .resource::<UiEventQueue>()
+            .push_typed(picker, crate::OverlayUiAction::ToggleThemePicker);
+
+        handle_overlay_actions(&mut world);
+
+        let mut panel_query = world.query::<(Entity, &crate::UiThemePickerMenu)>();
+        let panels = panel_query
+            .iter(&world)
+            .filter_map(|(entity, panel)| (panel.anchor == picker).then_some(entity))
+            .collect::<Vec<_>>();
+
+        assert_eq!(panels.len(), 1);
+        let panel = panels[0];
+        assert_eq!(
+            world
+                .get::<bevy_ecs::hierarchy::ChildOf>(panel)
+                .expect("theme picker panel should be parented")
+                .parent(),
+            overlay_root
+        );
+        assert!(
+            world
+                .get::<crate::UiThemePicker>(picker)
+                .expect("theme picker should exist")
+                .is_open
+        );
+
+        world.resource::<UiEventQueue>().push_typed(
+            panel,
+            crate::OverlayUiAction::SelectThemePickerItem { index: 1 },
+        );
+
+        handle_overlay_actions(&mut world);
+
+        let picker_after = world
+            .get::<crate::UiThemePicker>(picker)
+            .expect("theme picker should exist");
+        assert_eq!(picker_after.selected, 1);
+        assert!(!picker_after.is_open);
+        assert!(world.get_entity(panel).is_err());
+
+        let active_variant = world.resource::<crate::ActiveStyleVariant>();
+        assert_eq!(active_variant.0.as_deref(), Some("light"));
+
+        let changed = world
+            .resource_mut::<UiEventQueue>()
+            .drain_actions::<crate::UiThemePickerChanged>();
+        assert_eq!(changed.len(), 1);
+        assert_eq!(changed[0].entity, picker);
+        assert_eq!(changed[0].action.selected, 1);
+        assert_eq!(changed[0].action.variant, "light");
+    }
+
+    #[test]
+    fn overlay_actions_toggle_and_select_color_picker() {
+        let mut world = World::new();
+        world.insert_resource(UiEventQueue::default());
+
+        let overlay_root = world.spawn((UiRoot, crate::UiOverlayRoot)).id();
+        let picker = world.spawn((crate::UiColorPicker::new(12, 34, 56),)).id();
+
+        world
+            .resource::<UiEventQueue>()
+            .push_typed(picker, crate::OverlayUiAction::ToggleColorPicker);
+
+        handle_overlay_actions(&mut world);
+
+        let mut panel_query = world.query::<(Entity, &crate::UiColorPickerPanel)>();
+        let panels = panel_query
+            .iter(&world)
+            .filter_map(|(entity, panel)| (panel.anchor == picker).then_some(entity))
+            .collect::<Vec<_>>();
+
+        assert_eq!(panels.len(), 1);
+        let panel = panels[0];
+        assert_eq!(
+            world
+                .get::<bevy_ecs::hierarchy::ChildOf>(panel)
+                .expect("color picker panel should be parented")
+                .parent(),
+            overlay_root
+        );
+        assert!(
+            world
+                .get::<crate::UiColorPicker>(picker)
+                .expect("color picker should exist")
+                .is_open
+        );
+
+        world.resource::<UiEventQueue>().push_typed(
+            panel,
+            crate::OverlayUiAction::SelectColorSwatch {
+                r: 200,
+                g: 100,
+                b: 50,
+            },
+        );
+
+        handle_overlay_actions(&mut world);
+
+        let picker_after = world
+            .get::<crate::UiColorPicker>(picker)
+            .expect("color picker should exist");
+        assert_eq!(
+            (picker_after.r, picker_after.g, picker_after.b),
+            (200, 100, 50)
+        );
+        assert!(!picker_after.is_open);
+        assert!(world.get_entity(panel).is_err());
+
+        let changed = world
+            .resource_mut::<UiEventQueue>()
+            .drain_actions::<crate::UiColorPickerChanged>();
+        assert_eq!(changed.len(), 1);
+        assert_eq!(changed[0].entity, picker);
+        assert_eq!(
+            (
+                changed[0].action.r,
+                changed[0].action.g,
+                changed[0].action.b
+            ),
+            (200, 100, 50)
+        );
+    }
+
+    #[test]
+    fn overlay_actions_toggle_and_select_date_picker() {
+        let mut world = World::new();
+        world.insert_resource(UiEventQueue::default());
+
+        let overlay_root = world.spawn((UiRoot, crate::UiOverlayRoot)).id();
+        let picker = world.spawn((crate::UiDatePicker::new(2026, 3, 17),)).id();
+
+        world
+            .resource::<UiEventQueue>()
+            .push_typed(picker, crate::OverlayUiAction::ToggleDatePicker);
+
+        handle_overlay_actions(&mut world);
+
+        let mut panel_query = world.query::<(Entity, &crate::UiDatePickerPanel)>();
+        let panels = panel_query
+            .iter(&world)
+            .filter_map(|(entity, panel)| (panel.anchor == picker).then_some(entity))
+            .collect::<Vec<_>>();
+
+        assert_eq!(panels.len(), 1);
+        let panel = panels[0];
+        assert_eq!(
+            world
+                .get::<bevy_ecs::hierarchy::ChildOf>(panel)
+                .expect("date picker panel should be parented")
+                .parent(),
+            overlay_root
+        );
+        let panel_state = world
+            .get::<crate::UiDatePickerPanel>(panel)
+            .expect("date picker panel should exist");
+        assert_eq!(panel_state.view_year, 2026);
+        assert_eq!(panel_state.view_month, 3);
+        assert!(
+            world
+                .get::<crate::UiDatePicker>(picker)
+                .expect("date picker should exist")
+                .is_open
+        );
+
+        world
+            .resource::<UiEventQueue>()
+            .push_typed(panel, crate::OverlayUiAction::SelectDateDay { day: 29 });
+
+        handle_overlay_actions(&mut world);
+
+        let picker_after = world
+            .get::<crate::UiDatePicker>(picker)
+            .expect("date picker should exist");
+        assert_eq!(picker_after.year, 2026);
+        assert_eq!(picker_after.month, 3);
+        assert_eq!(picker_after.day, 29);
+        assert!(!picker_after.is_open);
+        assert!(world.get_entity(panel).is_err());
+
+        let changed = world
+            .resource_mut::<UiEventQueue>()
+            .drain_actions::<crate::UiDatePickerChanged>();
+        assert_eq!(changed.len(), 1);
+        assert_eq!(changed[0].entity, picker);
+        assert_eq!(changed[0].action.year, 2026);
+        assert_eq!(changed[0].action.month, 3);
+        assert_eq!(changed[0].action.day, 29);
+    }
+
+    #[test]
+    fn spawn_in_overlay_root_parents_entity_under_overlay_root() {
+        let mut world = World::new();
+        world.spawn((UiRoot,));
+
+        let dialog = spawn_in_overlay_root(&mut world, (crate::UiDialog::new("title", "body"),));
+
+        let overlay_root = ensure_overlay_root_entity(&mut world);
+        let parent = world
+            .get::<bevy_ecs::hierarchy::ChildOf>(dialog)
+            .expect("dialog should be parented")
+            .parent();
+
+        assert_eq!(parent, overlay_root);
+        assert!(world.get::<crate::UiOverlayRoot>(overlay_root).is_some());
+    }
+
+    #[test]
+    fn reparent_overlay_entities_moves_dialog_to_overlay_root() {
+        let mut world = World::new();
+        let app_root = world.spawn((UiRoot,)).id();
+        let dialog = world
+            .spawn((crate::UiDialog::new("title", "body"), ChildOf(app_root)))
+            .id();
+
+        reparent_overlay_entities(&mut world);
+
+        let mut overlays = world.query_filtered::<Entity, With<crate::UiOverlayRoot>>();
+        let overlay_root = overlays
+            .iter(&world)
+            .next()
+            .expect("overlay root should exist");
+
+        let parent = world
+            .get::<bevy_ecs::hierarchy::ChildOf>(dialog)
+            .expect("dialog should be parented")
+            .parent();
+        assert_eq!(parent, overlay_root);
+    }
+
+    #[test]
+    fn reparent_overlay_entities_moves_toast_and_tooltip_to_overlay_root_and_tracks_stack() {
+        let mut world = World::new();
+        world.insert_resource(crate::OverlayStack::default());
+
+        let app_root = world.spawn((UiRoot,)).id();
+        let anchor = world.spawn((ChildOf(app_root),)).id();
+
+        let toast = world
+            .spawn((
+                crate::UiToast::new("Saved"),
+                crate::OverlayState {
+                    is_modal: false,
+                    anchor: None,
+                },
+                ChildOf(app_root),
+            ))
+            .id();
+
+        let tooltip = world
+            .spawn((
+                crate::UiTooltip {
+                    text: "Helpful tip".to_string(),
+                    anchor,
+                },
+                crate::OverlayState {
+                    is_modal: false,
+                    anchor: Some(anchor),
+                },
+                ChildOf(app_root),
+            ))
+            .id();
+
+        reparent_overlay_entities(&mut world);
+
+        let mut overlays = world.query_filtered::<Entity, With<crate::UiOverlayRoot>>();
+        let overlay_root = overlays
+            .iter(&world)
+            .next()
+            .expect("overlay root should exist");
+
+        let toast_parent = world
+            .get::<bevy_ecs::hierarchy::ChildOf>(toast)
+            .expect("toast should be parented")
+            .parent();
+        let tooltip_parent = world
+            .get::<bevy_ecs::hierarchy::ChildOf>(tooltip)
+            .expect("tooltip should be parented")
+            .parent();
+
+        assert_eq!(toast_parent, overlay_root);
+        assert_eq!(tooltip_parent, overlay_root);
+
+        let stack = world.resource::<crate::OverlayStack>();
+        assert!(stack.active_overlays.contains(&toast));
+        assert!(stack.active_overlays.contains(&tooltip));
+    }
+
+    #[test]
+    fn ensure_overlay_defaults_assigns_built_in_overlay_metadata() {
+        let mut world = World::new();
+        let combo = world
+            .spawn((crate::UiComboBox::new(vec![crate::UiComboOption::new(
+                "v", "V",
+            )]),))
+            .id();
+        let dialog = world.spawn((crate::UiDialog::new("t", "b"),)).id();
+        let dropdown = world
+            .spawn((crate::UiDropdownMenu, crate::AnchoredTo(combo)))
+            .id();
+        let menu_item = world
+            .spawn((crate::UiMenuBarItem::new(
+                "File",
+                [crate::UiMenuItem::new("Open", "file.open")],
+            ),))
+            .id();
+        let menu_panel = world
+            .spawn((crate::UiMenuItemPanel { anchor: menu_item },))
+            .id();
+        let theme_picker = world.spawn((crate::UiThemePicker::fluent(),)).id();
+        let theme_panel = world
+            .spawn((crate::UiThemePickerMenu {
+                anchor: theme_picker,
+            },))
+            .id();
+        let color_picker = world.spawn((crate::UiColorPicker::new(12, 34, 56),)).id();
+        let color_panel = world
+            .spawn((crate::UiColorPickerPanel {
+                anchor: color_picker,
+            },))
+            .id();
+        let date_picker = world.spawn((crate::UiDatePicker::new(2026, 3, 17),)).id();
+        let date_panel = world
+            .spawn((crate::UiDatePickerPanel {
+                anchor: date_picker,
+                view_year: 2026,
+                view_month: 3,
+            },))
+            .id();
+        let tooltip_anchor = world.spawn_empty().id();
+        let tooltip = world
+            .spawn((crate::UiTooltip {
+                text: "Helpful tip".to_string(),
+                anchor: tooltip_anchor,
+            },))
+            .id();
+        let toast = world
+            .spawn((crate::UiToast::new("Saved").with_duration(1.25),))
+            .id();
+        let custom_toast = world
+            .spawn((crate::UiToast::new("Pinned top")
+                .with_placement(crate::OverlayPlacement::TopEnd)
+                .with_auto_flip_placement(true)
+                .with_duration(0.0),))
+            .id();
+        let persistent_toast = world
+            .spawn((
+                crate::UiToast::new("Pinned").with_duration(0.0),
+                crate::AutoDismiss::from_seconds(2.0),
+            ))
+            .id();
+
+        ensure_overlay_defaults(&mut world);
+
+        assert_overlay_defaults_for_entity(
+            &world,
+            dialog,
+            "dialog",
+            crate::OverlayConfig {
+                placement: crate::OverlayPlacement::Center,
+                anchor: None,
+                auto_flip: false,
+            },
+            crate::OverlayState {
+                is_modal: true,
+                anchor: None,
+            },
+            false,
+        );
+        assert_overlay_defaults_for_entity(
+            &world,
+            dropdown,
+            "dropdown",
+            crate::OverlayConfig {
+                placement: crate::OverlayPlacement::BottomStart,
+                anchor: Some(combo),
+                auto_flip: true,
+            },
+            crate::OverlayState {
+                is_modal: false,
+                anchor: Some(combo),
+            },
+            true,
+        );
+        assert_overlay_defaults_for_entity(
+            &world,
+            menu_panel,
+            "menu panel",
+            crate::OverlayConfig {
+                placement: crate::OverlayPlacement::BottomStart,
+                anchor: Some(menu_item),
+                auto_flip: true,
+            },
+            crate::OverlayState {
+                is_modal: false,
+                anchor: Some(menu_item),
+            },
+            true,
+        );
+        assert_overlay_defaults_for_entity(
+            &world,
+            theme_panel,
+            "theme picker panel",
+            crate::OverlayConfig {
+                placement: crate::OverlayPlacement::BottomEnd,
+                anchor: Some(theme_picker),
+                auto_flip: true,
+            },
+            crate::OverlayState {
+                is_modal: false,
+                anchor: Some(theme_picker),
+            },
+            true,
+        );
+        assert_overlay_defaults_for_entity(
+            &world,
+            color_panel,
+            "color picker panel",
+            crate::OverlayConfig {
+                placement: crate::OverlayPlacement::BottomStart,
+                anchor: Some(color_picker),
+                auto_flip: true,
+            },
+            crate::OverlayState {
+                is_modal: false,
+                anchor: Some(color_picker),
+            },
+            true,
+        );
+        assert_overlay_defaults_for_entity(
+            &world,
+            date_panel,
+            "date picker panel",
+            crate::OverlayConfig {
+                placement: crate::OverlayPlacement::BottomStart,
+                anchor: Some(date_picker),
+                auto_flip: true,
+            },
+            crate::OverlayState {
+                is_modal: false,
+                anchor: Some(date_picker),
+            },
+            true,
+        );
+        assert_overlay_defaults_for_entity(
+            &world,
+            tooltip,
+            "tooltip",
+            crate::OverlayConfig {
+                placement: crate::OverlayPlacement::Top,
+                anchor: Some(tooltip_anchor),
+                auto_flip: true,
+            },
+            crate::OverlayState {
+                is_modal: false,
+                anchor: Some(tooltip_anchor),
+            },
+            true,
+        );
+        assert_overlay_defaults_for_entity(
+            &world,
+            toast,
+            "toast",
+            crate::OverlayConfig {
+                placement: crate::OverlayPlacement::BottomEnd,
+                anchor: None,
+                auto_flip: false,
+            },
+            crate::OverlayState {
+                is_modal: false,
+                anchor: None,
+            },
+            false,
+        );
+        assert_overlay_defaults_for_entity(
+            &world,
+            custom_toast,
+            "custom toast",
+            crate::OverlayConfig {
+                placement: crate::OverlayPlacement::TopEnd,
+                anchor: None,
+                auto_flip: true,
+            },
+            crate::OverlayState {
+                is_modal: false,
+                anchor: None,
+            },
+            false,
+        );
+        assert_overlay_defaults_for_entity(
+            &world,
+            persistent_toast,
+            "persistent toast",
+            crate::OverlayConfig {
+                placement: crate::OverlayPlacement::BottomEnd,
+                anchor: None,
+                auto_flip: false,
+            },
+            crate::OverlayState {
+                is_modal: false,
+                anchor: None,
+            },
+            false,
+        );
+
+        let dismiss = world
+            .get::<crate::AutoDismiss>(toast)
+            .expect("toast should receive auto-dismiss timer");
+        assert_eq!(dismiss.timer.duration(), Duration::from_secs_f32(1.25));
+
+        assert!(world.get::<crate::AutoDismiss>(custom_toast).is_none());
+
+        assert!(world.get::<crate::AutoDismiss>(persistent_toast).is_none());
+    }
+
+    #[test]
+    fn sync_overlay_positions_uses_dynamic_primary_window_size() {
+        let mut app = App::new();
+        app.add_plugins(PicusPlugin);
+
+        let mut window = Window::default();
+        window.resolution.set(1024.0, 768.0);
+        app.world_mut().spawn((window, PrimaryWindow));
+
+        let dialog = app
+            .world_mut()
+            .spawn((crate::UiDialog::new("title", "body"),))
+            .id();
+
+        app.update();
+
+        let initial = *app
+            .world()
+            .get::<crate::OverlayComputedPosition>(dialog)
+            .expect("dialog should have computed position");
+        assert!(initial.is_positioned);
+
+        {
+            let world = app.world_mut();
+            let mut query = world.query_filtered::<&mut Window, With<PrimaryWindow>>();
+            let mut primary_window = query
+                .single_mut(world)
+                .expect("primary window should exist");
+            primary_window.resolution.set(1600.0, 900.0);
+        }
+
+        app.update();
+
+        let resized = *app
+            .world()
+            .get::<crate::OverlayComputedPosition>(dialog)
+            .expect("dialog should still have computed position");
+
+        assert!(resized.x > initial.x);
+        assert_eq!(initial.width, resized.width);
+        assert_eq!(initial.height, resized.height);
+        assert!(resized.is_positioned);
+        assert!(resized.x + resized.width <= 1600.0 + f64::EPSILON);
+        assert!(resized.y + resized.height <= 900.0 + f64::EPSILON);
+    }
+
+    #[test]
+    fn sync_overlay_positions_works_without_primary_window_marker() {
+        let mut app = App::new();
+        app.add_plugins(PicusPlugin);
+
+        let mut window = Window::default();
+        window.resolution.set(1280.0, 720.0);
+        app.world_mut().spawn((window,));
+
+        let dialog = app
+            .world_mut()
+            .spawn((crate::UiDialog::new("title", "body"),))
+            .id();
+
+        app.update();
+
+        let computed = *app
+            .world()
+            .get::<crate::OverlayComputedPosition>(dialog)
+            .expect("dialog should have computed position without PrimaryWindow marker");
+
+        assert!(computed.width > 1.0);
+        assert!(computed.height > 1.0);
+        assert!(computed.x > 0.0);
+        assert!(computed.y > 0.0);
+        assert!(computed.is_positioned);
+    }
+
+    #[test]
+    fn dialog_body_click_does_not_dismiss_overlay() {
+        let mut app = App::new();
+        app.add_plugins(PicusPlugin);
+
+        let mut window = Window::default();
+        window.resolution.set(800.0, 600.0);
+        window.set_cursor_position(Some(Vec2::new(0.0, 0.0)));
+        let window_entity = app.world_mut().spawn((window, PrimaryWindow)).id();
+
+        let dialog = spawn_in_overlay_root(app.world_mut(), (crate::UiDialog::new("t", "b"),));
+
+        app.update();
+        app.update();
+
+        let computed = app
+            .world()
+            .get::<crate::OverlayComputedPosition>(dialog)
+            .expect("dialog should have computed position");
+
+        let click_position = Vec2::new(
+            (computed.x + computed.width * 0.5) as f32,
+            (computed.y + 24.0) as f32,
+        );
+
+        send_primary_click(&mut app, window_entity, click_position);
+
+        assert!(app.world().get_entity(dialog).is_ok());
+    }
+
+    #[test]
+    fn dialog_padding_click_is_in_overlay_hit_path_and_does_not_dismiss() {
+        let mut app = App::new();
+        app.add_plugins(PicusPlugin);
+
+        let mut window = Window::default();
+        window.resolution.set(800.0, 600.0);
+        window.set_cursor_position(Some(Vec2::new(0.0, 0.0)));
+        let window_entity = app.world_mut().spawn((window, PrimaryWindow)).id();
+
+        let dialog = spawn_in_overlay_root(app.world_mut(), (crate::UiDialog::new("t", "b"),));
+
+        app.update();
+
+        let opaque_debug = format!("opaque_hitbox_entity={}", dialog.to_bits());
+        let opaque_widget_id = {
+            let runtime = app.world().non_send::<crate::MasonryRuntime>();
+            let root = runtime
+                .primary()
+                .expect("primary window runtime should exist")
+                .render_root
+                .get_layer_root(0);
+            find_widget_id_by_debug_text(root, &opaque_debug)
+                .expect("dialog should project an entity-tagged OpaqueHitboxWidget")
+        };
+
+        // Deliberately target a stable inset point inside the opaque panel surface.
+        let click_position = widget_inset_point_for_widget_id(&app, opaque_widget_id, 14.0);
+        let hit_path = hit_path_for_position(&mut app, window_entity, click_position);
+        assert!(hit_path.contains(&opaque_widget_id));
+
+        run_global_overlay_click(&mut app, window_entity, click_position);
+
+        assert!(app.world().get_entity(dialog).is_ok());
+    }
+
+    #[test]
+    fn dialog_dismiss_button_targets_dialog_entity() {
+        let mut app = App::new();
+        app.add_plugins(PicusPlugin);
+        crate::set_active_style_variant_by_name(app.world_mut(), "dark");
+
+        let mut window = Window::default();
+        window.resolution.set(800.0, 600.0);
+        window.set_cursor_position(Some(Vec2::new(0.0, 0.0)));
+        app.world_mut().spawn((window, PrimaryWindow));
+
+        let dialog = spawn_in_overlay_root(app.world_mut(), (crate::UiDialog::new("t", "b"),));
+
+        app.update();
+
+        let computed = app
+            .world()
+            .get::<crate::OverlayComputedPosition>(dialog)
+            .expect("dialog should have computed position");
+        let content_rect = Rect::from_corners(
+            Vec2::new(computed.x as f32, computed.y as f32),
+            Vec2::new(
+                (computed.x + computed.width) as f32,
+                (computed.y + computed.height) as f32,
+            ),
+        );
+
+        let button_rect = {
+            let runtime = app.world().non_send::<crate::MasonryRuntime>();
+            let root = runtime
+                .primary()
+                .expect("primary window runtime should exist")
+                .render_root
+                .get_layer_root(0);
+            let mut button_rects = Vec::new();
+            collect_widget_bounds_by_short_name(
+                root,
+                "ActionButtonWithChildWidget",
+                &mut button_rects,
+            );
+
+            button_rects
+                .into_iter()
+                .filter(|rect| {
+                    let width = rect.max.x - rect.min.x;
+                    let height = rect.max.y - rect.min.y;
+                    width < (content_rect.max.x - content_rect.min.x)
+                        && height < (content_rect.max.y - content_rect.min.y)
+                })
+                .min_by(|a, b| {
+                    let area_a = (a.max.x - a.min.x) * (a.max.y - a.min.y);
+                    let area_b = (b.max.x - b.min.x) * (b.max.y - b.min.y);
+                    area_a.total_cmp(&area_b)
+                })
+                .expect("dialog should project a dedicated dismiss button")
+        };
+
+        let click_position = Vec2::new(
+            (button_rect.min.x + button_rect.max.x) * 0.5,
+            (button_rect.min.y + button_rect.max.y) * 0.5,
+        );
+
+        let (hit_widget, hit_debug_text) = {
+            let runtime = app.world().non_send::<crate::MasonryRuntime>();
+            let root = runtime
+                .primary()
+                .expect("primary window runtime should exist")
+                .render_root
+                .get_layer_root(0);
+            root.find_widget_under_pointer(
+                (click_position.x as f64, click_position.y as f64).into(),
+            )
+            .map(|widget| {
+                (
+                    widget.short_type_name().to_string(),
+                    widget.get_debug_text().unwrap_or_default(),
+                )
+            })
+            .unwrap_or_default()
+        };
+
+        assert_eq!(hit_widget.as_str(), "ActionButtonWithChildWidget");
+        assert_eq!(hit_debug_text, format!("entity={}", dialog.to_bits()));
+
+        let content_width = content_rect.max.x - content_rect.min.x;
+        let content_height = content_rect.max.y - content_rect.min.y;
+        let button_top = button_rect.min.y;
+        let button_right = button_rect.max.x;
+
+        assert!(
+            button_right > content_width * 0.82,
+            "dismiss button should align against the right side of the dialog header"
+        );
+        assert!(
+            button_top < content_height * 0.22,
+            "dismiss button should sit in the top portion of the dialog header"
+        );
+    }
+
+    #[test]
+    fn dialog_projects_single_dismiss_button_without_fullscreen_backdrop_button() {
+        let mut app = App::new();
+        app.add_plugins(PicusPlugin);
+
+        let mut window = Window::default();
+        window.resolution.set(800.0, 600.0);
+        app.world_mut().spawn((window, PrimaryWindow));
+
+        let dialog = spawn_in_overlay_root(app.world_mut(), (crate::UiDialog::new("t", "b"),));
+
+        app.update();
+
+        let computed = app
+            .world()
+            .get::<crate::OverlayComputedPosition>(dialog)
+            .expect("dialog should have computed position");
+        let content_rect = Rect::from_corners(
+            Vec2::new(computed.x as f32, computed.y as f32),
+            Vec2::new(
+                (computed.x + computed.width) as f32,
+                (computed.y + computed.height) as f32,
+            ),
+        );
+
+        let button_rects = {
+            let runtime = app.world().non_send::<crate::MasonryRuntime>();
+            let root = runtime
+                .primary()
+                .expect("primary window runtime should exist")
+                .render_root
+                .get_layer_root(0);
+            let mut button_rects = Vec::new();
+            collect_widget_bounds_by_short_name(
+                root,
+                "ActionButtonWithChildWidget",
+                &mut button_rects,
+            );
+            button_rects
+        };
+
+        assert_eq!(
+            button_rects.len(),
+            1,
+            "dialog projector should only emit the dismiss button, not a structural backdrop button"
+        );
+
+        let only_button = button_rects[0];
+        let button_area = (only_button.max.x - only_button.min.x).max(0.0)
+            * (only_button.max.y - only_button.min.y).max(0.0);
+        let content_area = (content_rect.max.x - content_rect.min.x).max(0.0)
+            * (content_rect.max.y - content_rect.min.y).max(0.0);
+
+        assert!(button_area < content_area * 0.8);
+    }
+
+    #[test]
+    fn overlay_action_dismiss_dialog_despawns_dialog() {
+        let mut world = World::new();
+        world.insert_resource(UiEventQueue::default());
+
+        let dialog = world.spawn((crate::UiDialog::new("title", "body"),)).id();
+
+        world
+            .resource::<UiEventQueue>()
+            .push_typed(dialog, crate::OverlayUiAction::DismissDialog);
+
+        handle_overlay_actions(&mut world);
+
+        assert!(world.get_entity(dialog).is_err());
+    }
+
+    #[test]
+    fn overlay_action_dismiss_dialog_emits_optional_close_hook_before_despawn() {
+        let mut world = World::new();
+        world.insert_resource(UiEventQueue::default());
+
+        let target = world.spawn_empty().id();
+        let dialog = world
+            .spawn((
+                crate::UiDialog::new("title", "body"),
+                crate::UiDialogCloseAction::new(target, DialogCloseTestAction::Closed),
+            ))
+            .id();
+
+        world
+            .resource::<UiEventQueue>()
+            .push_typed(dialog, crate::OverlayUiAction::DismissDialog);
+
+        handle_overlay_actions(&mut world);
+
+        assert!(world.get_entity(dialog).is_err());
+
+        let events = world
+            .resource_mut::<UiEventQueue>()
+            .drain_actions::<DialogCloseTestAction>();
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].entity, target);
+        assert_eq!(events[0].action, DialogCloseTestAction::Closed);
+    }
+
+    #[test]
+    fn handle_global_overlay_clicks_closes_when_clicking_anchor_and_suppresses_pointer() {
+        let mut app = App::new();
+        app.add_plugins(PicusPlugin);
+        crate::set_active_style_variant_by_name(app.world_mut(), "dark");
+
+        let mut window = Window::default();
+        window.resolution.set(800.0, 600.0);
+        let window_entity = app.world_mut().spawn((window, PrimaryWindow)).id();
+
+        let root = app.world_mut().spawn((UiRoot, crate::UiFlexColumn)).id();
+        let combo = app
+            .world_mut()
+            .spawn((
+                crate::UiComboBox::new(vec![
+                    crate::UiComboOption::new("one", "One"),
+                    crate::UiComboOption::new("two", "Two"),
+                ]),
+                ChildOf(root),
+            ))
+            .id();
+
+        {
+            let mut combo_state = app
+                .world_mut()
+                .get_mut::<crate::UiComboBox>(combo)
+                .expect("combo should exist");
+            combo_state.selected = usize::MAX;
+        }
+
+        app.update();
+
+        let dropdown = open_combo_dropdown(&mut app, combo);
+        app.update();
+        let anchor_center = widget_center_for_entity(&app, combo);
+
+        run_global_overlay_click(&mut app, window_entity, anchor_center);
+
+        assert!(app.world().get_entity(dropdown).is_err());
+
+        let mut routing = app
+            .world_mut()
+            .resource_mut::<crate::OverlayPointerRoutingState>();
+        assert!(routing.take_suppressed_press(window_entity, MouseButton::Left));
+        assert!(!routing.take_suppressed_release(window_entity, MouseButton::Left));
+    }
+
+    #[test]
+    fn handle_global_overlay_clicks_closes_menu_panel_anchor_and_resets_open_state() {
+        let mut app = App::new();
+        app.add_plugins(PicusPlugin);
+
+        let mut window = Window::default();
+        window.resolution.set(900.0, 680.0);
+        let window_entity = app.world_mut().spawn((window, PrimaryWindow)).id();
+
+        let root = app.world_mut().spawn((UiRoot, crate::UiFlexColumn)).id();
+        let menu_bar = app
+            .world_mut()
+            .spawn((crate::UiMenuBar, ChildOf(root)))
+            .id();
+        let menu_item = app
+            .world_mut()
+            .spawn((
+                crate::UiMenuBarItem::new(
+                    "File",
+                    [
+                        crate::UiMenuItem::new("Open", "file.open"),
+                        crate::UiMenuItem::new("Save", "file.save"),
+                    ],
+                ),
+                ChildOf(menu_bar),
+            ))
+            .id();
+
+        app.update();
+
+        app.world()
+            .resource::<UiEventQueue>()
+            .push_typed(menu_item, crate::OverlayUiAction::ToggleMenuBarItem);
+        app.update();
+
+        let panel = {
+            let mut query = app.world_mut().query::<(Entity, &crate::UiMenuItemPanel)>();
+            query
+                .iter(app.world())
+                .find_map(|(entity, panel)| (panel.anchor == menu_item).then_some(entity))
+                .expect("menu toggle should spawn menu panel")
+        };
+
+        assert!(
+            app.world()
+                .get::<crate::UiMenuBarItem>(menu_item)
+                .expect("menu item should exist")
+                .is_open
+        );
+
+        let anchor_center = widget_center_for_entity(&app, menu_item);
+        run_global_overlay_click(&mut app, window_entity, anchor_center);
+
+        assert!(app.world().get_entity(panel).is_err());
+        assert!(
+            !app.world()
+                .get::<crate::UiMenuBarItem>(menu_item)
+                .expect("menu item should remain")
+                .is_open
+        );
+    }
+
+    #[test]
+    fn handle_global_overlay_clicks_closes_theme_picker_anchor_and_resets_open_state() {
+        let mut app = App::new();
+        app.add_plugins(PicusPlugin);
+
+        let mut window = Window::default();
+        window.resolution.set(900.0, 680.0);
+        let window_entity = app.world_mut().spawn((window, PrimaryWindow)).id();
+
+        let root = app.world_mut().spawn((UiRoot, crate::UiFlexColumn)).id();
+        let picker = app
+            .world_mut()
+            .spawn((crate::UiThemePicker::fluent(), ChildOf(root)))
+            .id();
+
+        app.update();
+
+        app.world()
+            .resource::<UiEventQueue>()
+            .push_typed(picker, crate::OverlayUiAction::ToggleThemePicker);
+        app.update();
+
+        let panel = {
+            let mut query = app
+                .world_mut()
+                .query::<(Entity, &crate::UiThemePickerMenu)>();
+            query
+                .iter(app.world())
+                .find_map(|(entity, panel)| (panel.anchor == picker).then_some(entity))
+                .expect("theme picker toggle should spawn menu panel")
+        };
+
+        assert!(
+            app.world()
+                .get::<crate::UiThemePicker>(picker)
+                .expect("theme picker should exist")
+                .is_open
+        );
+
+        let anchor_center = widget_center_for_entity(&app, picker);
+        run_global_overlay_click(&mut app, window_entity, anchor_center);
+
+        assert!(app.world().get_entity(panel).is_err());
+        assert!(
+            !app.world()
+                .get::<crate::UiThemePicker>(picker)
+                .expect("theme picker should remain")
+                .is_open
+        );
+    }
+
+    #[test]
+    fn overlay_pointer_routing_suppress_click_only_suppresses_press() {
+        let mut routing = crate::OverlayPointerRoutingState::default();
+        let window = Entity::from_raw_u32(7).expect("test entity index should be valid");
+
+        routing.suppress_click(window, MouseButton::Left);
+
+        assert!(routing.take_suppressed_press(window, MouseButton::Left));
+        assert!(!routing.take_suppressed_release(window, MouseButton::Left));
+    }
+
+    #[test]
+    fn handle_global_overlay_clicks_keeps_overlay_open_when_clicking_inside_overlay() {
+        let mut app = App::new();
+        app.add_plugins(PicusPlugin);
+
+        let mut window = Window::default();
+        window.resolution.set(800.0, 600.0);
+        let window_entity = app.world_mut().spawn((window, PrimaryWindow)).id();
+
+        let root = app.world_mut().spawn((UiRoot, crate::UiFlexColumn)).id();
+        let combo = app
+            .world_mut()
+            .spawn((
+                crate::UiComboBox::new(vec![
+                    crate::UiComboOption::new("one", "One"),
+                    crate::UiComboOption::new("two", "Two"),
+                ]),
+                ChildOf(root),
+            ))
+            .id();
+
+        app.update();
+
+        let dropdown = open_combo_dropdown(&mut app, combo);
+        let dropdown_center = widget_center_for_entity(&app, dropdown);
+
+        run_global_overlay_click(&mut app, window_entity, dropdown_center);
+
+        assert!(app.world().get_entity(dropdown).is_ok());
+
+        let mut routing = app
+            .world_mut()
+            .resource_mut::<crate::OverlayPointerRoutingState>();
+        assert!(!routing.take_suppressed_press(window_entity, MouseButton::Left));
+        assert!(!routing.take_suppressed_release(window_entity, MouseButton::Left));
+    }
+
+    #[test]
+    fn dropdown_padding_click_is_in_overlay_hit_path_and_does_not_dismiss() {
+        let mut app = App::new();
+        app.add_plugins(PicusPlugin);
+
+        let mut window = Window::default();
+        window.resolution.set(800.0, 600.0);
+        let window_entity = app.world_mut().spawn((window, PrimaryWindow)).id();
+
+        let root = app.world_mut().spawn((UiRoot, crate::UiFlexColumn)).id();
+        let combo = app
+            .world_mut()
+            .spawn((
+                crate::UiComboBox::new(vec![
+                    crate::UiComboOption::new("one", "One"),
+                    crate::UiComboOption::new("two", "Two"),
+                ]),
+                ChildOf(root),
+            ))
+            .id();
+
+        app.update();
+
+        let dropdown = open_combo_dropdown(&mut app, combo);
+
+        let opaque_debug = format!("opaque_hitbox_entity={}", dropdown.to_bits());
+        let opaque_widget_id = {
+            let runtime = app.world().non_send::<crate::MasonryRuntime>();
+            let root = runtime
+                .primary()
+                .expect("primary window runtime should exist")
+                .render_root
+                .get_layer_root(0);
+            find_widget_id_by_debug_text(root, &opaque_debug)
+                .expect("dropdown should project an entity-tagged OpaqueHitboxWidget")
+        };
+
+        // Deliberately target menu padding, not option label text.
+        let click_position = widget_inset_point_for_widget_id(&app, opaque_widget_id, 6.0);
+        let hit_path = hit_path_for_position(&mut app, window_entity, click_position);
+        assert!(hit_path.contains(&opaque_widget_id));
+
+        run_global_overlay_click(&mut app, window_entity, click_position);
+
+        assert!(app.world().get_entity(dropdown).is_ok());
+    }
+
+    #[test]
+    fn dropdown_item_text_region_hits_button_entity_instead_of_child_subwidget() {
+        let mut app = App::new();
+        app.add_plugins(PicusPlugin);
+
+        let mut window = Window::default();
+        window.resolution.set(800.0, 600.0);
+        app.world_mut().spawn((window, PrimaryWindow));
+
+        let root = app.world_mut().spawn((UiRoot, crate::UiFlexColumn)).id();
+        let combo = app
+            .world_mut()
+            .spawn((
+                crate::UiComboBox::new(vec![
+                    crate::UiComboOption::new("one", "One"),
+                    crate::UiComboOption::new("two", "Longer option label"),
+                ]),
+                ChildOf(root),
+            ))
+            .id();
+
+        app.update();
+
+        let dropdown = open_combo_dropdown(&mut app, combo);
+        app.update();
+
+        let item_entity = {
+            let mut query = app.world_mut().query::<(Entity, &crate::UiDropdownItem)>();
+            query
+                .iter(app.world())
+                .find_map(|(entity, item)| {
+                    (item.dropdown == dropdown && item.index == 1).then_some(entity)
+                })
+                .expect("second dropdown item should exist")
+        };
+
+        let hit_position = {
+            let debug = format!("entity={}", item_entity.to_bits());
+            let runtime = app.world().non_send::<crate::MasonryRuntime>();
+            let root = runtime
+                .primary()
+                .expect("primary window runtime should exist")
+                .render_root
+                .get_layer_root(0);
+            let widget_id = find_widget_id_by_debug_text(root, &debug)
+                .expect("dropdown item button should expose an entity-tagged widget");
+            widget_center_for_widget_id(&app, widget_id)
+        };
+        let (hit_widget, hit_debug_text) = {
+            let runtime = app.world().non_send::<crate::MasonryRuntime>();
+            let root = runtime
+                .primary()
+                .expect("primary window runtime should exist")
+                .render_root
+                .get_layer_root(0);
+            root.find_widget_under_pointer((hit_position.x as f64, hit_position.y as f64).into())
+                .map(|widget| {
+                    (
+                        widget.short_type_name().to_string(),
+                        widget.get_debug_text().unwrap_or_default(),
+                    )
+                })
+                .unwrap_or_default()
+        };
+
+        assert_eq!(hit_widget.as_str(), "ActionButtonWithChildWidget");
+        assert_eq!(hit_debug_text, format!("entity={}", item_entity.to_bits()));
+    }
+
+    #[test]
+    fn handle_global_overlay_clicks_closes_overlay_on_outside_click_without_suppression() {
+        let mut app = App::new();
+        app.add_plugins(PicusPlugin);
+
+        let mut window = Window::default();
+        window.resolution.set(800.0, 600.0);
+        let window_entity = app.world_mut().spawn((window, PrimaryWindow)).id();
+
+        let root = app.world_mut().spawn((UiRoot, crate::UiFlexColumn)).id();
+        let combo = app
+            .world_mut()
+            .spawn((
+                crate::UiComboBox::new(vec![
+                    crate::UiComboOption::new("one", "One"),
+                    crate::UiComboOption::new("two", "Two"),
+                ]),
+                ChildOf(root),
+            ))
+            .id();
+
+        app.update();
+
+        let dropdown = open_combo_dropdown(&mut app, combo);
+
+        run_global_overlay_click(&mut app, window_entity, Vec2::new(790.0, 590.0));
+
+        assert!(app.world().get_entity(dropdown).is_err());
+
+        let mut routing = app
+            .world_mut()
+            .resource_mut::<crate::OverlayPointerRoutingState>();
+        assert!(!routing.take_suppressed_press(window_entity, MouseButton::Left));
+        assert!(!routing.take_suppressed_release(window_entity, MouseButton::Left));
+    }
+
+    #[test]
+    fn handle_global_overlay_clicks_outside_dialog_emits_same_optional_close_hook() {
+        let mut app = App::new();
+        app.add_plugins(PicusPlugin);
+
+        let mut window = Window::default();
+        window.resolution.set(800.0, 600.0);
+        let window_entity = app.world_mut().spawn((window, PrimaryWindow)).id();
+
+        let target = app.world_mut().spawn_empty().id();
+        let dialog = spawn_in_overlay_root(
+            app.world_mut(),
+            (
+                crate::UiDialog::new("title", "body"),
+                crate::UiDialogCloseAction::new(target, DialogCloseTestAction::Closed),
+            ),
+        );
+
+        app.update();
+        app.update();
+
+        run_global_overlay_click(&mut app, window_entity, Vec2::new(790.0, 590.0));
+
+        assert!(app.world().get_entity(dialog).is_err());
+
+        let events = app
+            .world_mut()
+            .resource_mut::<UiEventQueue>()
+            .drain_actions::<DialogCloseTestAction>();
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].entity, target);
+        assert_eq!(events[0].action, DialogCloseTestAction::Closed);
+    }
+
+    #[test]
+    fn handle_global_overlay_clicks_outside_dialog_without_hook_keeps_existing_behavior() {
+        let mut app = App::new();
+        app.add_plugins(PicusPlugin);
+
+        let mut window = Window::default();
+        window.resolution.set(800.0, 600.0);
+        let window_entity = app.world_mut().spawn((window, PrimaryWindow)).id();
+
+        let dialog =
+            spawn_in_overlay_root(app.world_mut(), (crate::UiDialog::new("title", "body"),));
+
+        app.update();
+        app.update();
+
+        run_global_overlay_click(&mut app, window_entity, Vec2::new(790.0, 590.0));
+
+        assert!(app.world().get_entity(dialog).is_err());
+        assert!(
+            app.world_mut()
+                .resource_mut::<UiEventQueue>()
+                .drain_actions::<DialogCloseTestAction>()
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn handle_global_overlay_clicks_works_without_primary_window_marker() {
+        let mut app = App::new();
+        app.add_plugins(PicusPlugin);
+
+        let mut window = Window::default();
+        window.resolution.set(800.0, 600.0);
+        let window_entity = app.world_mut().spawn((window,)).id();
+
+        let root = app.world_mut().spawn((UiRoot, crate::UiFlexColumn)).id();
+        let combo = app
+            .world_mut()
+            .spawn((
+                crate::UiComboBox::new(vec![
+                    crate::UiComboOption::new("one", "One"),
+                    crate::UiComboOption::new("two", "Two"),
+                ]),
+                ChildOf(root),
+            ))
+            .id();
+
+        app.update();
+
+        let dropdown = open_combo_dropdown(&mut app, combo);
+
+        run_global_overlay_click(&mut app, window_entity, Vec2::new(790.0, 590.0));
+
+        assert!(app.world().get_entity(dropdown).is_err());
+    }
+
+    #[test]
+    fn toast_in_overlay_root_is_isolated_from_dropdown_overlay_stack_dismissal() {
+        let mut app = App::new();
+        app.add_plugins(PicusPlugin)
+            .register_projector::<ToastProbe>(project_toast_probe);
+
+        let mut window = Window::default();
+        window.resolution.set(800.0, 600.0);
+        let window_entity = app.world_mut().spawn((window, PrimaryWindow)).id();
+
+        let root = app.world_mut().spawn((UiRoot, crate::UiFlexColumn)).id();
+        let combo = app
+            .world_mut()
+            .spawn((
+                crate::UiComboBox::new(vec![
+                    crate::UiComboOption::new("one", "One"),
+                    crate::UiComboOption::new("two", "Two"),
+                ]),
+                ChildOf(root),
+            ))
+            .id();
+
+        app.update();
+
+        let dropdown = open_combo_dropdown(&mut app, combo);
+        let toast = spawn_in_overlay_root(app.world_mut(), (ToastProbe,));
+
+        app.update();
+
+        assert!(app.world().get::<crate::OverlayState>(toast).is_none());
+        {
+            let stack = app.world().resource::<crate::OverlayStack>();
+            assert_eq!(stack.active_overlays, vec![dropdown]);
+        }
+
+        let toast_center = widget_center_for_entity(&app, toast);
+        run_global_overlay_click(&mut app, window_entity, toast_center);
+
+        assert!(app.world().get_entity(dropdown).is_err());
+        assert!(app.world().get_entity(toast).is_ok());
+        assert!(
+            app.world()
+                .resource::<crate::OverlayStack>()
+                .active_overlays
+                .is_empty()
+        );
+
+        let mut routing = app
+            .world_mut()
+            .resource_mut::<crate::OverlayPointerRoutingState>();
+        assert!(!routing.take_suppressed_press(window_entity, MouseButton::Left));
+        assert!(!routing.take_suppressed_release(window_entity, MouseButton::Left));
+    }
+
+    #[test]
+    fn handle_global_overlay_clicks_logs_when_window_missing() {
+        init_test_tracing();
+
+        let mut world = World::new();
+        world.insert_resource(ButtonInput::<MouseButton>::default());
+
+        {
+            let mut input = world.resource_mut::<ButtonInput<MouseButton>>();
+            input.press(MouseButton::Left);
+        }
+
+        let dialog = world
+            .spawn((
+                crate::UiDialog::new("title", "body"),
+                crate::OverlayState {
+                    is_modal: true,
+                    anchor: None,
+                },
+            ))
+            .id();
+
+        crate::handle_global_overlay_clicks(&mut world);
+
+        assert!(world.get_entity(dialog).is_ok());
     }
 }

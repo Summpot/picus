@@ -120,6 +120,9 @@ pub fn resolve_localized_text(world: &World, entity: Entity, fallback: &str) -> 
 mod tests {
     use super::*;
 
+    use crate::{AppPicusExt, PicusPlugin, SyncTextSource};
+    use bevy_app::App;
+
     #[test]
     fn app_i18n_translate_falls_back_to_key() {
         let i18n = AppI18n::default();
@@ -156,5 +159,97 @@ mod tests {
             i18n.get_font_stack(),
             vec!["Default Sans".to_string(), "sans-serif".to_string()]
         );
+    }
+
+    #[test]
+    fn app_i18n_resolves_showcase_hello_world_for_zh_cn() {
+        let mut app = App::new();
+        app.add_plugins(PicusPlugin).register_i18n_bundle(
+            "zh-CN",
+            SyncTextSource::String(include_str!("../../../assets/locales/zh-CN/main.ftl")),
+            vec!["Inter", "Noto Sans CJK SC", "sans-serif"],
+        );
+
+        assert_eq!(
+            app.world().resource::<AppI18n>().translate("hello_world"),
+            "你好，世界！"
+        );
+    }
+
+    #[test]
+    fn resolve_localized_text_prefers_translation_over_uilabel_fallback() {
+        let mut app = App::new();
+        app.add_plugins(PicusPlugin).register_i18n_bundle(
+            "zh-CN",
+            SyncTextSource::String(include_str!("../../../assets/locales/zh-CN/main.ftl")),
+            vec!["Inter", "Noto Sans CJK SC", "sans-serif"],
+        );
+
+        let entity = app
+            .world_mut()
+            .spawn((
+                crate::UiLabel::new("Hello world"),
+                crate::LocalizeText::new("hello_world"),
+            ))
+            .id();
+
+        let resolved = crate::resolve_localized_text(app.world(), entity, "Hello world");
+
+        assert_eq!(resolved, "你好，世界！");
+    }
+
+    #[test]
+    fn localized_text_updates_after_active_locale_change() {
+        let mut app = App::new();
+        app.add_plugins(PicusPlugin)
+            .insert_resource(AppI18n::new(
+                "en-US"
+                    .parse()
+                    .expect("en-US locale identifier should parse"),
+            ))
+            .register_i18n_bundle(
+                "en-US",
+                SyncTextSource::String(include_str!("../../../assets/locales/en-US/main.ftl")),
+                vec!["Inter", "sans-serif"],
+            )
+            .register_i18n_bundle(
+                "zh-CN",
+                SyncTextSource::String(include_str!("../../../assets/locales/zh-CN/main.ftl")),
+                vec!["Inter", "Noto Sans CJK SC", "sans-serif"],
+            );
+
+        let entity = app
+            .world_mut()
+            .spawn((
+                crate::UiLabel::new("Hello world"),
+                crate::LocalizeText::new("hello_world"),
+            ))
+            .id();
+
+        let resolved_en = crate::resolve_localized_text(app.world(), entity, "Hello world");
+
+        assert_eq!(resolved_en, "Hello, world!");
+
+        app.world_mut().resource_mut::<AppI18n>().set_active_locale(
+            "zh-CN"
+                .parse()
+                .expect("zh-CN locale identifier should parse"),
+        );
+
+        let resolved_zh = crate::resolve_localized_text(app.world(), entity, "Hello world");
+
+        assert_eq!(resolved_zh, "你好，世界！");
+    }
+
+    #[test]
+    fn resolve_localized_text_falls_back_when_cache_is_missing() {
+        let mut world = World::new();
+        let entity = world.spawn((crate::LocalizeText::new("hello_world"),)).id();
+
+        let with_fallback = crate::resolve_localized_text(&world, entity, "Fallback");
+        let without_fallback = crate::resolve_localized_text(&world, entity, "");
+
+        assert_eq!(with_fallback, "Fallback");
+        assert_eq!(without_fallback, "hello_world");
     }
 }
