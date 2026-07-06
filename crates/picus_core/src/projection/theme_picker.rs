@@ -22,7 +22,7 @@ use super::{
     core::{ProjectionCtx, UiView},
     dropdown::{estimate_dropdown_surface_width_px, estimate_dropdown_viewport_height_px},
     popover::popover_geometry,
-    utils::{VectorIcon, app_i18n_font_stack, translate_text, vector_icon},
+    utils::{VectorIcon, apply_app_i18n_font_stack_for_text, translate_text, vector_icon},
 };
 
 fn selected_theme_index(world: &bevy_ecs::world::World, picker: &UiThemePicker) -> Option<usize> {
@@ -69,9 +69,8 @@ pub(crate) fn project_theme_picker_menu(
         .options
         .iter()
         .any(|option| option.label_key.is_some())
-        && let Some(stack) = app_i18n_font_stack(ctx.world)
     {
-        item_style.font_family = Some(stack);
+        apply_app_i18n_font_stack_for_text(&mut item_style, ctx.world);
     }
 
     let translated_options = picker

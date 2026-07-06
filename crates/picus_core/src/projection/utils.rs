@@ -5,7 +5,7 @@ use crate::{
     ecs::LocalizeText,
     i18n::AppI18n,
     icons::{LUCIDE_FONT_FAMILY, PicusIcon},
-    styling::{ResolvedStyle, apply_label_style},
+    styling::{ResolvedStyle, apply_label_style, theme_default_font_family},
 };
 use bevy_ecs::prelude::*;
 use masonry_core::layout::{Dim, Length};
@@ -134,6 +134,18 @@ pub(crate) fn app_i18n_font_stack(world: &World) -> Option<Vec<String>> {
         .get_resource::<AppI18n>()
         .map(AppI18n::get_font_stack)
         .filter(|stack| !stack.is_empty())
+}
+
+pub(crate) fn apply_app_i18n_font_stack_for_text(style: &mut ResolvedStyle, world: &World) {
+    let Some(stack) = app_i18n_font_stack(world) else {
+        return;
+    };
+
+    if style.font_family.is_none()
+        || style.font_family.as_ref() == theme_default_font_family(world).as_ref()
+    {
+        style.font_family = Some(stack);
+    }
 }
 
 pub(crate) fn localized_font_stack(world: &World, entity: Entity) -> Option<Vec<String>> {

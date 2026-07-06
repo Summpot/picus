@@ -711,6 +711,9 @@ pub(crate) fn project_text(text_component: &UiText, ctx: ProjectionCtx<'_>) -> U
     style.text.size = resolved.text.size;
     style.text.weight = resolved.text.weight;
     style.text.line_height = resolved.text.line_height;
+    if let Some(font_family) = resolved.font_family {
+        style.font_family = Some(font_family);
+    }
 
     if let Some(stack) = localized_font_stack(ctx.world, ctx.entity) {
         style.font_family = Some(stack);

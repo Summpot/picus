@@ -1,8 +1,8 @@
 use super::{
     core::{ProjectionCtx, UiView},
     utils::{
-        VectorIcon, app_i18n_font_stack, estimate_text_width_px, estimate_wrapped_lines,
-        hide_style_without_collapsing_layout, translate_text, vector_icon,
+        VectorIcon, apply_app_i18n_font_stack_for_text, estimate_text_width_px,
+        estimate_wrapped_lines, hide_style_without_collapsing_layout, translate_text, vector_icon,
     },
 };
 use crate::xilem::style::Style as _;
@@ -97,12 +97,10 @@ pub(crate) fn project_dialog(dialog: &UiDialog, ctx: ProjectionCtx<'_>) -> UiVie
         &dialog.dismiss_label,
     );
 
-    if (dialog.title_key.is_some() || dialog.body_key.is_some() || dialog.dismiss_key.is_some())
-        && let Some(stack) = app_i18n_font_stack(ctx.world)
-    {
-        title_style.font_family = Some(stack.clone());
-        body_style.font_family = Some(stack.clone());
-        dismiss_style.font_family = Some(stack);
+    if dialog.title_key.is_some() || dialog.body_key.is_some() || dialog.dismiss_key.is_some() {
+        apply_app_i18n_font_stack_for_text(&mut title_style, ctx.world);
+        apply_app_i18n_font_stack_for_text(&mut body_style, ctx.world);
+        apply_app_i18n_font_stack_for_text(&mut dismiss_style, ctx.world);
     }
 
     let computed_position = ctx

@@ -324,8 +324,9 @@ Runtime styling invariants:
 - `InteractionState { hovered, pressed }` is stable component state.
 - `StyleDirty`, `ComputedStyle`, and target color state cache resolved style.
 - Descendant selector invalidation propagates from changed ancestors.
-- Entities with no matched rules and no inline style resolve to an empty
-  `ResolvedStyle`; projectors must not inject visible no-theme fallback colors,
+- Entities with no matched rules and no inline style resolve to an otherwise
+  empty `ResolvedStyle`, except for a configured stylesheet default
+  `font_family`; projectors must not inject visible no-theme fallback colors,
   borders, padding, or shadows.
 - Picus' Masonry runtime and Picus-owned text views make retained text defaults
   transparent so missing theme data does not fall through to backend static
@@ -333,6 +334,13 @@ Runtime styling invariants:
 - Active stylesheet RON may declare `default_variant: "<name>"`; loading it
   applies that registered variant only when no active variant has already been
   selected.
+- Stylesheet RON may declare a top-level `font_family` style value, usually
+  `(Var: "font-family-base")`, as the default font stack for resolved styles.
+  `FontFamily(...)` tokens and rule-level `font_family` fields accept either a
+  CSS `font-family` string or a string list; CSS platform aliases such as
+  `-apple-system` and `BlinkMacSystemFont` normalize to native `system-ui`.
+  Use the map-style `(Var: "...")` spelling for font-family token references so
+  one-item literal font stacks remain unambiguous.
 - `ComputedStyle.font_family` carries resolved font-family data for projectors.
 - Color transitions use `bevy_tween`; projectors read resolved plus animated style
   through `resolve_style`.

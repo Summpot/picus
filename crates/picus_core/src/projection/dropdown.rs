@@ -20,7 +20,10 @@ use crate::UiDropdownPlacement;
 use super::{
     core::{ProjectionCtx, UiView},
     popover::popover_geometry,
-    utils::{VectorIcon, app_i18n_font_stack, estimate_text_width_px, translate_text, vector_icon},
+    utils::{
+        VectorIcon, apply_app_i18n_font_stack_for_text, estimate_text_width_px, translate_text,
+        vector_icon,
+    },
 };
 
 pub(crate) const DROPDOWN_MAX_VIEWPORT_HEIGHT: f64 = 300.0;
@@ -57,11 +60,7 @@ fn apply_app_i18n_font_stack_if_missing(
     style: &mut crate::styling::ResolvedStyle,
     world: &bevy_ecs::world::World,
 ) {
-    if style.font_family.is_none()
-        && let Some(stack) = app_i18n_font_stack(world)
-    {
-        style.font_family = Some(stack);
-    }
+    apply_app_i18n_font_stack_for_text(style, world);
 }
 
 #[cfg(test)]
@@ -527,7 +526,7 @@ mod tests {
         estimate_dropdown_surface_width_px, estimate_dropdown_viewport_height_px,
         select_dropdown_origin,
     };
-    use crate::{AppI18n, UiComboOption, styling::ResolvedStyle};
+    use crate::{AppI18n, StyleSheet, StyleValue, UiComboOption, styling::ResolvedStyle};
 
     #[test]
     fn dropdown_width_estimation_respects_anchor_min_width() {
@@ -680,5 +679,35 @@ mod tests {
         apply_app_i18n_font_stack_if_missing(&mut style, &world);
 
         assert_eq!(style.font_family, Some(vec!["lucide".to_string()]));
+    }
+
+    #[test]
+    fn app_i18n_font_stack_replaces_theme_default_for_dropdown_text() {
+        let mut world = bevy_ecs::world::World::new();
+        let i18n = AppI18n {
+            default_font_stack: vec!["Noto Sans CJK SC".to_string(), "sans-serif".to_string()],
+            ..AppI18n::default()
+        };
+        let mut sheet = StyleSheet::default();
+        sheet.font_family = Some(StyleValue::value(vec![
+            "Segoe UI".to_string(),
+            "sans-serif".to_string(),
+        ]));
+        world.insert_resource(i18n);
+        world.insert_resource(sheet);
+
+        let mut style = ResolvedStyle {
+            font_family: Some(vec!["Segoe UI".to_string(), "sans-serif".to_string()]),
+            ..ResolvedStyle::default()
+        };
+        apply_app_i18n_font_stack_if_missing(&mut style, &world);
+
+        assert_eq!(
+            style.font_family,
+            Some(vec![
+                "Noto Sans CJK SC".to_string(),
+                "sans-serif".to_string()
+            ])
+        );
     }
 }

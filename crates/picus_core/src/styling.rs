@@ -496,6 +496,7 @@ impl StyleRule {
 #[derive(Resource, Asset, TypePath, Debug, Clone, Default)]
 pub struct StyleSheet {
     pub default_variant: Option<String>,
+    pub font_family: Option<StyleValue<Vec<String>>>,
     pub tokens: HashMap<String, TokenValue>,
     pub rules: Vec<StyleRule>,
 }
@@ -665,6 +666,9 @@ fn upsert_rules_by_selector(sheet: &mut StyleSheet, incoming: Vec<StyleRule>) {
 }
 
 fn merge_sheet_inplace(sheet: &mut StyleSheet, incoming: StyleSheet) {
+    if incoming.font_family.is_some() {
+        sheet.font_family = incoming.font_family;
+    }
     for (name, token) in incoming.tokens {
         sheet.tokens.insert(name, token);
     }
@@ -690,6 +694,9 @@ fn apply_base_stylesheet(world: &mut World, new_base: StyleSheet) {
 
     world.resource_mut::<BaseStyleSheet>().0 = new_base.clone();
 
+    let active_font_family = world
+        .get_resource::<ActiveStyleSheet>()
+        .and_then(|active| active.0.font_family.clone());
     let active_selectors = world
         .get_resource::<ActiveStyleSheetSelectors>()
         .map(|selectors| selectors.0.clone())
@@ -700,6 +707,7 @@ fn apply_base_stylesheet(world: &mut World, new_base: StyleSheet) {
         .unwrap_or_default();
 
     let mut runtime_sheet = world.resource_mut::<StyleSheet>();
+    runtime_sheet.font_family = active_font_family.or(new_base.font_family.clone());
     runtime_sheet.rules.retain(|rule| {
         !previous_base_selectors.contains(&rule.selector)
             || active_selectors.contains(&rule.selector)
@@ -932,11 +940,15 @@ pub fn merge_base_stylesheet_ron(world: &mut World, ron_text: &str) -> io::Resul
     world.init_resource::<StyleSheet>();
     world.init_resource::<ActiveStyleSheetTokenNames>();
 
+    let incoming_font_family = parsed.font_family;
     let incoming_tokens = parsed.tokens;
     let incoming_rules = parsed.rules;
 
     {
         let mut base_sheet = world.resource_mut::<BaseStyleSheet>();
+        if incoming_font_family.is_some() {
+            base_sheet.0.font_family = incoming_font_family.clone();
+        }
         for (name, token) in &incoming_tokens {
             base_sheet.0.tokens.insert(name.clone(), token.clone());
         }
@@ -958,7 +970,13 @@ pub fn merge_base_stylesheet_ron(world: &mut World, ron_text: &str) -> io::Resul
         .collect::<Vec<_>>();
 
     {
+        let active_font_family = world
+            .get_resource::<ActiveStyleSheet>()
+            .and_then(|active| active.0.font_family.clone());
         let mut runtime_sheet = world.resource_mut::<StyleSheet>();
+        if active_font_family.is_none() && incoming_font_family.is_some() {
+            runtime_sheet.font_family = incoming_font_family;
+        }
         for (name, token) in incoming_tokens {
             if !active_tokens.contains(name.as_str()) {
                 runtime_sheet.tokens.insert(name, token);
@@ -1032,6 +1050,9 @@ fn apply_active_stylesheet_impl(
         .get_resource::<ActiveStyleSheetTokenNames>()
         .map(|names| names.0.clone())
         .unwrap_or_default();
+    let base_font_family = world
+        .get_resource::<BaseStyleSheet>()
+        .and_then(|base| base.0.font_family.clone());
 
     let mut runtime_sheet = world.resource_mut::<StyleSheet>();
     runtime_sheet
@@ -1040,6 +1061,7 @@ fn apply_active_stylesheet_impl(
     runtime_sheet
         .tokens
         .retain(|name, _| !previous_asset_token_names.contains(name));
+    runtime_sheet.font_family = loaded_stylesheet.font_family.clone().or(base_font_family);
     runtime_sheet.rules.extend(loaded_stylesheet.rules);
     runtime_sheet.tokens.extend(loaded_stylesheet.tokens);
 
@@ -1743,6 +1765,18 @@ fn resolve_font_family_value(
     }
 }
 
+fn resolve_stylesheet_font_family(sheet: &StyleSheet) -> Option<Vec<String>> {
+    sheet.font_family
+        .as_ref()
+        .and_then(|value| resolve_font_family_value(&sheet.tokens, value, "font_family"))
+}
+
+pub(crate) fn theme_default_font_family(world: &World) -> Option<Vec<String>> {
+    world
+        .get_resource::<StyleSheet>()
+        .and_then(resolve_stylesheet_font_family)
+}
+
 fn resolve_box_shadow_value(
     tokens: &HashMap<String, TokenValue>,
     value: &StyleValue<BoxShadow>,
@@ -1940,9 +1974,12 @@ fn resolved_from_merged(
     world: &World,
     entity: Entity,
     merged: &StyleSetterValue,
-    tokens: &HashMap<String, TokenValue>,
+    sheet: Option<&StyleSheet>,
     include_current_override: bool,
 ) -> ResolvedStyle {
+    let empty_tokens = HashMap::new();
+    let tokens = sheet.map(|sheet| &sheet.tokens).unwrap_or(&empty_tokens);
+    let default_font_family = sheet.and_then(resolve_stylesheet_font_family);
     let merged = resolve_setter_values(merged, tokens);
     let mut colors = target_colors(world, entity, &merged.colors);
 
@@ -1967,7 +2004,7 @@ fn resolved_from_merged(
         layout,
         colors,
         text: to_resolved_text(&merged.text),
-        font_family: merged.font_family.clone(),
+        font_family: merged.font_family.clone().or(default_font_family),
         box_shadow: merged.box_shadow,
         transition: merged.transition,
     }
@@ -1979,13 +2016,13 @@ fn compute_resolved_style(world: &World, entity: Entity) -> Option<ResolvedStyle
         return None;
     }
 
-    let empty_tokens = HashMap::new();
-    let tokens = world
-        .get_resource::<StyleSheet>()
-        .map(|sheet| &sheet.tokens)
-        .unwrap_or(&empty_tokens);
-
-    Some(resolved_from_merged(world, entity, &merged, tokens, false))
+    Some(resolved_from_merged(
+        world,
+        entity,
+        &merged,
+        world.get_resource::<StyleSheet>(),
+        false,
+    ))
 }
 
 /// Resolve final style for an entity.
@@ -2023,7 +2060,10 @@ pub fn resolve_style(world: &World, entity: Entity) -> ResolvedStyle {
         return style;
     }
 
-    compute_resolved_style(world, entity).unwrap_or_default()
+    compute_resolved_style(world, entity).unwrap_or_else(|| ResolvedStyle {
+        font_family: theme_default_font_family(world),
+        ..ResolvedStyle::default()
+    })
 }
 
 /// Resolve style from class names only, without inline entity overrides.
@@ -2034,10 +2074,9 @@ pub fn resolve_style_for_classes<'a>(
 ) -> ResolvedStyle {
     let merged = merged_from_class_names(world, None, class_names);
     let empty_tokens = HashMap::new();
-    let tokens = world
-        .get_resource::<StyleSheet>()
-        .map(|sheet| &sheet.tokens)
-        .unwrap_or(&empty_tokens);
+    let sheet = world.get_resource::<StyleSheet>();
+    let tokens = sheet.map(|sheet| &sheet.tokens).unwrap_or(&empty_tokens);
+    let default_font_family = sheet.and_then(resolve_stylesheet_font_family);
     let merged = resolve_setter_values(&merged, tokens);
 
     ResolvedStyle {
@@ -2048,7 +2087,7 @@ pub fn resolve_style_for_classes<'a>(
             border: merged.colors.border,
         },
         text: to_resolved_text(&merged.text),
-        font_family: merged.font_family,
+        font_family: merged.font_family.or(default_font_family),
         box_shadow: merged.box_shadow,
         transition: merged.transition,
     }
@@ -2063,10 +2102,9 @@ pub fn resolve_style_for_classes_with_state<'a>(
 ) -> ResolvedStyle {
     let merged = merged_from_class_names_with_state(world, None, Some(pseudo_state), class_names);
     let empty_tokens = HashMap::new();
-    let tokens = world
-        .get_resource::<StyleSheet>()
-        .map(|sheet| &sheet.tokens)
-        .unwrap_or(&empty_tokens);
+    let sheet = world.get_resource::<StyleSheet>();
+    let tokens = sheet.map(|sheet| &sheet.tokens).unwrap_or(&empty_tokens);
+    let default_font_family = sheet.and_then(resolve_stylesheet_font_family);
     let merged = resolve_setter_values(&merged, tokens);
 
     ResolvedStyle {
@@ -2077,7 +2115,7 @@ pub fn resolve_style_for_classes_with_state<'a>(
             pseudo_state.pressed,
         ),
         text: to_resolved_text(&merged.text),
-        font_family: merged.font_family,
+        font_family: merged.font_family.or(default_font_family),
         box_shadow: merged.box_shadow,
         transition: merged.transition,
     }
@@ -2094,12 +2132,13 @@ pub fn resolve_style_for_entity_classes<'a>(
     class_names: impl IntoIterator<Item = &'a str>,
 ) -> ResolvedStyle {
     let merged = merged_from_class_names(world, Some(entity), class_names);
-    let empty_tokens = HashMap::new();
-    let tokens = world
-        .get_resource::<StyleSheet>()
-        .map(|sheet| &sheet.tokens)
-        .unwrap_or(&empty_tokens);
-    resolved_from_merged(world, entity, &merged, tokens, false)
+    resolved_from_merged(
+        world,
+        entity,
+        &merged,
+        world.get_resource::<StyleSheet>(),
+        false,
+    )
 }
 
 /// Map style-level justify-content to Masonry flex main-axis alignment.
@@ -2587,12 +2626,12 @@ fn lerp_f64(start: f64, end: f64, t: f32) -> f64 {
 }
 
 fn map_font_family_name(name: &str) -> FontFamilyName<'static> {
-    let trimmed = name.trim();
-    let lower = trimmed.to_ascii_lowercase();
+    let normalized = normalize_font_family_name(name).unwrap_or_else(|| name.trim().to_string());
+    let lower = normalized.to_ascii_lowercase();
     if let Some(generic) = GenericFamily::parse(lower.as_str()) {
         FontFamilyName::Generic(generic)
     } else {
-        FontFamilyName::Named(trimmed.to_string().into())
+        FontFamilyName::Named(normalized.into())
     }
 }
 
@@ -2604,8 +2643,13 @@ pub(crate) fn font_stack_from_style(style: &ResolvedStyle) -> Option<FontFamily<
 
     let mapped = families
         .iter()
+        .filter(|name| normalize_font_family_name(name).is_some())
         .map(|name| map_font_family_name(name))
         .collect::<Vec<_>>();
+
+    if mapped.is_empty() {
+        return None;
+    }
 
     if mapped.len() == 1 {
         Some(FontFamily::Single(mapped.into_iter().next().unwrap()))
@@ -2775,6 +2819,8 @@ struct StyleSheetDef {
     #[serde(default, deserialize_with = "deserialize_optional_string")]
     default_variant: Option<String>,
     #[serde(default)]
+    font_family: OptionalStyleValueDef<FontFamilyStackDef>,
+    #[serde(default)]
     tokens: HashMap<String, TokenDef>,
     #[serde(default)]
     rules: Vec<StyleRuleDef>,
@@ -2783,6 +2829,8 @@ struct StyleSheetDef {
 #[derive(Debug, Deserialize)]
 struct StyleSheetVariantsDef {
     default_variant: String,
+    #[serde(default)]
+    font_family: OptionalStyleValueDef<FontFamilyStackDef>,
     #[serde(default)]
     tokens: HashMap<String, TokenDef>,
     #[serde(default)]
@@ -2903,7 +2951,7 @@ struct StyleSetterDef {
     #[serde(default)]
     text: TextStyleDef,
     #[serde(default)]
-    font_family: OptionalStyleValueDef<Vec<String>>,
+    font_family: OptionalStyleValueDef<FontFamilyStackDef>,
     #[serde(default)]
     box_shadow: OptionalStyleValueDef<BoxShadowDef>,
     #[serde(default)]
@@ -3026,11 +3074,140 @@ enum ColorDef {
     Hex(String),
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct FontFamilyStackDef(Vec<String>);
+
+impl FontFamilyStackDef {
+    fn into_vec(self) -> Vec<String> {
+        self.0
+    }
+}
+
+fn normalize_font_family_name(name: &str) -> Option<String> {
+    let trimmed = name.trim();
+    let unquoted = trimmed
+        .strip_prefix('\'')
+        .and_then(|value| value.strip_suffix('\''))
+        .or_else(|| {
+            trimmed
+                .strip_prefix('"')
+                .and_then(|value| value.strip_suffix('"'))
+        })
+        .unwrap_or(trimmed)
+        .trim();
+
+    if unquoted.is_empty() {
+        return None;
+    }
+
+    let lower = unquoted.to_ascii_lowercase();
+    let normalized = match lower.as_str() {
+        "-apple-system" | "blinkmacsystemfont" => "system-ui",
+        _ => unquoted,
+    };
+
+    Some(normalized.to_string())
+}
+
+fn push_unique_font_family(stack: &mut Vec<String>, name: String) {
+    if !stack
+        .iter()
+        .any(|existing| existing.eq_ignore_ascii_case(name.as_str()))
+    {
+        stack.push(name);
+    }
+}
+
+fn parsed_font_family_name_to_string(name: FontFamilyName<'_>) -> Option<String> {
+    match name {
+        FontFamilyName::Named(name) => normalize_font_family_name(name.as_ref()),
+        FontFamilyName::Generic(generic) => Some(generic.to_string()),
+    }
+}
+
+fn parse_css_font_family_stack(source: &str) -> Result<Vec<String>, String> {
+    let mut stack = Vec::new();
+
+    for family in FontFamilyName::parse_css_list(source) {
+        let family = family.map_err(|error| error.to_string())?;
+        if let Some(name) = parsed_font_family_name_to_string(family) {
+            push_unique_font_family(&mut stack, name);
+        }
+    }
+
+    if stack.is_empty() {
+        Err("font family stack must contain at least one family".to_string())
+    } else {
+        Ok(stack)
+    }
+}
+
+impl<'de> Deserialize<'de> for FontFamilyStackDef {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct FontFamilyStackVisitor;
+
+        impl<'de> Visitor<'de> for FontFamilyStackVisitor {
+            type Value = FontFamilyStackDef;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str(
+                    "a CSS font-family string or a sequence of font family names",
+                )
+            }
+
+            fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                parse_css_font_family_stack(value)
+                    .map(FontFamilyStackDef)
+                    .map_err(de::Error::custom)
+            }
+
+            fn visit_string<E>(self, value: String) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                self.visit_str(value.as_str())
+            }
+
+            fn visit_seq<A>(self, seq: A) -> Result<Self::Value, A::Error>
+            where
+                A: serde::de::SeqAccess<'de>,
+            {
+                let values =
+                    Vec::<String>::deserialize(SeqAccessDeserializer::new(seq))
+                        .map_err(de::Error::custom)?;
+                let mut stack = Vec::new();
+
+                for value in values {
+                    if let Some(name) = normalize_font_family_name(value.as_str()) {
+                        push_unique_font_family(&mut stack, name);
+                    }
+                }
+
+                if stack.is_empty() {
+                    Err(de::Error::custom(
+                        "font family stack must contain at least one family",
+                    ))
+                } else {
+                    Ok(FontFamilyStackDef(stack))
+                }
+            }
+        }
+
+        deserializer.deserialize_any(FontFamilyStackVisitor)
+    }
+}
+
 #[derive(Debug, Clone, Deserialize)]
 enum TokenDef {
     Color(ColorDef),
     Float(f64),
-    FontFamily(Vec<String>),
+    FontFamily(FontFamilyStackDef),
     BoxShadow(BoxShadowDef),
     Transition(StyleTransition),
     /// Cubic bezier curve control points.
@@ -3042,7 +3219,7 @@ impl TokenDef {
         match self {
             Self::Color(color) => Ok(TokenValue::Color(color.into_color()?)),
             Self::Float(value) => Ok(TokenValue::Float(value)),
-            Self::FontFamily(value) => Ok(TokenValue::FontFamily(value)),
+            Self::FontFamily(value) => Ok(TokenValue::FontFamily(value.into_vec())),
             Self::BoxShadow(value) => Ok(TokenValue::BoxShadow(value.into_box_shadow()?)),
             Self::Transition(value) => Ok(TokenValue::Transition(value)),
             Self::Curve(x1, y1, x2, y2) => Ok(TokenValue::Curve(x1, y1, x2, y2)),
@@ -3433,7 +3610,9 @@ impl StyleSetterDef {
             layout: self.layout.into_layout_values()?,
             colors: self.colors.into_color_style_values()?,
             text: self.text.into_text_values()?,
-            font_family: into_style_value(self.font_family.into_option(), Ok)?,
+            font_family: into_style_value(self.font_family.into_option(), |value| {
+                Ok(value.into_vec())
+            })?,
             box_shadow: into_style_value(
                 self.box_shadow.into_option(),
                 BoxShadowDef::into_box_shadow,
@@ -3517,6 +3696,9 @@ fn parse_hex_color(hex: &str) -> io::Result<Color> {
 fn stylesheet_from_def(parsed: StyleSheetDef) -> io::Result<StyleSheet> {
     let mut sheet = StyleSheet {
         default_variant: parsed.default_variant,
+        font_family: into_style_value(parsed.font_family.into_option(), |value| {
+            Ok(value.into_vec())
+        })?,
         ..Default::default()
     };
     for (name, token) in parsed.tokens {
@@ -3562,6 +3744,7 @@ fn stylesheet_variants_from_ron_bytes(bytes: &[u8]) -> io::Result<RegisteredStyl
     let default_variant = parsed.default_variant;
     let base_sheet = stylesheet_from_def(StyleSheetDef {
         default_variant: None,
+        font_family: parsed.font_family,
         tokens: parsed.tokens,
         rules: parsed.rules,
     })?;

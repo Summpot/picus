@@ -2,6 +2,7 @@
 
 (
   default_variant: "dark",
+  font_family: (Var: "font-family-base"),
   tokens: {
     "transparent": Color(Rgba(0.0, 0.0, 0.0, 0.0)),
     // Border radius matching Fluent v9 borderRadii
@@ -68,10 +69,11 @@
     "line-height-title1": Float(1.25),
     "line-height-large-title": Float(1.3),
     "line-height-display": Float(1.35),
-    // Font families matching Fluent v9 fontFamily tokens
-    "font-family-base": FontFamily(["'Segoe UI'", "'Segoe UI Web (West European)'", "-apple-system", "BlinkMacSystemFont", "Roboto", "'Helvetica Neue'", "sans-serif"]),
-    "font-family-monospace": FontFamily(["Consolas", "'Courier New'", "Courier", "monospace"]),
-    "font-family-numeric": FontFamily(["Bahnschrift", "'Segoe UI'", "'Segoe UI Web (West European)'", "-apple-system", "BlinkMacSystemFont", "Roboto", "'Helvetica Neue'", "sans-serif"]),
+    // Font families matching Fluent v9 fontFamily tokens.
+    // CSS platform aliases are normalized by the Picus theme loader for native text shaping.
+    "font-family-base": FontFamily("'Segoe UI', 'Segoe UI Web (West European)', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', sans-serif"),
+    "font-family-monospace": FontFamily("Consolas, 'Courier New', Courier, monospace"),
+    "font-family-numeric": FontFamily("Bahnschrift, 'Segoe UI', 'Segoe UI Web (West European)', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', sans-serif"),
     // Duration matching Fluent v9 durations
     "duration-ultra-fast": Float(0.05),
     "duration-faster": Float(0.10),

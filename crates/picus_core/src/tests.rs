@@ -2484,6 +2484,132 @@ fn resolve_style_for_classes_applies_font_family() {
 }
 
 #[test]
+fn stylesheet_font_family_accepts_css_stack_and_applies_as_default() {
+    let sheet = crate::parse_stylesheet_ron(
+        r#"(
+            font_family: (Var: "font-family-base"),
+            tokens: {
+                "font-family-base": FontFamily("'Segoe UI', 'Segoe UI Web (West European)', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', sans-serif"),
+            },
+        )"#,
+    )
+    .expect("stylesheet font stack should parse");
+
+    assert_eq!(
+        sheet.tokens.get("font-family-base"),
+        Some(&crate::TokenValue::FontFamily(vec![
+            "Segoe UI".to_string(),
+            "Segoe UI Web (West European)".to_string(),
+            "system-ui".to_string(),
+            "Roboto".to_string(),
+            "Helvetica Neue".to_string(),
+            "sans-serif".to_string(),
+        ]))
+    );
+
+    let mut world = World::new();
+    let entity = world.spawn_empty().id();
+    world.insert_resource(sheet);
+
+    assert_eq!(
+        resolve_style(&world, entity).font_family,
+        Some(vec![
+            "Segoe UI".to_string(),
+            "Segoe UI Web (West European)".to_string(),
+            "system-ui".to_string(),
+            "Roboto".to_string(),
+            "Helvetica Neue".to_string(),
+            "sans-serif".to_string(),
+        ])
+    );
+}
+
+#[test]
+fn stylesheet_rule_font_family_accepts_css_stack_string() {
+    let sheet = crate::parse_stylesheet_ron(
+        r#"(
+            rules: [
+                (
+                    selector: Class("code"),
+                    setter: (
+                        font_family: "Consolas, 'Courier New', Courier, monospace",
+                    ),
+                ),
+            ],
+        )"#,
+    )
+    .expect("rule font stack should parse");
+
+    let mut world = World::new();
+    world.insert_resource(sheet);
+
+    assert_eq!(
+        resolve_style_for_classes(&world, ["code"]).font_family,
+        Some(vec![
+            "Consolas".to_string(),
+            "Courier New".to_string(),
+            "Courier".to_string(),
+            "monospace".to_string(),
+        ])
+    );
+}
+
+#[test]
+fn stylesheet_rule_font_family_accepts_token_reference() {
+    let sheet = crate::parse_stylesheet_ron(
+        r#"(
+            tokens: {
+                "font-family-code": FontFamily("Consolas, monospace"),
+            },
+            rules: [
+                (
+                    selector: Class("code"),
+                    setter: (
+                        font_family: (Var: "font-family-code"),
+                    ),
+                ),
+            ],
+        )"#,
+    )
+    .expect("rule font stack token should parse");
+
+    let mut world = World::new();
+    world.insert_resource(sheet);
+
+    assert_eq!(
+        resolve_style_for_classes(&world, ["code"]).font_family,
+        Some(vec!["Consolas".to_string(), "monospace".to_string()])
+    );
+}
+
+#[test]
+fn fluent_theme_resolves_base_font_family_for_type_ramp() {
+    let variants = crate::parse_stylesheet_variants_ron(crate::BUILTIN_FLUENT_THEME_RON)
+        .expect("embedded Fluent theme should parse");
+    let dark = variants
+        .variants
+        .get("dark")
+        .cloned()
+        .expect("dark Fluent variant should exist");
+
+    let mut world = World::new();
+    world.insert_resource(dark);
+
+    let resolved = resolve_style_for_classes(&world, ["type.body1"]);
+    assert_eq!(
+        resolved.font_family,
+        Some(vec![
+            "Segoe UI".to_string(),
+            "Segoe UI Web (West European)".to_string(),
+            "system-ui".to_string(),
+            "Roboto".to_string(),
+            "Helvetica Neue".to_string(),
+            "sans-serif".to_string(),
+        ])
+    );
+}
+
+#[test]
 fn computed_style_lens_keeps_font_family_until_completion() {
     let mut world = World::new();
 
