@@ -149,8 +149,8 @@ impl Plugin for PicusPlugin {
                 (
                     track_window_size,
                     collect_bevy_font_assets,
-                    sync_fonts_to_xilem,
                     initialize_masonry_runtime_from_windows,
+                    sync_fonts_to_xilem,
                     sync_masonry_window_lifecycle,
                     track_drag_state,
                     dispatch_drag_events,

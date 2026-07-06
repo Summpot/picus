@@ -1,6 +1,6 @@
 use bevy_ecs::prelude::*;
 
-use crate::{ProjectionCtx, UiView, components::UiComponentTemplate, icons::PicusIcon};
+use crate::{ProjectionCtx, UiView, components::UiComponentTemplate, icons::IconGlyph};
 
 /// Button appearance matching Fluent UI v9 Button component.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -58,7 +58,7 @@ pub struct UiButton {
     pub appearance: ButtonAppearance,
     pub size: ButtonSize,
     pub shape: ButtonShape,
-    pub icon: Option<PicusIcon>,
+    pub icon: Option<IconGlyph>,
     pub icon_position: ButtonIconPosition,
     /// When true the button is non-interactive: it does not emit click actions
     /// and is rendered with the `button.disabled` style class.
@@ -98,8 +98,8 @@ impl UiButton {
     }
 
     #[must_use]
-    pub fn with_icon(mut self, icon: PicusIcon) -> Self {
-        self.icon = Some(icon);
+    pub fn with_icon(mut self, icon: impl Into<IconGlyph>) -> Self {
+        self.icon = Some(icon.into());
         self
     }
 

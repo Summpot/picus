@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     fmt::Debug,
     sync::{Arc, mpsc},
 };
@@ -56,6 +56,7 @@ use xilem_core::{
 
 use crate::{
     events::{UiEventQueue, install_global_ui_event_queue},
+    fonts::{XilemFontBridge, font_bytes_fingerprint},
     overlay::OverlayPointerRoutingState,
     projection::{UiAnyView, UiView},
     synthesize::SynthesizedUiViews,
@@ -132,6 +133,7 @@ pub struct WindowRuntime {
     viewport_height: f64,
     window_surface: Option<ExternalWindowSurface>,
     renderer: Renderer,
+    registered_font_fingerprints: HashSet<u64>,
     #[cfg(test)]
     pointer_trace: Vec<PointerTraceEvent>,
 }
@@ -224,6 +226,7 @@ impl WindowRuntime {
             viewport_height: initial_viewport.1,
             window_surface: None,
             renderer: Renderer::new(),
+            registered_font_fingerprints: HashSet::new(),
             #[cfg(test)]
             pointer_trace: Vec::new(),
         }
@@ -801,9 +804,19 @@ impl WindowRuntime {
     }
 
     /// Register a batch of font bytes into this window's retained font database.
-    pub fn register_fonts(&mut self, font_bytes: Vec<u8>) {
+    pub fn register_fonts(&mut self, font_bytes: Vec<u8>) -> bool {
+        if font_bytes.is_empty() {
+            return false;
+        }
+
+        let fingerprint = font_bytes_fingerprint(&font_bytes);
+        if !self.registered_font_fingerprints.insert(fingerprint) {
+            return false;
+        }
+
         self.render_root
             .register_fonts(masonry_core::peniko::Blob::new(Arc::new(font_bytes)));
+        true
     }
 }
 
@@ -1390,6 +1403,7 @@ pub fn inject_bevy_input_into_masonry(
 /// windows are auto-attached as secondary windows.
 pub fn initialize_masonry_runtime_from_windows(
     runtime: Option<NonSendMut<MasonryRuntime>>,
+    bridge: Option<Res<XilemFontBridge>>,
     added_window_query: Query<(Entity, Option<&PrimaryWindow>), Added<Window>>,
     window_query: Query<(Entity, Option<&PrimaryWindow>), With<Window>>,
 ) {
@@ -1427,6 +1441,11 @@ pub fn initialize_masonry_runtime_from_windows(
         });
 
         let window_runtime = runtime.ensure_window(window_entity, is_primary);
+        if let Some(bridge) = bridge.as_deref() {
+            for font_bytes in bridge.registered_font_bytes() {
+                window_runtime.register_fonts(font_bytes.to_vec());
+            }
+        }
 
         if let Some(metrics) = metrics {
             window_runtime.attach_to_window(metrics);
@@ -1647,6 +1666,21 @@ mod tests {
         // `primary_window` field is cleared, but `primary_window()` falls back
         // to the first remaining window when no explicit primary is set.
         assert_eq!(runtime.primary_window(), Some(b));
+    }
+
+    #[test]
+    fn window_runtime_deduplicates_font_registration() {
+        let mut runtime = MasonryRuntime {
+            windows: HashMap::new(),
+            primary_window: None,
+        };
+        let window = Entity::from_bits(7);
+
+        let window_runtime = runtime.ensure_window(window, true);
+
+        assert!(window_runtime.register_fonts(b"font-data".to_vec()));
+        assert!(!window_runtime.register_fonts(b"font-data".to_vec()));
+        assert_eq!(window_runtime.registered_font_fingerprints.len(), 1);
     }
 
     #[test]

@@ -32,7 +32,6 @@ use crate::{
         UiScrollView, UiSearch, UiSortDirection, UiSpinner, UiSplitPane, UiTabBar, UiTable,
         UiTimePicker, UiTimePickerPanel, UiToast, UiTooltip, UiTreeNode,
     },
-    icons::LUCIDE_FONT_FAMILY,
     overlay::OverlayUiAction,
     retained_bridge::{
         button_view, button_with_child_view, drag_thumb_view, opaque_hitbox_for_entity,
@@ -2030,13 +2029,13 @@ pub(crate) fn project_navigation_item(item: &UiNavigationItem, ctx: ProjectionCt
         });
     }
 
-    let icon_view: Option<UiView> = nav_item.icon.map(|glyph| -> UiView {
+    let icon_view: Option<UiView> = nav_item.icon.map(|icon| -> UiView {
         let mut icon_style = ResolvedStyle::default();
         icon_style.colors.text = style.colors.text;
         icon_style.text.size = style.text.size;
-        icon_style.font_family = Some(vec![LUCIDE_FONT_FAMILY.to_string()]);
+        icon_style.font_family = Some(icon.font_family_vec());
         Arc::new(
-            sized_box(apply_label_style(label(glyph.to_string()), &icon_style))
+            sized_box(apply_label_style(label(icon.glyph().to_string()), &icon_style))
                 .width(Dim::Fixed(Length::px(20.0)))
                 .height(Dim::Fixed(Length::px(20.0))),
         ) as UiView
@@ -2333,7 +2332,7 @@ pub(crate) fn project_context_menu(menu: &UiContextMenu, ctx: ProjectionCtx<'_>)
 
         let label_view = apply_label_style(label(item.label.clone()), &item_style);
 
-        let row_content: UiView = if let Some(glyph) = item.icon_glyph {
+        let row_content: UiView = if let Some(icon) = item.icon_glyph {
             let mut icon_style = ResolvedStyle::default();
             icon_style.colors.text = if item.enabled {
                 item_style.colors.text
@@ -2341,8 +2340,8 @@ pub(crate) fn project_context_menu(menu: &UiContextMenu, ctx: ProjectionCtx<'_>)
                 disabled_style.colors.text
             };
             icon_style.text.size = item_style.text.size * 0.9;
-            icon_style.font_family = Some(vec![LUCIDE_FONT_FAMILY.to_string()]);
-            let icon_view = apply_label_style(label(glyph.to_string()), &icon_style);
+            icon_style.font_family = Some(icon.font_family_vec());
+            let icon_view = apply_label_style(label(icon.glyph().to_string()), &icon_style);
             Arc::new(
                 flex_row(vec![icon_view.into_any_flex(), label_view.into_any_flex()])
                     .gap(Length::px(6.0)),

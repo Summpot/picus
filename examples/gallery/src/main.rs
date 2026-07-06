@@ -85,10 +85,10 @@ fn setup_gallery(mut commands: Commands) {
         })
         .id();
 
-    // Build navigation items from all gallery pages (with Lucide icon glyphs)
+    // Build navigation items from all gallery pages (with Fluent icon glyphs).
     let nav_items: Vec<NavigationViewItem> = GalleryPage::ALL
         .iter()
-        .map(|page| NavigationViewItem::new(page.label()).with_icon(page.icon().glyph()))
+        .map(|page| NavigationViewItem::new(page.label()).with_icon(page.icon()))
         .collect();
 
     let nav_view = commands

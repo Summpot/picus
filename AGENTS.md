@@ -151,7 +151,8 @@ Runtime invariants:
   paint/animation work or has not produced its first frame, renders through
   `picus_surface`, blits to the swapchain, presents, and forwards Masonry redraw
   requests through Bevy `RequestRedraw`.
-- Font registration broadcasts to all attached window runtimes.
+- Font registration broadcasts to all attached window runtimes, is retained for
+  future windows, and is replayed into each new `WindowRuntime` when it attaches.
 
 ## 4. Input, IME, and Hit Testing
 
@@ -199,6 +200,12 @@ placement, `UiLabel`, `UiButton`, `UiCanvas`/`UiCanvasCommand` plus
 text/image cell templates, `UiNavigationView` with ECS-backed `UiNavigationItem`
 sidebar template entities, `UiNumericUpDown`, `UiMarkdown`, `UiStreamingMarkdown`,
 and `LocalizeText`.
+
+Icon-capable public authoring values store `IconGlyph` (glyph plus font fallback
+stack) instead of a bare `char`. `PicusIcon` remains the bundled Lucide-backed
+compatibility set; `FluentIcon` is the Fluent Design / WinUI symbol set. Use
+`Into<IconGlyph>` builder parameters for public icon APIs so both sets remain
+usable.
 
 Priority built-ins (`UiButton`, `UiBadge`, `UiProgressBar`, `UiSwitch`, and
 `UiCheckbox`) own their Picus-composed visual structure instead of exposing raw
@@ -420,12 +427,18 @@ paragraphs lay out consecutive same-style runs in a wrapping flex row.
 
 ## 10. Assets, Fonts, Icons, and I18n
 
-`picus_core::icons` uses bundled Lucide icon/font data. Icon text styling uses the
-upstream Lucide family name, `"lucide"`.
+`picus_core::icons` provides `IconGlyph`, bundled Lucide `PicusIcon` glyphs, and
+Fluent Design / WinUI `FluentIcon` glyphs. Lucide glyphs use the bundled
+`lucide` font bytes. Fluent glyphs use the font fallback stack
+`Segoe Fluent Icons`, `Segoe MDL2 Assets`, `FabricMDL2Icons`, then
+`Segoe UI Symbol`; examples that want Fluent Design icons should pass
+`FluentIcon`/`IconGlyph` instead of styling a raw label character.
 
 `XilemFontBridge` is the legacy-named font bridge that registers Bevy font assets
 with Masonry Core. Fonts can come from the asset server, direct bytes, or direct
-paths through `AppPicusExt`.
+paths through `AppPicusExt`. The bridge deduplicates registered bytes, keeps a
+registered-font history for future windows, and drains pending font bytes only
+after an attached runtime exists.
 
 `AppI18n` is the synchronous i18n registry. `LocalizeText` resolves through the
 active bundle and falls back to the key or explicit fallback text.

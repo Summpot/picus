@@ -8,7 +8,7 @@
 //! are organized under category headings.
 
 use bevy_ecs::prelude::*;
-use picus::{PicusIcon, ToastKind};
+use picus::{FluentIcon, ToastKind};
 
 /// A sidebar category heading that groups related pages.
 #[allow(dead_code)]
@@ -122,7 +122,7 @@ impl GalleryPage {
             Self::Media => "Images, canvas drawings, and media placeholders for visual content.",
             Self::Shapes => "Canvas-drawn primitives, color swatches, and shape samples.",
             Self::Icons => {
-                "Icon glyphs from the bundled Lucide icon font, displayed in a gallery grid."
+                "Fluent Design icon glyphs with Segoe Fluent Icons font fallback, displayed in a gallery grid."
             }
             Self::Transitions => {
                 "Theme transitions, spinners, progress bars, and motion indicators."
@@ -159,24 +159,24 @@ impl GalleryPage {
     }
 
     /// Icon glyph for this page (used in the sidebar nav).
-    pub const fn icon(self) -> PicusIcon {
+    pub const fn icon(self) -> FluentIcon {
         match self {
-            Self::Buttons => PicusIcon::Pointer,
-            Self::Inputs => PicusIcon::TextCursorInput,
-            Self::Selection => PicusIcon::CheckSquare,
-            Self::WindowMenu => PicusIcon::Menu,
-            Self::MessageBox => PicusIcon::MessageSquare,
-            Self::Lists => PicusIcon::List,
-            Self::GridView => PicusIcon::Table,
-            Self::Panels => PicusIcon::LayoutPanelLeft,
-            Self::Layout => PicusIcon::LayoutGrid,
-            Self::Typography => PicusIcon::Type,
-            Self::Media => PicusIcon::Image,
-            Self::Shapes => PicusIcon::Square,
-            Self::Icons => PicusIcon::Images,
-            Self::Transitions => PicusIcon::Sparkles,
-            Self::Overlay => PicusIcon::Layers,
-            Self::I18n => PicusIcon::Globe,
+            Self::Buttons => FluentIcon::TouchPointer,
+            Self::Inputs => FluentIcon::Character,
+            Self::Selection => FluentIcon::Checkbox,
+            Self::WindowMenu => FluentIcon::GlobalNavigationButton,
+            Self::MessageBox => FluentIcon::Message,
+            Self::Lists => FluentIcon::List,
+            Self::GridView => FluentIcon::ViewAll,
+            Self::Panels => FluentIcon::DockLeft,
+            Self::Layout => FluentIcon::AllApps,
+            Self::Typography => FluentIcon::Font,
+            Self::Media => FluentIcon::Pictures,
+            Self::Shapes => FluentIcon::Placeholder,
+            Self::Icons => FluentIcon::AllApps,
+            Self::Transitions => FluentIcon::Sync,
+            Self::Overlay => FluentIcon::Map,
+            Self::I18n => FluentIcon::Globe,
         }
     }
 }

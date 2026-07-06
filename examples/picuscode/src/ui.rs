@@ -9,7 +9,7 @@ use picus::{
     bevy_ecs::hierarchy::Children,
     button_with_child, emit_ui_action,
     icon::icon,
-    icons::PicusIcon,
+    icons::{FluentIcon, IconGlyph},
     masonry_core::{
         layout::{Dim, Length},
         properties::Dimensions,
@@ -84,14 +84,15 @@ impl UiComponentTemplate for ChatTitleBarView {
         .cross_axis_alignment(CrossAxisAlignment::Center)
         .gap(Length::px(6.0));
 
-        let new_btn = primary_button(&ctx, PicusCodeAction::NewThread, "New", PicusIcon::Plus);
+        let new_btn = primary_button(&ctx, PicusCodeAction::NewThread, "New", FluentIcon::Add);
         let settings_btn = toolbar_button(
             &ctx,
             PicusCodeAction::OpenSettings,
             "Settings",
-            PicusIcon::Settings,
+            FluentIcon::Settings,
         );
-        let about_btn = toolbar_button(&ctx, PicusCodeAction::OpenAbout, "About", PicusIcon::Info);
+        let about_btn =
+            toolbar_button(&ctx, PicusCodeAction::OpenAbout, "About", FluentIcon::Info);
         Arc::new(apply_widget_style(
             flex_row(vec![
                 sized_box(brand).flex(1.0).into_any_flex(),
@@ -148,7 +149,7 @@ impl UiComponentTemplate for SidebarColumnView {
                 &ctx,
                 PicusCodeAction::NewThread,
                 "New session",
-                PicusIcon::Edit,
+                FluentIcon::Edit,
             ))
             .width(Length::px(220.0))
             .into_any_flex(),
@@ -256,10 +257,10 @@ impl UiComponentTemplate for ComposerView {
                 &ctx,
                 PicusCodeAction::CancelTurn,
                 "Stop",
-                PicusIcon::StopCircle,
+                FluentIcon::Stop,
             )
         } else {
-            primary_button(&ctx, PicusCodeAction::Send, "Send", PicusIcon::Send)
+            primary_button(&ctx, PicusCodeAction::Send, "Send", FluentIcon::Send)
         };
         let selected = state.and_then(|s| s.active_thread.as_deref()).is_some();
         let caret = if streaming { "…" } else { "›" };
@@ -293,7 +294,7 @@ impl UiComponentTemplate for StatusLineView {
                 vec![
                     status_metric(
                         &ctx,
-                        PicusIcon::CircleDot,
+                        FluentIcon::Accept,
                         "state",
                         truncate_preview(&s.status, 42),
                         if s.streaming {
@@ -304,28 +305,28 @@ impl UiComponentTemplate for StatusLineView {
                     ),
                     status_metric(
                         &ctx,
-                        PicusIcon::MessageSquare,
+                        FluentIcon::Message,
                         "threads",
                         s.threads.len().to_string(),
                         ChipTone::Neutral,
                     ),
                     status_metric(
                         &ctx,
-                        PicusIcon::List,
+                        FluentIcon::List,
                         "messages",
                         s.messages.len().to_string(),
                         ChipTone::Neutral,
                     ),
                     status_metric(
                         &ctx,
-                        PicusIcon::Globe,
+                        FluentIcon::Globe,
                         "provider",
                         config_summary_value(s, "provider", "unset"),
                         ChipTone::Accent,
                     ),
                     status_metric(
                         &ctx,
-                        PicusIcon::Bot,
+                        FluentIcon::Contact,
                         "model",
                         config_summary_value(s, "model", "unset"),
                         ChipTone::Neutral,
@@ -335,7 +336,7 @@ impl UiComponentTemplate for StatusLineView {
             .unwrap_or_else(|| {
                 vec![status_metric(
                     &ctx,
-                    PicusIcon::Loader,
+                    FluentIcon::Sync,
                     "state",
                     "Bridge starting",
                     ChipTone::Neutral,
@@ -358,7 +359,8 @@ impl UiComponentTemplate for StatusLineView {
 impl UiComponentTemplate for AboutRootView {
     fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
         let style = resolve_style(ctx.world, ctx.entity);
-        let close_btn = toolbar_button(&ctx, PicusCodeAction::CloseAbout, "Close", PicusIcon::X);
+        let close_btn =
+            toolbar_button(&ctx, PicusCodeAction::CloseAbout, "Close", FluentIcon::Cancel);
         let children = ctx
             .children
             .into_iter()
@@ -379,18 +381,23 @@ impl UiComponentTemplate for AboutRootView {
 impl UiComponentTemplate for SettingsRootView {
     fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
         let style = resolve_style(ctx.world, ctx.entity);
-        let close_btn = toolbar_button(&ctx, PicusCodeAction::CloseSettings, "Close", PicusIcon::X);
+        let close_btn = toolbar_button(
+            &ctx,
+            PicusCodeAction::CloseSettings,
+            "Close",
+            FluentIcon::Cancel,
+        );
         let save_btn = toolbar_button(
             &ctx,
             PicusCodeAction::ApplyConfigEdits,
             "Save",
-            PicusIcon::Check,
+            FluentIcon::Accept,
         );
         let reload_btn = toolbar_button(
             &ctx,
             PicusCodeAction::ReloadConfig,
             "Reload",
-            PicusIcon::RefreshCw,
+            FluentIcon::Refresh,
         );
         let children = ctx
             .children
@@ -515,8 +522,9 @@ fn toolbar_button(
     ctx: &ProjectionCtx<'_>,
     action: PicusCodeAction,
     text: &'static str,
-    glyph: PicusIcon,
+    glyph: impl Into<IconGlyph>,
 ) -> UiView {
+    let glyph = glyph.into();
     let style = resolve_style_for_classes(ctx.world, ["picuscode.toolbar.button"]);
     let text_style = resolve_style_for_classes(ctx.world, ["picuscode.toolbar.button.text"]);
     let icon_color = text_style.colors.text.unwrap_or(Color::WHITE);
@@ -537,8 +545,9 @@ fn primary_button(
     ctx: &ProjectionCtx<'_>,
     action: PicusCodeAction,
     text: &'static str,
-    glyph: PicusIcon,
+    glyph: impl Into<IconGlyph>,
 ) -> UiView {
+    let glyph = glyph.into();
     let style = resolve_style_for_classes(ctx.world, ["picuscode.primary.button"]);
     let text_style = resolve_style_for_classes(ctx.world, ["picuscode.primary.button.text"]);
     let icon_color = text_style.colors.text.unwrap_or(Color::WHITE);
@@ -560,7 +569,7 @@ fn brand_mark(ctx: &ProjectionCtx<'_>, size: f64) -> UiView {
     let icon_style = resolve_style_for_classes(ctx.world, ["picuscode.brand.mark.icon"]);
     let icon_color = icon_style.colors.text.unwrap_or(Color::WHITE);
     Arc::new(apply_widget_style(
-        sized_box(icon(PicusIcon::Bot, size * 0.46, icon_color))
+        sized_box(icon(FluentIcon::Contact, size * 0.46, icon_color))
             .width(Length::px(size))
             .height(Length::px(size)),
         &style,
@@ -685,7 +694,7 @@ fn sidebar_thread_item(ctx: &ProjectionCtx<'_>, thread: &ThreadSummary, is_activ
         format_short_timestamp(thread.updated_at)
     );
     let mut title_row = vec![
-        icon(PicusIcon::MessageSquare, 13.0, icon_color).into_any_flex(),
+        icon(FluentIcon::Message, 13.0, icon_color).into_any_flex(),
         sized_box(Arc::new(apply_label_style(
             label(truncate_preview(&name, 30)),
             &item_title_style,
@@ -740,10 +749,10 @@ fn sidebar_footer(ctx: &ProjectionCtx<'_>) -> UiView {
                 ctx,
                 PicusCodeAction::OpenSettings,
                 "Settings",
-                PicusIcon::Settings,
+                FluentIcon::Settings,
             )
             .into_any_flex(),
-            sidebar_nav_button(ctx, PicusCodeAction::OpenAbout, "About", PicusIcon::Info)
+            sidebar_nav_button(ctx, PicusCodeAction::OpenAbout, "About", FluentIcon::Info)
                 .into_any_flex(),
         ])
         .cross_axis_alignment(CrossAxisAlignment::Stretch)
@@ -756,8 +765,9 @@ fn sidebar_nav_button(
     ctx: &ProjectionCtx<'_>,
     action: PicusCodeAction,
     text: &'static str,
-    glyph: PicusIcon,
+    glyph: impl Into<IconGlyph>,
 ) -> UiView {
+    let glyph = glyph.into();
     let style = resolve_style_for_classes(ctx.world, ["picuscode.sidebar.nav"]);
     let text_style = resolve_style_for_classes(ctx.world, ["picuscode.sidebar.nav.text"]);
     let icon_color = text_style.colors.text.unwrap_or(Color::WHITE);
@@ -802,11 +812,12 @@ fn chip_view(ctx: &ProjectionCtx<'_>, text: impl Into<String>, tone: ChipTone) -
 
 fn status_metric(
     ctx: &ProjectionCtx<'_>,
-    glyph: PicusIcon,
+    glyph: impl Into<IconGlyph>,
     label_text: &'static str,
     value: impl Into<String>,
     tone: ChipTone,
 ) -> UiView {
+    let glyph = glyph.into();
     let style = match tone {
         ChipTone::Neutral => resolve_style_for_classes(ctx.world, ["picuscode.status.metric"]),
         ChipTone::Accent => resolve_style_for_classes(
@@ -872,11 +883,11 @@ fn message_role_label(role: MessageRole) -> &'static str {
     }
 }
 
-fn message_role_icon(role: MessageRole) -> PicusIcon {
+fn message_role_icon(role: MessageRole) -> FluentIcon {
     match role {
-        MessageRole::User => PicusIcon::User,
-        MessageRole::Assistant => PicusIcon::Bot,
-        MessageRole::System | MessageRole::Other => PicusIcon::Info,
+        MessageRole::User => FluentIcon::Contact,
+        MessageRole::Assistant => FluentIcon::Contact,
+        MessageRole::System | MessageRole::Other => FluentIcon::Info,
     }
 }
 
@@ -1081,7 +1092,7 @@ fn transcript_empty_state(ctx: &ProjectionCtx<'_>, summary: &TranscriptSummary) 
         ctx,
         PicusCodeAction::NewThread,
         "New thread",
-        PicusIcon::Plus,
+        FluentIcon::Add,
     );
     Arc::new(apply_widget_style(
         flex_col(vec![

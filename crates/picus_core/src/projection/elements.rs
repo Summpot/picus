@@ -10,7 +10,7 @@ use crate::{
         UiSwitch, UiText, UiTextInput,
     },
     i18n::resolve_localized_text,
-    icons::{LUCIDE_FONT_FAMILY, PicusIcon},
+    icons::IconGlyph,
     retained_bridge::{button_view, button_with_child_view, slider_view, text_input_view},
     styling::{
         ResolvedStyle, apply_direct_widget_style, apply_label_style, apply_widget_style,
@@ -79,12 +79,17 @@ pub(crate) fn project_label(label_component: &UiLabel, ctx: ProjectionCtx<'_>) -
     Arc::new(apply_label_style(label(text), &style))
 }
 
-/// Render a [`PicusIcon`] as a Lucide glyph in a fixed-size box.
-fn create_icon_view(icon: PicusIcon, size_px: f64, color: Option<crate::xilem::Color>) -> UiView {
+/// Render an icon glyph in a fixed-size box.
+fn create_icon_view(
+    icon: impl Into<IconGlyph>,
+    size_px: f64,
+    color: Option<crate::xilem::Color>,
+) -> UiView {
+    let icon = icon.into();
     let mut icon_style = ResolvedStyle::default();
     icon_style.colors.text = color;
     icon_style.text.size = (size_px * 0.90) as f32;
-    icon_style.font_family = Some(vec![LUCIDE_FONT_FAMILY.to_string()]);
+    icon_style.font_family = Some(icon.font_family_vec());
 
     Arc::new(
         sized_box(apply_label_style(

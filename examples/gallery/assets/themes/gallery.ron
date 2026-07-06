@@ -463,7 +463,10 @@
           text_align: Center,
         ),
         font_family: [
-          "lucide",
+          "Segoe Fluent Icons",
+          "Segoe MDL2 Assets",
+          "FabricMDL2Icons",
+          "Segoe UI Symbol",
         ],
       ),
     ),

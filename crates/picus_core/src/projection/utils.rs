@@ -4,7 +4,7 @@ use super::core::UiView;
 use crate::{
     ecs::LocalizeText,
     i18n::AppI18n,
-    icons::{LUCIDE_FONT_FAMILY, PicusIcon},
+    icons::{IconGlyph, PicusIcon},
     styling::{ResolvedStyle, apply_label_style, theme_default_font_family},
 };
 use bevy_ecs::prelude::*;
@@ -27,7 +27,7 @@ pub(crate) enum VectorIcon {
 }
 
 pub(crate) fn vector_icon(icon: VectorIcon, size_px: f64, color: crate::xilem::Color) -> UiView {
-    let lucide_icon = match icon {
+    let icon: IconGlyph = match icon {
         VectorIcon::Check => PicusIcon::Check,
         VectorIcon::ChevronDown => PicusIcon::ChevronDown,
         VectorIcon::ChevronUp => PicusIcon::ChevronUp,
@@ -38,16 +38,17 @@ pub(crate) fn vector_icon(icon: VectorIcon, size_px: f64, color: crate::xilem::C
         VectorIcon::RadioOn => PicusIcon::CircleDot,
         VectorIcon::SunMoon => PicusIcon::SunMoon,
         VectorIcon::X => PicusIcon::X,
-    };
+    }
+    .into();
 
     let mut icon_style = ResolvedStyle::default();
     icon_style.colors.text = Some(color);
     icon_style.text.size = (size_px * 0.90) as f32;
-    icon_style.font_family = Some(vec![LUCIDE_FONT_FAMILY.to_string()]);
+    icon_style.font_family = Some(icon.font_family_vec());
 
     Arc::new(
         sized_box(apply_label_style(
-            label(lucide_icon.glyph().to_string()),
+            label(icon.glyph().to_string()),
             &icon_style,
         ))
         .width(Dim::Fixed(Length::px(size_px)))

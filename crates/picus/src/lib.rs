@@ -21,9 +21,10 @@ pub mod app {
 pub mod components {
     pub use picus_core::{
         AppBreakpoints, AutoDismiss, AvatarShape, BuiltinUiAction, ButtonAppearance,
-        ButtonIconPosition, ButtonShape, ButtonSize, HasTooltip, LocalizeText, MessageBarKind,
-        NavigationViewItem, RatingColor, RatingSize, ScrollAxis, SplitDirection, TitleBarAction,
-        TitleBarIcon, TitleBarState, ToastKind, UiAnyView, UiAvatar, UiBadge, UiBreadcrumb,
+        ButtonIconPosition, ButtonShape, ButtonSize, FluentIcon, HasTooltip, IconGlyph,
+        LocalizeText, MessageBarKind, NavigationViewItem, PicusIcon, RatingColor, RatingSize,
+        ScrollAxis, SplitDirection, TitleBarAction, TitleBarIcon, TitleBarState, ToastKind,
+        UiAnyView, UiAvatar, UiBadge, UiBreadcrumb,
         UiBreadcrumbItem, UiButton, UiCanvas, UiCanvasCommand, UiCanvasPathCommand,
         UiCanvasPosition, UiCard, UiCheckbox, UiCheckboxChanged, UiColorPicker,
         UiColorPickerChanged, UiColorPickerPanel, UiComboBox, UiComboBoxChanged, UiComboOption,
@@ -47,7 +48,10 @@ pub mod components {
         UiTable, UiText, UiTextInput, UiTextInputChanged, UiThemePicker, UiThemePickerChanged,
         UiThemePickerMenu, UiThemePickerOption, UiTitleBar, UiToast, UiToolbar, UiTooltip,
         UiTreeNode, UiTreeNodeToggled, UiView, UiVisibleResponsive, UiWindow, button,
-        button_with_child, checkbox, icon, slider, switch, text_input,
+        button_with_child, checkbox, slider, switch, text_input,
+    };
+    pub use picus_core::icon::{
+        fluent_icon, icon, icon_glyph, icon_glyph_with_font_stack, icon_source, picus_icon,
     };
 }
 
@@ -131,8 +135,8 @@ pub mod scene {
 /// Common imports for Picus applications.
 pub mod prelude {
     pub use crate::{
-        app::*, components::*, events::*, i18n::*, overlay::*, projection::*, runtime::*, scene::*,
-        styling::*,
+        app::*, components::*, events::*, i18n::*, icons::*, overlay::*, projection::*,
+        runtime::*, scene::*, styling::*,
     };
     pub use picus_core::bevy_ecs::hierarchy::{ChildOf, Children};
 }

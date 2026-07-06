@@ -1,30 +1,30 @@
-//! PicusIcon glyph grid component examples.
+//! Fluent icon glyph grid component examples.
 //!
 //! Corresponds to Fluent UI's Icon component with a gallery of available glyphs.
 
 use crate::helpers::{card, class, grid, placeholder};
 use bevy_ecs::{hierarchy::ChildOf, prelude::*};
 use picus::{
-    PicusIcon, UiLabel,
+    FluentIcon, UiLabel,
     scene::{CommandsSceneExt, bsn, template_value},
 };
 
-/// PicusIcon glyph grid component examples.
+/// Fluent icon glyph grid component examples.
 ///
-/// Displays available icon glyphs from the bundled Lucide icon font,
+/// Displays common Fluent Design glyphs from the Windows symbol font stack,
 /// similar to Fluent UI's icon grid documentation page.
 pub fn spawn_icons_page(commands: &mut Commands, parent: Entity) -> Entity {
     let g = grid(commands, parent, 4);
 
     for (name, icon) in [
-        ("Check", PicusIcon::Check),
-        ("Chevron Down", PicusIcon::ChevronDown),
-        ("Chevron Up", PicusIcon::ChevronUp),
-        ("Chevron Right", PicusIcon::ChevronRight),
-        ("Circle", PicusIcon::Circle),
-        ("Circle Dot", PicusIcon::CircleDot),
-        ("Close", PicusIcon::X),
-        ("Theme", PicusIcon::SunMoon),
+        ("Accept", FluentIcon::Accept),
+        ("Add", FluentIcon::Add),
+        ("Cancel", FluentIcon::Cancel),
+        ("Settings", FluentIcon::Settings),
+        ("Search", FluentIcon::Search),
+        ("Send", FluentIcon::Send),
+        ("Refresh", FluentIcon::Refresh),
+        ("Message", FluentIcon::Message),
     ] {
         let c = card(commands, g, name);
         commands.spawn_scene(bsn! {
@@ -42,8 +42,8 @@ pub fn spawn_icons_page(commands: &mut Commands, parent: Entity) -> Entity {
     placeholder(
         commands,
         parent,
-        "Full Icons.xaml browser",
-        "Picus exposes a curated PicusIcon enum backed by Lucide font bytes.",
+        "Full Fluent icon browser",
+        "Picus exposes FluentIcon glyphs backed by Segoe Fluent Icons with MDL2/Fabric fallback.",
     );
 
     parent

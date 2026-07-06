@@ -1,14 +1,14 @@
 use bevy_ecs::{entity::Entity, prelude::*};
 
-use crate::{ProjectionCtx, UiView, components::UiComponentTemplate};
+use crate::{IconGlyph, ProjectionCtx, UiView, components::UiComponentTemplate};
 
 /// A single item inside a context menu.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct UiContextMenuItem {
     /// Display text.
     pub label: String,
-    /// Optional icon glyph (from the bundled Lucide icon font).
-    pub icon_glyph: Option<char>,
+    /// Optional icon glyph and font stack.
+    pub icon_glyph: Option<IconGlyph>,
     /// Draw a separator line after this item.
     pub separator_after: bool,
     /// Whether this item can be selected.
@@ -26,10 +26,10 @@ impl UiContextMenuItem {
         }
     }
 
-    /// Attach a Lucide icon glyph.
+    /// Attach an icon glyph.
     #[must_use]
-    pub fn with_icon(mut self, glyph: char) -> Self {
-        self.icon_glyph = Some(glyph);
+    pub fn with_icon(mut self, icon: impl Into<IconGlyph>) -> Self {
+        self.icon_glyph = Some(icon.into());
         self
     }
 

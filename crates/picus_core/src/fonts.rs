@@ -18,8 +18,15 @@ use crate::MasonryRuntime;
 /// `assets/fonts/NotoSansCJK-Regular.otf`).
 #[derive(Resource, Debug, Default)]
 pub struct XilemFontBridge {
+    registered_fonts: Vec<Vec<u8>>,
     pending_fonts: Vec<Vec<u8>>,
     registered_fingerprints: HashSet<u64>,
+}
+
+pub(crate) fn font_bytes_fingerprint(bytes: &[u8]) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    bytes.hash(&mut hasher);
+    hasher.finish()
 }
 
 impl XilemFontBridge {
@@ -29,15 +36,15 @@ impl XilemFontBridge {
             return false;
         }
 
-        let mut hasher = DefaultHasher::new();
-        bytes.hash(&mut hasher);
-        let fingerprint = hasher.finish();
+        let fingerprint = font_bytes_fingerprint(bytes);
 
         if !self.registered_fingerprints.insert(fingerprint) {
             return false;
         }
 
-        self.pending_fonts.push(bytes.to_vec());
+        let bytes = bytes.to_vec();
+        self.registered_fonts.push(bytes.clone());
+        self.pending_fonts.push(bytes);
         true
     }
 
@@ -51,6 +58,15 @@ impl XilemFontBridge {
 
     pub fn take_pending_fonts(&mut self) -> Vec<Vec<u8>> {
         std::mem::take(&mut self.pending_fonts)
+    }
+
+    #[must_use]
+    pub fn has_pending_fonts(&self) -> bool {
+        !self.pending_fonts.is_empty()
+    }
+
+    pub fn registered_font_bytes(&self) -> impl Iterator<Item = &[u8]> {
+        self.registered_fonts.iter().map(Vec::as_slice)
     }
 }
 
@@ -92,12 +108,11 @@ pub fn sync_fonts_to_xilem(
     let Some(mut runtime) = runtime else {
         return;
     };
-
-    let pending = bridge.take_pending_fonts();
-    if pending.is_empty() {
+    if runtime.windows.is_empty() || !bridge.has_pending_fonts() {
         return;
     }
 
+    let pending = bridge.take_pending_fonts();
     for font_bytes in pending {
         runtime.register_fonts_all(font_bytes);
     }
@@ -111,6 +126,23 @@ mod tests {
         let mut bridge = crate::XilemFontBridge::default();
         assert!(bridge.register_font_bytes(b"font-data"));
         assert!(!bridge.register_font_bytes(b"font-data"));
+        assert_eq!(bridge.registered_font_bytes().count(), 1);
+        assert!(bridge.has_pending_fonts());
+    }
+
+    #[test]
+    fn xilem_font_bridge_keeps_registered_fonts_after_draining_pending() {
+        let mut bridge = crate::XilemFontBridge::default();
+        assert!(bridge.register_font_bytes(b"font-data"));
+
+        let pending = bridge.take_pending_fonts();
+
+        assert_eq!(pending, vec![b"font-data".to_vec()]);
+        assert!(!bridge.has_pending_fonts());
+        assert_eq!(
+            bridge.registered_font_bytes().collect::<Vec<_>>(),
+            vec![b"font-data".as_slice()]
+        );
     }
 
     #[test]

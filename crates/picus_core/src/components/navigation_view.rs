@@ -4,18 +4,17 @@ use bevy_ecs::{
     prelude::*,
 };
 
-use crate::{ProjectionCtx, UiView, components::UiComponentTemplate};
+use crate::{IconGlyph, ProjectionCtx, UiView, components::UiComponentTemplate};
 
 /// A single item in the navigation view sidebar.
 ///
-/// Each item has a display label and an optional icon glyph
-/// from the bundled Lucide icon font.
+/// Each item has a display label and an optional icon glyph source.
 #[derive(Debug, Clone, Default)]
 pub struct NavigationViewItem {
     /// Human-readable label shown in the sidebar.
     pub label: String,
-    /// Optional Lucide icon glyph (single Unicode character from the Lucide font).
-    pub icon: Option<char>,
+    /// Optional icon glyph and font stack.
+    pub icon: Option<IconGlyph>,
 }
 
 impl NavigationViewItem {
@@ -28,8 +27,8 @@ impl NavigationViewItem {
     }
 
     #[must_use]
-    pub fn with_icon(mut self, icon: char) -> Self {
-        self.icon = Some(icon);
+    pub fn with_icon(mut self, icon: impl Into<IconGlyph>) -> Self {
+        self.icon = Some(icon.into());
         self
     }
 }
@@ -55,8 +54,8 @@ impl Default for UiNavigationItem {
 /// Sidebar navigation container with items and a content area.
 ///
 /// The sidebar is rendered as a vertical list of ECS-backed [`UiNavigationItem`]
-/// template entities (with optional Lucide icon glyphs). The content area
-/// displays the non-template ECS child at [`selected`] index — analogous to a
+/// template entities (with optional icon glyphs). The content area displays
+/// the non-template ECS child at [`selected`] index — analogous to a
 /// [`UiTabBar`](crate::UiTabBar) with hidden headers but with a separate
 /// navigation panel.
 ///

@@ -28,6 +28,16 @@ pub enum SyncTextSource<'a> {
 }
 
 fn flush_pending_font_registrations(app: &mut App) {
+    {
+        let world = app.world_mut();
+        world.init_resource::<UiEventQueue>();
+        world.init_non_send::<MasonryRuntime>();
+    }
+
+    if app.world().non_send::<MasonryRuntime>().windows.is_empty() {
+        return;
+    }
+
     let pending = app
         .world_mut()
         .resource_mut::<XilemFontBridge>()
@@ -35,12 +45,6 @@ fn flush_pending_font_registrations(app: &mut App) {
 
     if pending.is_empty() {
         return;
-    }
-
-    {
-        let world = app.world_mut();
-        world.init_resource::<UiEventQueue>();
-        world.init_non_send::<MasonryRuntime>();
     }
 
     let mut runtime = app.world_mut().non_send_mut::<MasonryRuntime>();
