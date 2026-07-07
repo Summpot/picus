@@ -5077,7 +5077,7 @@ mod tests {
             .register_i18n_bundle(
                 "zh-CN",
                 SyncTextSource::String(include_str!("../../../assets/locales/zh-CN/main.ftl")),
-                vec!["Inter", "Noto Sans CJK SC", "sans-serif"],
+                vec!["Inter", "sans-serif"],
             );
 
         {
@@ -5099,7 +5099,6 @@ mod tests {
                 i18n.get_font_stack(),
                 vec![
                     "Inter".to_string(),
-                    "Noto Sans CJK SC".to_string(),
                     "sans-serif".to_string()
                 ]
             );

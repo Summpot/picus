@@ -25,7 +25,7 @@ use bevy_window::{
 };
 
 use crate::{
-    AppBreakpoints, AppPicusExt, OverlayStack, WindowSize,
+    AppBreakpoints, OverlayStack, WindowSize,
     components::register_builtin_ui_components,
     events::UiEventQueue,
     fonts::{XilemFontBridge, collect_bevy_font_assets, sync_fonts_to_xilem},
@@ -101,7 +101,7 @@ impl Plugin for PicusPlugin {
                 Update,
                 component_tween_system::<crate::styling::ColorStyleLens>(),
             )
-            .register_xilem_font_bytes(crate::icons::LUCIDE_FONT_BYTES)
+
             .init_asset::<StyleSheet>()
             .init_asset_loader::<StyleSheetRonLoader>()
             .init_resource::<UiProjectorRegistry>()
@@ -249,7 +249,7 @@ impl Plugin for PicusPlugin {
 mod tests {
     use super::*;
     use crate::test_helpers::*;
-    use crate::{AppI18n, UiRoot};
+    use crate::{AppI18n, AppPicusExt, UiRoot};
     use bevy_app::App;
     use bevy_ecs::{
         hierarchy::{ChildOf, Children},

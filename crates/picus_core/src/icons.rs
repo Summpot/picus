@@ -1,13 +1,5 @@
 #![forbid(unsafe_code)]
 
-/// Preferred family name exposed by the bundled Lucide font.
-///
-/// `lucide-icons` itself uses this family identifier in its own integration code.
-pub const LUCIDE_FONT_FAMILY: &str = "lucide";
-
-/// Raw TrueType bytes for Lucide glyph rendering.
-pub const LUCIDE_FONT_BYTES: &[u8] = lucide_icons::LUCIDE_FONT_BYTES;
-
 /// Font family used by Windows Fluent Design symbol glyphs.
 ///
 /// This is the WinUI `SymbolIcon` family on current Windows releases.
@@ -24,9 +16,6 @@ pub const FLUENT_SYMBOL_FONT_FALLBACKS: &[&str] = &[
     "FabricMDL2Icons",
     "Segoe UI Symbol",
 ];
-
-/// Lucide icon stack used for bundled [`PicusIcon`] glyphs.
-pub const LUCIDE_ICON_FONT_STACK: &[&str] = &[LUCIDE_FONT_FAMILY];
 
 /// A resolved icon glyph plus the font stack required to draw it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -146,57 +135,8 @@ pub enum PicusIcon {
 
 impl PicusIcon {
     #[must_use]
-    pub const fn as_lucide(self) -> lucide_icons::Icon {
-        match self {
-            Self::Check => lucide_icons::Icon::Check,
-            Self::ChevronDown => lucide_icons::Icon::ChevronDown,
-            Self::ChevronUp => lucide_icons::Icon::ChevronUp,
-            Self::ChevronRight => lucide_icons::Icon::ChevronRight,
-            Self::Circle => lucide_icons::Icon::Circle,
-            Self::CircleDot => lucide_icons::Icon::CircleDot,
-            Self::X => lucide_icons::Icon::X,
-            Self::SunMoon => lucide_icons::Icon::SunMoon,
-            Self::Plus => lucide_icons::Icon::Plus,
-            Self::Search => lucide_icons::Icon::Search,
-            Self::Edit => lucide_icons::Icon::Edit,
-            Self::Delete => lucide_icons::Icon::Trash2,
-            Self::Settings => lucide_icons::Icon::Settings,
-            Self::ArrowLeft => lucide_icons::Icon::ArrowLeft,
-            Self::ArrowRight => lucide_icons::Icon::ArrowRight,
-            Self::Clock => lucide_icons::Icon::Clock,
-            Self::MessageSquare => lucide_icons::Icon::MessageSquare,
-            Self::Send => lucide_icons::Icon::Send,
-            Self::RefreshCw => lucide_icons::Icon::RefreshCw,
-            Self::Pointer => lucide_icons::Icon::Pointer,
-            Self::TextCursorInput => lucide_icons::Icon::TextCursorInput,
-            Self::CheckSquare => lucide_icons::Icon::CheckSquare,
-            Self::Menu => lucide_icons::Icon::Menu,
-            Self::Info => lucide_icons::Icon::Info,
-            Self::StopCircle => lucide_icons::Icon::CircleStop,
-            Self::Archive => lucide_icons::Icon::Archive,
-            Self::Ellipsis => lucide_icons::Icon::Ellipsis,
-            Self::Bot => lucide_icons::Icon::Bot,
-            Self::User => lucide_icons::Icon::User,
-            Self::Sparkles => lucide_icons::Icon::Sparkles,
-            Self::List => lucide_icons::Icon::List,
-            Self::Table => lucide_icons::Icon::Table,
-            Self::LayoutPanelLeft => lucide_icons::Icon::LayoutPanelLeft,
-            Self::LayoutGrid => lucide_icons::Icon::LayoutGrid,
-            Self::Type => lucide_icons::Icon::Type,
-            Self::Image => lucide_icons::Icon::Image,
-            Self::Images => lucide_icons::Icon::Images,
-            Self::Square => lucide_icons::Icon::Square,
-            Self::Layers => lucide_icons::Icon::Layers,
-            Self::Globe => lucide_icons::Icon::Globe,
-            Self::Loader => lucide_icons::Icon::Loader,
-            Self::Folder => lucide_icons::Icon::Folder,
-            Self::Minus => lucide_icons::Icon::Minus,
-        }
-    }
-
-    #[must_use]
     pub fn glyph(self) -> char {
-        char::from(self.as_lucide())
+        self.as_fluent().glyph()
     }
 
     #[must_use]
@@ -261,7 +201,7 @@ impl PicusIcon {
 
 impl From<PicusIcon> for IconGlyph {
     fn from(icon: PicusIcon) -> Self {
-        Self::new(icon.glyph(), LUCIDE_ICON_FONT_STACK)
+        Self::new(icon.glyph(), FLUENT_SYMBOL_FONT_FALLBACKS)
     }
 }
 
@@ -377,11 +317,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn picus_icon_converts_to_lucide_icon_glyph() {
+    fn picus_icon_converts_to_fluent_icon_glyph() {
         let glyph = IconGlyph::from(PicusIcon::Send);
 
         assert_eq!(glyph.glyph(), PicusIcon::Send.glyph());
-        assert_eq!(glyph.font_families(), LUCIDE_ICON_FONT_STACK);
+        assert_eq!(glyph.font_families(), FLUENT_SYMBOL_FONT_FALLBACKS);
     }
 
     #[test]

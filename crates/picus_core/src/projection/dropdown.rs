@@ -646,7 +646,7 @@ mod tests {
     fn app_i18n_font_stack_is_applied_to_dropdown_styles_when_missing() {
         let mut world = bevy_ecs::world::World::new();
         let i18n = AppI18n {
-            default_font_stack: vec!["Noto Sans CJK SC".to_string(), "sans-serif".to_string()],
+            default_font_stack: vec!["sans-serif".to_string()],
             ..AppI18n::default()
         };
         world.insert_resource(i18n);
@@ -656,10 +656,7 @@ mod tests {
 
         assert_eq!(
             style.font_family,
-            Some(vec![
-                "Noto Sans CJK SC".to_string(),
-                "sans-serif".to_string()
-            ])
+            Some(vec!["sans-serif".to_string()])
         );
     }
 
@@ -667,7 +664,7 @@ mod tests {
     fn explicit_dropdown_font_stack_is_preserved() {
         let mut world = bevy_ecs::world::World::new();
         let i18n = AppI18n {
-            default_font_stack: vec!["Noto Sans CJK JP".to_string(), "sans-serif".to_string()],
+            default_font_stack: vec!["sans-serif".to_string()],
             ..AppI18n::default()
         };
         world.insert_resource(i18n);
@@ -685,7 +682,7 @@ mod tests {
     fn app_i18n_font_stack_replaces_theme_default_for_dropdown_text() {
         let mut world = bevy_ecs::world::World::new();
         let i18n = AppI18n {
-            default_font_stack: vec!["Noto Sans CJK SC".to_string(), "sans-serif".to_string()],
+            default_font_stack: vec!["sans-serif".to_string()],
             ..AppI18n::default()
         };
         let sheet = StyleSheet {
@@ -706,10 +703,7 @@ mod tests {
 
         assert_eq!(
             style.font_family,
-            Some(vec![
-                "Noto Sans CJK SC".to_string(),
-                "sans-serif".to_string()
-            ])
+            Some(vec!["sans-serif".to_string()])
         );
     }
 }

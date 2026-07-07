@@ -167,7 +167,7 @@ mod tests {
         app.add_plugins(PicusPlugin).register_i18n_bundle(
             "zh-CN",
             SyncTextSource::String(include_str!("../../../assets/locales/zh-CN/main.ftl")),
-            vec!["Inter", "Noto Sans CJK SC", "sans-serif"],
+            vec!["Inter", "sans-serif"],
         );
 
         assert_eq!(
@@ -182,7 +182,7 @@ mod tests {
         app.add_plugins(PicusPlugin).register_i18n_bundle(
             "zh-CN",
             SyncTextSource::String(include_str!("../../../assets/locales/zh-CN/main.ftl")),
-            vec!["Inter", "Noto Sans CJK SC", "sans-serif"],
+            vec!["Inter", "sans-serif"],
         );
 
         let entity = app
@@ -215,7 +215,7 @@ mod tests {
             .register_i18n_bundle(
                 "zh-CN",
                 SyncTextSource::String(include_str!("../../../assets/locales/zh-CN/main.ftl")),
-                vec!["Inter", "Noto Sans CJK SC", "sans-serif"],
+                vec!["Inter", "sans-serif"],
             );
 
         let entity = app

@@ -19,7 +19,7 @@ use picus_view::picus_widget::peniko::Color;
 use picus_view::style::Style as _;
 use picus_view::view::{label, sized_box};
 
-use crate::icons::{FluentIcon, IconGlyph, LUCIDE_ICON_FONT_STACK, PicusIcon};
+use crate::icons::{FluentIcon, IconGlyph, FLUENT_SYMBOL_FONT_FALLBACKS, PicusIcon};
 
 /// Render an icon glyph as a fixed-size icon view.
 ///
@@ -68,7 +68,7 @@ pub fn icon_source(icon: impl Into<IconGlyph>, size_px: f64, color: Color) -> im
 /// Like [`icon`] but takes a raw Lucide `char` glyph, for legacy callers that
 /// already hold a [`PicusIcon::glyph`] value.
 pub fn icon_glyph(glyph: char, size_px: f64, color: Color) -> impl WidgetView<()> {
-    icon_glyph_with_font_stack(glyph, LUCIDE_ICON_FONT_STACK, size_px, color)
+    icon_glyph_with_font_stack(glyph, FLUENT_SYMBOL_FONT_FALLBACKS, size_px, color)
 }
 
 /// Like [`icon_glyph`] but with an explicit icon font fallback stack.

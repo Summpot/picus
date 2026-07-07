@@ -36,7 +36,7 @@ picus_view.workspace = true
 tracing.workspace = true
 serde.workspace = true
 ron.workspace = true
-lucide-icons.workspace = true
+
 wgpu.workspace = true
 image.workspace = true
 pulldown-cmark.workspace = true

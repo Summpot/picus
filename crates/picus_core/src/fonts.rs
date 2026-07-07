@@ -145,8 +145,5 @@ mod tests {
         );
     }
 
-    #[test]
-    fn lucide_font_family_matches_upstream_identifier() {
-        assert_eq!(crate::LUCIDE_FONT_FAMILY, "lucide");
-    }
+
 }

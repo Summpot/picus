@@ -27,7 +27,7 @@
 
 use picus::{
     AppI18n, AppPicusExt, InlineStyle, LayoutStyle, NavigationViewItem, PicusPlugin,
-    SyncAssetSource, SyncTextSource, UiAvatar, UiFlexColumn, UiFlexRow, UiLabel, UiNavigationView,
+    SyncTextSource, UiAvatar, UiFlexColumn, UiFlexRow, UiLabel, UiNavigationView,
     UiRoot, UiScrollView, UiSearch, UiThemePicker, avatar_sizes,
     bevy_app::{App, Startup, Update},
     bevy_ecs::{hierarchy::ChildOf, prelude::*},
@@ -297,15 +297,6 @@ fn build_gallery_app() -> App {
     let mut app = App::new();
     app.add_plugins(PicusPlugin)
         .load_style_sheet_ron(include_str!("../assets/themes/gallery.ron"))
-        .register_xilem_font(SyncAssetSource::Bytes(include_bytes!(
-            "../../../assets/fonts/NotoSans-Regular.ttf",
-        )))
-        .register_xilem_font(SyncAssetSource::Bytes(include_bytes!(
-            "../../../assets/fonts/NotoSansCJKsc-Regular.otf",
-        )))
-        .register_xilem_font(SyncAssetSource::Bytes(include_bytes!(
-            "../../../assets/fonts/NotoSansCJKjp-Regular.otf",
-        )))
         .insert_resource(AppI18n::new("en-US".parse().unwrap()))
         .register_i18n_bundle(
             "en-US",
@@ -315,12 +306,12 @@ fn build_gallery_app() -> App {
         .register_i18n_bundle(
             "zh-CN",
             SyncTextSource::String(include_str!("../assets/locales/zh-CN/main.ftl")),
-            vec!["Inter", "Noto Sans CJK SC", "sans-serif"],
+            vec!["Inter", "sans-serif"],
         )
         .register_i18n_bundle(
             "ja-JP",
             SyncTextSource::String(include_str!("../assets/locales/ja-JP/main.ftl")),
-            vec!["Inter", "Noto Sans CJK JP", "sans-serif"],
+            vec!["Inter", "sans-serif"],
         )
         .insert_resource(GalleryState::default())
         .register_ui_component::<GalleryRoot>()
