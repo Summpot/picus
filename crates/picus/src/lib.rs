@@ -104,8 +104,8 @@ pub mod overlay {
 /// Runtime synthesis and rendering integration.
 pub mod runtime {
     pub use picus_core::{
-        MasonryRuntime, ProjectionCtx, SynthesizedUiViews, UiProjector, UiProjectorRegistry,
-        WindowRuntime, XilemFontBridge, collect_bevy_font_assets,
+        MasonryRuntime, ProjectionCtx, SynthesizedUiViews, UiProjectionInvalidation, UiProjector,
+        UiProjectorRegistry, WindowRuntime, XilemFontBridge, collect_bevy_font_assets,
         expand_builtin_ui_component_templates, find_template_part, gather_ui_roots,
         inject_bevy_input_into_masonry, rebuild_masonry_runtime, register_builtin_projectors,
         register_builtin_ui_components, sync_fonts_to_xilem, synthesize_roots,

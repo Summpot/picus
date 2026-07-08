@@ -119,6 +119,16 @@ fn clamp_scroll_offset_strict(scroll_view: &mut UiScrollView) {
     scroll_view.scroll_offset.y = scroll_view.scroll_offset.y.clamp(0.0, max_scroll_y);
 }
 
+fn clamped_scroll_offset(offset: Vec2, viewport_size: Vec2, content_size: Vec2) -> Vec2 {
+    let max_scroll_y = (content_size.y - viewport_size.y).max(0.0);
+    let max_scroll_x = (content_size.x - viewport_size.x).max(0.0);
+
+    Vec2::new(
+        offset.x.clamp(0.0, max_scroll_x),
+        offset.y.clamp(0.0, max_scroll_y),
+    )
+}
+
 fn quantize_slider_value(slider: &UiSlider, value: f64) -> f64 {
     let step = slider.step.max(f64::EPSILON);
     let steps = ((value - slider.min) / step).round();
@@ -271,9 +281,17 @@ pub fn sync_scroll_view_layout_geometry(
         };
 
         let before = scroll_view.scroll_offset;
-        scroll_view.viewport_size = viewport_size;
-        scroll_view.content_size = content_size;
-        clamp_scroll_offset_strict(&mut scroll_view);
+        let next_offset =
+            clamped_scroll_offset(scroll_view.scroll_offset, viewport_size, content_size);
+
+        if scroll_view.viewport_size != viewport_size
+            || scroll_view.content_size != content_size
+            || scroll_view.scroll_offset != next_offset
+        {
+            scroll_view.viewport_size = viewport_size;
+            scroll_view.content_size = content_size;
+            scroll_view.scroll_offset = next_offset;
+        }
 
         if scroll_view.scroll_offset != before {
             ui_events.push_typed(

@@ -56,7 +56,10 @@ use crate::{
         sync_active_style_variant, sync_style_targets, sync_stylesheet_asset_events,
         sync_ui_interaction_markers,
     },
-    synthesize::{SynthesizedUiViews, UiSynthesisStats, sync_focus_state, synthesize_ui},
+    synthesize::{
+        SynthesizedUiViews, UiProjectionInvalidation, UiSynthesisStats,
+        register_projection_invalidation_dependencies, sync_focus_state, synthesize_ui,
+    },
     track_window_size,
     widget_actions::{
         handle_scroll_view_wheel, handle_tooltip_hovers, handle_widget_actions,
@@ -106,6 +109,7 @@ impl Plugin for PicusPlugin {
             .init_asset_loader::<StyleSheetRonLoader>()
             .init_resource::<UiProjectorRegistry>()
             .init_resource::<SynthesizedUiViews>()
+            .init_resource::<UiProjectionInvalidation>()
             .init_resource::<UiSynthesisStats>()
             .init_resource::<UiEventQueue>()
             .init_resource::<StyleSheet>()
@@ -241,6 +245,7 @@ impl Plugin for PicusPlugin {
         {
             let mut registry = app.world_mut().resource_mut::<UiProjectorRegistry>();
             register_core_projectors(&mut registry);
+            register_projection_invalidation_dependencies(&mut registry);
         }
     }
 }

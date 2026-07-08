@@ -4,7 +4,7 @@
 //! - register ECS UI components through [`UiComponentTemplate`],
 //! - collect typed UI actions through [`UiEventQueue`],
 //! - describe ECS UI trees with Bevy Scene Notation (`bsn!`),
-//! - synthesize and rebuild a retained Masonry tree every frame.
+//! - incrementally synthesize ECS UI changes into a retained Masonry tree.
 //!
 //! # Minimal setup
 //!
@@ -160,12 +160,12 @@ pub mod prelude {
         UiMultilineTextInput, UiMultilineTextInputChanged, UiNavigationSelectionChanged,
         UiNavigationView, UiNumericUpDown, UiNumericUpDownChanged, UiOverlayRoot, UiPasswordInput,
         UiPasswordInputChanged, UiPointerEvent, UiPointerHitEvent, UiPointerPhase, UiPopover,
-        UiProgressBar, UiProjector, UiProjectorRegistry, UiRadioGroup, UiRadioGroupChanged,
-        UiRating, UiRatingChanged, UiResponsiveGrid, UiResponsiveRow, UiRoot, UiScrollView,
-        UiScrollViewChanged, UiSearch, UiSearchChanged, UiSlider, UiSliderChanged,
+        UiProgressBar, UiProjectionInvalidation, UiProjector, UiProjectorRegistry, UiRadioGroup,
+        UiRadioGroupChanged, UiRating, UiRatingChanged, UiResponsiveGrid, UiResponsiveRow, UiRoot,
+        UiScrollView, UiScrollViewChanged, UiSearch, UiSearchChanged, UiSlider, UiSliderChanged,
         UiSortDirection, UiSpinner, UiSplitPane, UiStreamingMarkdown, UiSwitch, UiSwitchChanged,
-        UiSynthesisStats, UiTabBar, UiTabChanged, UiTable, UiText, UiTextInput,
-        UiTextInputChanged, UiThemePicker,
+        UiSynthesisStats, UiTabBar, UiTabChanged, UiTable, UiText, UiTextInput, UiTextInputChanged,
+        UiThemePicker,
         UiThemePickerChanged, UiThemePickerMenu, UiThemePickerOption, UiTitleBar, UiToast,
         UiToolbar, UiTooltip, UiTreeNode, UiTreeNodeToggled, UiView, UiVisibleResponsive, UiWindow,
         WidgetUiAction, WindowRuntime, WindowSize, XilemFontBridge, bubble_ui_pointer_events,

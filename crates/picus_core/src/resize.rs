@@ -17,7 +17,7 @@ use bevy_ecs::prelude::*;
 use bevy_window::{PrimaryWindow, Window};
 
 /// Current window inner size (logical pixels).
-#[derive(Resource, Debug, Clone, Copy, Default)]
+#[derive(Resource, Debug, Clone, Copy, Default, PartialEq)]
 pub struct WindowSize {
     /// Window inner width in logical pixels.
     pub width: f64,
@@ -151,9 +151,15 @@ pub fn track_window_size(
     primary_window: Query<&Window, With<PrimaryWindow>>,
 ) {
     if let Ok(window) = primary_window.single() {
-        window_size.width = window.width() as f64;
-        window_size.height = window.height() as f64;
-        window_size.scale_factor = window.scale_factor() as f64;
+        let next = WindowSize {
+            width: window.width() as f64,
+            height: window.height() as f64,
+            scale_factor: window.scale_factor() as f64,
+        };
+
+        if *window_size != next {
+            *window_size = next;
+        }
     }
 }
 

@@ -135,6 +135,8 @@ pub struct WindowRuntime {
     renderer: Renderer,
     registered_font_fingerprints: HashSet<u64>,
     #[cfg(test)]
+    rebuild_count: usize,
+    #[cfg(test)]
     pointer_trace: Vec<PointerTraceEvent>,
 }
 
@@ -227,6 +229,8 @@ impl WindowRuntime {
             window_surface: None,
             renderer: Renderer::new(),
             registered_font_fingerprints: HashSet::new(),
+            #[cfg(test)]
+            rebuild_count: 0,
             #[cfg(test)]
             pointer_trace: Vec::new(),
         }
@@ -434,11 +438,21 @@ impl WindowRuntime {
     }
 
     #[cfg(test)]
+    pub(crate) fn rebuild_count_for_tests(&self) -> usize {
+        self.rebuild_count
+    }
+
+    #[cfg(test)]
     pub(crate) fn clear_pointer_trace_for_tests(&mut self) {
         self.pointer_trace.clear();
     }
 
     pub fn rebuild_root_view(&mut self, next_view: UiView) {
+        #[cfg(test)]
+        {
+            self.rebuild_count += 1;
+        }
+
         self.render_root.edit_base_layer(|mut root| {
             let mut root = root.downcast::<Passthrough>();
             <UiAnyView as View<(), (), ViewCtx>>::rebuild(
@@ -453,6 +467,7 @@ impl WindowRuntime {
         });
 
         self.current_view = next_view;
+        self.needs_redraw = true;
 
         if let Some(fallback) = focus_fallback_widget(&self.render_root) {
             let _ = self.render_root.set_focus_fallback(Some(fallback));
@@ -1503,21 +1518,33 @@ pub fn sync_masonry_window_lifecycle(
 
     for window_entity in stale_windows {
         runtime.remove_window(window_entity);
-        synthesized.windows.remove(&window_entity);
+        synthesized.remove_window(window_entity);
     }
 }
 
 /// PostUpdate rebuild step: diff each window's synthesized root against its
 /// retained Masonry tree.
 pub fn rebuild_masonry_runtime(world: &mut World) {
+    if !world.contains_non_send::<MasonryRuntime>() {
+        return;
+    }
+
     let window_views: Vec<(Entity, UiView)> = world
-        .get_resource::<SynthesizedUiViews>()
-        .map(|views| views.windows.iter().map(|(e, v)| (*e, v.clone())).collect())
+        .get_resource_mut::<SynthesizedUiViews>()
+        .map(|mut views| {
+            let dirty_windows = views.dirty_windows.drain().collect::<Vec<_>>();
+            dirty_windows
+                .into_iter()
+                .filter_map(|window| views.windows.get(&window).cloned().map(|view| (window, view)))
+                .collect()
+        })
         .unwrap_or_default();
 
-    let Some(mut runtime) = world.get_non_send_mut::<MasonryRuntime>() else {
+    if window_views.is_empty() {
         return;
-    };
+    }
+
+    let mut runtime = world.non_send_mut::<MasonryRuntime>();
 
     for (window_entity, window_view) in window_views {
         let Some(window_runtime) = runtime.window_mut(window_entity) else {
@@ -1729,6 +1756,89 @@ mod tests {
         assert!(synthesized.windows.contains_key(&active));
         assert!(!synthesized.windows.contains_key(&closing));
         assert!(!synthesized.windows.contains_key(&removed));
+    }
+
+    #[test]
+    fn idle_update_does_not_rebuild_retained_tree_again() {
+        let mut app = App::new();
+        app.add_plugins(PicusPlugin);
+
+        let mut window = Window {
+            visible: false,
+            ..Default::default()
+        };
+        window.resolution.set(480.0, 320.0);
+        app.world_mut().spawn((window, PrimaryWindow));
+
+        app.world_mut()
+            .spawn((UiRoot, crate::UiLabel::new("stable")));
+
+        app.update();
+        let first_rebuild_count = app
+            .world()
+            .non_send::<crate::MasonryRuntime>()
+            .primary()
+            .expect("primary window runtime should exist")
+            .rebuild_count_for_tests();
+
+        app.update();
+        let second_rebuild_count = app
+            .world()
+            .non_send::<crate::MasonryRuntime>()
+            .primary()
+            .expect("primary window runtime should exist")
+            .rebuild_count_for_tests();
+
+        assert_eq!(first_rebuild_count, second_rebuild_count);
+    }
+
+    #[test]
+    fn changed_ui_component_rebuilds_once_then_returns_to_idle() {
+        let mut app = App::new();
+        app.add_plugins(PicusPlugin);
+
+        let mut window = Window {
+            visible: false,
+            ..Default::default()
+        };
+        window.resolution.set(480.0, 320.0);
+        app.world_mut().spawn((window, PrimaryWindow));
+
+        let label = app
+            .world_mut()
+            .spawn((UiRoot, crate::UiLabel::new("before")))
+            .id();
+
+        app.update();
+        let initial_rebuild_count = app
+            .world()
+            .non_send::<crate::MasonryRuntime>()
+            .primary()
+            .expect("primary window runtime should exist")
+            .rebuild_count_for_tests();
+
+        app.world_mut()
+            .get_mut::<crate::UiLabel>(label)
+            .expect("label should exist")
+            .text = "after".to_string();
+
+        app.update();
+        let changed_rebuild_count = app
+            .world()
+            .non_send::<crate::MasonryRuntime>()
+            .primary()
+            .expect("primary window runtime should exist")
+            .rebuild_count_for_tests();
+        assert_eq!(changed_rebuild_count, initial_rebuild_count + 1);
+
+        app.update();
+        let idle_rebuild_count = app
+            .world()
+            .non_send::<crate::MasonryRuntime>()
+            .primary()
+            .expect("primary window runtime should exist")
+            .rebuild_count_for_tests();
+        assert_eq!(idle_rebuild_count, changed_rebuild_count);
     }
 
     #[test]

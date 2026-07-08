@@ -171,21 +171,21 @@ pub fn sync_overlay_stack_lifecycle(world: &mut World) {
     live_overlays.sort_by_key(|entity| entity.index());
     let live_set = live_overlays.iter().copied().collect::<HashSet<_>>();
 
-    {
-        let mut stack = world.resource_mut::<OverlayStack>();
-        stack
-            .active_overlays
-            .retain(|entity| live_set.contains(entity));
+    let mut next_stack = world
+        .resource::<OverlayStack>()
+        .active_overlays
+        .iter()
+        .copied()
+        .filter(|entity| live_set.contains(entity))
+        .collect::<Vec<_>>();
+    for entity in live_overlays {
+        if !next_stack.contains(&entity) {
+            next_stack.push(entity);
+        }
     }
 
-    for entity in live_overlays {
-        let already_tracked = world
-            .resource::<OverlayStack>()
-            .active_overlays
-            .contains(&entity);
-        if !already_tracked {
-            push_overlay_to_stack(world, entity);
-        }
+    if world.resource::<OverlayStack>().active_overlays != next_stack {
+        world.resource_mut::<OverlayStack>().active_overlays = next_stack;
     }
 }
 
@@ -1925,24 +1925,21 @@ pub fn sync_overlay_positions(world: &mut World) {
             viewport_height.max(1.0),
         );
 
+        let next_computed = OverlayComputedPosition {
+            x,
+            y,
+            width,
+            height,
+            placement: chosen_placement,
+            is_positioned: true,
+        };
+
         if let Some(mut computed) = world.get_mut::<OverlayComputedPosition>(entity) {
-            *computed = OverlayComputedPosition {
-                x,
-                y,
-                width,
-                height,
-                placement: chosen_placement,
-                is_positioned: true,
-            };
+            if *computed != next_computed {
+                *computed = next_computed;
+            }
         } else {
-            world.entity_mut(entity).insert(OverlayComputedPosition {
-                x,
-                y,
-                width,
-                height,
-                placement: chosen_placement,
-                is_positioned: true,
-            });
+            world.entity_mut(entity).insert(next_computed);
         }
 
         tracing::trace!(
@@ -1958,7 +1955,9 @@ pub fn sync_overlay_positions(world: &mut World) {
             && let Some(anchor_rect) = anchor_rects.get(&anchor).copied()
         {
             if let Some(mut cached_anchor) = world.get_mut::<OverlayAnchorRect>(entity) {
-                *cached_anchor = anchor_rect;
+                if *cached_anchor != anchor_rect {
+                    *cached_anchor = anchor_rect;
+                }
             } else {
                 world.entity_mut(entity).insert(anchor_rect);
             }

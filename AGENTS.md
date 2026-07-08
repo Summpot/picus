@@ -266,8 +266,27 @@ Migration rules from old spawn code:
 
 UI synthesis is driven by `UiProjectorRegistry` in `PostUpdate`. It gathers
 `UiRoot` and `UiOverlayRoot` entities, projects ECS trees recursively, stores
-`SynthesizedUiViews`, and rebuilds `MasonryRuntime`. Multiple roots compose into a
-full-viewport top-left `zstack`, with overlays sorted last.
+`SynthesizedUiViews`, and rebuilds only dirty `MasonryRuntime` windows. Multiple
+roots compose into a full-viewport top-left `zstack`, with overlays sorted last.
+
+Projection invalidation is retained/incremental:
+
+- Component projectors registered through `register_component` and
+  `register_ui_component` automatically register their component type as a
+  projection dependency. Raw projectors are conservatively treated as untracked
+  and force synthesis; prefer component registration or an explicit
+  `UiProjectionInvalidation` request for new code.
+- `UiProjectionInvalidation` is the public escape hatch for projection inputs
+  that do not appear as tracked components, such as external resources or
+  bespoke runtime state. Use `request_all`, `request_window`, or `request_root`
+  instead of writing a stable resource/component every frame to trigger rebuilds.
+- `SynthesizedUiViews.dirty_windows` is the only handoff that should cause
+  `rebuild_masonry_runtime` to replace retained root views. The paint pass then
+  follows Masonry Core's own paint/animation invalidation.
+- Systems feeding projection must avoid no-op mutable writes. Compare before
+  assigning projection-visible resources/components such as window size, overlay
+  geometry, scroll geometry, and style-derived state so Bevy change detection
+  remains meaningful.
 
 Interactive controls use the ECS event route:
 
