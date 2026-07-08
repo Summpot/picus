@@ -3,7 +3,7 @@ use std::{any::TypeId, collections::HashSet};
 use bevy_app::App;
 use bevy_ecs::prelude::*;
 
-use crate::{AppPicusExt, ProjectionCtx, StyleTypeRegistry, UiView};
+use crate::{AppPicusExt, ProjectionCtx, StyleTypeRegistry, UiProjectorRegistry, UiView};
 
 mod avatar;
 mod badge;
@@ -116,6 +116,14 @@ pub trait UiComponentTemplate: Component + Sized {
 
     /// Project this UI component into a Masonry view.
     fn project(component: &Self, ctx: ProjectionCtx<'_>) -> UiView;
+
+    /// Register non-component projection inputs used by this UI component.
+    ///
+    /// Implement this when `project` reads app resources through
+    /// [`ProjectionCtx::world`]. Component changes are tracked automatically by
+    /// `register_ui_component`; resource dependencies must be declared here so
+    /// incremental synthesis can stay idle when nothing relevant changed.
+    fn register_projection_dependencies(_registry: &mut UiProjectorRegistry) {}
 
     /// Register selector type aliases used by this UI component.
     fn register_style_types(registry: &mut StyleTypeRegistry) {

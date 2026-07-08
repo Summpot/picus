@@ -353,15 +353,16 @@ pub fn synthesize_ui(world: &mut World) {
         }
     }
 
-    let dirty_entities = world.resource_scope(|world, mut registry: Mut<UiProjectorRegistry>| {
+    let dirty_inputs = world.resource_scope(|world, mut registry: Mut<UiProjectorRegistry>| {
         let dirty = registry.drain_dirty_entities(world);
+        let tracked_resources_changed = registry.drain_dirty_resources(world);
         let untracked_projectors = registry.has_untracked_projectors();
         if untracked_projectors {
             tracing::trace!("raw projection projectors are registered; forcing synthesis");
         }
-        (dirty, untracked_projectors)
+        (dirty, tracked_resources_changed, untracked_projectors)
     });
-    let (mut dirty_entities, has_untracked_projectors) = dirty_entities;
+    let (mut dirty_entities, tracked_resources_changed, has_untracked_projectors) = dirty_inputs;
 
     let projection_resources_changed = projection_resources_changed(world);
     let invalidation = world.resource_mut::<UiProjectionInvalidation>().take();
@@ -381,6 +382,7 @@ pub fn synthesize_ui(world: &mut World) {
         if views.generation == 0
             || invalidation.all
             || projection_resources_changed
+            || tracked_resources_changed
             || has_untracked_projectors
         {
             dirty_windows.extend(all_windows.iter().copied());
@@ -503,6 +505,7 @@ pub(crate) fn register_projection_invalidation_dependencies(registry: &mut UiPro
     registry
         .register_dependency::<Children>()
         .register_dependency::<UiWindow>()
+        .register_dependency::<InteractionState>()
         .register_dependency::<ComputedStyle>()
         .register_dependency::<CurrentColorStyle>()
         .register_dependency::<LocalizeText>()

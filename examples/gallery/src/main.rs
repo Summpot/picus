@@ -314,6 +314,7 @@ fn build_gallery_app() -> App {
             vec!["Inter", "sans-serif"],
         )
         .insert_resource(GalleryState::default())
+        .register_projection_resource::<GalleryState>()
         .register_ui_component::<GalleryRoot>()
         .register_ui_component::<GalleryTopBar>()
         .register_ui_component::<GalleryStatus>()

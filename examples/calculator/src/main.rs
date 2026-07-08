@@ -547,6 +547,7 @@ fn build_bevy_calculator_app() -> App {
     app.add_plugins(PicusPlugin)
         .load_style_sheet_ron(include_str!("../assets/themes/calculator.ron"))
         .insert_resource(CalculatorEngine::default())
+        .register_projection_resource::<CalculatorEngine>()
         .register_ui_component::<CalcRoot>()
         .register_ui_component::<CalcDisplayPanel>()
         .register_ui_component::<CalcKeypad>()
@@ -580,6 +581,7 @@ mod tests {
         let mut app = App::new();
         app.add_plugins(PicusPlugin)
             .insert_resource(CalculatorEngine::default())
+            .register_projection_resource::<CalculatorEngine>()
             .register_ui_component::<CalcRoot>()
             .register_ui_component::<CalcDisplayPanel>()
             .register_ui_component::<CalcKeypad>()

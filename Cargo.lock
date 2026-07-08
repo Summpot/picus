@@ -1497,7 +1497,7 @@ dependencies = [
 
 [[package]]
 name = "codewhale-agent"
-version = "0.8.66"
+version = "0.8.67"
 dependencies = [
  "codewhale-config",
  "serde",
@@ -1505,7 +1505,7 @@ dependencies = [
 
 [[package]]
 name = "codewhale-config"
-version = "0.8.66"
+version = "0.8.67"
 dependencies = [
  "anyhow",
  "codewhale-execpolicy",
@@ -1522,7 +1522,7 @@ dependencies = [
 
 [[package]]
 name = "codewhale-core"
-version = "0.8.66"
+version = "0.8.67"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1541,7 +1541,7 @@ dependencies = [
 
 [[package]]
 name = "codewhale-execpolicy"
-version = "0.8.66"
+version = "0.8.67"
 dependencies = [
  "anyhow",
  "codewhale-protocol",
@@ -1550,7 +1550,7 @@ dependencies = [
 
 [[package]]
 name = "codewhale-hooks"
-version = "0.8.66"
+version = "0.8.67"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1564,7 +1564,7 @@ dependencies = [
 
 [[package]]
 name = "codewhale-mcp"
-version = "0.8.66"
+version = "0.8.67"
 dependencies = [
  "anyhow",
  "serde",
@@ -1573,7 +1573,7 @@ dependencies = [
 
 [[package]]
 name = "codewhale-protocol"
-version = "0.8.66"
+version = "0.8.67"
 dependencies = [
  "chrono",
  "serde",
@@ -1583,7 +1583,7 @@ dependencies = [
 
 [[package]]
 name = "codewhale-secrets"
-version = "0.8.66"
+version = "0.8.67"
 dependencies = [
  "dirs",
  "keyring",
@@ -1596,10 +1596,11 @@ dependencies = [
 
 [[package]]
 name = "codewhale-state"
-version = "0.8.66"
+version = "0.8.67"
 dependencies = [
  "anyhow",
  "chrono",
+ "codewhale-protocol",
  "dirs",
  "rusqlite",
  "serde",
@@ -1608,7 +1609,7 @@ dependencies = [
 
 [[package]]
 name = "codewhale-tools"
-version = "0.8.66"
+version = "0.8.67"
 dependencies = [
  "anyhow",
  "async-trait",

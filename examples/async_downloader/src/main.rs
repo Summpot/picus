@@ -566,6 +566,7 @@ fn build_async_downloader_app() -> App {
     app.add_plugins(PicusPlugin)
         .load_style_sheet_ron(include_str!("../assets/themes/async_downloader.ron"))
         .insert_resource(DownloadState::default())
+        .register_projection_resource::<DownloadState>()
         .register_ui_component::<DownloadRootView>()
         .register_ui_component::<DownloadTitle>()
         .register_ui_component::<DownloadUrlRow>()

@@ -816,6 +816,7 @@ fn build_picuscode_app() -> App {
     app.add_plugins(PicusPlugin);
 
     app.load_style_sheet_ron(include_str!("../assets/themes/picuscode.ron"))
+        .register_projection_resource::<PicusState>()
         .register_ui_component::<ChatRootView>()
         .register_ui_component::<ChatTitleBarView>()
         .register_ui_component::<ChatBodyView>()

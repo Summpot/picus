@@ -1228,8 +1228,14 @@ fn track_game_viewport(
     mut viewport: ResMut<GameViewport>,
 ) {
     for event in window_resized.read() {
-        viewport.width = (event.width as f64).max(1.0);
-        viewport.height = (event.height as f64).max(1.0);
+        let width = (event.width as f64).max(1.0);
+        let height = (event.height as f64).max(1.0);
+        if viewport.width != width {
+            viewport.width = width;
+        }
+        if viewport.height != height {
+            viewport.height = height;
+        }
     }
 }
 
@@ -1302,6 +1308,8 @@ fn build_2048_app() -> App {
         .insert_resource(ButtonInput::<KeyCode>::default())
         .insert_resource(GameViewport::default())
         .insert_resource(Game2048State::default())
+        .register_projection_resource::<GameViewport>()
+        .register_projection_resource::<Game2048State>()
         .register_ui_component::<GameRoot>()
         .register_ui_component::<HeaderBlock>()
         .register_ui_component::<ScoreStrip>()

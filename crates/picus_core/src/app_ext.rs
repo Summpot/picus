@@ -1,6 +1,6 @@
 use bevy_app::{App, Update};
 use bevy_asset::AssetServer;
-use bevy_ecs::prelude::Component;
+use bevy_ecs::prelude::{Component, Resource};
 use fluent::{FluentResource, concurrent::FluentBundle};
 use std::{fs, io, path::Path};
 use unic_langid::LanguageIdentifier;
@@ -109,6 +109,13 @@ pub trait AppPicusExt {
     /// and selector type aliases.
     fn register_ui_component<T: UiComponentTemplate>(&mut self) -> &mut Self;
 
+    /// Register a Bevy resource as an input to UI projection.
+    ///
+    /// Use this for resources read from [`ProjectionCtx::world`] by application
+    /// projectors. Registered resources invalidate synthesis only when Bevy
+    /// change detection says they changed.
+    fn register_projection_resource<R: Resource>(&mut self) -> &mut Self;
+
     /// Register a raw projector implementation.
     ///
     /// Legacy low-level API kept for compatibility; prefer
@@ -191,12 +198,23 @@ impl AppPicusExt for App {
         self.world_mut()
             .resource_mut::<UiProjectorRegistry>()
             .register_component::<T>(T::project);
+        T::register_projection_dependencies(
+            &mut self.world_mut().resource_mut::<UiProjectorRegistry>(),
+        );
 
         self.init_resource::<StyleTypeRegistry>();
         T::register_style_types(&mut self.world_mut().resource_mut::<StyleTypeRegistry>());
 
         self.add_systems(Update, expand_added_ui_component_templates::<T>);
 
+        self
+    }
+
+    fn register_projection_resource<R: Resource>(&mut self) -> &mut Self {
+        self.init_resource::<UiProjectorRegistry>();
+        self.world_mut()
+            .resource_mut::<UiProjectorRegistry>()
+            .register_resource_dependency::<R>();
         self
     }
 

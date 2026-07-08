@@ -121,14 +121,19 @@ fn apply_timer_event(state: &mut TimerState, event: TimerEvent) {
     }
 }
 
+fn timer_can_tick(state: &TimerState) -> bool {
+    state.running && state.elapsed_secs < state.duration_secs
+}
+
 fn tick_timer(state: &mut TimerState) {
+    if !timer_can_tick(state) {
+        return;
+    }
+
     let now = Instant::now();
     let dt = now.saturating_duration_since(state.last_tick).as_secs_f64();
     state.last_tick = now;
-
-    if state.running && state.elapsed_secs < state.duration_secs {
-        state.elapsed_secs = (state.elapsed_secs + dt).min(state.duration_secs);
-    }
+    state.elapsed_secs = (state.elapsed_secs + dt).min(state.duration_secs);
 }
 
 fn draw_timer_dial(scene: &mut Scene, size: Size, progress: f64, running: bool) {
@@ -388,13 +393,25 @@ fn drain_timer_events_and_tick(world: &mut World) {
         .resource_mut::<UiEventQueue>()
         .drain_actions::<TimerEvent>();
 
-    {
-        let mut state = world.resource_mut::<TimerState>();
-        for event in events {
-            apply_timer_event(&mut state, event.action);
-        }
-        tick_timer(&mut state);
+    let has_mutating_event = events
+        .iter()
+        .any(|event| !matches!(event.action, TimerEvent::Tick));
+    let has_tick_event = events
+        .iter()
+        .any(|event| matches!(event.action, TimerEvent::Tick));
+    let should_tick = has_tick_event
+        && world
+            .get_resource::<TimerState>()
+            .is_some_and(timer_can_tick);
+    if !has_mutating_event && !should_tick {
+        return;
     }
+
+    let mut state = world.resource_mut::<TimerState>();
+    for event in events {
+        apply_timer_event(&mut state, event.action);
+    }
+    tick_timer(&mut state);
 }
 
 fn build_bevy_timer_app() -> App {
@@ -404,6 +421,7 @@ fn build_bevy_timer_app() -> App {
     app.add_plugins(PicusPlugin)
         .load_style_sheet_ron(include_str!("../assets/themes/timer.ron"))
         .insert_resource(TimerState::default())
+        .register_projection_resource::<TimerState>()
         .register_ui_component::<TimerRootView>()
         .register_ui_component::<TimerTitle>()
         .register_ui_component::<TimerDialView>()

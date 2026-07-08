@@ -319,6 +319,22 @@ fn tick_game(
     }
 }
 
+fn chess_should_tick(world: &World) -> bool {
+    let Some(flow) = world.get_resource::<ChessFlowResource>() else {
+        return false;
+    };
+
+    if matches!(
+        flow.phase,
+        Phase::Uninitialized | Phase::MoveAttempt | Phase::EngineThinking
+    ) {
+        return true;
+    }
+
+    matches!(flow.phase, Phase::Ready | Phase::EnginePlaying)
+        && flow.last_tick_instant.elapsed() >= Duration::from_millis(TIMER_TICK_MS)
+}
+
 fn tick_once(
     game_res: &mut ChessGameResource,
     ui: &mut ChessUiResource,
@@ -647,6 +663,10 @@ fn drain_events_and_tick(world: &mut World) {
         .resource_mut::<UiEventQueue>()
         .drain_actions::<ChessEvent>();
 
+    if events.is_empty() && !chess_should_tick(world) {
+        return;
+    }
+
     with_chess_resources(world, |game_res, ui, flow| {
         for event in events {
             apply_event(event.action, game_res, ui, flow);
@@ -667,6 +687,9 @@ fn build_bevy_chess_app() -> App {
         .insert_resource(ChessGameResource::new(game))
         .insert_resource(ui)
         .insert_resource(ChessFlowResource::default())
+        .register_projection_resource::<ChessGameResource>()
+        .register_projection_resource::<ChessUiResource>()
+        .register_projection_resource::<ChessFlowResource>()
         .register_ui_component::<ChessRootView>()
         .register_ui_component::<ChessUiComponentsPanel>()
         .register_ui_component::<ChessBoardPanel>()

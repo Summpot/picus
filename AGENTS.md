@@ -276,10 +276,14 @@ Projection invalidation is retained/incremental:
   projection dependency. Raw projectors are conservatively treated as untracked
   and force synthesis; prefer component registration or an explicit
   `UiProjectionInvalidation` request for new code.
+- Resource inputs read through `ProjectionCtx::world` must be declared with
+  `UiComponentTemplate::register_projection_dependencies` or
+  `AppPicusExt::register_projection_resource::<R>()`. Resource dependencies
+  dirty synthesis only when Bevy marks the resource added or changed.
 - `UiProjectionInvalidation` is the public escape hatch for projection inputs
-  that do not appear as tracked components, such as external resources or
-  bespoke runtime state. Use `request_all`, `request_window`, or `request_root`
-  instead of writing a stable resource/component every frame to trigger rebuilds.
+  that do not appear as tracked components or resources, such as bespoke
+  runtime state. Use `request_all`, `request_window`, or `request_root` instead
+  of writing a stable resource/component every frame to trigger rebuilds.
 - `SynthesizedUiViews.dirty_windows` is the only handoff that should cause
   `rebuild_masonry_runtime` to replace retained root views. The paint pass then
   follows Masonry Core's own paint/animation invalidation.
@@ -316,6 +320,10 @@ Interactive controls use the ECS event route:
   `checkbox`) fire their `on_changed`/`on_enter` callbacks into `UiEventQueue`
   in the same frame. Button widgets push to `UiEventQueue` directly from
   `on_pointer_event` and do not rely on this routing path.
+- Xilem task/proxy messages are queued per `WindowRuntime` and routed by the
+  same PreUpdate message system; when Bevy's `EventLoopProxyWrapper` is
+  available, the proxy sends `WinitUserEvent::WakeUp` so reactive winit mode
+  does not wait for the next timeout to process async view output.
 - `UiEventQueue` stores type-erased actions and supports typed non-destructive
   drains through `drain_actions::<T>()`.
 - `UiPointerHitEvent` is the hit-tested source event; `UiPointerEvent` bubbles

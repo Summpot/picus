@@ -110,11 +110,46 @@ fn changed_entities<C: Component>(world: &mut World) -> Vec<Entity> {
     query.iter(world).collect()
 }
 
+struct ProjectionResourceDependency {
+    type_id: TypeId,
+    type_name: &'static str,
+    resource_id: Option<ComponentId>,
+    ensure_resource_id: fn(&mut World) -> ComponentId,
+}
+
+impl ProjectionResourceDependency {
+    fn new<R: Resource>() -> Self {
+        Self {
+            type_id: TypeId::of::<R>(),
+            type_name: std::any::type_name::<R>(),
+            resource_id: None,
+            ensure_resource_id: |world| world.register_resource::<R>(),
+        }
+    }
+
+    fn resource_id(&mut self, world: &mut World) -> ComponentId {
+        match self.resource_id {
+            Some(resource_id) => resource_id,
+            None => {
+                let resource_id = (self.ensure_resource_id)(world);
+                self.resource_id = Some(resource_id);
+                resource_id
+            }
+        }
+    }
+
+    fn changed(&mut self, world: &mut World) -> bool {
+        let resource_id = self.resource_id(world);
+        world.is_resource_added_by_id(resource_id) || world.is_resource_changed_by_id(resource_id)
+    }
+}
+
 /// Registry of projector implementations.
 #[derive(Resource, Default)]
 pub struct UiProjectorRegistry {
     projectors: Vec<Box<dyn UiProjector>>,
     dependencies: Vec<ProjectionComponentDependency>,
+    resource_dependencies: Vec<ProjectionResourceDependency>,
     untracked_projectors: usize,
 }
 
@@ -137,6 +172,21 @@ impl UiProjectorRegistry {
         {
             self.dependencies
                 .push(ProjectionComponentDependency::new::<C>());
+        }
+        self
+    }
+
+    /// Register a resource whose changes should invalidate ECS-to-retained
+    /// projection.
+    pub fn register_resource_dependency<R: Resource>(&mut self) -> &mut Self {
+        let type_id = TypeId::of::<R>();
+        if !self
+            .resource_dependencies
+            .iter()
+            .any(|dependency| dependency.type_id == type_id)
+        {
+            self.resource_dependencies
+                .push(ProjectionResourceDependency::new::<R>());
         }
         self
     }
@@ -168,6 +218,20 @@ impl UiProjectorRegistry {
             }
         }
         dirty
+    }
+
+    pub(crate) fn drain_dirty_resources(&mut self, world: &mut World) -> bool {
+        let mut changed = false;
+        for dependency in &mut self.resource_dependencies {
+            if dependency.changed(world) {
+                tracing::trace!(
+                    resource = dependency.type_name,
+                    "projection resource dependency changed"
+                );
+                changed = true;
+            }
+        }
+        changed
     }
 
     pub(crate) fn has_untracked_projectors(&self) -> bool {

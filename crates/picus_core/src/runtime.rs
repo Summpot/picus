@@ -1,7 +1,7 @@
 use std::{
     collections::{HashMap, HashSet},
     fmt::Debug,
-    sync::{Arc, mpsc},
+    sync::{Arc, Mutex, mpsc},
 };
 
 use crate::xilem::style::Style as _;
@@ -22,6 +22,7 @@ use bevy_window::{
     ClosingWindow, CursorLeft, CursorMoved, Ime as BevyIme, PrimaryWindow, RawHandleWrapper,
     RequestRedraw, Window, WindowFocused, WindowResized, WindowScaleFactorChanged, WindowWrapper,
 };
+use bevy_winit::{EventLoopProxy, EventLoopProxyWrapper, WinitUserEvent};
 use masonry_core::{
     app::{RenderRoot, RenderRootOptions, RenderRootSignal, VisualLayerKind, WindowSizePolicy},
     core::{
@@ -62,12 +63,38 @@ use crate::{
     synthesize::SynthesizedUiViews,
 };
 
-#[derive(Debug)]
-struct NoopProxy;
+struct QueuedViewMessage {
+    path: Vec<ViewId>,
+    message: SendMessage,
+}
 
-impl RawProxy for NoopProxy {
-    fn send_message(&self, _path: Arc<[ViewId]>, message: SendMessage) -> Result<(), ProxyError> {
-        Err(ProxyError::DriverFinished(message))
+struct ChannelProxy {
+    sender: mpsc::Sender<QueuedViewMessage>,
+    event_loop_proxy: Arc<Mutex<Option<EventLoopProxy<WinitUserEvent>>>>,
+}
+
+impl Debug for ChannelProxy {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ChannelProxy").finish_non_exhaustive()
+    }
+}
+
+impl RawProxy for ChannelProxy {
+    fn send_message(&self, path: Arc<[ViewId]>, message: SendMessage) -> Result<(), ProxyError> {
+        match self.sender.send(QueuedViewMessage {
+            path: path.as_ref().to_vec(),
+            message,
+        }) {
+            Ok(()) => {
+                if let Ok(proxy) = self.event_loop_proxy.lock()
+                    && let Some(proxy) = proxy.as_ref()
+                {
+                    let _ = proxy.send_event(WinitUserEvent::WakeUp);
+                }
+                Ok(())
+            }
+            Err(err) => Err(ProxyError::DriverFinished(err.0.message)),
+        }
     }
 
     fn dyn_debug(&self) -> &dyn Debug {
@@ -125,6 +152,7 @@ pub struct WindowRuntime {
     keyboard_modifiers: Modifiers,
     ime_signal_receiver: mpsc::Receiver<ImeWindowSignal>,
     action_signal_receiver: mpsc::Receiver<(ErasedAction, WidgetId)>,
+    view_message_receiver: mpsc::Receiver<QueuedViewMessage>,
     redraw_signal_receiver: mpsc::Receiver<RedrawSignal>,
     needs_redraw: bool,
     needs_anim_frame: bool,
@@ -141,9 +169,17 @@ pub struct WindowRuntime {
 }
 
 impl WindowRuntime {
-    fn new(window_entity: Entity, initial_view: UiView) -> Self {
+    fn new(
+        window_entity: Entity,
+        initial_view: UiView,
+        event_loop_proxy: Arc<Mutex<Option<EventLoopProxy<WinitUserEvent>>>>,
+    ) -> Self {
+        let (view_message_sender, view_message_receiver) = mpsc::channel::<QueuedViewMessage>();
         let mut view_ctx = ViewCtx::new(
-            Arc::new(NoopProxy),
+            Arc::new(ChannelProxy {
+                sender: view_message_sender,
+                event_loop_proxy,
+            }),
             Arc::new(tokio::runtime::Runtime::new().expect("tokio runtime should initialize")),
         );
         let (ime_signal_sender, ime_signal_receiver) = mpsc::channel::<ImeWindowSignal>();
@@ -220,6 +256,7 @@ impl WindowRuntime {
             keyboard_modifiers: Modifiers::empty(),
             ime_signal_receiver,
             action_signal_receiver,
+            view_message_receiver,
             redraw_signal_receiver,
             needs_redraw: true,
             needs_anim_frame: true,
@@ -474,25 +511,32 @@ impl WindowRuntime {
         }
     }
 
-    /// Route widget actions emitted since the last call back to their source
-    /// view's [`View::message`] handler.
+    /// Route widget actions and async proxy messages emitted since the last
+    /// call back to their source view's [`View::message`] handler.
     ///
     /// Masonry widgets submit actions during the rewrite passes (triggered by
     /// input injection). Actions not consumed by ancestor widgets' `on_action`
     /// are emitted as [`RenderRootSignal::Action`], which the per-window signal
-    /// sink captures into `action_signal_receiver`. This method drains that
-    /// queue and dispatches each action to the corresponding view via the
-    /// `ViewCtx` widget map, so callback-based views such as `text_input` can
-    /// fire their `on_changed`/`on_enter` callbacks.
+    /// sink captures into `action_signal_receiver`. Xilem tasks and other
+    /// proxy-backed views submit messages through `view_message_receiver`.
+    /// This method drains both queues and dispatches each message to the
+    /// corresponding view, so callback-based views such as `text_input` can
+    /// fire their `on_changed`/`on_enter` callbacks and async task views can
+    /// deliver their output.
     ///
     /// Must be called after input injection and before the ECS action-drain
     /// systems run, so that callback-emitted UI actions are visible in the same
     /// frame.
     pub fn route_pending_view_messages(&mut self) {
+        let view_messages: Vec<QueuedViewMessage> = self.view_message_receiver.try_iter().collect();
         let actions: Vec<(ErasedAction, WidgetId)> =
             self.action_signal_receiver.try_iter().collect();
-        if actions.is_empty() {
+        if view_messages.is_empty() && actions.is_empty() {
             return;
+        }
+
+        for queued in view_messages {
+            self.route_view_message_at_path(queued.path, queued.message);
         }
 
         for (action, source) in actions {
@@ -510,11 +554,15 @@ impl WindowRuntime {
             return false;
         };
 
+        self.route_view_message_at_path(path, SendMessage(action))
+    }
+
+    fn route_view_message_at_path(&mut self, path: Vec<ViewId>, message: SendMessage) -> bool {
         let env = std::mem::take(self.view_ctx.environment());
-        let message = DynMessage::from(SendMessage(action));
+        let message = DynMessage::from(message);
         let mut ctx = MessageCtx::new(env, path, message);
 
-        let _result: MessageResult<()> = self.render_root.edit_base_layer(|mut root| {
+        let result: MessageResult<()> = self.render_root.edit_base_layer(|mut root| {
             let mut root = root.downcast::<Passthrough>();
             <UiAnyView as View<(), (), ViewCtx>>::message(
                 self.current_view.as_ref(),
@@ -527,6 +575,9 @@ impl WindowRuntime {
 
         let (env, _, _) = ctx.finish();
         *self.view_ctx.environment() = env;
+        if matches!(result, MessageResult::RequestRebuild) {
+            self.needs_redraw = true;
+        }
         true
     }
 
@@ -920,6 +971,7 @@ fn picus_default_properties() -> DefaultProperties {
 pub struct MasonryRuntime {
     pub windows: HashMap<Entity, WindowRuntime>,
     primary_window: Option<Entity>,
+    event_loop_proxy: Arc<Mutex<Option<EventLoopProxy<WinitUserEvent>>>>,
 }
 
 impl FromWorld for MasonryRuntime {
@@ -931,6 +983,7 @@ impl FromWorld for MasonryRuntime {
         Self {
             windows: HashMap::new(),
             primary_window: None,
+            event_loop_proxy: Arc::new(Mutex::new(None)),
         }
     }
 }
@@ -982,8 +1035,19 @@ impl MasonryRuntime {
         }
 
         self.windows.entry(entity).or_insert_with(|| {
-            WindowRuntime::new(entity, WindowRuntime::initial_placeholder_view())
+            WindowRuntime::new(
+                entity,
+                WindowRuntime::initial_placeholder_view(),
+                Arc::clone(&self.event_loop_proxy),
+            )
         })
+    }
+
+    /// Update the Bevy winit event-loop proxy used by async Xilem view tasks.
+    pub fn set_event_loop_proxy(&mut self, proxy: Option<EventLoopProxy<WinitUserEvent>>) {
+        if let Ok(mut target) = self.event_loop_proxy.lock() {
+            *target = proxy;
+        }
     }
 
     /// Mark `entity` as the primary window if no primary is set yet.
@@ -1419,12 +1483,15 @@ pub fn inject_bevy_input_into_masonry(
 pub fn initialize_masonry_runtime_from_windows(
     runtime: Option<NonSendMut<MasonryRuntime>>,
     bridge: Option<Res<XilemFontBridge>>,
+    event_loop_proxy: Option<Res<EventLoopProxyWrapper>>,
     added_window_query: Query<(Entity, Option<&PrimaryWindow>), Added<Window>>,
     window_query: Query<(Entity, Option<&PrimaryWindow>), With<Window>>,
 ) {
     let Some(mut runtime) = runtime else {
         return;
     };
+
+    runtime.set_event_loop_proxy(event_loop_proxy.as_deref().map(|proxy| (**proxy).clone()));
 
     // Gather candidate windows: newly-added windows, or any existing window if
     // the runtime currently has none attached.
@@ -1554,10 +1621,11 @@ pub fn rebuild_masonry_runtime(world: &mut World) {
     }
 }
 
-/// PreUpdate step: route widget actions emitted during input injection back to
-/// their source view's `message` handler, so callback-based views (such as
-/// `text_input`) fire their `on_changed`/`on_enter` callbacks into the global
-/// UI event queue before the ECS action-drain systems run.
+/// PreUpdate step: route widget actions emitted during input injection and
+/// async Xilem proxy messages back to their source view's `message` handler.
+/// Callback-based views (such as `text_input`) fire their `on_changed` /
+/// `on_enter` callbacks, and task views can deliver background output into the
+/// global UI event queue before the ECS action-drain systems run.
 pub fn route_masonry_view_messages(runtime: Option<NonSendMut<MasonryRuntime>>) {
     let Some(mut runtime) = runtime else {
         return;
@@ -1637,11 +1705,59 @@ pub fn paint_masonry_ui(
 mod tests {
     use super::*;
     use crate::test_helpers::*;
-    use crate::{InteractionState, PicusPlugin, UiRoot};
+    use crate::{
+        AppPicusExt, InteractionState, NavigationViewItem, PicusPlugin, ProjectionCtx,
+        UiComponentTemplate, UiNavigationItem, UiNavigationView, UiProjectorRegistry, UiRoot,
+        UiView, emit_ui_action,
+    };
     use bevy_app::{App, Update};
     use bevy_ecs::hierarchy::ChildOf;
+    use bevy_ecs::prelude::{Component, Resource};
     use bevy_input::touch::TouchPhase;
     use picus_view::picus_widget::widgets::TextAction;
+    use picus_view::view::{fork, task};
+
+    #[derive(Resource, Default)]
+    struct ProjectionTestResource {
+        text: String,
+    }
+
+    #[derive(Component, Default, Clone)]
+    struct ResourceBackedLabel;
+
+    impl UiComponentTemplate for ResourceBackedLabel {
+        fn project(_component: &Self, ctx: ProjectionCtx<'_>) -> UiView {
+            Arc::new(label(
+                ctx.world.resource::<ProjectionTestResource>().text.clone(),
+            ))
+        }
+
+        fn register_projection_dependencies(registry: &mut UiProjectorRegistry) {
+            registry.register_resource_dependency::<ProjectionTestResource>();
+        }
+    }
+
+    #[derive(Component, Default, Clone)]
+    struct ProxyTaskRoot;
+
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    struct ProxyTaskAction;
+
+    impl UiComponentTemplate for ProxyTaskRoot {
+        fn project(_component: &Self, ctx: ProjectionCtx<'_>) -> UiView {
+            let root = ctx.entity;
+            let heartbeat = task(
+                |proxy, _: &mut ()| async move {
+                    let _ = proxy.message(());
+                },
+                move |_: &mut (), ()| {
+                    emit_ui_action(root, ProxyTaskAction);
+                },
+            );
+
+            Arc::new(fork(Arc::new(label("task")) as UiView, Some(heartbeat)))
+        }
+    }
 
     #[test]
     fn logical_character_keys_map_to_text_keys() {
@@ -1671,6 +1787,7 @@ mod tests {
         let mut runtime = MasonryRuntime {
             windows: HashMap::new(),
             primary_window: None,
+            event_loop_proxy: Arc::new(Mutex::new(None)),
         };
 
         let a = Entity::from_bits(1);
@@ -1700,6 +1817,7 @@ mod tests {
         let mut runtime = MasonryRuntime {
             windows: HashMap::new(),
             primary_window: None,
+            event_loop_proxy: Arc::new(Mutex::new(None)),
         };
         let window = Entity::from_bits(7);
 
@@ -1839,6 +1957,153 @@ mod tests {
             .expect("primary window runtime should exist")
             .rebuild_count_for_tests();
         assert_eq!(idle_rebuild_count, changed_rebuild_count);
+    }
+
+    #[test]
+    fn changed_projection_resource_rebuilds_once_then_returns_to_idle() {
+        let mut app = App::new();
+        app.add_plugins(PicusPlugin)
+            .insert_resource(ProjectionTestResource {
+                text: "before".to_string(),
+            })
+            .register_ui_component::<ResourceBackedLabel>();
+
+        let mut window = Window {
+            visible: false,
+            ..Default::default()
+        };
+        window.resolution.set(480.0, 320.0);
+        app.world_mut().spawn((window, PrimaryWindow));
+        app.world_mut().spawn((UiRoot, ResourceBackedLabel));
+
+        app.update();
+        let initial_rebuild_count = app
+            .world()
+            .non_send::<crate::MasonryRuntime>()
+            .primary()
+            .expect("primary window runtime should exist")
+            .rebuild_count_for_tests();
+
+        app.world_mut()
+            .resource_mut::<ProjectionTestResource>()
+            .text = "after".to_string();
+
+        app.update();
+        let changed_rebuild_count = app
+            .world()
+            .non_send::<crate::MasonryRuntime>()
+            .primary()
+            .expect("primary window runtime should exist")
+            .rebuild_count_for_tests();
+        assert_eq!(changed_rebuild_count, initial_rebuild_count + 1);
+
+        app.update();
+        let idle_rebuild_count = app
+            .world()
+            .non_send::<crate::MasonryRuntime>()
+            .primary()
+            .expect("primary window runtime should exist")
+            .rebuild_count_for_tests();
+        assert_eq!(idle_rebuild_count, changed_rebuild_count);
+    }
+
+    #[test]
+    fn navigation_item_interaction_state_rebuilds_hover_once_then_returns_to_idle() {
+        let mut app = App::new();
+        app.add_plugins(PicusPlugin);
+
+        let mut window = Window {
+            visible: false,
+            ..Default::default()
+        };
+        window.resolution.set(480.0, 320.0);
+        app.world_mut().spawn((window, PrimaryWindow));
+        app.world_mut().spawn((
+            UiRoot,
+            UiNavigationView::new([
+                NavigationViewItem::new("One"),
+                NavigationViewItem::new("Two"),
+            ]),
+        ));
+
+        app.update();
+        let initial_rebuild_count = app
+            .world()
+            .non_send::<crate::MasonryRuntime>()
+            .primary()
+            .expect("primary window runtime should exist")
+            .rebuild_count_for_tests();
+
+        let item = {
+            let mut query = app
+                .world_mut()
+                .query_filtered::<Entity, With<UiNavigationItem>>();
+            query
+                .iter(app.world())
+                .next()
+                .expect("navigation item should be expanded")
+        };
+        app.world_mut().entity_mut(item).insert(InteractionState {
+            hovered: true,
+            ..InteractionState::default()
+        });
+
+        app.update();
+        let changed_rebuild_count = app
+            .world()
+            .non_send::<crate::MasonryRuntime>()
+            .primary()
+            .expect("primary window runtime should exist")
+            .rebuild_count_for_tests();
+        assert_eq!(changed_rebuild_count, initial_rebuild_count + 1);
+
+        app.update();
+        let idle_rebuild_count = app
+            .world()
+            .non_send::<crate::MasonryRuntime>()
+            .primary()
+            .expect("primary window runtime should exist")
+            .rebuild_count_for_tests();
+        assert_eq!(idle_rebuild_count, changed_rebuild_count);
+    }
+
+    #[test]
+    fn xilem_task_proxy_messages_are_routed_back_to_view_handler() {
+        let mut app = App::new();
+        app.add_plugins(PicusPlugin)
+            .register_ui_component::<ProxyTaskRoot>();
+
+        let mut window = Window {
+            visible: false,
+            ..Default::default()
+        };
+        window.resolution.set(480.0, 320.0);
+        app.world_mut().spawn((window, PrimaryWindow));
+        let task_root = app.world_mut().spawn((UiRoot, ProxyTaskRoot)).id();
+
+        app.update();
+
+        let mut routed = false;
+        for _ in 0..10 {
+            std::thread::sleep(std::time::Duration::from_millis(10));
+            app.update();
+            let actions = app
+                .world_mut()
+                .resource_mut::<UiEventQueue>()
+                .drain_actions::<ProxyTaskAction>();
+            if actions
+                .iter()
+                .any(|event| event.entity == task_root && event.action == ProxyTaskAction)
+            {
+                routed = true;
+                break;
+            }
+        }
+
+        assert!(
+            routed,
+            "task proxy message should be queued and routed through route_masonry_view_messages"
+        );
     }
 
     #[test]
