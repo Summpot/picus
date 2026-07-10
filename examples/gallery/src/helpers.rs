@@ -247,8 +247,8 @@ pub fn dialog_button(
     id
 }
 
-/// Spawn a button that updates the gallery status bar on click.
-pub fn status_button(
+/// Spawn a button that shows transient informational feedback on click.
+pub fn info_button(
     commands: &mut Commands,
     parent: Entity,
     label: &str,
@@ -260,7 +260,7 @@ pub fn status_button(
             ChildOf(parent)
         })
         .id();
-    commands.entity(id).insert(GalleryButtonAction::Status {
+    commands.entity(id).insert(GalleryButtonAction::Info {
         message: message.into(),
     });
     id

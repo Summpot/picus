@@ -31,6 +31,18 @@ pub enum NativeWindowBackdropMaterial {
     MicaAlt,
 }
 
+/// Native color scheme requested for a top-level window backdrop.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+pub enum NativeWindowBackdropColorScheme {
+    /// Preserve the operating system's current window appearance policy.
+    #[default]
+    System,
+    /// Request light window chrome and backdrop composition.
+    Light,
+    /// Request dark window chrome and backdrop composition.
+    Dark,
+}
+
 impl NativeWindowBackdropMaterial {
     #[must_use]
     pub const fn requires_transparent_surface(self) -> bool {
@@ -69,25 +81,57 @@ pub fn set_native_window_backdrop_material(
     raw_handle: &RawHandleWrapper,
     material: NativeWindowBackdropMaterial,
 ) -> Result<(), NativeWindowBackdropError> {
-    set_native_window_backdrop_material_impl(raw_handle, material)
+    set_native_window_backdrop_material_with_color_scheme(
+        raw_handle,
+        material,
+        NativeWindowBackdropColorScheme::System,
+    )
+}
+
+/// Apply a native backdrop material and explicit light/dark appearance.
+pub fn set_native_window_backdrop_material_with_color_scheme(
+    raw_handle: &RawHandleWrapper,
+    material: NativeWindowBackdropMaterial,
+    color_scheme: NativeWindowBackdropColorScheme,
+) -> Result<(), NativeWindowBackdropError> {
+    set_native_window_backdrop_material_impl(raw_handle, material, color_scheme)
 }
 
 #[cfg(windows)]
 fn set_native_window_backdrop_material_impl(
     raw_handle: &RawHandleWrapper,
     material: NativeWindowBackdropMaterial,
+    color_scheme: NativeWindowBackdropColorScheme,
 ) -> Result<(), NativeWindowBackdropError> {
     use raw_window_handle::RawWindowHandle;
     use windows_sys::Win32::Graphics::Dwm::{
         DWM_SYSTEMBACKDROP_TYPE, DWMSBT_AUTO, DWMSBT_MAINWINDOW, DWMSBT_NONE,
         DWMSBT_TABBEDWINDOW, DWMSBT_TRANSIENTWINDOW, DWMWA_SYSTEMBACKDROP_TYPE,
-        DwmSetWindowAttribute,
+        DWMWA_USE_IMMERSIVE_DARK_MODE, DwmSetWindowAttribute,
     };
 
     let hwnd = match raw_handle.get_window_handle() {
         RawWindowHandle::Win32(handle) => handle.hwnd.get() as windows_sys::Win32::Foundation::HWND,
         _ => return Err(NativeWindowBackdropError::UnsupportedWindowHandle),
     };
+
+    if !matches!(color_scheme, NativeWindowBackdropColorScheme::System) {
+        let use_dark_mode: i32 = i32::from(matches!(
+            color_scheme,
+            NativeWindowBackdropColorScheme::Dark
+        ));
+        let hr = unsafe {
+            DwmSetWindowAttribute(
+                hwnd,
+                DWMWA_USE_IMMERSIVE_DARK_MODE as u32,
+                (&use_dark_mode as *const i32).cast(),
+                core::mem::size_of::<i32>() as u32,
+            )
+        };
+        if hr < 0 {
+            return Err(NativeWindowBackdropError::WindowsHresult(hr));
+        }
+    }
 
     let backdrop: DWM_SYSTEMBACKDROP_TYPE = match material {
         NativeWindowBackdropMaterial::None => DWMSBT_NONE,
@@ -116,6 +160,7 @@ fn set_native_window_backdrop_material_impl(
 fn set_native_window_backdrop_material_impl(
     _raw_handle: &RawHandleWrapper,
     _material: NativeWindowBackdropMaterial,
+    _color_scheme: NativeWindowBackdropColorScheme,
 ) -> Result<(), NativeWindowBackdropError> {
     Err(NativeWindowBackdropError::UnsupportedPlatform)
 }

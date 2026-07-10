@@ -3,7 +3,7 @@
 //! Corresponds to Fluent UI's localization pattern — switching display language
 //! and verifying CJK font fallback behavior through registered i18n bundles.
 
-use crate::helpers::{card, class, grid, note, status_button};
+use crate::helpers::{card, class, grid, info_button, note};
 use bevy_ecs::{hierarchy::ChildOf, prelude::*};
 use picus::{
     LocalizeText, UiComboBox, UiComboOption, UiFlexColumn, UiFlexRow, UiLabel,
@@ -107,7 +107,7 @@ pub fn spawn_i18n_page(commands: &mut Commands, parent: Entity) -> Entity {
         template_value(LocalizeText::new("gallery-locale-action"))
         ChildOf(key_demo)
     });
-    status_button(
+    info_button(
         commands,
         key_demo,
         "Demo Button (static)",

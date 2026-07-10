@@ -5,6 +5,7 @@
   font_family: (Var: "font-family-base"),
   backdrop: (
     material: (Var: "window-backdrop"),
+    color_scheme: System,
     styles: {},
   ),
   tokens: {
@@ -2631,7 +2632,7 @@
           align_items: Stretch,
         ),
         colors: (
-          bg: Var("fill-layer-default"),
+          bg: Var("fill-layer-background"),
           border: Var("border-default"),
           text: Var("text-primary"),
         ),
@@ -2646,7 +2647,7 @@
           border_width: Var("border-thin"),
         ),
         colors: (
-          bg: Var("fill-layer-alt"),
+          bg: Var("fill-layer-background"),
           border: Var("border-default"),
         ),
       ),
@@ -3129,7 +3130,7 @@
           border_width: Var("border-thin"),
         ),
         colors: (
-          bg: Var("surface-elevated"),
+          bg: Var("fill-layer-background"),
           border: Var("border-muted"),
         ),
       ),
@@ -3223,6 +3224,7 @@
     "dark": (
       backdrop: (
         material: (Var: "window-backdrop"),
+        color_scheme: Dark,
         styles: {
           "mica": (
             tokens: {
@@ -3423,6 +3425,7 @@
     "light": (
       backdrop: (
         material: (Var: "window-backdrop"),
+        color_scheme: Light,
         styles: {
           "mica": (
             tokens: {
@@ -3621,6 +3624,11 @@
     ),
 
     "high-contrast": (
+      backdrop: (
+        material: (Var: "window-backdrop"),
+        color_scheme: Dark,
+        styles: {},
+      ),
       tokens: {
         "fill-layer-background": Color(Hex("#000000")),
         "fill-layer-default": Color(Hex("#000000")),

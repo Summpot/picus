@@ -26,7 +26,7 @@
           align_items: Center,
         ),
         colors: (
-          bg: Var("fill-layer-default"),
+          bg: Var("fill-card-default"),
           border: Var("border-default"),
         ),
       ),
@@ -93,21 +93,6 @@
       ),
     ),
     (
-      selector: Class("gallery.status"),
-      setter: (
-        layout: (
-          padding: Var("space-md"),
-          corner_radius: Var("radius-md"),
-          border_width: Var("border-thin"),
-        ),
-        colors: (
-          bg: Var("fill-layer-alt"),
-          border: Var("border-default"),
-          text: Var("text-secondary"),
-        ),
-      ),
-    ),
-    (
       selector: Class("gallery.body"),
       setter: (
         layout: (
@@ -135,7 +120,7 @@
           border_width: Var("border-thin"),
         ),
         colors: (
-          bg: Var("fill-layer-alt"),
+          bg: Var("fill-layer-background"),
           border: Var("border-default"),
         ),
       ),
@@ -166,8 +151,8 @@
         ),
         colors: (
           bg: Var("transparent"),
-          hover_bg: Var("surface-subtle-hover"),
-          pressed_bg: Var("surface-subtle-pressed"),
+          hover_bg: Var("fill-subtle-secondary"),
+          pressed_bg: Var("fill-subtle-tertiary"),
           text: Var("text-primary"),
         ),
         text: (
@@ -195,7 +180,7 @@
           border_width: Var("border-thin"),
         ),
         colors: (
-          bg: Var("surface-panel"),
+          bg: Var("transparent"),
           border: Var("border-default"),
         ),
       ),

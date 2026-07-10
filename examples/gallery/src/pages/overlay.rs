@@ -94,7 +94,7 @@ pub fn spawn_overlay_page(commands: &mut Commands, parent: Entity) -> Entity {
         .id();
     commands
         .entity(tooltip_src)
-        .insert(GalleryButtonAction::Status {
+        .insert(GalleryButtonAction::Info {
             message: "Overlay: Tooltip source clicked (hover for tooltip).".to_string(),
         });
 

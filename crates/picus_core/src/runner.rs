@@ -1,5 +1,9 @@
-use crate::backdrop::{ThemeManagedWindowBackdrop, WindowBackdropMaterial};
-use crate::styling::{StyleSheet, resolve_theme_backdrop_material};
+use crate::backdrop::{
+    ThemeManagedWindowBackdrop, WindowBackdropColorScheme, WindowBackdropMaterial,
+};
+use crate::styling::{
+    StyleSheet, resolve_theme_backdrop_color_scheme, resolve_theme_backdrop_material,
+};
 use crate::xilem::winit::{dpi::Size, error::EventLoopError};
 use bevy_a11y::AccessibilityPlugin;
 use bevy_app::App;
@@ -15,6 +19,7 @@ pub struct BevyWindowOptions {
     initial_inner_size: Option<Size>,
     min_inner_size: Option<Size>,
     backdrop_material: Option<WindowBackdropMaterial>,
+    backdrop_color_scheme: Option<WindowBackdropColorScheme>,
     theme_managed_backdrop: bool,
 }
 
@@ -53,6 +58,16 @@ impl BevyWindowOptions {
         self
     }
 
+    /// Requests an explicit light/dark appearance for the native backdrop.
+    #[must_use]
+    pub fn with_backdrop_color_scheme(
+        mut self,
+        color_scheme: WindowBackdropColorScheme,
+    ) -> Self {
+        self.backdrop_color_scheme = Some(color_scheme);
+        self
+    }
+
     /// Requests the Windows Mica system backdrop for the primary window.
     #[must_use]
     pub fn with_mica_backdrop(self) -> Self {
@@ -79,6 +94,12 @@ fn apply_theme_backdrop_option(app: &App, options: &mut BevyWindowOptions) {
     };
 
     options.backdrop_material = Some(material);
+    if options.backdrop_color_scheme.is_none() {
+        options.backdrop_color_scheme = app
+            .world()
+            .get_resource::<StyleSheet>()
+            .and_then(resolve_theme_backdrop_color_scheme);
+    }
     options.theme_managed_backdrop = true;
 }
 
@@ -186,6 +207,9 @@ fn configure_primary_window(app: &mut App, title: &str, options: &BevyWindowOpti
         if let Some(material) = options.backdrop_material {
             let mut entity = app.world_mut().entity_mut(entity);
             entity.insert(material);
+            if let Some(color_scheme) = options.backdrop_color_scheme {
+                entity.insert(color_scheme);
+            }
             if options.theme_managed_backdrop {
                 entity.insert(ThemeManagedWindowBackdrop);
             }
@@ -197,6 +221,9 @@ fn configure_primary_window(app: &mut App, title: &str, options: &BevyWindowOpti
     let mut entity_commands = app.world_mut().spawn((window, PrimaryWindow));
     if let Some(material) = options.backdrop_material {
         entity_commands.insert(material);
+        if let Some(color_scheme) = options.backdrop_color_scheme {
+            entity_commands.insert(color_scheme);
+        }
         if options.theme_managed_backdrop {
             entity_commands.insert(ThemeManagedWindowBackdrop);
         }
@@ -310,6 +337,7 @@ mod tests {
         app.insert_resource(StyleSheet {
             backdrop: Some(ThemeBackdrop {
                 material: StyleValue::value(WindowBackdropMaterial::Mica),
+                color_scheme: WindowBackdropColorScheme::Dark,
                 styles: HashMap::new(),
             }),
             ..StyleSheet::default()
@@ -323,13 +351,15 @@ mod tests {
         let mut query = world.query_filtered::<(
             &Window,
             &WindowBackdropMaterial,
+            &WindowBackdropColorScheme,
             &ThemeManagedWindowBackdrop,
         ), bevy_ecs::query::With<PrimaryWindow>>();
-        let (window, material, _) = query
+        let (window, material, color_scheme, _) = query
             .iter(world)
             .next()
             .expect("theme-managed primary window should exist");
         assert_eq!(*material, WindowBackdropMaterial::Mica);
+        assert_eq!(*color_scheme, WindowBackdropColorScheme::Dark);
         assert_eq!(window.transparent, cfg!(windows));
     }
 

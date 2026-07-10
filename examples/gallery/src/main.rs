@@ -8,8 +8,8 @@
 //! ## Architecture
 //!
 //! - [`helpers`] — Shared utilities (card, grid, note, placeholder, canvas/image helpers)
-//! - [`state`] — `GalleryPage` enum, `GalleryState`/`GalleryRuntime` resources, `NavCategory`
-//! - [`views`] — shell components and projectors for `GalleryRoot` and `GalleryStatus`
+//! - [`state`] — `GalleryPage` enum, `GalleryRuntime` resource, and `NavCategory`
+//! - [`views`] — shell components and projectors for `GalleryRoot` and `GalleryTopBar`
 //! - [`events`] — Event dispatch for all component interactions
 //! - [`pages`] — 16 page modules, each showcasing a component category
 //!
@@ -22,7 +22,6 @@
 //! | `pages/selection.rs`   | `Checkbox`, `Radio` examples       |
 //! | Sidebar nav categories | Fluent UI Storybook sidebar groups |
 //! | Top search bar         | Storybook search                   |
-//! | Status bar events      | Storybook action logger            |
 //! | `gallery.ron` theme    | Fluent UI `makeStyles` tokens      |
 
 use picus::{
@@ -45,8 +44,8 @@ mod views;
 
 use events::drain_gallery_events;
 use helpers::{PAGE_CONTENT, PAGE_VIEWPORT, class};
-use state::{GalleryPage, GalleryRuntime, GalleryState};
-use views::{GalleryRoot, GalleryStatus, GalleryTopBar};
+use state::{GalleryPage, GalleryRuntime};
+use views::{GalleryRoot, GalleryTopBar};
 
 /// Build the full gallery application tree.
 ///
@@ -62,12 +61,6 @@ fn setup_gallery(mut commands: Commands) {
         .id();
 
     spawn_top_bar(&mut commands, root);
-
-    commands.spawn_scene(bsn! {
-        GalleryStatus
-        template_value(class("gallery.status"))
-        ChildOf(root)
-    });
 
     // --- Body: UiNavigationView handles sidebar + content area layout ---
     let body = commands
@@ -313,11 +306,8 @@ fn build_gallery_app() -> App {
             SyncTextSource::String(include_str!("../assets/locales/ja-JP/main.ftl")),
             vec!["Inter", "sans-serif"],
         )
-        .insert_resource(GalleryState::default())
-        .register_projection_resource::<GalleryState>()
         .register_ui_component::<GalleryRoot>()
         .register_ui_component::<GalleryTopBar>()
-        .register_ui_component::<GalleryStatus>()
         .add_systems(Startup, setup_gallery)
         .add_systems(
             Update,
@@ -372,6 +362,61 @@ mod tests {
             app.world().get::<picus::WindowBackdropMaterial>(window),
             Some(&picus::WindowBackdropMaterial::Mica)
         );
+        assert_eq!(
+            app.world().get::<picus::WindowBackdropColorScheme>(window),
+            Some(&picus::WindowBackdropColorScheme::Dark)
+        );
+        assert_eq!(
+            picus::resolve_style_for_classes(app.world(), ["gallery.content_scroll"])
+                .colors
+                .bg,
+            Some(picus::xilem::Color::TRANSPARENT)
+        );
+        assert_eq!(
+            picus::resolve_style_for_classes(
+                app.world(),
+                ["template.scroll_view.viewport"],
+            )
+            .colors
+            .bg,
+            Some(picus::xilem::Color::TRANSPARENT)
+        );
+        assert_eq!(
+            picus::resolve_style_for_classes(app.world(), ["nav.sidebar"])
+                .colors
+                .bg,
+            Some(picus::xilem::Color::TRANSPARENT)
+        );
+        let card_fill = Some(picus::xilem::Color::from_rgba8(255, 255, 255, 13));
+        assert_eq!(
+            picus::resolve_style_for_classes(app.world(), ["gallery.top_bar"])
+                .colors
+                .bg,
+            card_fill
+        );
+        assert_eq!(
+            picus::resolve_style_for_classes(app.world(), ["gallery.card"])
+                .colors
+                .bg,
+            card_fill
+        );
+        assert_eq!(
+            picus::resolve_style_for_classes(app.world(), ["gallery.page"])
+                .colors
+                .bg,
+            None
+        );
+        let nav_view = app.world().resource::<GalleryRuntime>().nav_view;
+        assert_eq!(
+            picus::resolve_style(app.world(), nav_view).colors.bg,
+            Some(picus::xilem::Color::TRANSPARENT)
+        );
+        assert_eq!(
+            picus::resolve_style_for_classes(app.world(), ["nav.content"])
+                .colors
+                .bg,
+            Some(picus::xilem::Color::from_rgba8(58, 58, 58, 76))
+        );
         let mut picker_query = app
             .world_mut()
             .query_filtered::<&picus::UiRadioGroup, With<state::GalleryBackdropPicker>>();
@@ -381,6 +426,13 @@ mod tests {
             .expect("gallery should expose a backdrop material picker");
         assert_eq!(picker.options, ["None", "Mica", "Acrylic"]);
         assert_eq!(picker.selected, 1);
+        let has_status = {
+            let mut query = app.world_mut().query::<&picus::StyleClass>();
+            query
+                .iter(app.world())
+                .any(|classes| classes.0.iter().any(|class| class == "gallery.status"))
+        };
+        assert!(!has_status, "gallery status text should not be spawned");
     }
 
     #[test]

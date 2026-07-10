@@ -35,7 +35,7 @@ pub fn spawn_transitions_page(commands: &mut Commands, parent: Entity) -> Entity
         .id();
     commands
         .entity(hover_btn)
-        .insert(crate::state::GalleryButtonAction::Status {
+        .insert(crate::state::GalleryButtonAction::Info {
             message: "Transitions: hover/press transition clicked.".to_string(),
         });
     commands.spawn_scene(bsn! {

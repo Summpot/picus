@@ -1,8 +1,8 @@
 //! Gallery state resources, page enumeration, and category groupings.
 //!
 //! This module defines the `GalleryPage` enum (mapping to Fluent UI's component categories),
-//! the `GalleryState` resource for tracking the last event, and the `GalleryRuntime` resource
-//! that stores entity references for interactive controls across pages.
+//! the `GalleryRuntime` resource that stores entity references for interactive
+//! controls across pages.
 //!
 //! Inspired by the Fluent UI v9 documentation sidebar navigation pattern where components
 //! are organized under category headings.
@@ -188,7 +188,7 @@ impl GalleryPage {
 /// Marker describing what a gallery demo button should do on click.
 ///
 /// Attached to showcase buttons that only need to echo a toast, dialog, or
-/// status-bar message. The gallery event dispatcher reads this component when
+/// transient feedback. The gallery event dispatcher reads this component when
 /// a `BuiltinUiAction::Clicked` does not match a named `GalleryRuntime` entity.
 #[derive(Component, Debug, Clone)]
 pub enum GalleryButtonAction {
@@ -201,22 +201,8 @@ pub enum GalleryButtonAction {
     },
     /// Spawn a modal dialog overlay with the given title and body.
     Dialog { title: String, body: String },
-    /// Update the gallery status bar with the given message.
-    Status { message: String },
-}
-#[derive(Resource, Debug, Clone)]
-pub struct GalleryState {
-    pub last_event: String,
-    pub active_page: usize,
-}
-
-impl Default for GalleryState {
-    fn default() -> Self {
-        Self {
-            last_event: "Gallery ready. Interact with a control to see events here.".to_string(),
-            active_page: 0,
-        }
-    }
+    /// Show a transient informational toast with the given message.
+    Info { message: String },
 }
 
 /// Runtime entity references for interactive controls across all pages.

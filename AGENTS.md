@@ -139,6 +139,10 @@ explicit application-owned `WindowBackdropMaterial` are theme-managed. Explicit
 window components and `with_backdrop_material(...)` remain higher priority. The
 runner resolves the active theme material before creating the primary window, and
 runtime theme changes synchronize the component and native DWM material.
+`WindowBackdropColorScheme` is the companion public component for explicit
+`System`, `Light`, or `Dark` native appearance. Fluent backdrop metadata supplies
+it automatically; on Windows Picus maps Light/Dark to
+`DWMWA_USE_IMMERSIVE_DARK_MODE` before applying the system backdrop.
 
 System stages:
 
@@ -396,6 +400,8 @@ Runtime styling invariants:
   literal lowercase material name or a typed token reference, normally
   `(Var: "window-backdrop")`; the token uses
   `"window-backdrop": Backdrop("none"|"auto"|"mica"|"acrylic"|"mica-alt")`.
+  `color_scheme: System|Light|Dark` controls native window/backdrop appearance;
+  the built-in dark/light/high-contrast variants use Dark/Light/Dark.
   `backdrop.styles` maps lowercase material names to token and selector-rule
   overrides merged only for the selected material. `auto` and `mica-alt` fall
   back to the `mica` style when no exact style entry exists.
@@ -429,6 +435,12 @@ not reuse button-oriented `text-on-accent` for `template.checkbox.mark`.
 The gallery defaults its theme backdrop override to Mica and exposes a
 None/Mica/Acrylic picker on the Window/Menu page so native material and public
 fill-token changes are exercised together.
+With a window backdrop active, the Fluent NavigationView shell, expanded sidebar,
+and `template.scroll_view.viewport` use `fill-layer-background` so they do not
+stack opaque or repeated tint layers. `nav.content` owns the single
+`fill-layer-default` content tint, while top-level/repeated gallery cards use
+`fill-card-default`. The gallery does not include a persistent status-text bar;
+demo feedback that needs a visible result uses dialogs or transient toasts.
 Picus-only helpers that do not correspond to Fluent UI components, such as
 `UiGroupBox`, must not receive default box styling from this built-in Fluent
 bundle; examples or applications that want a visible group box provide their own

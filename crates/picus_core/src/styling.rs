@@ -48,7 +48,7 @@ use serde::{
     },
 };
 
-use crate::{UiEventQueue, WindowBackdropMaterial};
+use crate::{UiEventQueue, WindowBackdropColorScheme, WindowBackdropMaterial};
 
 pub(crate) const DEFAULT_TEXT_SIZE: f32 = 15.0;
 
@@ -431,6 +431,7 @@ pub struct BackdropStyle {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ThemeBackdrop {
     pub material: StyleValue<WindowBackdropMaterial>,
+    pub color_scheme: WindowBackdropColorScheme,
     pub styles: HashMap<WindowBackdropMaterial, BackdropStyle>,
 }
 
@@ -732,6 +733,17 @@ pub fn resolve_theme_backdrop_material(
         .backdrop
         .as_ref()
         .and_then(|backdrop| resolve_backdrop_value(&stylesheet.tokens, &backdrop.material))
+}
+
+/// Resolve the native light/dark appearance selected by a stylesheet backdrop.
+#[must_use]
+pub fn resolve_theme_backdrop_color_scheme(
+    stylesheet: &StyleSheet,
+) -> Option<WindowBackdropColorScheme> {
+    stylesheet
+        .backdrop
+        .as_ref()
+        .map(|backdrop| backdrop.color_scheme)
 }
 
 fn apply_selected_backdrop_style(stylesheet: &mut StyleSheet) {
@@ -2951,6 +2963,8 @@ struct StyleSheetVariantsDef {
 struct ThemeBackdropDef {
     material: StyleValueDef<String>,
     #[serde(default)]
+    color_scheme: WindowBackdropColorScheme,
+    #[serde(default)]
     styles: HashMap<String, BackdropStyleDef>,
 }
 
@@ -3907,7 +3921,11 @@ impl ThemeBackdropDef {
             );
         }
 
-        Ok(ThemeBackdrop { material, styles })
+        Ok(ThemeBackdrop {
+            material,
+            color_scheme: self.color_scheme,
+            styles,
+        })
     }
 }
 
@@ -4647,6 +4665,7 @@ mod tests {
             r##"(
                 backdrop: (
                     material: (Var: "window-backdrop"),
+                    color_scheme: Dark,
                     styles: {
                         "mica": (
                             tokens: {
@@ -4665,6 +4684,10 @@ mod tests {
         assert_eq!(
             crate::resolve_theme_backdrop_material(&sheet),
             Some(crate::WindowBackdropMaterial::Mica)
+        );
+        assert_eq!(
+            crate::resolve_theme_backdrop_color_scheme(&sheet),
+            Some(crate::WindowBackdropColorScheme::Dark)
         );
         assert!(
             sheet
@@ -4704,6 +4727,10 @@ mod tests {
             Some(crate::WindowBackdropMaterial::Mica)
         );
         assert_eq!(
+            crate::resolve_theme_backdrop_color_scheme(sheet),
+            Some(crate::WindowBackdropColorScheme::Dark)
+        );
+        assert_eq!(
             sheet.tokens.get(crate::WINDOW_BACKDROP_TOKEN),
             Some(&crate::TokenValue::Backdrop(
                 crate::WindowBackdropMaterial::Mica
@@ -4722,6 +4749,34 @@ mod tests {
         assert_eq!(
             resolve_style(app.world(), root).colors.bg,
             Some(crate::xilem::Color::from_rgb8(0x1F, 0x1F, 0x1F))
+        );
+    }
+    #[test]
+    fn fluent_backdrop_color_scheme_tracks_active_variant() {
+        let mut app = App::new();
+        app.add_plugins(PicusPlugin);
+        crate::set_active_style_variant_by_name(app.world_mut(), "dark");
+        crate::apply_active_style_variant(app.world_mut())
+            .expect("embedded Fluent dark theme should apply");
+        crate::set_theme_backdrop_material(
+            app.world_mut(),
+            crate::WindowBackdropMaterial::Mica,
+        );
+        let window = app.world_mut().spawn(Window::default()).id();
+
+        app.update();
+        assert_eq!(
+            app.world()
+                .get::<crate::WindowBackdropColorScheme>(window),
+            Some(&crate::WindowBackdropColorScheme::Dark)
+        );
+
+        crate::set_active_style_variant_by_name(app.world_mut(), "light");
+        app.update();
+        assert_eq!(
+            app.world()
+                .get::<crate::WindowBackdropColorScheme>(window),
+            Some(&crate::WindowBackdropColorScheme::Light)
         );
     }
     #[test]

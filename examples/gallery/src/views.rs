@@ -8,20 +8,18 @@ use std::sync::Arc;
 
 use picus::{
     ProjectionCtx, StyleClass, UiComponentTemplate, UiSearch, UiThemePicker, UiView,
-    apply_label_style, apply_widget_style,
+    apply_widget_style,
     bevy_ecs::prelude::*,
     masonry_core::{
         layout::{Dim, Length},
         properties::Dimensions,
     },
-    resolve_style, resolve_style_for_classes,
+    resolve_style,
     xilem::{
         style::Style as _,
-        view::{FlexExt as _, FlexSpacer, flex_col, flex_item, flex_row, label, sized_box},
+        view::{FlexExt as _, FlexSpacer, flex_col, flex_item, flex_row, sized_box},
     },
 };
-
-use crate::state::GalleryState;
 
 /// Root gallery component: renders a full-viewport flex column layout.
 #[derive(Component, Debug, Clone, Copy, Default)]
@@ -30,10 +28,6 @@ pub struct GalleryRoot;
 /// Fixed top bar shell: brand at start, search near the end, tools at the edge.
 #[derive(Component, Debug, Clone, Copy, Default)]
 pub struct GalleryTopBar;
-
-/// Status bar component: displays the most recent user interaction event.
-#[derive(Component, Debug, Clone, Copy, Default)]
-pub struct GalleryStatus;
 
 fn child_entity_views(ctx: &ProjectionCtx<'_>) -> Vec<(Entity, UiView)> {
     let child_entities = ctx
@@ -136,15 +130,3 @@ impl UiComponentTemplate for GalleryTopBar {
     }
 }
 
-impl UiComponentTemplate for GalleryStatus {
-    fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
-        let style = resolve_style(ctx.world, ctx.entity);
-        let text_style = resolve_style_for_classes(ctx.world, ["gallery.note"]);
-        let state = ctx.world.resource::<GalleryState>();
-
-        Arc::new(apply_widget_style(
-            apply_label_style(label(state.last_event.clone()), &text_style),
-            &style,
-        ))
-    }
-}

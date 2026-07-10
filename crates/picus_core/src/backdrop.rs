@@ -3,11 +3,14 @@
 use bevy_ecs::prelude::*;
 use bevy_window::{CompositeAlphaMode, RawHandleWrapper, Window, WindowWrapper};
 use picus_surface::{
-    NativeWindowBackdropError, NativeWindowBackdropMaterial,
-    set_native_window_backdrop_material,
+    NativeWindowBackdropColorScheme, NativeWindowBackdropError, NativeWindowBackdropMaterial,
+    set_native_window_backdrop_material_with_color_scheme,
 };
+use serde::Deserialize;
 
-use crate::styling::{StyleSheet, resolve_theme_backdrop_material};
+use crate::styling::{
+    StyleSheet, resolve_theme_backdrop_color_scheme, resolve_theme_backdrop_material,
+};
 
 /// Native desktop backdrop material for a top-level [`Window`].
 ///
@@ -32,6 +35,28 @@ pub enum WindowBackdropMaterial {
     Acrylic,
     /// Windows tabbed/Mica Alt system backdrop.
     MicaAlt,
+}
+
+/// Light/dark appearance requested for a native top-level window backdrop.
+#[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Deserialize)]
+pub enum WindowBackdropColorScheme {
+    /// Preserve the operating system's current window appearance policy.
+    #[default]
+    System,
+    /// Request light window chrome and backdrop composition.
+    Light,
+    /// Request dark window chrome and backdrop composition.
+    Dark,
+}
+
+impl WindowBackdropColorScheme {
+    const fn native(self) -> NativeWindowBackdropColorScheme {
+        match self {
+            Self::System => NativeWindowBackdropColorScheme::System,
+            Self::Light => NativeWindowBackdropColorScheme::Light,
+            Self::Dark => NativeWindowBackdropColorScheme::Dark,
+        }
+    }
 }
 
 impl WindowBackdropMaterial {
@@ -105,64 +130,92 @@ pub fn configure_window_for_backdrop(window: &mut Window, material: WindowBackdr
 }
 
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct AppliedWindowBackdropMaterial(WindowBackdropMaterial);
+pub(crate) struct AppliedWindowBackdropMaterial {
+    material: WindowBackdropMaterial,
+    color_scheme: WindowBackdropColorScheme,
+}
 
 /// Marks windows whose backdrop component is owned by the active theme.
 #[derive(Component, Debug, Clone, Copy, Default)]
 pub(crate) struct ThemeManagedWindowBackdrop;
+
+type ThemeBackdropWindows<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static mut Window,
+        Option<&'static WindowBackdropMaterial>,
+        Option<&'static WindowBackdropColorScheme>,
+        Option<&'static ThemeManagedWindowBackdrop>,
+    ),
+>;
+
+type NativeBackdropWindows<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static WindowBackdropMaterial,
+        Option<&'static WindowBackdropColorScheme>,
+        &'static mut Window,
+        Option<&'static AppliedWindowBackdropMaterial>,
+    ),
+>;
 
 /// Synchronize the active theme backdrop to windows without an explicit
 /// application-owned [`WindowBackdropMaterial`].
 pub(crate) fn sync_theme_window_backdrops(
     mut commands: Commands,
     stylesheet: Res<StyleSheet>,
-    mut windows: Query<(
-        Entity,
-        &mut Window,
-        Option<&WindowBackdropMaterial>,
-        Option<&ThemeManagedWindowBackdrop>,
-    )>,
+    mut windows: ThemeBackdropWindows<'_, '_>,
 ) {
     let Some(material) = resolve_theme_backdrop_material(&stylesheet) else {
         return;
     };
+    let color_scheme = resolve_theme_backdrop_color_scheme(&stylesheet).unwrap_or_default();
 
-    for (entity, mut window, current, managed) in &mut windows {
+    for (entity, mut window, current, current_color_scheme, managed) in &mut windows {
         if current.is_some() && managed.is_none() {
             continue;
         }
-        if current.is_some_and(|current| *current == material) && managed.is_some() {
+        if current.is_some_and(|current| *current == material)
+            && current_color_scheme.is_some_and(|current| *current == color_scheme)
+            && managed.is_some()
+        {
             continue;
         }
 
         material.configure_window(&mut window);
         commands
             .entity(entity)
-            .insert((material, ThemeManagedWindowBackdrop));
+            .insert((material, color_scheme, ThemeManagedWindowBackdrop));
     }
 }
 
 /// Synchronize requested native backdrop materials to attached winit windows.
 pub(crate) fn apply_window_backdrop_materials(
     mut commands: Commands,
-    mut window_query: Query<(
-        Entity,
-        &WindowBackdropMaterial,
-        &mut Window,
-        Option<&AppliedWindowBackdropMaterial>,
-    )>,
+    mut window_query: NativeBackdropWindows<'_, '_>,
 ) {
-    for (entity, material, mut window, applied) in &mut window_query {
+    for (entity, material, color_scheme, mut window, applied) in &mut window_query {
+        let color_scheme = color_scheme.copied().unwrap_or_default();
         if material.needs_window_configuration(&window) {
             material.configure_window(&mut window);
         }
 
-        if applied.is_some_and(|applied| applied.0 == *material) {
+        if applied.is_some_and(|applied| {
+            applied.material == *material && applied.color_scheme == color_scheme
+        }) {
             continue;
         }
 
         let Some(result) = with_window_raw_handle(entity, |raw_handle| {
-            set_native_window_backdrop_material(&raw_handle, material.native())
+            set_native_window_backdrop_material_with_color_scheme(
+                &raw_handle,
+                material.native(),
+                color_scheme.native(),
+            )
         }) else {
             continue;
         };
@@ -171,13 +224,19 @@ pub(crate) fn apply_window_backdrop_materials(
             Ok(()) => {
                 commands
                     .entity(entity)
-                    .insert(AppliedWindowBackdropMaterial(*material));
+                    .insert(AppliedWindowBackdropMaterial {
+                        material: *material,
+                        color_scheme,
+                    });
             }
             Err(error) => {
                 log_backdrop_error(entity, *material, error);
                 commands
                     .entity(entity)
-                    .insert(AppliedWindowBackdropMaterial(*material));
+                    .insert(AppliedWindowBackdropMaterial {
+                        material: *material,
+                        color_scheme,
+                    });
             }
         }
     }
@@ -274,6 +333,7 @@ mod tests {
         app.insert_resource(StyleSheet {
             backdrop: Some(ThemeBackdrop {
                 material: StyleValue::value(WindowBackdropMaterial::Mica),
+                color_scheme: WindowBackdropColorScheme::Dark,
                 styles: HashMap::new(),
             }),
             ..StyleSheet::default()
@@ -287,6 +347,10 @@ mod tests {
             app.world().get::<WindowBackdropMaterial>(window),
             Some(&WindowBackdropMaterial::Mica)
         );
+        assert_eq!(
+            app.world().get::<WindowBackdropColorScheme>(window),
+            Some(&WindowBackdropColorScheme::Dark)
+        );
         assert!(app.world().get::<ThemeManagedWindowBackdrop>(window).is_some());
     }
 
@@ -296,6 +360,7 @@ mod tests {
         app.insert_resource(StyleSheet {
             backdrop: Some(ThemeBackdrop {
                 material: StyleValue::value(WindowBackdropMaterial::Mica),
+                color_scheme: WindowBackdropColorScheme::Dark,
                 styles: HashMap::new(),
             }),
             ..StyleSheet::default()

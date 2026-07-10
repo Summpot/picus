@@ -1,4 +1,4 @@
-use crate::helpers::{card, class, grid, note, placeholder, status_button};
+use crate::helpers::{card, class, grid, info_button, note, placeholder};
 use crate::state::GalleryButtonAction;
 use bevy_ecs::{hierarchy::ChildOf, prelude::*};
 use picus::{
@@ -13,7 +13,7 @@ pub fn spawn_buttons_page(commands: &mut Commands, parent: Entity) -> Entity {
     let g = grid(commands, parent, 3);
 
     let buttons = card(commands, g, "Buttons");
-    status_button(commands, buttons, "Default", "Buttons: Default clicked.");
+    info_button(commands, buttons, "Default", "Buttons: Default clicked.");
     let accent = commands
         .spawn_scene(bsn! {
             template_value(UiButton::new("Accent"))
@@ -21,7 +21,7 @@ pub fn spawn_buttons_page(commands: &mut Commands, parent: Entity) -> Entity {
             ChildOf(buttons)
         })
         .id();
-    commands.entity(accent).insert(GalleryButtonAction::Status {
+    commands.entity(accent).insert(GalleryButtonAction::Info {
         message: "Buttons: Accent clicked.".to_string(),
     });
     let flat = commands
@@ -31,7 +31,7 @@ pub fn spawn_buttons_page(commands: &mut Commands, parent: Entity) -> Entity {
             ChildOf(buttons)
         })
         .id();
-    commands.entity(flat).insert(GalleryButtonAction::Status {
+    commands.entity(flat).insert(GalleryButtonAction::Info {
         message: "Buttons: Flat clicked.".to_string(),
     });
     let danger = commands
@@ -41,7 +41,7 @@ pub fn spawn_buttons_page(commands: &mut Commands, parent: Entity) -> Entity {
             ChildOf(buttons)
         })
         .id();
-    commands.entity(danger).insert(GalleryButtonAction::Status {
+    commands.entity(danger).insert(GalleryButtonAction::Info {
         message: "Buttons: Danger clicked.".to_string(),
     });
     let open_dialog_btn = commands
