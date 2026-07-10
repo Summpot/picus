@@ -373,6 +373,12 @@ mod tests {
             Some(picus::xilem::Color::TRANSPARENT)
         );
         assert_eq!(
+            picus::resolve_style_for_classes(app.world(), ["gallery.content_scroll"])
+                .layout
+                .border_width,
+            0.0
+        );
+        assert_eq!(
             picus::resolve_style_for_classes(
                 app.world(),
                 ["template.scroll_view.viewport"],
@@ -382,16 +388,37 @@ mod tests {
             Some(picus::xilem::Color::TRANSPARENT)
         );
         assert_eq!(
+            picus::resolve_style_for_classes(
+                app.world(),
+                ["template.scroll_view.viewport"],
+            )
+            .layout
+            .border_width,
+            0.0
+        );
+        assert_eq!(
             picus::resolve_style_for_classes(app.world(), ["nav.sidebar"])
                 .colors
                 .bg,
             Some(picus::xilem::Color::TRANSPARENT)
         );
         assert_eq!(
+            picus::resolve_style_for_classes(app.world(), ["nav.sidebar"])
+                .layout
+                .border_width,
+            0.0
+        );
+        assert_eq!(
             picus::resolve_style_for_classes(app.world(), ["gallery.top_bar"])
                 .colors
                 .bg,
             Some(picus::xilem::Color::TRANSPARENT)
+        );
+        assert_eq!(
+            picus::resolve_style_for_classes(app.world(), ["gallery.top_bar"])
+                .layout
+                .border_width,
+            0.0
         );
         assert_eq!(
             picus::resolve_style_for_classes(app.world(), ["gallery.search"])
@@ -421,8 +448,25 @@ mod tests {
             picus::resolve_style_for_classes(app.world(), ["nav.content"])
                 .colors
                 .bg,
-            Some(picus::xilem::Color::from_rgba8(58, 58, 58, 76))
+            Some(picus::xilem::Color::TRANSPARENT)
         );
+        let scroll_entities = {
+            let mut query = app.world_mut().query_filtered::<Entity, With<UiScrollView>>();
+            query.iter(app.world()).collect::<Vec<_>>()
+        };
+        assert!(!scroll_entities.is_empty());
+        for scroll in scroll_entities {
+            let style = picus::resolve_style(app.world(), scroll);
+            assert_eq!(
+                style.colors.bg,
+                Some(picus::xilem::Color::TRANSPARENT),
+                "gallery scroll shells must reveal the native backdrop"
+            );
+            assert_eq!(
+                style.layout.border_width, 0.0,
+                "gallery scroll shells must remain borderless"
+            );
+        }
         let mut picker_query = app
             .world_mut()
             .query_filtered::<&picus::UiRadioGroup, With<state::GalleryBackdropPicker>>();
@@ -461,8 +505,8 @@ mod tests {
         );
 
         assert!(
-            sidebar.colors.bg.is_some() && sidebar.colors.border.is_some(),
-            "gallery navigation sidebar should resolve visible panel colors, got {sidebar:?}"
+            sidebar.colors.bg.is_some() && sidebar.layout.border_width == 0.0,
+            "gallery navigation sidebar should resolve a borderless backdrop fill, got {sidebar:?}"
         );
         assert!(
             item.colors.text.is_some() && item.layout.padding > 0.0,

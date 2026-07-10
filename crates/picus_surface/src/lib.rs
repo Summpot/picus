@@ -250,8 +250,11 @@ impl ExternalWindowSurface {
             .render_cx
             .desired_alpha_mode_for_surface(&self.surface, metrics);
         if self.surface.config.alpha_mode != desired_alpha_mode {
-            self.render_cx
-                .set_surface_alpha_mode(&mut self.surface, desired_alpha_mode);
+            self.render_cx.set_surface_alpha_mode(
+                &mut self.surface,
+                desired_alpha_mode,
+                metrics.transparent,
+            );
             changed = true;
         }
 
@@ -439,7 +442,13 @@ impl RenderContext {
             metrics.transparent,
             metrics.composite_alpha_mode,
         );
-        let blitter = create_blitter(&device_handle.device, format, alpha_mode, &adapter_name);
+        let blitter = create_blitter(
+            &device_handle.device,
+            format,
+            alpha_mode,
+            metrics.transparent,
+            &adapter_name,
+        );
 
         let config = SurfaceConfiguration {
             usage: TextureUsages::RENDER_ATTACHMENT,
@@ -511,11 +520,17 @@ impl RenderContext {
         &self,
         surface: &mut RenderSurface<'_>,
         alpha_mode: CompositeAlphaMode,
+        transparent: bool,
     ) {
         let device_handle = &self.devices[surface.dev_id];
         let adapter_name = device_handle.adapter.get_info().name;
-        surface.blitter =
-            create_blitter(&device_handle.device, surface.format, alpha_mode, &adapter_name);
+        surface.blitter = create_blitter(
+            &device_handle.device,
+            surface.format,
+            alpha_mode,
+            transparent,
+            &adapter_name,
+        );
         surface.config.alpha_mode = alpha_mode;
         self.configure_surface(surface);
     }
@@ -663,6 +678,7 @@ fn create_blitter(
     device: &Device,
     format: TextureFormat,
     alpha_mode: CompositeAlphaMode,
+    transparent: bool,
     adapter_name: &str,
 ) -> TextureBlitter {
     const PREMUL_BLEND_STATE: wgpu::BlendState = wgpu::BlendState {
@@ -674,12 +690,12 @@ fn create_blitter(
         },
     };
 
-    let needs_premultiplied_blit = matches!(alpha_mode, CompositeAlphaMode::PreMultiplied)
-        || (matches!(
-            alpha_mode,
-            CompositeAlphaMode::Auto | CompositeAlphaMode::Opaque
-        ) && cfg!(windows)
-            && adapter_name.contains("AMD"));
+    let needs_premultiplied_blit = needs_premultiplied_blit(
+        alpha_mode,
+        transparent,
+        cfg!(windows),
+        adapter_name,
+    );
     if needs_premultiplied_blit {
         if cfg!(windows) && adapter_name.contains("AMD") {
             tracing::info!("using premultiplied blitting for Windows AMD compatibility");
@@ -690,6 +706,22 @@ fn create_blitter(
     } else {
         TextureBlitter::new(device, format)
     }
+}
+
+fn needs_premultiplied_blit(
+    alpha_mode: CompositeAlphaMode,
+    transparent: bool,
+    windows: bool,
+    adapter_name: &str,
+) -> bool {
+    matches!(alpha_mode, CompositeAlphaMode::PreMultiplied)
+        || (windows && transparent)
+        || (windows
+            && adapter_name.contains("AMD")
+            && matches!(
+                alpha_mode,
+                CompositeAlphaMode::Auto | CompositeAlphaMode::Opaque
+            ))
 }
 
 #[cfg(test)]
@@ -867,6 +899,32 @@ mod tests {
             choose_alpha_mode(&modes, false, BevyCompositeAlphaMode::PostMultiplied),
             CompositeAlphaMode::PostMultiplied
         );
+    }
+
+    #[test]
+    fn windows_transparent_surfaces_always_premultiply_the_final_blit() {
+        assert!(needs_premultiplied_blit(
+            CompositeAlphaMode::Auto,
+            true,
+            true,
+            "Generic GPU",
+        ));
+        assert!(!needs_premultiplied_blit(
+            CompositeAlphaMode::Auto,
+            true,
+            false,
+            "Generic GPU",
+        ));
+    }
+
+    #[test]
+    fn explicit_premultiplied_alpha_always_premultiplies_the_final_blit() {
+        assert!(needs_premultiplied_blit(
+            CompositeAlphaMode::PreMultiplied,
+            false,
+            false,
+            "Generic GPU",
+        ));
     }
 
     #[test]

@@ -739,11 +739,11 @@
       setter: (
         layout: (
           corner_radius: Var("radius-md"),
-          border_width: Var("border-thin"),
+          border_width: 0.0,
         ),
         colors: (
-          bg: Var("fill-layer-default"),
-          border: Var("border-default"),
+          bg: Var("fill-layer-background"),
+          border: Var("transparent"),
         ),
       ),
     ),
@@ -1240,7 +1240,7 @@
           align_items: Stretch,
         ),
         colors: (
-          bg: Var("fill-layer-default"),
+          bg: Var("surface-elevated"),
           border: Var("border-default"),
         ),
         box_shadow: Var("shadow-flyout"),
@@ -1270,7 +1270,7 @@
       selector: Class("overlay.modal.dimmer"),
       setter: (
         colors: (
-          bg: Var("overlay-dimmer"),
+          bg: Var("fill-smoke-default"),
         ),
       ),
     ),
@@ -2587,7 +2587,7 @@
           border_width: Var("border-thin"),
         ),
         colors: (
-          bg: Var("surface-elevated"),
+          bg: Var("fill-control-default"),
           border: Var("border-default"),
           text: Var("text-primary"),
         ),
@@ -2598,7 +2598,7 @@
       selector: And([Type("UiSearch"), PseudoClass(Hovered)]),
       setter: (
         colors: (
-          bg: Var("surface-subtle-hover"),
+          bg: Var("fill-control-secondary"),
           border: Var("border-input-hover"),
         ),
       ),
@@ -2607,7 +2607,7 @@
       selector: And([Type("UiSearch"), PseudoClass(Pressed)]),
       setter: (
         colors: (
-          bg: Var("surface-subtle-pressed"),
+          bg: Var("fill-control-tertiary"),
           border: Var("border-input"),
         ),
       ),
@@ -2627,13 +2627,13 @@
       setter: (
         layout: (
           corner_radius: Var("radius-md"),
-          border_width: Var("border-thin"),
+          border_width: 0.0,
           justify_content: Start,
           align_items: Stretch,
         ),
         colors: (
           bg: Var("fill-layer-background"),
-          border: Var("border-default"),
+          border: Var("transparent"),
           text: Var("text-primary"),
         ),
       ),
@@ -2644,11 +2644,11 @@
         layout: (
           padding: Var("space-md"),
           gap: Var("space-xs"),
-          border_width: Var("border-thin"),
+          border_width: 0.0,
         ),
         colors: (
           bg: Var("fill-layer-background"),
-          border: Var("border-default"),
+          border: Var("transparent"),
         ),
       ),
     ),
@@ -2663,7 +2663,7 @@
           align_items: Stretch,
         ),
         colors: (
-          bg: Var("fill-layer-default"),
+          bg: Var("fill-layer-background"),
           border: Var("transparent"),
           text: Var("text-primary"),
         ),
@@ -3127,11 +3127,11 @@
       setter: (
         layout: (
           corner_radius: Var("radius-sm"),
-          border_width: Var("border-thin"),
+          border_width: 0.0,
         ),
         colors: (
           bg: Var("fill-layer-background"),
-          border: Var("border-muted"),
+          border: Var("transparent"),
         ),
       ),
     ),

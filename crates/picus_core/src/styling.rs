@@ -4323,6 +4323,29 @@ mod tests {
                 },
             ))
             .id();
+        let search = app.world_mut().spawn(crate::UiSearch::default()).id();
+        let search_hovered = app
+            .world_mut()
+            .spawn((
+                crate::UiSearch::default(),
+                InteractionState {
+                    hovered: true,
+                    pressed: false,
+                    focused: false,
+                },
+            ))
+            .id();
+        let search_pressed = app
+            .world_mut()
+            .spawn((
+                crate::UiSearch::default(),
+                InteractionState {
+                    hovered: false,
+                    pressed: true,
+                    focused: false,
+                },
+            ))
+            .id();
 
         let password_hover = resolve_style(app.world(), hovered);
         assert_eq!(
@@ -4334,6 +4357,19 @@ mod tests {
         assert_eq!(
             time_pressed.colors.bg,
             Some(token_color(app.world(), "surface-subtle-pressed"))
+        );
+
+        assert_eq!(
+            resolve_style(app.world(), search).colors.bg,
+            Some(token_color(app.world(), "fill-control-default"))
+        );
+        assert_eq!(
+            resolve_style(app.world(), search_hovered).colors.bg,
+            Some(token_color(app.world(), "fill-control-secondary"))
+        );
+        assert_eq!(
+            resolve_style(app.world(), search_pressed).colors.bg,
+            Some(token_color(app.world(), "fill-control-tertiary"))
         );
 
         let numeric_decrease =
@@ -4366,14 +4402,27 @@ mod tests {
         let nav_sidebar = resolve_style_for_classes(app.world(), ["nav.sidebar"]);
         assert_eq!(
             nav_sidebar.colors.bg,
-            Some(token_color(app.world(), "fill-layer-alt"))
+            Some(token_color(app.world(), "fill-layer-background"))
         );
+        assert_eq!(nav_sidebar.layout.border_width, 0.0);
 
         let nav_content = resolve_style_for_classes(app.world(), ["nav.content"]);
         assert_eq!(
             nav_content.colors.bg,
-            Some(token_color(app.world(), "fill-layer-default"))
+            Some(token_color(app.world(), "fill-layer-background"))
         );
+
+        let scroll_viewport =
+            resolve_style_for_classes(app.world(), ["template.scroll_view.viewport"]);
+        assert_eq!(scroll_viewport.layout.border_width, 0.0);
+
+        let scroll_view = app.world_mut().spawn(crate::UiScrollView::default()).id();
+        let scroll_style = resolve_style(app.world(), scroll_view);
+        assert_eq!(
+            scroll_style.colors.bg,
+            Some(token_color(app.world(), "fill-layer-background"))
+        );
+        assert_eq!(scroll_style.layout.border_width, 0.0);
 
         let switch_on = resolve_style_for_entity_classes(
             app.world(),
@@ -4739,6 +4788,31 @@ mod tests {
         assert_eq!(
             resolve_style(app.world(), root).colors.bg,
             Some(crate::xilem::Color::TRANSPARENT)
+        );
+        let dialog = app
+            .world_mut()
+            .spawn(crate::UiDialog::new("Title", "Body"))
+            .id();
+        let search = app.world_mut().spawn(crate::UiSearch::default()).id();
+        let nav_content = resolve_style_for_classes(app.world(), ["nav.content"]);
+        let nav_sidebar = resolve_style_for_classes(app.world(), ["nav.sidebar"]);
+        let dimmer = resolve_style_for_classes(app.world(), ["overlay.modal.dimmer"]);
+
+        assert_eq!(
+            resolve_style(app.world(), dialog).colors.bg,
+            Some(crate::xilem::Color::from_rgb8(0x1F, 0x1F, 0x1F)),
+            "dialogs must remain opaque over native backdrops"
+        );
+        assert_eq!(
+            resolve_style(app.world(), search).colors.bg,
+            Some(crate::xilem::Color::from_rgba8(255, 255, 255, 15))
+        );
+        assert_eq!(nav_content.colors.bg, Some(crate::xilem::Color::TRANSPARENT));
+        assert_eq!(nav_sidebar.colors.bg, Some(crate::xilem::Color::TRANSPARENT));
+        assert_eq!(nav_sidebar.layout.border_width, 0.0);
+        assert_eq!(
+            dimmer.colors.bg,
+            Some(crate::xilem::Color::from_rgba8(0, 0, 0, 77))
         );
 
         crate::clear_theme_backdrop_material_override(app.world_mut());

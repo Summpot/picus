@@ -445,10 +445,18 @@ uses `fill-control-default`; top-level gallery cards continue to use
 `fill-card-default`.
 With a window backdrop active, the Fluent NavigationView shell, expanded sidebar,
 and `template.scroll_view.viewport` use `fill-layer-background` so they do not
-stack opaque or repeated tint layers. `nav.content` owns the single
-`fill-layer-default` content tint, while top-level/repeated gallery cards use
-`fill-card-default`. The gallery does not include a persistent status-text bar;
-demo feedback that needs a visible result uses dialogs or transient toasts.
+stack opaque or repeated tint layers. `nav.content` also uses
+`fill-layer-background`, letting the native Mica/Acrylic material remain the page
+surface; top-level/repeated gallery cards use `fill-card-default`. NavigationView,
+its sidebar, scroll shells and viewports, and the gallery top bar are borderless so
+fractional DPI scaling does not soften one-pixel shell outlines. The gallery does
+not include a persistent status-text bar; demo feedback that needs a visible
+result uses dialogs or transient toasts.
+Fluent `UiSearch` backgrounds use `fill-control-default`,
+`fill-control-secondary`, and `fill-control-tertiary` for normal, hovered, and
+pressed states. Modal dialogs remain opaque on `surface-elevated` above the
+`fill-smoke-default` dimmer instead of revealing the native backdrop through the
+dialog surface.
 Picus-only helpers that do not correspond to Fluent UI components, such as
 `UiGroupBox`, must not receive default box styling from this built-in Fluent
 bundle; examples or applications that want a visible group box provide their own
@@ -517,10 +525,11 @@ paragraphs lay out consecutive same-style runs in a wrapping flex row.
 - `evict_streaming_markdown_cache` removes cache entries for despawned entities.
 
 Picus text is rendered through Vello area-coverage anti-aliasing, which is
-grayscale and does not emit ClearType/RGB subpixel masks. Retained labels and text
-areas allow outline hinting only at window scale factors up to 125%; higher-DPI
-text uses unhinted grayscale outlines to avoid uneven pixel snapping over native
-backdrops.
+grayscale and does not emit ClearType/RGB subpixel masks; the final Vello texture
+renderer must keep `AaConfig::Area` for both opaque and transparent windows.
+Retained labels and text areas allow outline hinting only at window scale factors
+up to 125%; higher-DPI text uses unhinted grayscale outlines to avoid uneven pixel
+snapping over native backdrops.
 
 ## 10. Assets, Fonts, Icons, and I18n
 
@@ -532,6 +541,8 @@ Fluent Design / WinUI `FluentIcon` glyphs. Lucide glyphs use the bundled
 `FluentIcon`/`IconGlyph` instead of styling a raw label character.
 `PicusIcon::Check` maps to WinUI's checkmark glyph (`FluentIcon::Checkmark`,
 U+E73E), matching checkbox visuals; do not substitute the broader Accept glyph.
+`PicusIcon::SunMoon`, used by the built-in theme picker, maps to the Fluent
+Brightness glyph rather than Refresh or Sync.
 
 `XilemFontBridge` is the legacy-named font bridge that registers Bevy font assets
 with Masonry Core. Fonts can come from the asset server, direct bytes, or direct
@@ -551,10 +562,14 @@ alpha for externally owned opaque Bevy windows, but transparent windows, includi
 premultiplied alpha on Windows so native compositor material can show through. It
 uses wgpu's DirectComposition visual swapchain on Windows for transparent windows;
 the default HWND swapchain is opaque and must not be used for backdrop surfaces.
-It keeps the Windows AMD premultiplied-alpha compatibility blit path as a fallback and
-never blocks the Bevy thread waiting for GPU completion after `present()`. It
-attaches through raw window handles and tracks physical size, logical size, scale
-factor, transparency, and composition alpha mode.
+The final blit premultiplies Picus' straight-alpha Vello texture for every Windows
+transparent DirectComposition surface, even when wgpu reports `Auto` instead of
+`PreMultiplied`; otherwise translucent fills and grayscale glyph edges become
+incorrectly opaque. It keeps the Windows AMD premultiplied-alpha compatibility
+path as a fallback for non-transparent `Auto`/`Opaque` surfaces and never blocks
+the Bevy thread waiting for GPU completion after `present()`. It attaches through
+raw window handles and tracks physical size, logical size, scale factor,
+transparency, and composition alpha mode.
 
 ## 12. Plugin and App Helpers
 

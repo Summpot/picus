@@ -154,7 +154,7 @@ impl PicusIcon {
             Self::Circle => FluentIcon::Placeholder,
             Self::CircleDot => FluentIcon::Accept,
             Self::X => FluentIcon::Cancel,
-            Self::SunMoon => FluentIcon::Sync,
+            Self::SunMoon => FluentIcon::Brightness,
             Self::Plus => FluentIcon::Add,
             Self::Search => FluentIcon::Search,
             Self::Edit => FluentIcon::Edit,
@@ -212,6 +212,7 @@ pub enum FluentIcon {
     Add,
     AllApps,
     Back,
+    Brightness,
     Cancel,
     Character,
     Checkmark,
@@ -262,6 +263,7 @@ impl FluentIcon {
             Self::Add => '\u{E710}',
             Self::AllApps => '\u{E71D}',
             Self::Back => '\u{E72B}',
+            Self::Brightness => '\u{E706}',
             Self::Cancel => '\u{E711}',
             Self::Character => '\u{E8C1}',
             Self::Checkmark => '\u{E73E}',
@@ -346,5 +348,14 @@ mod tests {
 
         assert_eq!(glyph.glyph(), FluentIcon::Checkmark.glyph());
         assert_ne!(glyph.glyph(), FluentIcon::Accept.glyph());
+    }
+
+    #[test]
+    fn theme_icon_uses_brightness_instead_of_refresh() {
+        let glyph = IconGlyph::from(PicusIcon::SunMoon);
+
+        assert_eq!(glyph.glyph(), FluentIcon::Brightness.glyph());
+        assert_ne!(glyph.glyph(), FluentIcon::Refresh.glyph());
+        assert_ne!(glyph.glyph(), FluentIcon::Sync.glyph());
     }
 }
