@@ -387,13 +387,19 @@ mod tests {
                 .bg,
             Some(picus::xilem::Color::TRANSPARENT)
         );
-        let card_fill = Some(picus::xilem::Color::from_rgba8(255, 255, 255, 13));
         assert_eq!(
             picus::resolve_style_for_classes(app.world(), ["gallery.top_bar"])
                 .colors
                 .bg,
-            card_fill
+            Some(picus::xilem::Color::TRANSPARENT)
         );
+        assert_eq!(
+            picus::resolve_style_for_classes(app.world(), ["gallery.search"])
+                .colors
+                .bg,
+            Some(picus::xilem::Color::from_rgba8(255, 255, 255, 15))
+        );
+        let card_fill = Some(picus::xilem::Color::from_rgba8(255, 255, 255, 13));
         assert_eq!(
             picus::resolve_style_for_classes(app.world(), ["gallery.card"])
                 .colors

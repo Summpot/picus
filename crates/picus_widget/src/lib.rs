@@ -18,6 +18,7 @@ pub mod layers;
 pub mod properties;
 pub mod theme;
 pub mod widgets;
+mod text_rendering;
 
 pub use accesskit;
 pub use masonry_core;

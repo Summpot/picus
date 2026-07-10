@@ -435,6 +435,9 @@ not reuse button-oriented `text-on-accent` for `template.checkbox.mark`.
 The gallery defaults its theme backdrop override to Mica and exposes a
 None/Mica/Acrylic picker on the Window/Menu page so native material and public
 fill-token changes are exercised together.
+The gallery top bar is transparent over the window material and its search box
+uses `fill-control-default`; top-level gallery cards continue to use
+`fill-card-default`.
 With a window backdrop active, the Fluent NavigationView shell, expanded sidebar,
 and `template.scroll_view.viewport` use `fill-layer-background` so they do not
 stack opaque or repeated tint layers. `nav.content` owns the single
@@ -508,6 +511,12 @@ paragraphs lay out consecutive same-style runs in a wrapping flex row.
   only the in-progress tail is re-parsed each frame.
 - `evict_streaming_markdown_cache` removes cache entries for despawned entities.
 
+Picus text is rendered through Vello area-coverage anti-aliasing, which is
+grayscale and does not emit ClearType/RGB subpixel masks. Retained labels and text
+areas allow outline hinting only at window scale factors up to 125%; higher-DPI
+text uses unhinted grayscale outlines to avoid uneven pixel snapping over native
+backdrops.
+
 ## 10. Assets, Fonts, Icons, and I18n
 
 `picus_core::icons` provides `IconGlyph`, bundled Lucide `PicusIcon` glyphs, and
@@ -534,8 +543,10 @@ active bundle and falls back to the key or explicit fallback text.
 DPI-aware scene rendering, and swapchain presentation. It prefers opaque swapchain
 alpha for externally owned opaque Bevy windows, but transparent windows, including
 `WindowBackdropMaterial` windows, honor Bevy's requested composition mode and prefer
-post- or pre-multiplied alpha so native compositor material can show through. It
-keeps the Windows AMD premultiplied-alpha compatibility blit path as a fallback and
+premultiplied alpha on Windows so native compositor material can show through. It
+uses wgpu's DirectComposition visual swapchain on Windows for transparent windows;
+the default HWND swapchain is opaque and must not be used for backdrop surfaces.
+It keeps the Windows AMD premultiplied-alpha compatibility blit path as a fallback and
 never blocks the Bevy thread waiting for GPU completion after `present()`. It
 attaches through raw window handles and tracks physical size, logical size, scale
 factor, transparency, and composition alpha mode.

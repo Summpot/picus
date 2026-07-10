@@ -294,7 +294,7 @@ mod tests {
         assert_eq!(
             window.composite_alpha_mode,
             if cfg!(windows) {
-                bevy_window::CompositeAlphaMode::PostMultiplied
+                bevy_window::CompositeAlphaMode::PreMultiplied
             } else {
                 bevy_window::CompositeAlphaMode::Auto
             }
@@ -324,7 +324,7 @@ mod tests {
         assert_eq!(
             window.composite_alpha_mode,
             if cfg!(windows) {
-                bevy_window::CompositeAlphaMode::PostMultiplied
+                bevy_window::CompositeAlphaMode::PreMultiplied
             } else {
                 bevy_window::CompositeAlphaMode::Auto
             }

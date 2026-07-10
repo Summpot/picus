@@ -10,9 +10,9 @@ use masonry_imaging::{
 };
 use wgpu::util::{TextureBlitter, TextureBlitterBuilder};
 use wgpu::{
-    CompositeAlphaMode, Device, Instance, MemoryBudgetThresholds, MemoryHints, PresentMode,
-    Surface, SurfaceConfiguration, SurfaceTexture, Texture, TextureFormat, TextureUsages,
-    TextureView,
+    CompositeAlphaMode, Device, Dx12SwapchainKind, Instance, MemoryBudgetThresholds, MemoryHints,
+    PresentMode, Surface, SurfaceConfiguration, SurfaceTexture, Texture, TextureFormat,
+    TextureUsages, TextureView,
 };
 
 /// Native desktop backdrop material requested for a top-level window.
@@ -202,7 +202,7 @@ impl ExternalWindowSurface {
         // `WindowWrapper`, which internally keeps an owning reference to the window alive.
         // We create a thread-locked handle target only for surface initialization.
         let target = unsafe { raw_handle.get_handle() };
-        let mut render_cx = RenderContext::new();
+        let mut render_cx = RenderContext::new(metrics.transparent);
         let surface = pollster::block_on(render_cx.create_surface(
             target,
             metrics,
@@ -327,10 +327,10 @@ struct DeviceHandle {
 }
 
 impl RenderContext {
-    fn new() -> Self {
+    fn new(transparent: bool) -> Self {
         let backends = wgpu::Backends::from_env().unwrap_or_default();
         let flags = wgpu::InstanceFlags::from_build_config().with_env();
-        let backend_options = wgpu::BackendOptions::from_env_or_default();
+        let backend_options = backend_options_for_surface(transparent);
         let instance = Instance::new(&wgpu::InstanceDescriptor {
             backends,
             flags,
@@ -510,6 +510,19 @@ impl RenderContext {
     }
 }
 
+fn backend_options_for_surface(transparent: bool) -> wgpu::BackendOptions {
+    let mut backend_options = wgpu::BackendOptions::from_env_or_default();
+
+    if cfg!(windows) && transparent {
+        // DXGI swapchains created directly from an HWND only expose opaque alpha.
+        // DirectComposition visuals preserve the Vello target's alpha channel so
+        // DWM backdrops can composite through transparent Picus content.
+        backend_options.dx12.presentation_system = Dx12SwapchainKind::DxgiFromVisual;
+    }
+
+    backend_options
+}
+
 fn create_targets(width: u32, height: u32, device: &Device) -> (Texture, TextureView) {
     let target_texture = device.create_texture(&wgpu::TextureDescriptor {
         label: None,
@@ -550,7 +563,15 @@ fn choose_alpha_mode(
         return requested;
     }
 
-    let preferences: &[CompositeAlphaMode] = if transparent {
+    let preferences: &[CompositeAlphaMode] = if transparent && cfg!(windows) {
+        &[
+            CompositeAlphaMode::PreMultiplied,
+            CompositeAlphaMode::PostMultiplied,
+            CompositeAlphaMode::Inherit,
+            CompositeAlphaMode::Auto,
+            CompositeAlphaMode::Opaque,
+        ]
+    } else if transparent {
         &[
             CompositeAlphaMode::PostMultiplied,
             CompositeAlphaMode::PreMultiplied,
@@ -674,6 +695,15 @@ impl std::fmt::Debug for RenderSurface<'_> {
 mod tests {
     use super::*;
 
+    #[cfg(windows)]
+    #[test]
+    fn transparent_windows_use_direct_composition_visuals() {
+        assert_eq!(
+            backend_options_for_surface(true).dx12.presentation_system,
+            Dx12SwapchainKind::DxgiFromVisual
+        );
+    }
+
     #[test]
     fn alpha_mode_prefers_opaque_surfaces_by_default() {
         let modes = [
@@ -689,7 +719,7 @@ mod tests {
     }
 
     #[test]
-    fn alpha_mode_prefers_postmultiplied_for_transparent_windows() {
+    fn alpha_mode_prefers_platform_compositor_mode_for_transparent_windows() {
         let modes = [
             CompositeAlphaMode::Opaque,
             CompositeAlphaMode::PreMultiplied,
@@ -698,7 +728,11 @@ mod tests {
 
         assert_eq!(
             choose_alpha_mode(&modes, true, BevyCompositeAlphaMode::Auto),
-            CompositeAlphaMode::PostMultiplied
+            if cfg!(windows) {
+                CompositeAlphaMode::PreMultiplied
+            } else {
+                CompositeAlphaMode::PostMultiplied
+            }
         );
     }
 

@@ -17,6 +17,7 @@ use crate::layout::{AsUnit, LenReq, Length};
 use crate::parley::PlainEditor;
 use crate::parley::editing::{Generation, SplitString};
 use crate::properties::{CaretColor, ContentColor, SelectionColor};
+use crate::text_rendering::should_hint_text;
 use crate::theme::default_text_styles;
 use crate::util::bounding_box_to_rect;
 use crate::util::debug_panic;
@@ -184,10 +185,11 @@ impl<const EDITABLE: bool> TextArea<EDITABLE> {
         self
     }
 
-    /// Sets whether [hinting](https://en.wikipedia.org/wiki/Font_hinting) will be used for this text area.
+    /// Sets whether low-DPI [hinting](https://en.wikipedia.org/wiki/Font_hinting) is allowed for this text area.
     ///
     /// Hinting is a process where text is drawn "snapped" to pixel boundaries to improve fidelity.
-    /// The default is true, i.e. hinting is enabled by default.
+    /// The default is true. Picus applies hinting at window scale factors up to
+    /// 125% and leaves higher-DPI text to Vello's grayscale area anti-aliasing.
     ///
     /// This should be set to false if the text area will be animated at creation.
     /// The kinds of relevant animations include changing variable font parameters,
@@ -1027,7 +1029,7 @@ impl<const EDITABLE: bool> Widget for TextArea<EDITABLE> {
             Affine::IDENTITY,
             layout,
             &[text_color.color.into()],
-            self.hint,
+            should_hint_text(self.hint, ctx.scale_factor()),
         );
     }
 

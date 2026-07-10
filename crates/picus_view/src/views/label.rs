@@ -88,7 +88,10 @@ impl Label {
         self
     }
 
-    /// Sets whether [hinting](https://en.wikipedia.org/wiki/Font_hinting) will be used for this label.
+    /// Allows low-DPI [hinting](https://en.wikipedia.org/wiki/Font_hinting) for this label.
+    ///
+    /// Picus automatically disables hinting above 125% scale, where Vello's
+    /// grayscale area anti-aliasing produces smoother compositor-safe text.
     pub fn enable_hinting(mut self, enable_hinting: bool) -> Self {
         self.enable_hinting = enable_hinting;
         self

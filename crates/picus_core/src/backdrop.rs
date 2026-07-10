@@ -101,8 +101,8 @@ impl WindowBackdropMaterial {
             if !window.transparent {
                 window.transparent = true;
             }
-            if window.composite_alpha_mode != CompositeAlphaMode::PostMultiplied {
-                window.composite_alpha_mode = CompositeAlphaMode::PostMultiplied;
+            if window.composite_alpha_mode != CompositeAlphaMode::PreMultiplied {
+                window.composite_alpha_mode = CompositeAlphaMode::PreMultiplied;
             }
         }
     }
@@ -110,7 +110,7 @@ impl WindowBackdropMaterial {
     fn needs_window_configuration(self, window: &Window) -> bool {
         self.requires_transparent_surface()
             && (!window.transparent
-                || window.composite_alpha_mode != CompositeAlphaMode::PostMultiplied)
+                || window.composite_alpha_mode != CompositeAlphaMode::PreMultiplied)
     }
 
     const fn native(self) -> NativeWindowBackdropMaterial {
@@ -310,7 +310,7 @@ mod tests {
         assert_eq!(
             window.composite_alpha_mode,
             if cfg!(windows) {
-                CompositeAlphaMode::PostMultiplied
+                CompositeAlphaMode::PreMultiplied
             } else {
                 CompositeAlphaMode::Auto
             }

@@ -124,7 +124,7 @@ pub const WIDGET_CONTROL_COMPONENT_PADDING: Length = Length::const_px(4.0);
 
 // ── Scrollbar defaults ──────────────────────────────────────────────
 pub const SCROLLBAR_COLOR: Color = SCROLLBAR_THUMB;
-pub const SCROLLBAR_BORDER_COLOR: Color = Color::from_rgb8(0x77, 0x77, 0x77);
+pub const SCROLLBAR_BORDER_COLOR: Color = Color::TRANSPARENT;
 pub const SCROLLBAR_WIDTH: f64 = 8.;
 pub const SCROLLBAR_PAD: f64 = 2.;
 pub const SCROLLBAR_MIN_SIZE: f64 = 45.;
@@ -558,4 +558,15 @@ pub(crate) fn test_property_set() -> DefaultProperties {
     let mut properties = default_property_set();
 
     properties
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn retained_scrollbar_does_not_add_an_opaque_outline() {
+        assert_eq!(SCROLLBAR_BORDER_COLOR.to_rgba8().a, 0);
+        assert!(SCROLLBAR_COLOR.to_rgba8().a < u8::MAX);
+    }
 }
