@@ -35,7 +35,9 @@ use masonry_core::{
     },
     properties::{Background, BorderColor, BorderWidth, BoxShadow, CornerRadius, Padding},
 };
-use picus_view::picus_widget::properties::{BorderBrush, LineBreaking};
+use picus_view::picus_widget::properties::{
+    AbsoluteLinearGradient, BorderBrush, LineBreaking,
+};
 use picus_view::picus_widget::properties::types::Gradient;
 use picus_view::{
     WidgetView,
@@ -3438,20 +3440,55 @@ enum ColorDef {
 #[derive(Debug, Clone, Deserialize)]
 enum BrushDef {
     Color(ColorDef),
+    /// CSS-style relative linear gradient (spans the paint rect).
+    ///
+    /// RON: `Linear((angle: 180.0, stops: [...]))` with `angle` in degrees.
     Linear(LinearGradientDef),
+    /// WinUI `LinearGradientBrush` with `MappingMode="Absolute"`.
+    ///
+    /// RON:
+    /// `AbsoluteLinear((start: (0.0, 0.0), end: (0.0, 3.0), flip_y: false, stops: [...]))`
+    AbsoluteLinear(AbsoluteLinearDef),
+    /// WinUI `ControlElevationBorderBrush` / `AccentControlElevationBorderBrush`.
+    ///
+    /// Absolute `(0,0)→(0,extent)` (default extent 3), stops at 0.33 / 1.0,
+    /// optional `flip_y` for Light/Accent (`ScaleY=-1 CenterY=0.5`).
+    ///
+    /// RON: `ControlElevation((flip_y: false, secondary: Rgba8(...), default: Rgba8(...)))`
+    ControlElevation(ControlElevationDef),
 }
 
-/// RON deserialization type for a linear gradient.
-///
-/// Syntax in RON (newtype wrapper needs an inner struct tuple):
-/// `Linear((angle: 180.0, stops: [(0.33, Rgba8(255, 255, 255, 24)), (1.0, Rgba8(255, 255, 255, 18))]))`
-///
-/// `angle` is in **degrees** (CSS convention: 0° upward, clockwise positive) and
-/// is converted to radians for [`Gradient::new_linear`].
+/// RON deserialization type for a CSS-relative linear gradient.
 #[derive(Debug, Clone, Deserialize)]
 struct LinearGradientDef {
     angle: f64,
     stops: Vec<(f32, ColorDef)>,
+}
+
+/// RON deserialization type for a WinUI absolute linear gradient.
+#[derive(Debug, Clone, Deserialize)]
+struct AbsoluteLinearDef {
+    start: (f64, f64),
+    end: (f64, f64),
+    #[serde(default)]
+    flip_y: bool,
+    stops: Vec<(f32, ColorDef)>,
+}
+
+/// RON shorthand for WinUI control elevation border brushes.
+#[derive(Debug, Clone, Deserialize)]
+struct ControlElevationDef {
+    #[serde(default)]
+    flip_y: bool,
+    /// Gradient line length in DIP (WinUI uses 3 for control elevation, 2 for text).
+    #[serde(default = "default_elevation_extent")]
+    extent: f64,
+    secondary: ColorDef,
+    default: ColorDef,
+}
+
+fn default_elevation_extent() -> f64 {
+    3.0
 }
 
 impl LinearGradientDef {
@@ -3473,11 +3510,46 @@ impl LinearGradientDef {
     }
 }
 
+impl AbsoluteLinearDef {
+    fn into_brush(self) -> io::Result<BorderBrush> {
+        let mut stops = Vec::with_capacity(self.stops.len());
+        for (offset, color_def) in self.stops {
+            stops.push((offset, color_def.into_color()?));
+        }
+        Ok(BorderBrush::AbsoluteLinear(AbsoluteLinearGradient {
+            start: self.start,
+            end: self.end,
+            flip_y: self.flip_y,
+            stops,
+        }))
+    }
+}
+
+impl ControlElevationDef {
+    fn into_brush(self) -> io::Result<BorderBrush> {
+        let secondary = self.secondary.into_color()?;
+        let default = self.default.into_color()?;
+        let extent = if self.extent > 0.0 {
+            self.extent
+        } else {
+            3.0
+        };
+        Ok(BorderBrush::AbsoluteLinear(AbsoluteLinearGradient {
+            start: (0.0, 0.0),
+            end: (0.0, extent),
+            flip_y: self.flip_y,
+            stops: vec![(0.33, secondary), (1.0, default)],
+        }))
+    }
+}
+
 impl BrushDef {
     fn into_brush(self) -> io::Result<BorderBrush> {
         match self {
             BrushDef::Color(color_def) => Ok(BorderBrush::Color(color_def.into_color()?)),
             BrushDef::Linear(linear) => linear.into_brush(),
+            BrushDef::AbsoluteLinear(linear) => linear.into_brush(),
+            BrushDef::ControlElevation(elevation) => elevation.into_brush(),
         }
     }
 }
@@ -3618,11 +3690,18 @@ enum TokenDef {
     Backdrop(String),
     /// Cubic bezier curve control points.
     Curve(f32, f32, f32, f32),
-    /// Linear gradient brush token (e.g. elevation border).
+    /// CSS-relative linear gradient brush token.
     ///
-    /// RON: `Linear((angle: 180.0, stops: [(0.0, Rgba8(...)), (1.0, Rgba8(...))]))`
-    /// with `angle` in degrees (inner double-parens are required for the newtype).
+    /// RON: `Linear((angle: 180.0, stops: [...]))` with `angle` in degrees.
     Linear(LinearGradientDef),
+    /// WinUI absolute linear gradient brush token.
+    ///
+    /// RON: `AbsoluteLinear((start: (0.0, 0.0), end: (0.0, 3.0), flip_y: false, stops: [...]))`
+    AbsoluteLinear(AbsoluteLinearDef),
+    /// WinUI ControlElevationBorderBrush shorthand token.
+    ///
+    /// RON: `ControlElevation((flip_y: false, secondary: Rgba8(...), default: Rgba8(...)))`
+    ControlElevation(ControlElevationDef),
     /// Explicit brush token (solid or gradient).
     Brush(BrushDef),
 }
@@ -3640,6 +3719,10 @@ impl TokenDef {
                 .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error)),
             Self::Curve(x1, y1, x2, y2) => Ok(TokenValue::Curve(x1, y1, x2, y2)),
             Self::Linear(linear) => Ok(TokenValue::BorderBrush(linear.into_brush()?)),
+            Self::AbsoluteLinear(linear) => Ok(TokenValue::BorderBrush(linear.into_brush()?)),
+            Self::ControlElevation(elevation) => {
+                Ok(TokenValue::BorderBrush(elevation.into_brush()?))
+            }
             Self::Brush(brush) => Ok(TokenValue::BorderBrush(brush.into_brush()?)),
         }
     }
@@ -4530,19 +4613,51 @@ mod tests {
             crate::resolve_style_for_classes(app.world(), ["template.progress.fill"]);
         assert!(progress_fill.colors.bg.is_some());
 
-        // Default UiButton uses ControlElevationBorderBrush (gradient).
+        // Default UiButton uses WinUI ControlElevationBorderBrush (absolute 3 DIP ramp).
         let button = app.world_mut().spawn(crate::UiButton::new("Save")).id();
         let button_style = resolve_style(app.world(), button);
-        assert!(
-            matches!(
-                button_style.colors.resolved_border_brush(),
-                BorderBrush::Gradient(_)
+        match button_style.colors.resolved_border_brush() {
+            BorderBrush::AbsoluteLinear(gradient) => {
+                assert_eq!(gradient.start, (0.0, 0.0));
+                assert_eq!(gradient.end, (0.0, 3.0));
+                assert!(
+                    !gradient.flip_y,
+                    "dark ControlElevationBorderBrush should not flip_y"
+                );
+                assert_eq!(gradient.stops.len(), 2);
+                // Geometry: Absolute (0,0)→(0,3) relative to paint target top-left.
+                let rect = masonry_core::kurbo::Rect::new(10.0, 20.0, 110.0, 60.0);
+                let (p0, p1) = gradient.resolve_points(rect);
+                assert_eq!(p0, masonry_core::kurbo::Point::new(10.0, 20.0));
+                assert_eq!(p1, masonry_core::kurbo::Point::new(10.0, 23.0));
+            }
+            other => panic!(
+                "default UiButton border should use AbsoluteLinear elevation brush, got {other:?}"
             ),
-            "default UiButton border should use elevation gradient brush, got {:?}",
-            button_style.colors.border_brush
-        );
+        }
 
-        // Hover solid border must clear the elevation gradient via cascade.
+        // Light theme ControlElevationBorderBrush uses ScaleY=-1 CenterY=0.5.
+        crate::set_active_style_variant_by_name(app.world_mut(), "light");
+        app.update();
+        let light_button = app.world_mut().spawn(crate::UiButton::new("Save")).id();
+        let light_style = resolve_style(app.world(), light_button);
+        match light_style.colors.resolved_border_brush() {
+            BorderBrush::AbsoluteLinear(gradient) => {
+                assert!(
+                    gradient.flip_y,
+                    "light ControlElevationBorderBrush should flip_y"
+                );
+                let rect = masonry_core::kurbo::Rect::new(0.0, 0.0, 100.0, 40.0);
+                let (p0, p1) = gradient.resolve_points(rect);
+                assert_eq!(p0, masonry_core::kurbo::Point::new(0.0, 40.0));
+                assert_eq!(p1, masonry_core::kurbo::Point::new(0.0, 37.0));
+            }
+            other => panic!("light UiButton border should use AbsoluteLinear, got {other:?}"),
+        }
+        crate::set_active_style_variant_by_name(app.world_mut(), "dark");
+        app.update();
+
+        // WinUI keeps ControlElevationBorderBrush on PointerOver.
         let button_hovered = app
             .world_mut()
             .spawn((
@@ -4558,10 +4673,32 @@ mod tests {
         assert!(
             matches!(
                 hovered_style.colors.resolved_border_brush(),
+                BorderBrush::AbsoluteLinear(_)
+            ),
+            "hovered UiButton should keep elevation border, got {:?}",
+            hovered_style.colors.border_brush
+        );
+
+        // WinUI ButtonBorderBrushPressed → solid ControlStrokeColorDefault.
+        let button_pressed = app
+            .world_mut()
+            .spawn((
+                crate::UiButton::new("Save"),
+                InteractionState {
+                    hovered: true,
+                    pressed: true,
+                    focused: false,
+                },
+            ))
+            .id();
+        let pressed_style = resolve_style(app.world(), button_pressed);
+        assert!(
+            matches!(
+                pressed_style.colors.resolved_border_brush(),
                 BorderBrush::Color(_)
             ),
-            "hovered UiButton should use solid border, got {:?}",
-            hovered_style.colors.border_brush
+            "pressed UiButton should use solid stroke, got {:?}",
+            pressed_style.colors.border_brush
         );
     }
     #[test]

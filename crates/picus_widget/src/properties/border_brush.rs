@@ -1,14 +1,17 @@
 // Copyright 2026 Summp
 // SPDX-License-Identifier: Apache-2.0
 
-//! Border brush property supporting both solid colors and gradients.
+//! Border brush property supporting solid colors and gradients.
 //!
-//! This is the single source of truth for border paint, mirroring
-//! [`Background`]'s `Color | Gradient` model. Widgets should paint borders
-//! through [`paint_border_brush`] / [`pre_paint_brush`] rather than reading
-//! [`BorderColor`] directly.
+//! This is the single source of truth for border paint. Widgets should paint
+//! borders through [`paint_border_brush`] / [`pre_paint_brush`] rather than
+//! reading [`BorderColor`] directly.
 //!
-//! [`Background`]: crate::properties::Background
+//! WinUI elevation borders (`ControlElevationBorderBrush`) are modeled as
+//! [`BorderBrush::AbsoluteLinear`]: `MappingMode=Absolute`, a short vertical
+//! ramp (typically 3 DIP), optional vertical flip (`ScaleY=-1 CenterY=0.5`),
+//! and pad extend so the rest of the control stays on the last stop.
+//!
 //! [`BorderColor`]: crate::properties::BorderColor
 
 use crate::core::{
@@ -16,24 +19,97 @@ use crate::core::{
     paint_box_shadow,
 };
 use crate::imaging::Painter;
-use crate::kurbo::{Join, Rect, Stroke};
-use crate::peniko::color::{AlphaColor, Srgb};
+use crate::kurbo::{Join, Point, Rect, Stroke};
+use crate::peniko::color::{AlphaColor, ColorSpaceTag, HueDirection, Srgb};
+use crate::peniko::{
+    ColorStop, ColorStops, Extend, InterpolationAlphaSpace, LinearGradientPosition,
+};
 use crate::properties::types::Gradient;
 use crate::properties::{BorderColor, BorderWidth, CornerRadius};
 
+/// Absolute linear gradient in device-independent pixels relative to the paint
+/// target's top-left corner (WinUI `LinearGradientBrush` with
+/// `MappingMode="Absolute"`).
+///
+/// `ControlElevationBorderBrush` is typically:
+/// - `start = (0, 0)`, `end = (0, 3)`
+/// - stops at 0.33 (Secondary) and 1.0 (Default)
+/// - `flip_y = true` on Light / Accent (RelativeTransform `ScaleY=-1`)
+#[derive(Clone, Debug, PartialEq)]
+pub struct AbsoluteLinearGradient {
+    /// Start point in DIP relative to the target's top-left.
+    pub start: (f64, f64),
+    /// End point in DIP relative to the target's top-left.
+    pub end: (f64, f64),
+    /// Apply WinUI `RelativeTransform` ScaleY=-1 CenterY=0.5 (reflect about
+    /// the horizontal mid-line of the paint target).
+    pub flip_y: bool,
+    /// Color stops along the gradient line (`offset` in 0..=1).
+    pub stops: Vec<(f32, AlphaColor<Srgb>)>,
+}
+
+impl AbsoluteLinearGradient {
+    /// WinUI `ControlElevationBorderBrush` / `AccentControlElevationBorderBrush`
+    /// shape: Absolute `(0,0)→(0,extent)`, two stops at 0.33 and 1.0.
+    #[must_use]
+    pub fn control_elevation(
+        secondary: AlphaColor<Srgb>,
+        default: AlphaColor<Srgb>,
+        flip_y: bool,
+    ) -> Self {
+        Self {
+            start: (0.0, 0.0),
+            end: (0.0, 3.0),
+            flip_y,
+            stops: vec![(0.33, secondary), (1.0, default)],
+        }
+    }
+
+    /// Resolves absolute start/end points in the paint target's coordinate space.
+    #[must_use]
+    pub fn resolve_points(&self, rect: Rect) -> (Point, Point) {
+        let mut p0 = Point::new(rect.x0 + self.start.0, rect.y0 + self.start.1);
+        let mut p1 = Point::new(rect.x0 + self.end.0, rect.y0 + self.end.1);
+        if self.flip_y {
+            // RelativeTransform ScaleY=-1 CenterY=0.5 → y' = 2*cy - y
+            let cy = (rect.y0 + rect.y1) * 0.5;
+            p0.y = 2.0 * cy - p0.y;
+            p1.y = 2.0 * cy - p1.y;
+        }
+        (p0, p1)
+    }
+
+    /// Builds a peniko gradient covering `rect`.
+    pub fn get_peniko_gradient_for_rect(&self, rect: Rect) -> crate::peniko::Gradient {
+        let (start, end) = self.resolve_points(rect);
+        let mut stops = ColorStops::default();
+        for &stop in &self.stops {
+            stops.push(ColorStop::from(stop));
+        }
+        crate::peniko::Gradient {
+            kind: LinearGradientPosition { start, end }.into(),
+            extend: Extend::Pad,
+            interpolation_cs: ColorSpaceTag::Srgb,
+            hue_direction: HueDirection::default(),
+            stops,
+            interpolation_alpha_space: InterpolationAlphaSpace::default(),
+        }
+    }
+}
+
 /// The brush used to paint a widget's border.
 ///
-/// Mirrors [`Background`]: solid color or gradient. Prefer this property over
-/// the legacy solid-only [`BorderColor`].
+/// Prefer this property over the legacy solid-only [`BorderColor`].
 ///
-/// [`Background`]: crate::properties::Background
 /// [`BorderColor`]: crate::properties::BorderColor
 #[derive(Clone, Debug, PartialEq)]
 pub enum BorderBrush {
     /// Solid color border.
     Color(AlphaColor<Srgb>),
-    /// Gradient border.
+    /// CSS-style relative gradient (masonry [`Gradient`], spans the paint rect).
     Gradient(Gradient),
+    /// WinUI-style absolute linear gradient (short DIP ramp, optional flip).
+    AbsoluteLinear(AbsoluteLinearGradient),
 }
 
 impl Default for BorderBrush {
@@ -56,10 +132,28 @@ impl BorderBrush {
         Self::Color(color)
     }
 
-    /// Creates a gradient border brush.
+    /// Creates a CSS-relative gradient border brush.
     #[must_use]
     pub fn gradient(gradient: Gradient) -> Self {
         Self::Gradient(gradient)
+    }
+
+    /// Creates a WinUI absolute linear border brush.
+    #[must_use]
+    pub fn absolute_linear(gradient: AbsoluteLinearGradient) -> Self {
+        Self::AbsoluteLinear(gradient)
+    }
+
+    /// WinUI `ControlElevationBorderBrush` helper.
+    #[must_use]
+    pub fn control_elevation(
+        secondary: AlphaColor<Srgb>,
+        default: AlphaColor<Srgb>,
+        flip_y: bool,
+    ) -> Self {
+        Self::AbsoluteLinear(AbsoluteLinearGradient::control_elevation(
+            secondary, default, flip_y,
+        ))
     }
 
     /// Returns a peniko brush suitable for stroking a border in `rect`.
@@ -67,6 +161,7 @@ impl BorderBrush {
         match self {
             Self::Color(color) => (*color).into(),
             Self::Gradient(gradient) => gradient.get_peniko_gradient_for_rect(rect).into(),
+            Self::AbsoluteLinear(gradient) => gradient.get_peniko_gradient_for_rect(rect).into(),
         }
     }
 
@@ -75,7 +170,7 @@ impl BorderBrush {
     pub const fn as_solid_color(&self) -> Option<AlphaColor<Srgb>> {
         match self {
             Self::Color(color) => Some(*color),
-            Self::Gradient(_) => None,
+            Self::Gradient(_) | Self::AbsoluteLinear(_) => None,
         }
     }
 
@@ -88,7 +183,7 @@ impl BorderBrush {
                 let alpha = color.components[3];
                 alpha != 0.0
             }
-            Self::Gradient(_) => true,
+            Self::Gradient(_) | Self::AbsoluteLinear(_) => true,
         }
     }
 }
@@ -102,6 +197,12 @@ impl From<AlphaColor<Srgb>> for BorderBrush {
 impl From<Gradient> for BorderBrush {
     fn from(gradient: Gradient) -> Self {
         Self::Gradient(gradient)
+    }
+}
+
+impl From<AbsoluteLinearGradient> for BorderBrush {
+    fn from(gradient: AbsoluteLinearGradient) -> Self {
+        Self::AbsoluteLinear(gradient)
     }
 }
 

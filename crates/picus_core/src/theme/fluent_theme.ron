@@ -198,7 +198,7 @@
         ),
         colors: (
           bg: Var("fill-control-default"),
-          // WinUI ControlElevationBorderBrush (top→bottom gradient).
+          // WinUI ButtonBorderBrush → ControlElevationBorderBrush
           border_brush: Var("border-elevation"),
           text: Var("text-primary"),
         ),
@@ -215,8 +215,8 @@
       setter: (
         colors: (
           bg: Var("fill-control-secondary"),
-          // Solid hover border clears the base elevation gradient via cascade.
-          border: Var("border-default-hover"),
+          // WinUI keeps ControlElevationBorderBrush on PointerOver.
+          border_brush: Var("border-elevation"),
           text: Var("text-primary"),
         ),
       ),
@@ -226,8 +226,9 @@
       setter: (
         colors: (
           bg: Var("fill-control-tertiary"),
-          border: Var("border-default-pressed"),
-          text: Var("text-primary"),
+          // WinUI ButtonBorderBrushPressed → ControlStrokeColorDefaultBrush
+          border: Var("stroke-control-default"),
+          text: Var("text-secondary"),
         ),
       ),
     ),
@@ -242,12 +243,13 @@
     ),
 
     // ===== Button appearance: primary =====
+    // WinUI AccentButton → AccentControlElevationBorderBrush
     (
       selector: And([Type("UiButton"), Class("button.appearance.primary")]),
       setter: (
         colors: (
           bg: Var("surface-accent"),
-          border: Var("surface-accent"),
+          border_brush: Var("border-elevation-accent"),
           text: Var("text-on-accent"),
         ),
         box_shadow: Var("shadow-ui-component"),
@@ -258,7 +260,7 @@
       setter: (
         colors: (
           bg: Var("surface-accent-hover"),
-          border: Var("surface-accent-hover"),
+          border_brush: Var("border-elevation-accent"),
           text: Var("text-on-accent"),
         ),
       ),
@@ -268,7 +270,8 @@
       setter: (
         colors: (
           bg: Var("surface-accent-pressed"),
-          border: Var("surface-accent-pressed"),
+          // WinUI AccentButtonBorderBrushPressed → transparent
+          border: Var("transparent"),
           text: Var("text-on-accent"),
         ),
       ),
@@ -417,7 +420,8 @@
       setter: (
         colors: (
           bg: Var("fill-control-disabled"),
-          border: Var("border-disabled"),
+          // WinUI ButtonBorderBrushDisabled → ControlStrokeColorDefaultBrush
+          border: Var("stroke-control-default"),
           text: Var("text-disabled"),
         ),
       ),
@@ -3337,10 +3341,23 @@
         "scrollbar-thumb-pressed": Color(Hex("#FFFFFFB8")),
         // Border stroke hierarchy (Fluent v9 colorNeutralStroke*)
         "border-disabled": Color(Hex("#5C5C5C")),
-        // WinUI ControlElevationBorderBrush: vertical 2-stop gradient
-        // (top = ControlStrokeColorSecondary #18FFFFFF, bottom = ControlStrokeColorDefault #12FFFFFF)
-        // angle is degrees (CSS): 180° = top → bottom.
-        "border-elevation": Linear((angle: 180.0, stops: [(0.33, Rgba8(255, 255, 255, 24)), (1.0, Rgba8(255, 255, 255, 18))])),
+        // WinUI ControlStrokeColor* (used by elevation borders / pressed stroke)
+        "stroke-control-default": Color(Rgba8(255, 255, 255, 18)),
+        "stroke-control-secondary": Color(Rgba8(255, 255, 255, 24)),
+        "stroke-control-on-accent-default": Color(Rgba8(255, 255, 255, 20)),
+        "stroke-control-on-accent-secondary": Color(Rgba8(0, 0, 0, 35)),
+        // WinUI ControlElevationBorderBrush (Default/Dark: Absolute 0,0→0,3, no flip)
+        "border-elevation": ControlElevation((
+          flip_y: false,
+          secondary: Rgba8(255, 255, 255, 24),
+          default: Rgba8(255, 255, 255, 18),
+        )),
+        // WinUI AccentControlElevationBorderBrush (always ScaleY=-1)
+        "border-elevation-accent": ControlElevation((
+          flip_y: true,
+          secondary: Rgba8(0, 0, 0, 35),
+          default: Rgba8(255, 255, 255, 20),
+        )),
         "border-on-accent": Color(Hex("#0078D4")),
         // Accessible stroke hierarchy (Fluent v9 colorNeutralStrokeAccessible*)
         "stroke-accessible": Color(Hex("#ADADAD")),
@@ -3550,10 +3567,23 @@
         "scrollbar-thumb-pressed": Color(Hex("#00000070")),
         // Border stroke hierarchy (Fluent v9 colorNeutralStroke*)
         "border-disabled": Color(Hex("#BDBDBD")),
-        // WinUI ControlElevationBorderBrush: vertical 2-stop gradient
-        // (top = ControlStrokeColorSecondary #29000000, bottom = ControlStrokeColorDefault #0F000000)
-        // angle is degrees (CSS): 180° = top → bottom.
-        "border-elevation": Linear((angle: 180.0, stops: [(0.33, Rgba8(0, 0, 0, 41)), (1.0, Rgba8(0, 0, 0, 15))])),
+        // WinUI ControlStrokeColor* (Light)
+        "stroke-control-default": Color(Rgba8(0, 0, 0, 15)),
+        "stroke-control-secondary": Color(Rgba8(0, 0, 0, 41)),
+        "stroke-control-on-accent-default": Color(Rgba8(255, 255, 255, 20)),
+        "stroke-control-on-accent-secondary": Color(Rgba8(0, 0, 0, 102)),
+        // WinUI ControlElevationBorderBrush (Light: Absolute 0,0→0,3 + ScaleY=-1)
+        "border-elevation": ControlElevation((
+          flip_y: true,
+          secondary: Rgba8(0, 0, 0, 41),
+          default: Rgba8(0, 0, 0, 15),
+        )),
+        // WinUI AccentControlElevationBorderBrush (ScaleY=-1)
+        "border-elevation-accent": ControlElevation((
+          flip_y: true,
+          secondary: Rgba8(0, 0, 0, 102),
+          default: Rgba8(255, 255, 255, 20),
+        )),
         "border-on-accent": Color(Hex("#0F6CBD")),
         // Accessible stroke hierarchy (Fluent v9 colorNeutralStrokeAccessible*)
         "stroke-accessible": Color(Hex("#616161")),
