@@ -1221,7 +1221,7 @@
           gap: Var("space-xs"),
         ),
         colors: (
-          bg: Var("fill-card-default"),
+          bg: Var("surface-flyout"),
           border: Var("border-default"),
         ),
         box_shadow: Var("shadow-flyout"),
@@ -1259,7 +1259,7 @@
           align_items: Stretch,
         ),
         colors: (
-          bg: Var("fill-card-default"),
+          bg: Var("surface-flyout"),
           border: Var("border-default"),
         ),
         box_shadow: Var("shadow-flyout"),
@@ -1351,7 +1351,7 @@
           gap: Var("gap-sm"),
         ),
         colors: (
-          bg: Var("fill-card-default"),
+          bg: Var("surface-flyout"),
           border: Var("border-default"),
         ),
         box_shadow: Var("shadow-flyout"),
@@ -1404,7 +1404,7 @@
           gap: Var("space-xs"),
         ),
         colors: (
-          bg: Var("fill-card-default"),
+          bg: Var("surface-flyout"),
           border: Var("border-default"),
         ),
         box_shadow: Var("shadow-flyout"),
@@ -1454,7 +1454,7 @@
           gap: Var("space-xs"),
         ),
         colors: (
-          bg: Var("fill-card-default"),
+          bg: Var("surface-flyout"),
           border: Var("border-default"),
         ),
         box_shadow: Var("shadow-flyout"),
@@ -1515,7 +1515,7 @@
           border_width: Var("border-thin"),
         ),
         colors: (
-          bg: Var("fill-card-default"),
+          bg: Var("surface-flyout"),
           border: Var("border-default"),
           text: Var("text-primary"),
         ),
@@ -1533,7 +1533,7 @@
           gap: Var("space-md"),
         ),
         colors: (
-          bg: Var("fill-card-default"),
+          bg: Var("surface-flyout"),
           border: Var("stroke-transparent-interactive"),
           text: Var("text-primary"),
         ),
@@ -1610,7 +1610,7 @@
           gap: Var("gap-sm"),
         ),
         colors: (
-          bg: Var("fill-card-default"),
+          bg: Var("surface-flyout"),
           border: Var("border-default"),
         ),
         box_shadow: Var("shadow-flyout"),
@@ -1677,7 +1677,7 @@
           gap: Var("space-xs"),
         ),
         colors: (
-          bg: Var("fill-card-default"),
+          bg: Var("surface-flyout"),
           border: Var("border-default"),
         ),
         box_shadow: Var("shadow-flyout"),
@@ -1770,7 +1770,7 @@
           gap: Var("space-xs"),
         ),
         colors: (
-          bg: Var("fill-card-default"),
+          bg: Var("surface-flyout"),
           border: Var("border-default"),
         ),
         box_shadow: Var("shadow-flyout"),
@@ -3286,6 +3286,7 @@
         "surface-bg": Color(Hex("#1F1F1F")),
         "surface-panel": Color(Hex("#292929")),
         "surface-elevated": Color(Hex("#1F1F1F")),
+        "surface-flyout": Color(Hex("#2C2C2C")),
         "surface-subtle": Color(Hex("#292929")),
         "surface-subtle-hover": Color(Hex("#3D3D3D")),
         "surface-subtle-pressed": Color(Hex("#1F1F1F")),
@@ -3494,6 +3495,7 @@
         "surface-bg": Color(Hex("#FFFFFF")),
         "surface-panel": Color(Hex("#FFFFFF")),
         "surface-elevated": Color(Hex("#FFFFFF")),
+        "surface-flyout": Color(Hex("#F9F9F9")),
         "surface-subtle": Color(Hex("#F5F5F5")),
         "surface-subtle-hover": Color(Hex("#EBEBEB")),
         "surface-subtle-pressed": Color(Hex("#E0E0E0")),
@@ -3661,6 +3663,7 @@
         "surface-bg": Color(Hex("#000000")),
         "surface-panel": Color(Hex("#000000")),
         "surface-elevated": Color(Hex("#000000")),
+        "surface-flyout": Color(Hex("#000000")),
         "surface-subtle": Color(Hex("#0A0A0A")),
         "surface-subtle-hover": Color(Hex("#1C1C1C")),
         "surface-subtle-pressed": Color(Hex("#303030")),
