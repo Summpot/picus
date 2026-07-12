@@ -586,7 +586,7 @@
           align_items: Center,
         ),
         colors: (
-          bg: Var("surface-elevated"),
+          bg: Var("fill-control-default"),
           border: Var("border-default"),
           text: Var("text-primary"),
         ),
@@ -600,7 +600,7 @@
       selector: And([Type("UiTextInput"), PseudoClass(Hovered)]),
       setter: (
         colors: (
-          bg: Var("surface-subtle-hover"),
+          bg: Var("fill-control-secondary"),
           border: Var("border-input-hover"),
         ),
       ),
@@ -609,7 +609,7 @@
       selector: And([Type("UiTextInput"), PseudoClass(Pressed)]),
       setter: (
         colors: (
-          bg: Var("surface-subtle-pressed"),
+          bg: Var("fill-control-tertiary"),
           border: Var("border-input"),
         ),
       ),
@@ -634,7 +634,7 @@
           align_items: Center,
         ),
         colors: (
-          bg: Var("surface-elevated"),
+          bg: Var("fill-control-default"),
           border: Var("border-default"),
           text: Var("text-primary"),
         ),
@@ -648,7 +648,7 @@
       selector: And([Type("UiPasswordInput"), PseudoClass(Hovered)]),
       setter: (
         colors: (
-          bg: Var("surface-subtle-hover"),
+          bg: Var("fill-control-secondary"),
           border: Var("border-input-hover"),
         ),
       ),
@@ -657,7 +657,7 @@
       selector: And([Type("UiPasswordInput"), PseudoClass(Pressed)]),
       setter: (
         colors: (
-          bg: Var("surface-subtle-pressed"),
+          bg: Var("fill-control-tertiary"),
           border: Var("border-input"),
         ),
       ),
@@ -682,7 +682,7 @@
           align_items: Stretch,
         ),
         colors: (
-          bg: Var("surface-elevated"),
+          bg: Var("fill-control-default"),
           border: Var("border-default"),
           text: Var("text-primary"),
         ),
@@ -696,7 +696,7 @@
       selector: And([Type("UiMultilineTextInput"), PseudoClass(Hovered)]),
       setter: (
         colors: (
-          bg: Var("surface-subtle-hover"),
+          bg: Var("fill-control-secondary"),
           border: Var("border-input-hover"),
         ),
       ),
@@ -705,7 +705,7 @@
       selector: And([Type("UiMultilineTextInput"), PseudoClass(Pressed)]),
       setter: (
         colors: (
-          bg: Var("surface-subtle-pressed"),
+          bg: Var("fill-control-tertiary"),
           border: Var("border-input"),
         ),
       ),
@@ -806,7 +806,7 @@
           border_width: Var("border-thin"),
         ),
         colors: (
-          bg: Var("surface-subtle"),
+          bg: Var("fill-control-default"),
           border: Var("border-default"),
           text: Var("text-primary"),
         ),
@@ -996,7 +996,7 @@
           border_width: Var("border-thin"),
         ),
         colors: (
-          bg: Var("surface-subtle"),
+          bg: Var("fill-control-default"),
           border: Var("border-default"),
           text: Var("text-primary"),
         ),
@@ -1007,7 +1007,7 @@
       selector: And([Type("UiColorPicker"), PseudoClass(Hovered)]),
       setter: (
         colors: (
-          bg: Var("surface-subtle-hover"),
+          bg: Var("fill-control-secondary"),
           border: Var("border-default-hover"),
         ),
       ),
@@ -1016,7 +1016,7 @@
       selector: And([Type("UiColorPicker"), PseudoClass(Pressed)]),
       setter: (
         colors: (
-          bg: Var("surface-subtle-pressed"),
+          bg: Var("fill-control-tertiary"),
           border: Var("border-default-pressed"),
         ),
       ),
@@ -1085,7 +1085,7 @@
           border_width: Var("border-thin"),
         ),
         colors: (
-          bg: Var("surface-subtle"),
+          bg: Var("fill-control-default"),
           border: Var("border-default"),
           text: Var("text-primary"),
         ),
@@ -1096,7 +1096,7 @@
       selector: And([Type("UiDatePicker"), PseudoClass(Hovered)]),
       setter: (
         colors: (
-          bg: Var("surface-subtle-hover"),
+          bg: Var("fill-control-secondary"),
           border: Var("border-default-hover"),
         ),
       ),
@@ -1105,7 +1105,7 @@
       selector: And([Type("UiDatePicker"), PseudoClass(Pressed)]),
       setter: (
         colors: (
-          bg: Var("surface-subtle-pressed"),
+          bg: Var("fill-control-tertiary"),
           border: Var("border-default-pressed"),
         ),
       ),
@@ -1128,7 +1128,7 @@
           border_width: Var("border-thin"),
         ),
         colors: (
-          bg: Var("surface-subtle"),
+          bg: Var("fill-control-default"),
           border: Var("border-default"),
           text: Var("text-primary"),
         ),
@@ -1139,7 +1139,7 @@
       selector: And([Type("UiTimePicker"), PseudoClass(Hovered)]),
       setter: (
         colors: (
-          bg: Var("surface-subtle-hover"),
+          bg: Var("fill-control-secondary"),
           border: Var("border-default-hover"),
         ),
       ),
@@ -1148,7 +1148,7 @@
       selector: And([Type("UiTimePicker"), PseudoClass(Pressed)]),
       setter: (
         colors: (
-          bg: Var("surface-subtle-pressed"),
+          bg: Var("fill-control-tertiary"),
           border: Var("border-default-pressed"),
         ),
       ),
@@ -1173,7 +1173,7 @@
           align_items: Center,
         ),
         colors: (
-          bg: Var("surface-subtle"),
+          bg: Var("fill-control-default"),
           border: Var("border-default"),
           text: Var("text-primary"),
         ),
@@ -1185,7 +1185,7 @@
       selector: And([Type("UiThemePicker"), PseudoClass(Hovered)]),
       setter: (
         colors: (
-          bg: Var("surface-subtle-hover"),
+          bg: Var("fill-control-secondary"),
           border: Var("border-default-hover"),
         ),
       ),
@@ -1197,7 +1197,7 @@
           scale: 0.98,
         ),
         colors: (
-          bg: Var("surface-subtle-pressed"),
+          bg: Var("fill-control-tertiary"),
           border: Var("border-default-pressed"),
         ),
       ),
@@ -2408,7 +2408,7 @@
           align_items: Center,
         ),
         colors: (
-          bg: Var("surface-elevated"),
+          bg: Var("fill-control-default"),
           border: Var("border-default"),
           text: Var("text-primary"),
         ),
@@ -3241,6 +3241,8 @@
               "fill-card-default": Color(Rgba8(255, 255, 255, 13)),
               "fill-card-secondary": Color(Rgba8(255, 255, 255, 8)),
               "fill-smoke-default": Color(Rgba8(0, 0, 0, 77)),
+              "surface-overlay-item-hover": Color(Rgba8(255, 255, 255, 15)),
+              "surface-overlay-item-pressed": Color(Rgba8(255, 255, 255, 10)),
             },
           ),
           "acrylic": (
@@ -3258,6 +3260,8 @@
               "fill-card-default": Color(Rgba8(255, 255, 255, 13)),
               "fill-card-secondary": Color(Rgba8(255, 255, 255, 8)),
               "fill-smoke-default": Color(Rgba8(0, 0, 0, 77)),
+              "surface-overlay-item-hover": Color(Rgba8(255, 255, 255, 15)),
+              "surface-overlay-item-pressed": Color(Rgba8(255, 255, 255, 10)),
             },
           ),
         },
@@ -3442,6 +3446,8 @@
               "fill-card-default": Color(Rgba8(255, 255, 255, 179)),
               "fill-card-secondary": Color(Rgba8(246, 246, 246, 128)),
               "fill-smoke-default": Color(Rgba8(0, 0, 0, 77)),
+              "surface-overlay-item-hover": Color(Rgba8(0, 0, 0, 9)),
+              "surface-overlay-item-pressed": Color(Rgba8(0, 0, 0, 6)),
             },
           ),
           "acrylic": (
@@ -3459,6 +3465,8 @@
               "fill-card-default": Color(Rgba8(255, 255, 255, 128)),
               "fill-card-secondary": Color(Rgba8(246, 246, 246, 96)),
               "fill-smoke-default": Color(Rgba8(0, 0, 0, 77)),
+              "surface-overlay-item-hover": Color(Rgba8(0, 0, 0, 9)),
+              "surface-overlay-item-pressed": Color(Rgba8(0, 0, 0, 6)),
             },
           ),
         },
