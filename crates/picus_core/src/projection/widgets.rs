@@ -11,7 +11,7 @@ use masonry_core::imaging::Painter;
 use masonry_core::kurbo::{Axis, BezPath, Circle, Line, Point, Rect, Stroke};
 use masonry_core::peniko::{self, Gradient};
 use masonry_core::{
-    layout::{Dim, Length},
+    layout::{Dim, Length, UnitPoint},
     properties::Dimensions,
 };
 use picus_view::picus_widget::widgets::InsertNewline;
@@ -1356,27 +1356,20 @@ pub(crate) fn project_spinner(sp: &UiSpinner, ctx: ProjectionCtx<'_>) -> UiView 
 // Color Picker
 // ---------------------------------------------------------------------------
 
-const COLOR_SWATCHES: [(u8, u8, u8); 20] = [
-    (255, 0, 0),
-    (255, 128, 0),
-    (255, 255, 0),
-    (0, 255, 0),
-    (0, 255, 128),
-    (0, 255, 255),
-    (0, 128, 255),
-    (0, 0, 255),
-    (128, 0, 255),
-    (255, 0, 255),
-    (255, 128, 128),
-    (255, 200, 128),
-    (255, 255, 128),
-    (128, 255, 128),
-    (128, 255, 200),
-    (128, 200, 255),
-    (128, 128, 255),
-    (200, 128, 255),
-    (255, 128, 200),
-    (255, 255, 255),
+/// Dimensions for the color picker spectrum and hue slider.
+const SV_SPECTRUM_WIDTH: f64 = 220.0;
+const SV_SPECTRUM_HEIGHT: f64 = 160.0;
+const SV_GRID_COLS: usize = 12;
+const SV_GRID_ROWS: usize = 8;
+const HUE_BAR_HEIGHT: f64 = 16.0;
+const HUE_GRID_COLS: usize = 24;
+
+const COLOR_SWATCHES: [(u8, u8, u8); 25] = [
+    (255, 0, 0),     (255, 128, 0),   (255, 255, 0),   (128, 255, 0),   (0, 255, 0),
+    (0, 255, 128),   (0, 255, 255),   (0, 128, 255),   (0, 0, 255),     (128, 0, 255),
+    (255, 0, 255),   (255, 0, 128),   (255, 128, 128), (255, 192, 128), (255, 224, 128),
+    (224, 255, 128), (192, 255, 128), (128, 255, 128), (128, 255, 192), (128, 224, 255),
+    (128, 192, 255), (128, 128, 255), (192, 128, 255), (224, 224, 224), (255, 255, 255),
 ];
 
 pub(crate) fn project_color_picker(picker: &UiColorPicker, ctx: ProjectionCtx<'_>) -> UiView {
@@ -1398,6 +1391,97 @@ pub(crate) fn project_color_picker(picker: &UiColorPicker, ctx: ProjectionCtx<'_
     ))
 }
 
+/// Draw the saturation-value spectrum for the given hue onto a Canvas scene.
+fn draw_sv_spectrum(
+    scene: &mut masonry_core::imaging::record::Scene,
+    w: f64,
+    h: f64,
+    hue: f32,
+) {
+    let mut painter = Painter::new(scene);
+    let steps_x = 48;
+    let steps_y = 32;
+    let cell_w = w / steps_x as f64;
+    let cell_h = h / steps_y as f64;
+    for sy in 0..steps_y {
+        let v = 1.0 - (sy as f32 / (steps_y - 1) as f32);
+        for sx in 0..steps_x {
+            let s = sx as f32 / (steps_x - 1) as f32;
+            let (r, g, b) = crate::hsv_to_rgb(hue, s, v);
+            let color = Color::from_rgb8(r, g, b);
+            let x = sx as f64 * cell_w;
+            let y = sy as f64 * cell_h;
+            painter
+                .fill(Rect::new(x, y, x + cell_w + 1.0, y + cell_h + 1.0), color)
+                .draw();
+        }
+    }
+}
+
+/// Draw a horizontal hue bar (rainbow strip) onto a Canvas scene.
+fn draw_hue_bar(scene: &mut masonry_core::imaging::record::Scene, w: f64, h: f64) {
+    let mut painter = Painter::new(scene);
+    let steps = 64;
+    let cell_w = w / steps as f64;
+    for i in 0..steps {
+        let hue = (i as f32 / (steps - 1) as f32) * 360.0;
+        let (r, g, b) = crate::hue_to_rgb(hue);
+        let color = Color::from_rgb8(r, g, b);
+        let x = i as f64 * cell_w;
+        painter
+            .fill(Rect::new(x, 0.0, x + cell_w + 1.0, h), color)
+            .draw();
+    }
+}
+
+/// Draw a circular selection indicator at (cx, cy).
+fn draw_selection_indicator(
+    scene: &mut masonry_core::imaging::record::Scene,
+    cx: f64,
+    cy: f64,
+    radius: f64,
+) {
+    let mut painter = Painter::new(scene);
+    painter
+        .stroke(Circle::new((cx, cy), radius), &Stroke::new(2.0), Color::BLACK)
+        .draw();
+    painter
+        .stroke(
+            Circle::new((cx, cy), radius - 2.0),
+            &Stroke::new(1.5),
+            Color::WHITE,
+        )
+        .draw();
+}
+
+/// Build a transparent grid of `cols × rows` buttons covering a `w × h` area.
+fn build_transparent_button_grid(
+    entity: Entity,
+    cols: usize,
+    rows: usize,
+    w: f64,
+    h: f64,
+    action_fn: impl Fn(usize, usize) -> OverlayUiAction + Clone + Send + Sync + 'static,
+) -> UiView {
+    let cell_w = w / cols as f64;
+    let cell_h = h / rows as f64;
+    let mut row_views = Vec::new();
+    for row in 0..rows {
+        let mut col_views = Vec::new();
+        for col in 0..cols {
+            let action = action_fn(col, row);
+            let btn = button_with_child_view(entity, action, sized_box(label("")));
+            let styled = apply_direct_widget_style(btn, &ResolvedStyle::default());
+            let sized = sized_box(styled)
+                .width(Dim::Fixed(Length::px(cell_w)))
+                .height(Dim::Fixed(Length::px(cell_h)));
+            col_views.push(sized.into_any_flex());
+        }
+        row_views.push(flex_row(col_views).gap(Length::px(0.0)).into_any_flex());
+    }
+    Arc::new(sized_box(flex_col(row_views).gap(Length::px(0.0))))
+}
+
 pub(crate) fn project_color_picker_panel(
     panel: &UiColorPickerPanel,
     ctx: ProjectionCtx<'_>,
@@ -1416,9 +1500,98 @@ pub(crate) fn project_color_picker_panel(
         .map(|p| (p.r, p.g, p.b))
         .unwrap_or((255, 255, 255));
 
-    // Build swatch rows (4 rows × 5 cols)
+    let (cur_h, cur_s, cur_v) = crate::rgb_to_hsv(cur_r, cur_g, cur_b);
+
+    // --- SV spectrum area ---
+    let sv_w = SV_SPECTRUM_WIDTH;
+    let sv_h = SV_SPECTRUM_HEIGHT;
+    let sv_hue = cur_h;
+    let sv_cur_s = cur_s;
+    let sv_cur_v = cur_v;
+    let sv_canvas: UiView = Arc::new(canvas(
+        move |_: &mut (),
+         _: &mut masonry_core::core::MutateCtx<'_>,
+         scene: &mut masonry_core::imaging::record::Scene,
+         size| {
+            draw_sv_spectrum(scene, size.width, size.height, sv_hue);
+            let indicator_x = (sv_cur_s as f64) * size.width;
+            let indicator_y = (1.0 - sv_cur_v as f64) * size.height;
+            draw_selection_indicator(scene, indicator_x, indicator_y, 7.0);
+        },
+    ));
+    let sv_grid = build_transparent_button_grid(
+        ctx.entity,
+        SV_GRID_COLS,
+        SV_GRID_ROWS,
+        sv_w,
+        sv_h,
+        |col, row| {
+            let s = ((col as f32 / (SV_GRID_COLS - 1) as f32) * 255.0).round() as u8;
+            let v = (1.0 - (row as f32 / (SV_GRID_ROWS - 1) as f32)) * 255.0;
+            let v = v.round().clamp(0.0, 255.0) as u8;
+            OverlayUiAction::SelectColorSv { s, v }
+        },
+    );
+    let sv_area = Arc::new(
+        sized_box(zstack(vec![sv_canvas, sv_grid]).alignment(UnitPoint::TOP_LEFT))
+            .width(Dim::Fixed(Length::px(sv_w)))
+            .height(Dim::Fixed(Length::px(sv_h))),
+    );
+
+    // --- Hue bar ---
+    let hue_bar_w = sv_w;
+    let hue_bar_h = HUE_BAR_HEIGHT;
+    let hue_cur_h = cur_h;
+    let hue_canvas: UiView = Arc::new(canvas(
+        move |_: &mut (),
+         _: &mut masonry_core::core::MutateCtx<'_>,
+         scene: &mut masonry_core::imaging::record::Scene,
+         size| {
+            draw_hue_bar(scene, size.width, size.height);
+            let hue_x = (hue_cur_h / 360.0) as f64 * size.width;
+            draw_selection_indicator(scene, hue_x, size.height / 2.0, 7.0);
+        },
+    ));
+    let hue_grid = build_transparent_button_grid(
+        ctx.entity,
+        HUE_GRID_COLS,
+        1,
+        hue_bar_w,
+        hue_bar_h,
+        |col, _row| {
+            let h = ((col as f32 / (HUE_GRID_COLS - 1) as f32) * 255.0).round() as u8;
+            OverlayUiAction::SelectColorHue { h }
+        },
+    );
+    let hue_area = Arc::new(
+        sized_box(zstack(vec![hue_canvas, hue_grid]).alignment(UnitPoint::TOP_LEFT))
+            .width(Dim::Fixed(Length::px(hue_bar_w)))
+            .height(Dim::Fixed(Length::px(hue_bar_h))),
+    );
+
+    // --- Color preview + hex label ---
+    let mut preview_style =
+        resolve_style_for_classes(ctx.world, ["overlay.color_picker.preview"]);
+    preview_style.colors.bg = Some(Color::from_rgb8(cur_r, cur_g, cur_b));
+    let preview_box = sized_box(label(""))
+        .width(Dim::Fixed(Length::px(28.0)))
+        .height(Dim::Fixed(Length::px(28.0)));
+    let preview_styled = apply_widget_style(preview_box, &preview_style);
+    let current_hex = format!("#{:02X}{:02X}{:02X}", cur_r, cur_g, cur_b);
+    let hex_label = apply_label_style(
+        label(current_hex),
+        &resolve_style_for_classes(ctx.world, ["overlay.color_picker.value"]),
+    );
+    let preview_row = flex_row(vec![
+        preview_styled.into_any_flex(),
+        hex_label.into_any_flex(),
+    ])
+    .gap(Length::px(8.0));
+
+    // --- Preset swatch grid (rows × 5 cols) ---
+    let swatch_rows_total = COLOR_SWATCHES.len().div_ceil(5);
     let mut rows = Vec::new();
-    for row in 0..4 {
+    for row in 0..swatch_rows_total {
         let mut row_items = Vec::new();
         for col in 0..5 {
             let idx = row * 5 + col;
@@ -1451,17 +1624,16 @@ pub(crate) fn project_color_picker_panel(
         }
         rows.push(flex_row(row_items).gap(Length::px(4.0)).into_any_flex());
     }
+    let swatch_grid = flex_col(rows).gap(Length::px(4.0));
 
-    let current_hex = format!("#{:02X}{:02X}{:02X}", cur_r, cur_g, cur_b);
-    let hex_label = apply_label_style(
-        label(current_hex),
-        &resolve_style_for_classes(ctx.world, ["overlay.color_picker.value"]),
-    );
-
-    let mut panel_items = vec![hex_label.into_any_flex()];
-    panel_items.extend(rows);
-
-    let content = flex_col(panel_items).gap(Length::px(6.0));
+    // --- Assemble panel ---
+    let panel_items = vec![
+        sv_area.into_any_flex(),
+        hue_area.into_any_flex(),
+        preview_row.into_any_flex(),
+        swatch_grid.into_any_flex(),
+    ];
+    let content = flex_col(panel_items).gap(Length::px(10.0));
 
     let computed_pos = ctx
         .world
@@ -1471,12 +1643,12 @@ pub(crate) fn project_color_picker_panel(
     let panel_width = if computed_pos.width > 1.0 {
         computed_pos.width
     } else {
-        260.0
+        sv_w + 24.0
     };
     let panel_height = if computed_pos.height > 1.0 {
         computed_pos.height
     } else {
-        200.0
+        sv_h + hue_bar_h + 28.0 + (swatch_rows_total as f64 * 32.0) + 60.0
     };
 
     let panel_view = apply_widget_style(

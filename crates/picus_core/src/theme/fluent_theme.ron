@@ -1679,6 +1679,19 @@
     ),
 
     (
+      selector: Class("overlay.color_picker.preview"),
+      setter: (
+        layout: (
+          corner_radius: Var("radius-sm"),
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          border: Var("border-default"),
+        ),
+      ),
+    ),
+
+    (
       selector: Class("overlay.date_picker.panel"),
       setter: (
         layout: (

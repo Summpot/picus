@@ -59,6 +59,8 @@ pub enum OverlayUiAction {
     // Color picker overlay
     ToggleColorPicker,
     SelectColorSwatch { r: u8, g: u8, b: u8 },
+    SelectColorSv { s: u8, v: u8 },
+    SelectColorHue { h: u8 },
     DismissColorPicker,
     // Date picker overlay
     ToggleDatePicker,
@@ -1133,6 +1135,82 @@ pub fn handle_overlay_actions(world: &mut World) {
 
                 if world.get_entity(event.entity).is_ok() {
                     close_color_picker_panel(world, event.entity);
+                }
+
+                if let Some(ev) = changed_event {
+                    world.resource::<UiEventQueue>().push_typed(anchor, ev);
+                }
+            }
+
+            OverlayUiAction::SelectColorSv { s, v } => {
+                let Some(anchor) = world
+                    .get::<UiColorPickerPanel>(event.entity)
+                    .map(|p| p.anchor)
+                else {
+                    continue;
+                };
+
+                let mut changed_event = None;
+                if let Some(mut picker) = world.get_mut::<UiColorPicker>(anchor) {
+                    let (h, _old_s, _old_v) =
+                        crate::rgb_to_hsv(
+                            picker.r,
+                            picker.g,
+                            picker.b,
+                        );
+                    let new_s = s as f32 / 255.0;
+                    let new_v = v as f32 / 255.0;
+                    let (r, g, b) = crate::hsv_to_rgb(
+                        h,
+                        new_s,
+                        new_v,
+                    );
+                    picker.r = r;
+                    picker.g = g;
+                    picker.b = b;
+                    changed_event = Some(UiColorPickerChanged {
+                        picker: anchor,
+                        r,
+                        g,
+                        b,
+                    });
+                }
+
+                if let Some(ev) = changed_event {
+                    world.resource::<UiEventQueue>().push_typed(anchor, ev);
+                }
+            }
+
+            OverlayUiAction::SelectColorHue { h } => {
+                let Some(anchor) = world
+                    .get::<UiColorPickerPanel>(event.entity)
+                    .map(|p| p.anchor)
+                else {
+                    continue;
+                };
+
+                let mut changed_event = None;
+                if let Some(mut picker) = world.get_mut::<UiColorPicker>(anchor) {
+                    let (_old_h, s, v) = crate::rgb_to_hsv(
+                        picker.r,
+                        picker.g,
+                        picker.b,
+                    );
+                    let new_h = (h as f32 / 255.0) * 360.0;
+                    let (r, g, b) = crate::hsv_to_rgb(
+                        new_h,
+                        s,
+                        v,
+                    );
+                    picker.r = r;
+                    picker.g = g;
+                    picker.b = b;
+                    changed_event = Some(UiColorPickerChanged {
+                        picker: anchor,
+                        r,
+                        g,
+                        b,
+                    });
                 }
 
                 if let Some(ev) = changed_event {
