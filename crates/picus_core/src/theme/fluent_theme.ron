@@ -581,6 +581,7 @@
       ),
     ),
 
+    // WinUI TextBox / TextControlElevationBorderBrush family
     (
       selector: Type("UiTextInput"),
       setter: (
@@ -593,7 +594,7 @@
         ),
         colors: (
           bg: Var("fill-control-default"),
-          border: Var("border-default"),
+          border_brush: Var("border-elevation-text"),
           text: Var("text-primary"),
         ),
         text: (
@@ -607,7 +608,8 @@
       setter: (
         colors: (
           bg: Var("fill-control-secondary"),
-          border: Var("border-input-hover"),
+          // WinUI keeps TextControlElevationBorderBrush on PointerOver.
+          border_brush: Var("border-elevation-text"),
         ),
       ),
     ),
@@ -616,7 +618,7 @@
       setter: (
         colors: (
           bg: Var("fill-control-tertiary"),
-          border: Var("border-input"),
+          border_brush: Var("border-elevation-text"),
         ),
       ),
     ),
@@ -624,7 +626,8 @@
       selector: And([Type("UiTextInput"), PseudoClass(Focused)]),
       setter: (
         colors: (
-          border: Var("focus-stroke"),
+          bg: Var("surface-input"),
+          border_brush: Var("border-elevation-text-focused"),
         ),
       ),
     ),
@@ -641,7 +644,7 @@
         ),
         colors: (
           bg: Var("fill-control-default"),
-          border: Var("border-default"),
+          border_brush: Var("border-elevation-text"),
           text: Var("text-primary"),
         ),
         text: (
@@ -655,7 +658,7 @@
       setter: (
         colors: (
           bg: Var("fill-control-secondary"),
-          border: Var("border-input-hover"),
+          border_brush: Var("border-elevation-text"),
         ),
       ),
     ),
@@ -664,7 +667,7 @@
       setter: (
         colors: (
           bg: Var("fill-control-tertiary"),
-          border: Var("border-input"),
+          border_brush: Var("border-elevation-text"),
         ),
       ),
     ),
@@ -672,7 +675,8 @@
       selector: And([Type("UiPasswordInput"), PseudoClass(Focused)]),
       setter: (
         colors: (
-          border: Var("focus-stroke"),
+          bg: Var("surface-input"),
+          border_brush: Var("border-elevation-text-focused"),
         ),
       ),
     ),
@@ -689,7 +693,7 @@
         ),
         colors: (
           bg: Var("fill-control-default"),
-          border: Var("border-default"),
+          border_brush: Var("border-elevation-text"),
           text: Var("text-primary"),
         ),
         text: (
@@ -703,7 +707,7 @@
       setter: (
         colors: (
           bg: Var("fill-control-secondary"),
-          border: Var("border-input-hover"),
+          border_brush: Var("border-elevation-text"),
         ),
       ),
     ),
@@ -712,7 +716,7 @@
       setter: (
         colors: (
           bg: Var("fill-control-tertiary"),
-          border: Var("border-input"),
+          border_brush: Var("border-elevation-text"),
         ),
       ),
     ),
@@ -720,7 +724,8 @@
       selector: And([Type("UiMultilineTextInput"), PseudoClass(Focused)]),
       setter: (
         colors: (
-          border: Var("focus-stroke"),
+          bg: Var("surface-input"),
+          border_brush: Var("border-elevation-text-focused"),
         ),
       ),
     ),
@@ -1873,6 +1878,7 @@
         ),
       ),
     ),
+    // WinUI RadioButton outer ellipse → ControlStrongStrokeColorDefault
     (
       selector: Class("widget.radio.indicator"),
       setter: (
@@ -1880,16 +1886,17 @@
           border_width: Var("border-thin"),
         ),
         colors: (
-          border: Var("stroke-accessible"),
+          border: Var("stroke-control-strong"),
           text: Var("stroke-accessible-selected"),
         ),
       ),
     ),
+    // Selected: outer ring brand + check glyph uses CircleElevation stroke
     (
       selector: Class("widget.radio.indicator.selected"),
       setter: (
         colors: (
-          border: Var("compound-brand-stroke"),
+          border_brush: Var("border-elevation-circle"),
           text: Var("compound-brand-fg"),
         ),
       ),
@@ -2580,7 +2587,7 @@
       ),
     ),
 
-    // ── Search ────────────────────────────────────────────────
+    // ── Search (same TextControl elevation family as TextBox) ─
     (
       selector: Type("UiSearch"),
       setter: (
@@ -2594,7 +2601,7 @@
         ),
         colors: (
           bg: Var("fill-control-default"),
-          border: Var("border-default"),
+          border_brush: Var("border-elevation-text"),
           text: Var("text-primary"),
         ),
         transition: Var("duration-fast"),
@@ -2605,7 +2612,7 @@
       setter: (
         colors: (
           bg: Var("fill-control-secondary"),
-          border: Var("border-input-hover"),
+          border_brush: Var("border-elevation-text"),
         ),
       ),
     ),
@@ -2614,7 +2621,7 @@
       setter: (
         colors: (
           bg: Var("fill-control-tertiary"),
-          border: Var("border-input"),
+          border_brush: Var("border-elevation-text"),
         ),
       ),
     ),
@@ -2622,7 +2629,8 @@
       selector: And([Type("UiSearch"), PseudoClass(Focused)]),
       setter: (
         colors: (
-          border: Var("focus-stroke"),
+          bg: Var("surface-input"),
+          border_brush: Var("border-elevation-text-focused"),
         ),
       ),
     ),
@@ -2904,6 +2912,7 @@
     ( selector: Class("avatar.color.pink"), setter: ( colors: ( bg: Var("avatar-bg-pink"), text: Var("avatar-text-on-light") ), ) ),
     ( selector: Class("avatar.color.magenta"), setter: ( colors: ( bg: Var("avatar-bg-magenta"), text: Var("avatar-text-on-dark") ), ) ),
 
+    // WinUI CheckBox unchecked stroke → ControlStrongStrokeColorDefault
     (
       selector: Class("template.checkbox.box"),
       setter: (
@@ -2914,7 +2923,7 @@
         ),
         colors: (
           bg: Var("fill-control-default"),
-          border: Var("border-default"),
+          border: Var("stroke-control-strong"),
         ),
         transition: Var("duration-fast"),
       ),
@@ -2924,6 +2933,7 @@
       setter: (
         colors: (
           bg: Var("fill-control-secondary"),
+          border: Var("stroke-control-strong"),
         ),
       ),
     ),
@@ -2932,6 +2942,7 @@
       setter: (
         colors: (
           bg: Var("fill-control-tertiary"),
+          border: Var("stroke-control-strong-disabled"),
         ),
       ),
     ),
@@ -3028,6 +3039,7 @@
         ),
       ),
     ),
+    // WinUI ToggleSwitchStrokeOff → ControlStrongStrokeColorDefault
     (
       selector: Class("template.switch.track"),
       setter: (
@@ -3038,7 +3050,7 @@
         ),
         colors: (
           bg: Var("fill-control-default"),
-          border: Var("border-default"),
+          border: Var("stroke-control-strong"),
         ),
         transition: Var("duration-fast"),
       ),
@@ -3048,6 +3060,7 @@
       setter: (
         colors: (
           bg: Var("fill-control-secondary"),
+          border: Var("stroke-control-strong"),
         ),
       ),
     ),
@@ -3056,9 +3069,11 @@
       setter: (
         colors: (
           bg: Var("fill-control-tertiary"),
+          border: Var("stroke-control-strong"),
         ),
       ),
     ),
+    // WinUI ToggleSwitchStrokeOn → accent fill (solid brand ring)
     (
       selector: Class("template.switch.track.on"),
       setter: (
@@ -3091,17 +3106,18 @@
         ),
       ),
     ),
+    // WinUI ToggleSwitchKnobStrokeOn → CircleElevationBorderBrush
     (
       selector: Class("template.switch.thumb"),
       setter: (
         layout: (
           padding: 0.0,
           corner_radius: Var("radius-pill"),
-          border_width: 0.0,
+          border_width: Var("border-thin"),
         ),
         colors: (
           bg: Var("fill-thumb"),
-          border: Var("transparent"),
+          border_brush: Var("border-elevation-circle"),
         ),
         box_shadow: Var("shadow-ui-component"),
       ),
@@ -3341,9 +3357,11 @@
         "scrollbar-thumb-pressed": Color(Hex("#FFFFFFB8")),
         // Border stroke hierarchy (Fluent v9 colorNeutralStroke*)
         "border-disabled": Color(Hex("#5C5C5C")),
-        // WinUI ControlStrokeColor* (used by elevation borders / pressed stroke)
+        // WinUI ControlStrokeColor* / ControlStrongStrokeColor*
         "stroke-control-default": Color(Rgba8(255, 255, 255, 18)),
         "stroke-control-secondary": Color(Rgba8(255, 255, 255, 24)),
+        "stroke-control-strong": Color(Rgba8(255, 255, 255, 139)),
+        "stroke-control-strong-disabled": Color(Rgba8(255, 255, 255, 40)),
         "stroke-control-on-accent-default": Color(Rgba8(255, 255, 255, 20)),
         "stroke-control-on-accent-secondary": Color(Rgba8(0, 0, 0, 35)),
         // WinUI ControlElevationBorderBrush (Default/Dark: Absolute 0,0→0,3, no flip)
@@ -3357,6 +3375,29 @@
           flip_y: true,
           secondary: Rgba8(0, 0, 0, 35),
           default: Rgba8(255, 255, 255, 20),
+        )),
+        // WinUI TextControlElevationBorderBrush (Absolute 0,0→0,2 + ScaleY=-1)
+        "border-elevation-text": ControlElevation((
+          flip_y: true,
+          extent: 2.0,
+          secondary_stop: 0.5,
+          default_stop: 1.0,
+          secondary: Rgba8(255, 255, 255, 139),
+          default: Rgba8(255, 255, 255, 18),
+        )),
+        // WinUI TextControlElevationBorderFocusedBrush (bottom 2px accent)
+        "border-elevation-text-focused": ControlElevation((
+          flip_y: true,
+          extent: 2.0,
+          secondary_stop: 0.5,
+          default_stop: 1.0,
+          secondary: Hex("#2899F5"),
+          default: Hex("#2899F5"),
+        )),
+        // WinUI CircleElevationBorderBrush (RelativeToBoundingBox 0,0→0,1)
+        "border-elevation-circle": Linear((
+          angle: 180.0,
+          stops: [(0.50, Rgba8(255, 255, 255, 18)), (0.70, Rgba8(255, 255, 255, 24))],
         )),
         "border-on-accent": Color(Hex("#0078D4")),
         // Accessible stroke hierarchy (Fluent v9 colorNeutralStrokeAccessible*)
@@ -3567,9 +3608,11 @@
         "scrollbar-thumb-pressed": Color(Hex("#00000070")),
         // Border stroke hierarchy (Fluent v9 colorNeutralStroke*)
         "border-disabled": Color(Hex("#BDBDBD")),
-        // WinUI ControlStrokeColor* (Light)
+        // WinUI ControlStrokeColor* / ControlStrongStrokeColor* (Light)
         "stroke-control-default": Color(Rgba8(0, 0, 0, 15)),
         "stroke-control-secondary": Color(Rgba8(0, 0, 0, 41)),
+        "stroke-control-strong": Color(Rgba8(0, 0, 0, 114)),
+        "stroke-control-strong-disabled": Color(Rgba8(0, 0, 0, 55)),
         "stroke-control-on-accent-default": Color(Rgba8(255, 255, 255, 20)),
         "stroke-control-on-accent-secondary": Color(Rgba8(0, 0, 0, 102)),
         // WinUI ControlElevationBorderBrush (Light: Absolute 0,0→0,3 + ScaleY=-1)
@@ -3583,6 +3626,29 @@
           flip_y: true,
           secondary: Rgba8(0, 0, 0, 102),
           default: Rgba8(255, 255, 255, 20),
+        )),
+        // WinUI TextControlElevationBorderBrush (Absolute 0,0→0,2 + ScaleY=-1)
+        "border-elevation-text": ControlElevation((
+          flip_y: true,
+          extent: 2.0,
+          secondary_stop: 0.5,
+          default_stop: 1.0,
+          secondary: Rgba8(0, 0, 0, 114),
+          default: Rgba8(0, 0, 0, 15),
+        )),
+        // WinUI TextControlElevationBorderFocusedBrush (bottom 2px accent)
+        "border-elevation-text-focused": ControlElevation((
+          flip_y: true,
+          extent: 2.0,
+          secondary_stop: 0.5,
+          default_stop: 1.0,
+          secondary: Hex("#0F6CBD"),
+          default: Hex("#0F6CBD"),
+        )),
+        // WinUI CircleElevationBorderBrush (RelativeToBoundingBox 0,0→0,1)
+        "border-elevation-circle": Linear((
+          angle: 180.0,
+          stops: [(0.50, Rgba8(0, 0, 0, 15)), (0.70, Rgba8(0, 0, 0, 41))],
         )),
         "border-on-accent": Color(Hex("#0F6CBD")),
         // Accessible stroke hierarchy (Fluent v9 colorNeutralStrokeAccessible*)
@@ -3752,6 +3818,18 @@
         "scrollbar-thumb-pressed": Color(Hex("#FFFFFFFF")),
         // Border stroke hierarchy (Fluent v9 colorNeutralStroke*)
         "border-disabled": Color(Hex("#808080")),
+        // WinUI elevation brushes collapse to solid system text color in HC
+        "stroke-control-default": Color(Hex("#FFFFFF")),
+        "stroke-control-secondary": Color(Hex("#FFFFFF")),
+        "stroke-control-strong": Color(Hex("#FFFFFF")),
+        "stroke-control-strong-disabled": Color(Hex("#808080")),
+        "stroke-control-on-accent-default": Color(Hex("#FFFFFF")),
+        "stroke-control-on-accent-secondary": Color(Hex("#FFFFFF")),
+        "border-elevation": Color(Hex("#FFFFFF")),
+        "border-elevation-accent": Color(Hex("#FFFFFF")),
+        "border-elevation-text": Color(Hex("#FFFFFF")),
+        "border-elevation-text-focused": Color(Hex("#1AEBFF")),
+        "border-elevation-circle": Color(Hex("#FFFFFF")),
         "border-on-accent": Color(Hex("#1AEBFF")),
         // Accessible stroke hierarchy (Fluent v9 colorNeutralStrokeAccessible*)
         "stroke-accessible": Color(Hex("#FFFFFF")),

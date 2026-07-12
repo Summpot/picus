@@ -3475,7 +3475,10 @@ struct AbsoluteLinearDef {
     stops: Vec<(f32, ColorDef)>,
 }
 
-/// RON shorthand for WinUI control elevation border brushes.
+/// RON shorthand for WinUI control / text elevation border brushes.
+///
+/// - Control elevation: `extent: 3`, stops `0.33` / `1.0` (default)
+/// - Text control elevation: `extent: 2`, `secondary_stop: 0.5`, `flip_y: true`
 #[derive(Debug, Clone, Deserialize)]
 struct ControlElevationDef {
     #[serde(default)]
@@ -3483,12 +3486,26 @@ struct ControlElevationDef {
     /// Gradient line length in DIP (WinUI uses 3 for control elevation, 2 for text).
     #[serde(default = "default_elevation_extent")]
     extent: f64,
+    /// Offset of the "secondary/strong" stop (control: 0.33, text: 0.5).
+    #[serde(default = "default_elevation_secondary_stop")]
+    secondary_stop: f32,
+    /// Offset of the "default" stop (usually 1.0).
+    #[serde(default = "default_elevation_default_stop")]
+    default_stop: f32,
     secondary: ColorDef,
     default: ColorDef,
 }
 
 fn default_elevation_extent() -> f64 {
     3.0
+}
+
+fn default_elevation_secondary_stop() -> f32 {
+    0.33
+}
+
+fn default_elevation_default_stop() -> f32 {
+    1.0
 }
 
 impl LinearGradientDef {
@@ -3538,7 +3555,10 @@ impl ControlElevationDef {
             start: (0.0, 0.0),
             end: (0.0, extent),
             flip_y: self.flip_y,
-            stops: vec![(0.33, secondary), (1.0, default)],
+            stops: vec![
+                (self.secondary_stop, secondary),
+                (self.default_stop, default),
+            ],
         }))
     }
 }
@@ -4602,7 +4622,14 @@ mod tests {
             app.world(),
             ["widget.radio.indicator", "widget.radio.indicator.selected"],
         );
-        assert!(radio_selected.colors.border.is_some());
+        // Selected radio uses CircleElevation gradient for the check glyph stroke.
+        assert!(
+            matches!(
+                radio_selected.colors.resolved_border_brush(),
+                BorderBrush::Gradient(_)
+            ),
+            "selected radio indicator should use CircleElevation gradient"
+        );
         assert!(radio_selected.colors.text.is_some());
 
         let date_panel =
@@ -4700,6 +4727,53 @@ mod tests {
             "pressed UiButton should use solid stroke, got {:?}",
             pressed_style.colors.border_brush
         );
+
+        // WinUI TextControlElevationBorderBrush: Absolute 0,0→0,2 + flip_y.
+        let text = app.world_mut().spawn(crate::UiTextInput::default()).id();
+        let text_style = resolve_style(app.world(), text);
+        match text_style.colors.resolved_border_brush() {
+            BorderBrush::AbsoluteLinear(gradient) => {
+                assert_eq!(gradient.end, (0.0, 2.0));
+                assert!(
+                    gradient.flip_y,
+                    "text elevation always flips to bottom edge"
+                );
+                assert_eq!(gradient.stops.len(), 2);
+                assert!((gradient.stops[0].0 - 0.5).abs() < f32::EPSILON);
+            }
+            other => panic!("UiTextInput should use text elevation AbsoluteLinear, got {other:?}"),
+        }
+
+        let text_focused = app
+            .world_mut()
+            .spawn((
+                crate::UiTextInput::default(),
+                InteractionState {
+                    hovered: false,
+                    pressed: false,
+                    focused: true,
+                },
+            ))
+            .id();
+        let focused_style = resolve_style(app.world(), text_focused);
+        assert!(
+            matches!(
+                focused_style.colors.resolved_border_brush(),
+                BorderBrush::AbsoluteLinear(_)
+            ),
+            "focused text control should use focused elevation brush"
+        );
+
+        // WinUI CircleElevationBorderBrush: CSS-relative linear top→bottom.
+        let circle = crate::resolve_style_for_classes(app.world(), ["template.switch.thumb"]);
+        assert!(
+            matches!(
+                circle.colors.resolved_border_brush(),
+                BorderBrush::Gradient(_)
+            ),
+            "switch thumb should use relative CircleElevation gradient, got {:?}",
+            circle.colors.border_brush
+        );
     }
     #[test]
     fn embedded_fluent_theme_defines_interactive_state_defaults() {
@@ -4767,9 +4841,18 @@ mod tests {
             .id();
 
         let password_hover = resolve_style(app.world(), hovered);
+        // WinUI keeps TextControlElevationBorderBrush on hover (not a solid hover stroke).
+        assert!(
+            matches!(
+                password_hover.colors.resolved_border_brush(),
+                BorderBrush::AbsoluteLinear(_)
+            ),
+            "password hover should keep text elevation brush, got {:?}",
+            password_hover.colors.border_brush
+        );
         assert_eq!(
-            password_hover.colors.border,
-            Some(token_color(app.world(), "border-input-hover"))
+            password_hover.colors.bg,
+            Some(token_color(app.world(), "fill-control-secondary"))
         );
 
         let time_pressed = resolve_style(app.world(), pressed);
