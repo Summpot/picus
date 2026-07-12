@@ -6,14 +6,16 @@ use tracing::{Span, trace_span};
 use crate::core::{
     AccessCtx, ArcStr, ChildrenIds, LayoutCtx, MeasureCtx, NewWidget, NoAction, PaintCtx,
     PrePaintProps, PropertiesMut, PropertiesRef, Property, PropertySet, RegisterCtx, Update,
-    UpdateCtx, Widget, WidgetId, WidgetMut, WidgetPod, paint_background, paint_border,
-    paint_box_shadow,
+    UpdateCtx, Widget, WidgetId, WidgetMut, WidgetPod, paint_background, paint_box_shadow,
 };
 use crate::imaging::Painter;
 use crate::kurbo::{Axis, Size};
 use crate::layout::{LayoutSize, LenReq, Length, SizeDef};
 use crate::peniko::{Color, Gradient};
-use crate::properties::{BarColor, BorderColor, BorderWidth, CornerRadius, LineBreaking};
+use crate::properties::{
+    BarColor, BorderColor, BorderWidth, CornerRadius, LineBreaking, paint_border_brush,
+    resolve_border_brush,
+};
 use crate::theme;
 use crate::widgets::Label;
 
@@ -198,7 +200,6 @@ impl Widget for ProgressBar {
         let cache = ctx.property_cache();
         let border_width = *props.get::<BorderWidth>(cache);
         let corner_radius = *props.get::<CornerRadius>(cache);
-        let border_color = *props.get::<BorderColor>(cache);
 
         let progress = self.progress.unwrap_or(1.);
         if progress > 0. {
@@ -223,10 +224,11 @@ impl Widget for ProgressBar {
             }
         }
 
-        paint_border(
+        let border_brush = resolve_border_brush(props, ctx.property_cache());
+        paint_border_brush(
             painter,
             border_box,
-            &border_color,
+            &border_brush,
             &border_width,
             &corner_radius,
         );

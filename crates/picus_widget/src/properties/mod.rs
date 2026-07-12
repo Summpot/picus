@@ -2,6 +2,7 @@
 //!
 //! See [properties documentation](crate::doc::widget_properties) for details.
 
+mod border_brush;
 mod checkmark;
 mod content_color;
 mod gap;
@@ -17,6 +18,7 @@ mod step_input;
 
 pub mod types;
 
+pub use border_brush::*;
 pub use checkmark::*;
 pub use content_color::*;
 pub use gap::*;

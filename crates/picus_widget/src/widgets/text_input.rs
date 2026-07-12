@@ -8,12 +8,15 @@ use crate::core::{
     AccessCtx, ArcStr, ChildrenIds, EventCtx, LayoutCtx, MeasureCtx, NewWidget, NoAction, PaintCtx,
     PointerButton, PointerButtonEvent, PointerEvent, PrePaintProps, PropertiesMut, PropertiesRef,
     RegisterCtx, TextEvent, Update, UpdateCtx, UsesProperty, Widget, WidgetId, WidgetMut,
-    WidgetPod, paint_background, paint_border, paint_box_shadow,
+    WidgetPod, paint_background, paint_box_shadow,
 };
 use crate::imaging::Painter;
 use crate::kurbo::{Axis, Point, Size};
 use crate::layout::{LayoutSize, LenReq, Length};
-use crate::properties::{CaretColor, ContentColor, LineBreaking, PlaceholderColor, SelectionColor};
+use crate::properties::{
+    CaretColor, ContentColor, LineBreaking, PlaceholderColor, SelectionColor, paint_border_brush,
+    resolve_border_brush,
+};
 use crate::widgets::{Label, TextArea};
 
 /// The text input widget displays text which can be edited by the user,
@@ -320,13 +323,8 @@ impl Widget for TextInput {
 
         paint_box_shadow(painter, bbox, p.box_shadow, p.corner_radius);
         paint_background(painter, bbox, p.background, p.border_width, p.corner_radius);
-        paint_border(
-            painter,
-            bbox,
-            p.border_color,
-            p.border_width,
-            p.corner_radius,
-        );
+        let border_brush = resolve_border_brush(props, ctx.property_cache());
+        paint_border_brush(painter, bbox, &border_brush, p.border_width, p.corner_radius);
     }
 
     fn paint(

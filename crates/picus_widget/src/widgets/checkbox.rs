@@ -15,6 +15,7 @@ use crate::kurbo::{Axis, BezPath, Cap, Dashes, Join, Point, Size, Stroke};
 use crate::layout::{LayoutSize, LenReq, Length, SizeDef};
 use crate::properties::{
     BorderColor, BorderWidth, CheckmarkColor, CheckmarkStrokeWidth, CornerRadius,
+    paint_border_brush, resolve_border_brush,
 };
 use crate::theme;
 use crate::widgets::Label;
@@ -247,6 +248,9 @@ impl Widget for Checkbox {
 
         paint_box_shadow(painter, bbox, p.box_shadow, p.corner_radius);
         paint_background(painter, bbox, p.background, p.border_width, p.corner_radius);
+
+        let border_brush = resolve_border_brush(props, ctx.property_cache());
+        paint_border_brush(painter, bbox, &border_brush, p.border_width, p.corner_radius);
 
         // Paint focus indicator around the entire widget (box + label)
         if ctx.is_focus_target() || ctx.is_hovered() {

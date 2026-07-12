@@ -15,7 +15,9 @@ use crate::imaging::{Composite, GroupRef, Painter};
 use crate::kurbo::{Axis, Circle, Rect, Size, Stroke};
 use crate::layout::{LenReq, Length};
 use crate::peniko;
-use crate::properties::{ThumbColor, ThumbRadius, TrackColor, TrackThickness};
+use crate::properties::{
+    ThumbColor, ThumbRadius, TrackColor, TrackThickness, paint_border_brush, resolve_border_brush,
+};
 use crate::theme;
 
 /// A widget that allows a user to select a value from a continuous range.
@@ -342,6 +344,9 @@ impl Widget for Slider {
 
         paint_box_shadow(painter, bbox, p.box_shadow, p.corner_radius);
         paint_background(painter, bbox, p.background, p.border_width, p.corner_radius);
+
+        let border_brush = resolve_border_brush(props, ctx.property_cache());
+        paint_border_brush(painter, bbox, &border_brush, p.border_width, p.corner_radius);
 
         if ctx.is_focus_target() || ctx.is_hovered() {
             // TODO: Replace this custom implementation with the general paint_border()

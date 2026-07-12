@@ -15,7 +15,10 @@ use masonry_core::{
     layout::{LayoutSize, LenReq, Length, SizeDef},
     properties::{Background, BorderColor, BorderWidth, CornerRadius, Padding},
 };
-use picus_view::picus_widget::{properties::ContentColor, widgets::Label};
+use picus_view::picus_widget::{
+    properties::{BorderBrush, ContentColor, pre_paint_brush},
+    widgets::Label,
+};
 
 use crate::{
     events::{UiEvent, push_global_ui_event},
@@ -40,6 +43,7 @@ pub struct ActionButtonWidget<A> {
 }
 
 impl<A> UsesProperty<ContentColor> for ActionButtonWidget<A> where A: Clone + Send + Sync + 'static {}
+impl<A> UsesProperty<BorderBrush> for ActionButtonWidget<A> where A: Clone + Send + Sync + 'static {}
 
 impl<A> ActionButtonWidget<A> {
     #[must_use]
@@ -211,6 +215,7 @@ where
         if ContentColor::matches(property_type)
             || CornerRadius::matches(property_type)
             || BorderColor::matches(property_type)
+            || BorderBrush::matches(property_type)
             || Background::matches(property_type)
         {
             ctx.request_render();
@@ -244,6 +249,15 @@ where
         let child_origin = ((size - child_size).to_vec2() * 0.5).to_point();
         ctx.place_child(&mut self.label, child_origin);
         ctx.derive_baselines(&self.label);
+    }
+
+    fn pre_paint(
+        &mut self,
+        ctx: &mut PaintCtx<'_>,
+        props: &PropertiesRef<'_>,
+        painter: &mut Painter<'_>,
+    ) {
+        pre_paint_brush(ctx, props, painter);
     }
 
     fn paint(

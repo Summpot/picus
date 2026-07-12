@@ -5,7 +5,7 @@ use picus_widget::layout::{Dim, Length};
 use picus_widget::peniko::Color;
 pub use picus_widget::properties::types::{Gradient, GradientShape};
 pub use picus_widget::properties::{
-    Background, BorderColor, BorderWidth, BoxShadow, CornerRadius, Padding,
+    Background, BorderBrush, BorderColor, BorderWidth, BoxShadow, CornerRadius, Padding,
 };
 use picus_widget::properties::{ContentColor, Dimensions, Gap, LineBreaking};
 
@@ -83,24 +83,89 @@ pub trait Style<State: 'static, Action: 'static>: WidgetView<State, Action> + Si
         self.prop(Background::Gradient(gradient))
     }
 
-    /// Sets the element's border color and width.
+    /// Sets the element's border to a solid color and width.
+    ///
+    /// Widgets that paint via [`pre_paint_brush`] receive this as
+    /// [`BorderBrush::Color`]. Widgets that still use masonry's default
+    /// `pre_paint` also get a legacy [`BorderColor`] so solid borders remain
+    /// visible on generic containers (`SizedBox`, etc.).
+    ///
+    /// [`pre_paint_brush`]: picus_widget::properties::pre_paint_brush
     fn border(
         self,
         color: Color,
         width: Length,
-    ) -> Prop<BorderWidth, Prop<BorderColor, Self, State, Action>, State, Action>
+    ) -> Prop<
+        BorderWidth,
+        Prop<BorderColor, Prop<BorderBrush, Self, State, Action>, State, Action>,
+        State,
+        Action,
+    >
     where
-        Self::Widget: UsesProperty<BorderColor> + UsesProperty<BorderWidth>,
+        Self::Widget: UsesProperty<BorderBrush>
+            + UsesProperty<BorderColor>
+            + UsesProperty<BorderWidth>,
     {
-        self.prop(BorderColor { color }).prop(BorderWidth { width })
+        self.prop(BorderBrush::Color(color))
+            .prop(BorderColor { color })
+            .prop(BorderWidth { width })
     }
 
-    /// Sets the element's border color.
-    fn border_color(self, color: Color) -> Prop<BorderColor, Self, State, Action>
+    /// Sets the element's border brush (solid color or gradient) and width.
+    ///
+    /// This is the preferred border API. Solid colors also write legacy
+    /// [`BorderColor`] so generic masonry `pre_paint` paths stay consistent.
+    fn border_brush(
+        self,
+        brush: BorderBrush,
+        width: Length,
+    ) -> Prop<
+        BorderWidth,
+        Prop<BorderColor, Prop<BorderBrush, Self, State, Action>, State, Action>,
+        State,
+        Action,
+    >
     where
-        Self::Widget: UsesProperty<BorderColor>,
+        Self::Widget: UsesProperty<BorderBrush>
+            + UsesProperty<BorderColor>
+            + UsesProperty<BorderWidth>,
     {
-        self.prop(BorderColor { color })
+        let legacy_color = brush.as_solid_color().unwrap_or(Color::TRANSPARENT);
+        self.prop(brush)
+            .prop(BorderColor {
+                color: legacy_color,
+            })
+            .prop(BorderWidth { width })
+    }
+
+    /// Sets the element's border to a gradient.
+    fn border_gradient(
+        self,
+        gradient: Gradient,
+        width: Length,
+    ) -> Prop<
+        BorderWidth,
+        Prop<BorderColor, Prop<BorderBrush, Self, State, Action>, State, Action>,
+        State,
+        Action,
+    >
+    where
+        Self::Widget: UsesProperty<BorderBrush>
+            + UsesProperty<BorderColor>
+            + UsesProperty<BorderWidth>,
+    {
+        self.border_brush(BorderBrush::Gradient(gradient), width)
+    }
+
+    /// Sets the element's border color (solid only).
+    ///
+    /// Prefer [`Style::border`] or [`Style::border_brush`] when also setting width.
+    fn border_color(self, color: Color) -> Prop<BorderColor, Prop<BorderBrush, Self, State, Action>, State, Action>
+    where
+        Self::Widget: UsesProperty<BorderBrush> + UsesProperty<BorderColor>,
+    {
+        self.prop(BorderBrush::Color(color))
+            .prop(BorderColor { color })
     }
 
     /// Sets the element's border width.

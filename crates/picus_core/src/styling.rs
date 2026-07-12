@@ -35,7 +35,8 @@ use masonry_core::{
     },
     properties::{Background, BorderColor, BorderWidth, BoxShadow, CornerRadius, Padding},
 };
-use picus_view::picus_widget::properties::LineBreaking;
+use picus_view::picus_widget::properties::{BorderBrush, LineBreaking};
+use picus_view::picus_widget::properties::types::Gradient;
 use picus_view::{
     WidgetView,
     view::{CrossAxisAlignment, Flex, Label, MainAxisAlignment, TextInput, sized_box, transformed},
@@ -330,6 +331,7 @@ impl Selector {
 pub struct StyleSetter {
     pub layout: LayoutStyle,
     pub colors: ColorStyle,
+    pub border_brush: Option<BorderBrush>,
     pub text: TextStyle,
     pub font_family: Option<Vec<String>>,
     pub box_shadow: Option<BoxShadow>,
@@ -378,6 +380,7 @@ pub struct ColorStyleValue {
     pub pressed_bg: Option<StyleValue<Color>>,
     pub pressed_text: Option<StyleValue<Color>>,
     pub pressed_border: Option<StyleValue<Color>>,
+    pub border_brush: Option<StyleValue<BorderBrush>>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -413,6 +416,8 @@ pub enum TokenValue {
     Backdrop(WindowBackdropMaterial),
     /// Cubic bezier curve control points (x1, y1, x2, y2).
     Curve(f32, f32, f32, f32),
+    /// Border brush (solid color or gradient).
+    BorderBrush(BorderBrush),
 }
 
 /// Token and selector overrides activated for one window backdrop material.
@@ -462,6 +467,7 @@ impl From<ColorStyle> for ColorStyleValue {
             pressed_bg: value.pressed_bg.map(StyleValue::value),
             pressed_text: value.pressed_text.map(StyleValue::value),
             pressed_border: value.pressed_border.map(StyleValue::value),
+            border_brush: None,
         }
     }
 }
@@ -1305,11 +1311,45 @@ pub struct ResolvedLayoutStyle {
     pub flex_grow: f64,
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct ResolvedColorStyle {
     pub bg: Option<Color>,
     pub text: Option<Color>,
+    /// Solid border color used for color transitions and solid-only paint paths.
+    ///
+    /// When [`Self::border_brush`] is a gradient, this may be `None`.
     pub border: Option<Color>,
+    /// Authoritative border paint (solid or gradient). Prefer
+    /// [`Self::resolved_border_brush`] when applying styles to widgets.
+    pub border_brush: Option<BorderBrush>,
+}
+
+impl ResolvedColorStyle {
+    /// Effective border brush for painting.
+    ///
+    /// Prefers an explicit [`Self::border_brush`], otherwise promotes
+    /// [`Self::border`] to a solid brush.
+    #[must_use]
+    pub fn resolved_border_brush(&self) -> BorderBrush {
+        self.border_brush
+            .clone()
+            .or_else(|| self.border.map(BorderBrush::Color))
+            .unwrap_or(BorderBrush::Color(Color::TRANSPARENT))
+    }
+
+    /// Solid color for legacy masonry `BorderColor` paint paths.
+    ///
+    /// Gradients fall back to transparent (generic containers cannot paint them).
+    #[must_use]
+    pub fn solid_border_color(&self) -> Color {
+        self.border
+            .or_else(|| {
+                self.border_brush
+                    .as_ref()
+                    .and_then(BorderBrush::as_solid_color)
+            })
+            .unwrap_or(Color::TRANSPARENT)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -1420,8 +1460,15 @@ fn merge_colors_values(dst: &mut ColorStyleValue, src: &ColorStyleValue) {
     if src.text.is_some() {
         dst.text = src.text.clone();
     }
+    // `border` and `border_brush` share one cascade slot for "border paint".
+    // A later solid `border` clears any previous brush so hover/pressed solid
+    // borders correctly override a base elevation gradient.
     if src.border.is_some() {
         dst.border = src.border.clone();
+        dst.border_brush = None;
+    }
+    if src.border_brush.is_some() {
+        dst.border_brush = src.border_brush.clone();
     }
     if src.hover_bg.is_some() {
         dst.hover_bg = src.hover_bg.clone();
@@ -1747,6 +1794,7 @@ fn target_colors_for_state(
         bg: colors.bg,
         text: colors.text,
         border: colors.border,
+        border_brush: None,
     };
 
     if hovered {
@@ -2005,10 +2053,9 @@ fn resolve_color_style(
             .text
             .as_ref()
             .and_then(|value| resolve_color_value(tokens, value, "colors.text")),
-        border: colors
-            .border
-            .as_ref()
-            .and_then(|value| resolve_color_value(tokens, value, "colors.border")),
+        // Solid border is resolved with `border_brush` in `resolve_border_paint`
+        // so gradient tokens used as `border: Var(...)` do not warn here.
+        border: None,
         hover_bg: colors
             .hover_bg
             .as_ref()
@@ -2057,13 +2104,83 @@ fn resolve_text_style(text: &TextStyleValue, tokens: &HashMap<String, TokenValue
     }
 }
 
+fn resolve_border_brush_value(
+    tokens: &HashMap<String, TokenValue>,
+    value: &StyleValue<BorderBrush>,
+    field: &str,
+) -> Option<BorderBrush> {
+    match value {
+        StyleValue::Value(brush) => Some(brush.clone()),
+        StyleValue::Var(token) => match tokens.get(token) {
+            Some(TokenValue::BorderBrush(brush)) => Some(brush.clone()),
+            Some(TokenValue::Color(color)) => Some(BorderBrush::Color(*color)),
+            _ => {
+                warn_missing_or_invalid_token(token, field, "BorderBrush");
+                None
+            }
+        },
+    }
+}
+
+/// Resolves the shared border-paint slot from solid `border` and/or `border_brush`.
+///
+/// `border: Var("border-elevation")` works when the token is a brush or color.
+/// Explicit `border_brush` wins over a solid `border` from the same rule.
+fn resolve_border_paint(
+    colors: &ColorStyleValue,
+    tokens: &HashMap<String, TokenValue>,
+) -> (Option<Color>, Option<BorderBrush>) {
+    let solid_from_border = colors.border.as_ref().and_then(|value| match value {
+        StyleValue::Value(color) => Some(*color),
+        StyleValue::Var(token) => match tokens.get(token) {
+            Some(TokenValue::Color(color)) => Some(*color),
+            Some(TokenValue::BorderBrush(BorderBrush::Color(color))) => Some(*color),
+            // Gradient (or missing) handled via brush path below.
+            Some(TokenValue::BorderBrush(BorderBrush::Gradient(_))) => None,
+            _ => {
+                // Only warn when the token is not a brush either.
+                if !matches!(tokens.get(token), Some(TokenValue::BorderBrush(_))) {
+                    warn_missing_or_invalid_token(token, "colors.border", "Color");
+                }
+                None
+            }
+        },
+    });
+
+    let brush_from_border = colors.border.as_ref().and_then(|value| match value {
+        StyleValue::Value(color) => Some(BorderBrush::Color(*color)),
+        StyleValue::Var(token) => match tokens.get(token) {
+            Some(TokenValue::Color(color)) => Some(BorderBrush::Color(*color)),
+            Some(TokenValue::BorderBrush(brush)) => Some(brush.clone()),
+            _ => None,
+        },
+    });
+
+    let brush_from_field = colors
+        .border_brush
+        .as_ref()
+        .and_then(|value| resolve_border_brush_value(tokens, value, "colors.border_brush"));
+
+    let brush = brush_from_field.or(brush_from_border);
+    let solid = solid_from_border.or_else(|| brush.as_ref().and_then(BorderBrush::as_solid_color));
+
+    (solid, brush)
+}
+
 fn resolve_setter_values(
     setter: &StyleSetterValue,
     tokens: &HashMap<String, TokenValue>,
 ) -> StyleSetter {
+    let mut colors = resolve_color_style(&setter.colors, tokens);
+    let (solid_border, border_brush) = resolve_border_paint(&setter.colors, tokens);
+    // Override solid border with the paint-slot resolution so gradient tokens
+    // used as `border: Var(...)` do not leave a stale color behind.
+    colors.border = solid_border;
+
     StyleSetter {
         layout: resolve_layout_style(&setter.layout, tokens),
-        colors: resolve_color_style(&setter.colors, tokens),
+        colors,
+        border_brush,
         text: resolve_text_style(&setter.text, tokens),
         font_family: setter
             .font_family
@@ -2103,6 +2220,16 @@ fn resolved_from_merged(
     let merged = resolve_setter_values(merged, tokens);
     let mut colors = target_colors(world, entity, &merged.colors);
 
+    // border_brush comes from the shared border-paint cascade slot.
+    colors.border_brush = merged.border_brush.clone();
+    // Keep solid color in sync when only a solid brush was authored.
+    if colors.border.is_none() {
+        colors.border = colors
+            .border_brush
+            .as_ref()
+            .and_then(BorderBrush::as_solid_color);
+    }
+
     if include_current_override && let Some(current) = world.get::<CurrentColorStyle>(entity) {
         if current.bg.is_some() {
             colors.bg = current.bg;
@@ -2111,7 +2238,9 @@ fn resolved_from_merged(
             colors.text = current.text;
         }
         if current.border.is_some() {
+            // Animated solid border becomes the authoritative brush.
             colors.border = current.border;
+            colors.border_brush = current.border.map(BorderBrush::Color);
         }
     }
 
@@ -2157,7 +2286,7 @@ pub fn resolve_style(world: &World, entity: Entity) -> ResolvedStyle {
     if let Some(computed) = world.get::<ComputedStyle>(entity) {
         let mut style = ResolvedStyle {
             layout: computed.layout,
-            colors: computed.colors,
+            colors: computed.colors.clone(),
             text: computed.text,
             font_family: computed.font_family.clone(),
             box_shadow: computed.box_shadow,
@@ -2173,6 +2302,7 @@ pub fn resolve_style(world: &World, entity: Entity) -> ResolvedStyle {
             }
             if current.border.is_some() {
                 style.colors.border = current.border;
+                style.colors.border_brush = current.border.map(BorderBrush::Color);
             }
             style.layout.scale = current.scale;
         }
@@ -2199,13 +2329,22 @@ pub fn resolve_style_for_classes<'a>(
     let default_font_family = sheet.and_then(resolve_stylesheet_font_family);
     let merged = resolve_setter_values(&merged, tokens);
 
+    let mut colors = ResolvedColorStyle {
+        bg: merged.colors.bg,
+        text: merged.colors.text,
+        border: merged.colors.border,
+        border_brush: merged.border_brush.clone(),
+    };
+    if colors.border.is_none() {
+        colors.border = colors
+            .border_brush
+            .as_ref()
+            .and_then(BorderBrush::as_solid_color);
+    }
+
     ResolvedStyle {
         layout: to_resolved_layout(&merged.layout),
-        colors: ResolvedColorStyle {
-            bg: merged.colors.bg,
-            text: merged.colors.text,
-            border: merged.colors.border,
-        },
+        colors,
         text: to_resolved_text(&merged.text),
         font_family: merged.font_family.or(default_font_family),
         box_shadow: merged.box_shadow,
@@ -2227,9 +2366,19 @@ pub fn resolve_style_for_classes_with_state<'a>(
     let default_font_family = sheet.and_then(resolve_stylesheet_font_family);
     let merged = resolve_setter_values(&merged, tokens);
 
+    let mut colors =
+        target_colors_for_state(&merged.colors, pseudo_state.hovered, pseudo_state.pressed);
+    colors.border_brush = merged.border_brush.clone();
+    if colors.border.is_none() {
+        colors.border = colors
+            .border_brush
+            .as_ref()
+            .and_then(BorderBrush::as_solid_color);
+    }
+
     ResolvedStyle {
         layout: to_resolved_layout(&merged.layout),
-        colors: target_colors_for_state(&merged.colors, pseudo_state.hovered, pseudo_state.pressed),
+        colors,
         text: to_resolved_text(&merged.text),
         font_family: merged.font_family.or(default_font_family),
         box_shadow: merged.box_shadow,
@@ -2315,6 +2464,10 @@ where
 }
 
 /// Apply box/layout styling on any widget view.
+///
+/// Uses a wrapping `sized_box`, which paints via masonry's solid `BorderColor`
+/// path only. Gradient borders require [`apply_direct_widget_style`] on a
+/// widget that paints with [`BorderBrush`].
 pub fn apply_widget_style<V>(view: V, style: &ResolvedStyle) -> impl WidgetView<(), ()>
 where
     V: WidgetView<(), ()>,
@@ -2325,7 +2478,7 @@ where
             .padding(style_padding(style.layout.padding))
             .corner_radius(style_length(style.layout.corner_radius))
             .border(
-                style.colors.border.unwrap_or(Color::TRANSPARENT),
+                style.colors.solid_border_color(),
                 style_length(style.layout.border_width),
             )
             .background_color(style.colors.bg.unwrap_or(Color::TRANSPARENT))
@@ -2337,13 +2490,16 @@ where
 /// Apply style directly on the target widget.
 ///
 /// This should be preferred for interactive UI components to ensure visual bounds
-/// and hit-testing bounds remain identical.
+/// and hit-testing bounds remain identical. Border paint always goes through
+/// [`BorderBrush`] (solid or gradient); solid colors also write legacy
+/// `BorderColor` for masonry default `pre_paint` paths.
 pub fn apply_direct_widget_style<V>(view: V, style: &ResolvedStyle) -> impl WidgetView<(), ()>
 where
     V: WidgetView<(), ()>,
     V::Widget: Sized
         + UsesProperty<Padding>
         + UsesProperty<CornerRadius>
+        + UsesProperty<BorderBrush>
         + UsesProperty<BorderColor>
         + UsesProperty<BorderWidth>
         + UsesProperty<Background>
@@ -2353,8 +2509,8 @@ where
     transformed(
         view.padding(style_padding(style.layout.padding))
             .corner_radius(style_length(style.layout.corner_radius))
-            .border(
-                style.colors.border.unwrap_or(Color::TRANSPARENT),
+            .border_brush(
+                style.colors.resolved_border_brush(),
                 style_length(style.layout.border_width),
             )
             .background_color(style.colors.bg.unwrap_or(Color::TRANSPARENT))
@@ -2612,7 +2768,7 @@ pub fn sync_style_targets(world: &mut World) {
             Some(resolved) => {
                 if let Some(mut computed) = world.get_mut::<ComputedStyle>(entity) {
                     computed.layout = resolved.layout;
-                    computed.colors = resolved.colors;
+                    computed.colors = resolved.colors.clone();
                     computed.text = resolved.text;
                     computed.font_family = resolved.font_family.clone();
                     computed.box_shadow = resolved.box_shadow;
@@ -2620,7 +2776,7 @@ pub fn sync_style_targets(world: &mut World) {
                 } else {
                     world.entity_mut(entity).insert(ComputedStyle {
                         layout: resolved.layout,
-                        colors: resolved.colors,
+                        colors: resolved.colors.clone(),
                         text: resolved.text,
                         font_family: resolved.font_family.clone(),
                         box_shadow: resolved.box_shadow,
@@ -2819,6 +2975,24 @@ impl Interpolator for ComputedStyleLens {
         target.colors.border =
             lerp_optional_color(self.start.colors.border, self.end.colors.border, t);
 
+        // Border brushes: lerp only when both ends are solid (or missing).
+        // Gradients snap to the end brush at t == 1, otherwise keep start.
+        let start_brush = self.start.colors.border_brush.as_ref();
+        let end_brush = self.end.colors.border_brush.as_ref();
+        let both_solidish = start_brush
+            .map(|b| b.as_solid_color().is_some())
+            .unwrap_or(true)
+            && end_brush
+                .map(|b| b.as_solid_color().is_some())
+                .unwrap_or(true);
+        if both_solidish {
+            target.colors.border_brush = target.colors.border.map(BorderBrush::Color);
+        } else if t >= 1.0 {
+            target.colors.border_brush = self.end.colors.border_brush.clone();
+        } else {
+            target.colors.border_brush = self.start.colors.border_brush.clone();
+        }
+
         target.text.size = lerp_f32(self.start.text.size, self.end.text.size, t);
         target.text.text_align = if t < 1.0 {
             self.start.text.text_align
@@ -2920,8 +3094,8 @@ pub fn apply_direct_text_input_style(
             .maybe_placeholder_color(style.colors.text.map(|color| color.with_alpha(0.72)))
             .padding(style_padding(style.layout.padding))
             .corner_radius(style_length(style.layout.corner_radius))
-            .border(
-                style.colors.border.unwrap_or(Color::TRANSPARENT),
+            .border_brush(
+                style.colors.resolved_border_brush(),
                 style_length(style.layout.border_width),
             )
             .background_color(style.colors.bg.unwrap_or(Color::TRANSPARENT))
@@ -3247,6 +3421,8 @@ struct ColorStyleDef {
     pressed_text: OptionalStyleValueDef<ColorDef>,
     #[serde(default)]
     pressed_border: OptionalStyleValueDef<ColorDef>,
+    #[serde(default)]
+    border_brush: OptionalStyleValueDef<BrushDef>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -3256,6 +3432,54 @@ enum ColorDef {
     Rgb8(u8, u8, u8),
     Rgba8(u8, u8, u8, u8),
     Hex(String),
+}
+
+/// RON deserialization type for a border brush (solid color or gradient).
+#[derive(Debug, Clone, Deserialize)]
+enum BrushDef {
+    Color(ColorDef),
+    Linear(LinearGradientDef),
+}
+
+/// RON deserialization type for a linear gradient.
+///
+/// Syntax in RON (newtype wrapper needs an inner struct tuple):
+/// `Linear((angle: 180.0, stops: [(0.33, Rgba8(255, 255, 255, 24)), (1.0, Rgba8(255, 255, 255, 18))]))`
+///
+/// `angle` is in **degrees** (CSS convention: 0° upward, clockwise positive) and
+/// is converted to radians for [`Gradient::new_linear`].
+#[derive(Debug, Clone, Deserialize)]
+struct LinearGradientDef {
+    angle: f64,
+    stops: Vec<(f32, ColorDef)>,
+}
+
+impl LinearGradientDef {
+    fn into_gradient(self) -> io::Result<Gradient> {
+        let angle_rad = self.angle.to_radians();
+        let mut gradient = Gradient::new_linear(angle_rad);
+        // Collect stops once so with_stops replaces rather than appends.
+        // ColorStopsSource is implemented for slices, not owned Vec.
+        let mut stops: Vec<(f32, Color)> = Vec::with_capacity(self.stops.len());
+        for (offset, color_def) in self.stops {
+            stops.push((offset, color_def.into_color()?));
+        }
+        gradient = gradient.with_stops(stops.as_slice());
+        Ok(gradient)
+    }
+
+    fn into_brush(self) -> io::Result<BorderBrush> {
+        Ok(BorderBrush::Gradient(self.into_gradient()?))
+    }
+}
+
+impl BrushDef {
+    fn into_brush(self) -> io::Result<BorderBrush> {
+        match self {
+            BrushDef::Color(color_def) => Ok(BorderBrush::Color(color_def.into_color()?)),
+            BrushDef::Linear(linear) => linear.into_brush(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -3394,6 +3618,13 @@ enum TokenDef {
     Backdrop(String),
     /// Cubic bezier curve control points.
     Curve(f32, f32, f32, f32),
+    /// Linear gradient brush token (e.g. elevation border).
+    ///
+    /// RON: `Linear((angle: 180.0, stops: [(0.0, Rgba8(...)), (1.0, Rgba8(...))]))`
+    /// with `angle` in degrees (inner double-parens are required for the newtype).
+    Linear(LinearGradientDef),
+    /// Explicit brush token (solid or gradient).
+    Brush(BrushDef),
 }
 
 impl TokenDef {
@@ -3408,6 +3639,8 @@ impl TokenDef {
                 .map(TokenValue::Backdrop)
                 .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error)),
             Self::Curve(x1, y1, x2, y2) => Ok(TokenValue::Curve(x1, y1, x2, y2)),
+            Self::Linear(linear) => Ok(TokenValue::BorderBrush(linear.into_brush()?)),
+            Self::Brush(brush) => Ok(TokenValue::BorderBrush(brush.into_brush()?)),
         }
     }
 }
@@ -3830,6 +4063,20 @@ impl ColorStyleDef {
         }
     }
 
+    fn into_brush_style_value(
+        value: Option<StyleValueDef<BrushDef>>,
+    ) -> io::Result<Option<StyleValue<BorderBrush>>> {
+        match value {
+            None => Ok(None),
+            Some(StyleValueDef::Value(value)) => {
+                Ok(Some(StyleValue::Value(value.into_brush()?)))
+            }
+            Some(StyleValueDef::Var(name)) => {
+                Ok(Some(StyleValue::Var(name)))
+            }
+        }
+    }
+
     fn into_color_style_values(self) -> io::Result<ColorStyleValue> {
         Ok(ColorStyleValue {
             bg: Self::into_color_style_value(self.bg.into_option())?,
@@ -3841,6 +4088,7 @@ impl ColorStyleDef {
             pressed_bg: Self::into_color_style_value(self.pressed_bg.into_option())?,
             pressed_text: Self::into_color_style_value(self.pressed_text.into_option())?,
             pressed_border: Self::into_color_style_value(self.pressed_border.into_option())?,
+            border_brush: Self::into_brush_style_value(self.border_brush.into_option())?,
         })
     }
 }
@@ -4281,6 +4529,40 @@ mod tests {
         let progress_fill =
             crate::resolve_style_for_classes(app.world(), ["template.progress.fill"]);
         assert!(progress_fill.colors.bg.is_some());
+
+        // Default UiButton uses ControlElevationBorderBrush (gradient).
+        let button = app.world_mut().spawn(crate::UiButton::new("Save")).id();
+        let button_style = resolve_style(app.world(), button);
+        assert!(
+            matches!(
+                button_style.colors.resolved_border_brush(),
+                BorderBrush::Gradient(_)
+            ),
+            "default UiButton border should use elevation gradient brush, got {:?}",
+            button_style.colors.border_brush
+        );
+
+        // Hover solid border must clear the elevation gradient via cascade.
+        let button_hovered = app
+            .world_mut()
+            .spawn((
+                crate::UiButton::new("Save"),
+                InteractionState {
+                    hovered: true,
+                    pressed: false,
+                    focused: false,
+                },
+            ))
+            .id();
+        let hovered_style = resolve_style(app.world(), button_hovered);
+        assert!(
+            matches!(
+                hovered_style.colors.resolved_border_brush(),
+                BorderBrush::Color(_)
+            ),
+            "hovered UiButton should use solid border, got {:?}",
+            hovered_style.colors.border_brush
+        );
     }
     #[test]
     fn embedded_fluent_theme_defines_interactive_state_defaults() {

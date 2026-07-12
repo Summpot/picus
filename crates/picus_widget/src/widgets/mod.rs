@@ -67,3 +67,46 @@ pub use self::text_area::*;
 pub use self::text_input::*;
 pub use self::virtual_scroll::*;
 pub use self::zstack::*;
+
+// --- BorderBrush UsesProperty impls ---
+//
+// We cannot use a blanket `impl<W: Widget> UsesProperty<BorderBrush> for W`
+// because Rust's orphan rules forbid it (uncovered type parameter `W` before
+// the local type `BorderBrush`). Instead, impl for each concrete widget type.
+
+use crate::core::{UsesProperty, Widget};
+use crate::properties::BorderBrush;
+
+// Simple (non-generic) widgets:
+impl UsesProperty<BorderBrush> for Align {}
+impl UsesProperty<BorderBrush> for Badge {}
+impl UsesProperty<BorderBrush> for Button {}
+impl UsesProperty<BorderBrush> for Canvas {}
+impl UsesProperty<BorderBrush> for Checkbox {}
+impl UsesProperty<BorderBrush> for Divider {}
+impl UsesProperty<BorderBrush> for Grid {}
+impl UsesProperty<BorderBrush> for Label {}
+impl UsesProperty<BorderBrush> for Passthrough {}
+impl UsesProperty<BorderBrush> for ProgressBar {}
+impl UsesProperty<BorderBrush> for Prose {}
+impl UsesProperty<BorderBrush> for RadioButton {}
+impl UsesProperty<BorderBrush> for RadioGroup {}
+impl UsesProperty<BorderBrush> for ScrollBar {}
+impl UsesProperty<BorderBrush> for SizedBox {}
+impl UsesProperty<BorderBrush> for Slider {}
+impl UsesProperty<BorderBrush> for Spinner {}
+impl UsesProperty<BorderBrush> for Switch {}
+impl UsesProperty<BorderBrush> for TextInput {}
+impl UsesProperty<BorderBrush> for ZStack {}
+impl UsesProperty<BorderBrush> for Image {}
+
+// Generic widgets — type parameter is covered by the widget struct, so orphan
+// rules are satisfied.
+impl<W: Widget> UsesProperty<BorderBrush> for Portal<W> {}
+impl UsesProperty<BorderBrush> for Badged {}
+impl UsesProperty<BorderBrush> for Flex {}
+impl<A: Widget, B: Widget> UsesProperty<BorderBrush> for Split<A, B> {}
+impl<T: crate::widgets::step_input::Steppable> UsesProperty<BorderBrush> for StepInput<T> {}
+impl UsesProperty<BorderBrush> for TextArea<true> {}
+impl UsesProperty<BorderBrush> for TextArea<false> {}
+impl UsesProperty<BorderBrush> for VirtualScroll {}

@@ -198,7 +198,8 @@
         ),
         colors: (
           bg: Var("fill-control-default"),
-          border: Var("border-default"),
+          // WinUI ControlElevationBorderBrush (top→bottom gradient).
+          border_brush: Var("border-elevation"),
           text: Var("text-primary"),
         ),
         text: (
@@ -214,6 +215,7 @@
       setter: (
         colors: (
           bg: Var("fill-control-secondary"),
+          // Solid hover border clears the base elevation gradient via cascade.
           border: Var("border-default-hover"),
           text: Var("text-primary"),
         ),
@@ -3335,6 +3337,10 @@
         "scrollbar-thumb-pressed": Color(Hex("#FFFFFFB8")),
         // Border stroke hierarchy (Fluent v9 colorNeutralStroke*)
         "border-disabled": Color(Hex("#5C5C5C")),
+        // WinUI ControlElevationBorderBrush: vertical 2-stop gradient
+        // (top = ControlStrokeColorSecondary #18FFFFFF, bottom = ControlStrokeColorDefault #12FFFFFF)
+        // angle is degrees (CSS): 180° = top → bottom.
+        "border-elevation": Linear((angle: 180.0, stops: [(0.33, Rgba8(255, 255, 255, 24)), (1.0, Rgba8(255, 255, 255, 18))])),
         "border-on-accent": Color(Hex("#0078D4")),
         // Accessible stroke hierarchy (Fluent v9 colorNeutralStrokeAccessible*)
         "stroke-accessible": Color(Hex("#ADADAD")),
@@ -3544,6 +3550,10 @@
         "scrollbar-thumb-pressed": Color(Hex("#00000070")),
         // Border stroke hierarchy (Fluent v9 colorNeutralStroke*)
         "border-disabled": Color(Hex("#BDBDBD")),
+        // WinUI ControlElevationBorderBrush: vertical 2-stop gradient
+        // (top = ControlStrokeColorSecondary #29000000, bottom = ControlStrokeColorDefault #0F000000)
+        // angle is degrees (CSS): 180° = top → bottom.
+        "border-elevation": Linear((angle: 180.0, stops: [(0.33, Rgba8(0, 0, 0, 41)), (1.0, Rgba8(0, 0, 0, 15))])),
         "border-on-accent": Color(Hex("#0F6CBD")),
         // Accessible stroke hierarchy (Fluent v9 colorNeutralStrokeAccessible*)
         "stroke-accessible": Color(Hex("#616161")),

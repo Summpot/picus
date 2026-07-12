@@ -15,6 +15,7 @@ use crate::core::{
 use crate::imaging::Painter;
 use crate::kurbo::{Axis, Size};
 use crate::layout::{LayoutSize, LenReq, Length, SizeDef};
+use crate::properties::pre_paint_brush;
 use crate::theme;
 use crate::widgets::Label;
 
@@ -206,6 +207,15 @@ impl Widget for Button {
         ctx.place_child(&mut self.child, child_origin);
 
         ctx.derive_baselines(&self.child);
+    }
+
+    fn pre_paint(
+        &mut self,
+        ctx: &mut PaintCtx<'_>,
+        props: &PropertiesRef<'_>,
+        painter: &mut Painter<'_>,
+    ) {
+        pre_paint_brush(ctx, props, painter);
     }
 
     fn paint(

@@ -14,7 +14,10 @@ use masonry_core::{
     layout::{LayoutSize, LenReq, Length, SizeDef},
     properties::{Background, BorderColor, BorderWidth, CornerRadius, Padding},
 };
-use picus_view::picus_widget::{properties::ContentColor, widgets::Label};
+use picus_view::picus_widget::{
+    properties::{BorderBrush, ContentColor, pre_paint_brush},
+    widgets::Label,
+};
 
 use crate::{
     ScrollAxis, WidgetUiAction,
@@ -39,6 +42,7 @@ pub struct DragThumbWidget {
 }
 
 impl UsesProperty<ContentColor> for DragThumbWidget {}
+impl UsesProperty<BorderBrush> for DragThumbWidget {}
 
 impl DragThumbWidget {
     #[must_use]
@@ -222,6 +226,7 @@ impl Widget for DragThumbWidget {
         if ContentColor::matches(property_type)
             || CornerRadius::matches(property_type)
             || BorderColor::matches(property_type)
+            || BorderBrush::matches(property_type)
             || Background::matches(property_type)
         {
             ctx.request_render();
@@ -255,6 +260,15 @@ impl Widget for DragThumbWidget {
         let child_origin = ((size - child_size).to_vec2() * 0.5).to_point();
         ctx.place_child(&mut self.label, child_origin);
         ctx.derive_baselines(&self.label);
+    }
+
+    fn pre_paint(
+        &mut self,
+        ctx: &mut PaintCtx<'_>,
+        props: &PropertiesRef<'_>,
+        painter: &mut Painter<'_>,
+    ) {
+        pre_paint_brush(ctx, props, painter);
     }
 
     fn paint(
