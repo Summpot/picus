@@ -43,7 +43,7 @@ const DROPDOWN_MAX_VIEWPORT_HEIGHT: f64 = 300.0;
 const DROPDOWN_ITEM_HOVER_ENTER_DELAY_SECS: f32 = 0.015;
 
 /// Internal overlay actions emitted by built-in floating UI projectors.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum OverlayUiAction {
     DismissDialog,
     ToggleCombo,
@@ -59,9 +59,10 @@ pub enum OverlayUiAction {
     // Color picker overlay
     ToggleColorPicker,
     SelectColorSwatch { r: u8, g: u8, b: u8 },
-    SelectColorSv { s: u8, v: u8 },
-    SelectColorHue { h: u8 },
+    SelectColorSv { s: f64, v: f64 },
+    SelectColorHue { h: f64 },
     DismissColorPicker,
+    SetHexColor { hex: String },
     // Date picker overlay
     ToggleDatePicker,
     NavigateDateMonth { forward: bool },
@@ -1158,12 +1159,10 @@ pub fn handle_overlay_actions(world: &mut World) {
                             picker.g,
                             picker.b,
                         );
-                    let new_s = s as f32 / 255.0;
-                    let new_v = v as f32 / 255.0;
                     let (r, g, b) = crate::hsv_to_rgb(
                         h,
-                        new_s,
-                        new_v,
+                        s as f32,
+                        v as f32,
                     );
                     picker.r = r;
                     picker.g = g;
@@ -1196,12 +1195,49 @@ pub fn handle_overlay_actions(world: &mut World) {
                         picker.g,
                         picker.b,
                     );
-                    let new_h = (h as f32 / 255.0) * 360.0;
                     let (r, g, b) = crate::hsv_to_rgb(
-                        new_h,
+                        h as f32,
                         s,
                         v,
                     );
+                    picker.r = r;
+                    picker.g = g;
+                    picker.b = b;
+                    changed_event = Some(UiColorPickerChanged {
+                        picker: anchor,
+                        r,
+                        g,
+                        b,
+                    });
+                }
+
+                if let Some(ev) = changed_event {
+                    world.resource::<UiEventQueue>().push_typed(anchor, ev);
+                }
+            }
+
+            OverlayUiAction::SetHexColor { hex } => {
+                let Some(anchor) = world
+                    .get::<UiColorPickerPanel>(event.entity)
+                    .map(|p| p.anchor)
+                else {
+                    continue;
+                };
+
+                let hex = hex.trim();
+                let hex_stripped = hex.strip_prefix('#').unwrap_or(hex);
+                if hex_stripped.len() != 6 {
+                    continue;
+                }
+                let Ok(parsed) = u32::from_str_radix(hex_stripped, 16) else {
+                    continue;
+                };
+                let r = ((parsed >> 16) & 0xFF) as u8;
+                let g = ((parsed >> 8) & 0xFF) as u8;
+                let b = (parsed & 0xFF) as u8;
+
+                let mut changed_event = None;
+                if let Some(mut picker) = world.get_mut::<UiColorPicker>(anchor) {
                     picker.r = r;
                     picker.g = g;
                     picker.b = b;

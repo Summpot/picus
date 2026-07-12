@@ -11,7 +11,7 @@ use masonry_core::imaging::Painter;
 use masonry_core::kurbo::{Axis, BezPath, Circle, Line, Point, Rect, Stroke};
 use masonry_core::peniko::{self, Gradient};
 use masonry_core::{
-    layout::{Dim, Length, UnitPoint},
+    layout::{Dim, Length},
     properties::Dimensions,
 };
 use picus_view::picus_widget::widgets::InsertNewline;
@@ -37,8 +37,8 @@ use crate::{
     icons::FluentIcon,
     overlay::OverlayUiAction,
     retained_bridge::{
-        button_view, button_with_child_view, drag_thumb_view, opaque_hitbox_for_entity,
-        radio_button_view, scroll_portal, text_input_view,
+        button_view, button_with_child_view, color_spectrum_view, drag_thumb_view,
+        opaque_hitbox_for_entity, radio_button_view, scroll_portal, slider_view, text_input_view,
     },
     styling::{
         ResolvedStyle, apply_direct_text_input_style, apply_direct_widget_style,
@@ -1357,12 +1357,8 @@ pub(crate) fn project_spinner(sp: &UiSpinner, ctx: ProjectionCtx<'_>) -> UiView 
 // ---------------------------------------------------------------------------
 
 /// Dimensions for the color picker spectrum and hue slider.
-const SV_SPECTRUM_WIDTH: f64 = 220.0;
-const SV_SPECTRUM_HEIGHT: f64 = 160.0;
-const SV_GRID_COLS: usize = 12;
-const SV_GRID_ROWS: usize = 8;
-const HUE_BAR_HEIGHT: f64 = 16.0;
-const HUE_GRID_COLS: usize = 24;
+const SPECTRUM_SIZE: f64 = 200.0;
+const HUE_SLIDER_HEIGHT: f64 = 12.0;
 
 const COLOR_SWATCHES: [(u8, u8, u8); 25] = [
     (255, 0, 0),     (255, 128, 0),   (255, 255, 0),   (128, 255, 0),   (0, 255, 0),
@@ -1391,97 +1387,6 @@ pub(crate) fn project_color_picker(picker: &UiColorPicker, ctx: ProjectionCtx<'_
     ))
 }
 
-/// Draw the saturation-value spectrum for the given hue onto a Canvas scene.
-fn draw_sv_spectrum(
-    scene: &mut masonry_core::imaging::record::Scene,
-    w: f64,
-    h: f64,
-    hue: f32,
-) {
-    let mut painter = Painter::new(scene);
-    let steps_x = 48;
-    let steps_y = 32;
-    let cell_w = w / steps_x as f64;
-    let cell_h = h / steps_y as f64;
-    for sy in 0..steps_y {
-        let v = 1.0 - (sy as f32 / (steps_y - 1) as f32);
-        for sx in 0..steps_x {
-            let s = sx as f32 / (steps_x - 1) as f32;
-            let (r, g, b) = crate::hsv_to_rgb(hue, s, v);
-            let color = Color::from_rgb8(r, g, b);
-            let x = sx as f64 * cell_w;
-            let y = sy as f64 * cell_h;
-            painter
-                .fill(Rect::new(x, y, x + cell_w + 1.0, y + cell_h + 1.0), color)
-                .draw();
-        }
-    }
-}
-
-/// Draw a horizontal hue bar (rainbow strip) onto a Canvas scene.
-fn draw_hue_bar(scene: &mut masonry_core::imaging::record::Scene, w: f64, h: f64) {
-    let mut painter = Painter::new(scene);
-    let steps = 64;
-    let cell_w = w / steps as f64;
-    for i in 0..steps {
-        let hue = (i as f32 / (steps - 1) as f32) * 360.0;
-        let (r, g, b) = crate::hue_to_rgb(hue);
-        let color = Color::from_rgb8(r, g, b);
-        let x = i as f64 * cell_w;
-        painter
-            .fill(Rect::new(x, 0.0, x + cell_w + 1.0, h), color)
-            .draw();
-    }
-}
-
-/// Draw a circular selection indicator at (cx, cy).
-fn draw_selection_indicator(
-    scene: &mut masonry_core::imaging::record::Scene,
-    cx: f64,
-    cy: f64,
-    radius: f64,
-) {
-    let mut painter = Painter::new(scene);
-    painter
-        .stroke(Circle::new((cx, cy), radius), &Stroke::new(2.0), Color::BLACK)
-        .draw();
-    painter
-        .stroke(
-            Circle::new((cx, cy), radius - 2.0),
-            &Stroke::new(1.5),
-            Color::WHITE,
-        )
-        .draw();
-}
-
-/// Build a transparent grid of `cols × rows` buttons covering a `w × h` area.
-fn build_transparent_button_grid(
-    entity: Entity,
-    cols: usize,
-    rows: usize,
-    w: f64,
-    h: f64,
-    action_fn: impl Fn(usize, usize) -> OverlayUiAction + Clone + Send + Sync + 'static,
-) -> UiView {
-    let cell_w = w / cols as f64;
-    let cell_h = h / rows as f64;
-    let mut row_views = Vec::new();
-    for row in 0..rows {
-        let mut col_views = Vec::new();
-        for col in 0..cols {
-            let action = action_fn(col, row);
-            let btn = button_with_child_view(entity, action, sized_box(label("")));
-            let styled = apply_direct_widget_style(btn, &ResolvedStyle::default());
-            let sized = sized_box(styled)
-                .width(Dim::Fixed(Length::px(cell_w)))
-                .height(Dim::Fixed(Length::px(cell_h)));
-            col_views.push(sized.into_any_flex());
-        }
-        row_views.push(flex_row(col_views).gap(Length::px(0.0)).into_any_flex());
-    }
-    Arc::new(sized_box(flex_col(row_views).gap(Length::px(0.0))))
-}
-
 pub(crate) fn project_color_picker_panel(
     panel: &UiColorPickerPanel,
     ctx: ProjectionCtx<'_>,
@@ -1501,75 +1406,39 @@ pub(crate) fn project_color_picker_panel(
         .unwrap_or((255, 255, 255));
 
     let (cur_h, cur_s, cur_v) = crate::rgb_to_hsv(cur_r, cur_g, cur_b);
+    let cur_h_deg = cur_h as f64;
+    let cur_s_f64 = cur_s as f64;
+    let cur_v_f64 = cur_v as f64;
 
-    // --- SV spectrum area ---
-    let sv_w = SV_SPECTRUM_WIDTH;
-    let sv_h = SV_SPECTRUM_HEIGHT;
-    let sv_hue = cur_h;
-    let sv_cur_s = cur_s;
-    let sv_cur_v = cur_v;
-    let sv_canvas: UiView = Arc::new(canvas(
-        move |_: &mut (),
-         _: &mut masonry_core::core::MutateCtx<'_>,
-         scene: &mut masonry_core::imaging::record::Scene,
-         size| {
-            draw_sv_spectrum(scene, size.width, size.height, sv_hue);
-            let indicator_x = (sv_cur_s as f64) * size.width;
-            let indicator_y = (1.0 - sv_cur_v as f64) * size.height;
-            draw_selection_indicator(scene, indicator_x, indicator_y, 7.0);
-        },
-    ));
-    let sv_grid = build_transparent_button_grid(
+    // --- SV spectrum (2D draggable pad) ---
+    let sv_spectrum = color_spectrum_view(
         ctx.entity,
-        SV_GRID_COLS,
-        SV_GRID_ROWS,
-        sv_w,
-        sv_h,
-        |col, row| {
-            let s = ((col as f32 / (SV_GRID_COLS - 1) as f32) * 255.0).round() as u8;
-            let v = (1.0 - (row as f32 / (SV_GRID_ROWS - 1) as f32)) * 255.0;
-            let v = v.round().clamp(0.0, 255.0) as u8;
-            OverlayUiAction::SelectColorSv { s, v }
-        },
+        cur_h_deg,
+        cur_s_f64,
+        cur_v_f64,
+        |s, v| OverlayUiAction::SelectColorSv { s, v },
     );
     let sv_area = Arc::new(
-        sized_box(zstack(vec![sv_canvas, sv_grid]).alignment(UnitPoint::TOP_LEFT))
-            .width(Dim::Fixed(Length::px(sv_w)))
-            .height(Dim::Fixed(Length::px(sv_h))),
+        sized_box(sv_spectrum)
+            .width(Dim::Fixed(Length::px(SPECTRUM_SIZE)))
+            .height(Dim::Fixed(Length::px(SPECTRUM_SIZE))),
     );
 
-    // --- Hue bar ---
-    let hue_bar_w = sv_w;
-    let hue_bar_h = HUE_BAR_HEIGHT;
-    let hue_cur_h = cur_h;
-    let hue_canvas: UiView = Arc::new(canvas(
-        move |_: &mut (),
-         _: &mut masonry_core::core::MutateCtx<'_>,
-         scene: &mut masonry_core::imaging::record::Scene,
-         size| {
-            draw_hue_bar(scene, size.width, size.height);
-            let hue_x = (hue_cur_h / 360.0) as f64 * size.width;
-            draw_selection_indicator(scene, hue_x, size.height / 2.0, 7.0);
-        },
-    ));
-    let hue_grid = build_transparent_button_grid(
+    // --- Horizontal hue slider (WinUI style, below SV spectrum) ---
+    let hue_slider = slider_view(
         ctx.entity,
-        HUE_GRID_COLS,
-        1,
-        hue_bar_w,
-        hue_bar_h,
-        |col, _row| {
-            let h = ((col as f32 / (HUE_GRID_COLS - 1) as f32) * 255.0).round() as u8;
-            OverlayUiAction::SelectColorHue { h }
-        },
+        0.0,
+        360.0,
+        cur_h_deg,
+        |h| OverlayUiAction::SelectColorHue { h },
     );
     let hue_area = Arc::new(
-        sized_box(zstack(vec![hue_canvas, hue_grid]).alignment(UnitPoint::TOP_LEFT))
-            .width(Dim::Fixed(Length::px(hue_bar_w)))
-            .height(Dim::Fixed(Length::px(hue_bar_h))),
+        sized_box(hue_slider)
+            .width(Dim::Fixed(Length::px(SPECTRUM_SIZE)))
+            .height(Dim::Fixed(Length::px(HUE_SLIDER_HEIGHT))),
     );
 
-    // --- Color preview + hex label ---
+    // --- Color preview + hex input ---
     let mut preview_style =
         resolve_style_for_classes(ctx.world, ["overlay.color_picker.preview"]);
     preview_style.colors.bg = Some(Color::from_rgb8(cur_r, cur_g, cur_b));
@@ -1578,13 +1447,26 @@ pub(crate) fn project_color_picker_panel(
         .height(Dim::Fixed(Length::px(28.0)));
     let preview_styled = apply_widget_style(preview_box, &preview_style);
     let current_hex = format!("#{:02X}{:02X}{:02X}", cur_r, cur_g, cur_b);
-    let hex_label = apply_label_style(
-        label(current_hex),
-        &resolve_style_for_classes(ctx.world, ["overlay.color_picker.value"]),
+    let hex_input_style =
+        resolve_style_for_classes(ctx.world, ["overlay.color_picker.value"]);
+    let hex_input = apply_direct_text_input_style(
+        text_input_view(
+            ctx.entity,
+            current_hex.clone(),
+            |text| OverlayUiAction::SetHexColor { hex: text },
+        )
+        .on_enter(move |text| {
+            crate::events::emit_ui_action(
+                ctx.entity,
+                OverlayUiAction::SetHexColor { hex: text },
+            );
+        })
+        .placeholder("#RRGGBB"),
+        &hex_input_style,
     );
     let preview_row = flex_row(vec![
         preview_styled.into_any_flex(),
-        hex_label.into_any_flex(),
+        hex_input.into_any_flex(),
     ])
     .gap(Length::px(8.0));
 
@@ -1619,7 +1501,7 @@ pub(crate) fn project_color_picker_panel(
                     OverlayUiAction::SelectColorSwatch { r, g, b },
                     swatch_styled,
                 );
-                row_items.push(apply_direct_widget_style(btn, &swatch_style).into_any_flex());
+                row_items.push(apply_direct_widget_style(btn, &sw_style).into_any_flex());
             }
         }
         rows.push(flex_row(row_items).gap(Length::px(4.0)).into_any_flex());
@@ -1643,12 +1525,12 @@ pub(crate) fn project_color_picker_panel(
     let panel_width = if computed_pos.width > 1.0 {
         computed_pos.width
     } else {
-        sv_w + 24.0
+        SPECTRUM_SIZE + 24.0
     };
     let panel_height = if computed_pos.height > 1.0 {
         computed_pos.height
     } else {
-        sv_h + hue_bar_h + 28.0 + (swatch_rows_total as f64 * 32.0) + 60.0
+        SPECTRUM_SIZE + HUE_SLIDER_HEIGHT + 28.0 + (swatch_rows_total as f64 * 32.0) + 60.0
     };
 
     let panel_view = apply_widget_style(
@@ -1825,7 +1707,7 @@ pub(crate) fn project_toast(toast: &UiToast, ctx: ProjectionCtx<'_>) -> UiView {
 
 pub(crate) fn project_date_picker(picker: &UiDatePicker, ctx: ProjectionCtx<'_>) -> UiView {
     let style = resolve_style(ctx.world, ctx.entity);
-    let date_str = format!("{:04}-{:02}-{:02}", picker.year, picker.month, picker.day);
+    let date_str = format!("{} {}, {}", month_name(picker.month), picker.day, picker.year);
     let mut items = vec![apply_label_style(label(date_str), &style).into_any_flex()];
     if let Some(icon_color) = style.colors.text {
         let icon = if picker.is_open {
@@ -1876,15 +1758,18 @@ pub(crate) fn project_date_picker_panel(
 
     // Navigation row
     let nav_style = resolve_style_for_classes(ctx.world, ["overlay.date_picker.nav"]);
+    let nav_icon_color = nav_style.colors.text.unwrap_or(crate::xilem::Color::BLACK);
+    let prev_icon = vector_icon(VectorIcon::ChevronLeft, DATE_PICKER_NAV_HEIGHT, nav_icon_color);
+    let next_icon = vector_icon(VectorIcon::ChevronRight, DATE_PICKER_NAV_HEIGHT, nav_icon_color);
     let prev_btn = button_with_child_view(
         ctx.entity,
         OverlayUiAction::NavigateDateMonth { forward: false },
-        Arc::new(apply_label_style(label("<"), &cell_style)),
+        prev_icon,
     );
     let next_btn = button_with_child_view(
         ctx.entity,
         OverlayUiAction::NavigateDateMonth { forward: true },
-        Arc::new(apply_label_style(label(">"), &cell_style)),
+        next_icon,
     );
     let month_lbl = apply_label_style(
         label(format!("{} {view_year}", month_name(view_month))),

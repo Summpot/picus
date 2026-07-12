@@ -6,6 +6,7 @@
 mod button_view;
 mod button_with_child_view;
 mod component_views;
+mod color_spectrum_view;
 mod drag_thumb_view;
 mod entity_scope_view;
 mod opaque_hitbox_view;
@@ -21,6 +22,7 @@ pub use component_views::switch_view as switch;
 pub use component_views::text_input_view as text_input;
 pub use component_views::{CheckboxView, SliderView, SwitchView};
 pub(crate) use component_views::{radio_button_view, slider_view, text_input_view};
+pub(crate) use color_spectrum_view::color_spectrum_view;
 pub(crate) use drag_thumb_view::drag_thumb_view;
 pub(crate) use entity_scope_view::entity_scope;
 pub(crate) use opaque_hitbox_view::opaque_hitbox_for_entity;

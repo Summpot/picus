@@ -11,6 +11,7 @@ mod badge;
 mod badged;
 mod button;
 mod canvas;
+mod color_spectrum;
 mod checkbox;
 mod divider;
 mod flex;
@@ -45,6 +46,7 @@ pub use self::badged::*;
 pub use self::button::*;
 pub use self::canvas::*;
 pub use self::checkbox::*;
+pub use self::color_spectrum::*;
 pub use self::divider::*;
 pub use self::flex::*;
 pub use self::grid::*;
@@ -83,6 +85,7 @@ impl UsesProperty<BorderBrush> for Badge {}
 impl UsesProperty<BorderBrush> for Button {}
 impl UsesProperty<BorderBrush> for Canvas {}
 impl UsesProperty<BorderBrush> for Checkbox {}
+impl UsesProperty<BorderBrush> for ColorSpectrum {}
 impl UsesProperty<BorderBrush> for Divider {}
 impl UsesProperty<BorderBrush> for Grid {}
 impl UsesProperty<BorderBrush> for Label {}

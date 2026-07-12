@@ -63,6 +63,7 @@ impl Default for IconGlyph {
 pub enum PicusIcon {
     Check,
     ChevronDown,
+    ChevronLeft,
     ChevronUp,
     ChevronRight,
     Circle,
@@ -149,6 +150,7 @@ impl PicusIcon {
         match self {
             Self::Check => FluentIcon::Checkmark,
             Self::ChevronDown => FluentIcon::ChevronDown,
+            Self::ChevronLeft => FluentIcon::ChevronLeft,
             Self::ChevronUp => FluentIcon::ChevronUp,
             Self::ChevronRight => FluentIcon::ChevronRight,
             Self::Circle => FluentIcon::Placeholder,

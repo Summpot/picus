@@ -16,6 +16,7 @@ use picus_view::view::{label, sized_box};
 pub(crate) enum VectorIcon {
     Check,
     ChevronDown,
+    ChevronLeft,
     ChevronUp,
     ChevronRight,
     Clock,
@@ -31,6 +32,7 @@ pub(crate) fn vector_icon(icon: VectorIcon, size_px: f64, color: crate::xilem::C
     let icon: IconGlyph = match icon {
         VectorIcon::Check => PicusIcon::Check,
         VectorIcon::ChevronDown => PicusIcon::ChevronDown,
+        VectorIcon::ChevronLeft => PicusIcon::ChevronLeft,
         VectorIcon::ChevronUp => PicusIcon::ChevronUp,
         VectorIcon::ChevronRight => PicusIcon::ChevronRight,
         VectorIcon::Clock => PicusIcon::Clock,
