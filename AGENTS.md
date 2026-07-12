@@ -384,8 +384,8 @@ Runtime styling invariants:
   `fill-layer-background`, `fill-layer-default`, `fill-layer-alt`,
   `fill-control-default`, `fill-control-secondary`, `fill-control-tertiary`,
   `fill-control-disabled`, `fill-subtle-transparent`, `fill-subtle-secondary`,
-  `fill-subtle-tertiary`, `fill-card-default`, `fill-card-secondary`, and
-  `fill-smoke-default`. Normal values are opaque; Mica/Acrylic styles replace
+  `fill-subtle-tertiary`, `fill-card-default`, `fill-card-secondary`,
+  `fill-smoke-default`, and `fill-thumb`. Normal values are opaque; Mica/Acrylic styles replace
   them with WinUI-inspired alpha values. Rules must reference these tokens
   instead of hard-coding backdrop alpha values.
 

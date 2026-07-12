@@ -129,12 +129,22 @@ impl OverlayPointerRoutingState {
         Self::push_unique(&mut self.suppressed_presses, window, button);
     }
 
-    /// Suppress the next press for a globally consumed click.
+    /// Mark the next `Released` event for this `(window, button)` pair as consumed.
+    pub(crate) fn suppress_release(&mut self, window: Entity, button: MouseButton) {
+        Self::push_unique(&mut self.suppressed_releases, window, button);
+    }
+
+    /// Suppress the next press **and** release for a globally consumed click.
+    ///
+    /// Suppressing both halves prevents an orphaned release from reaching
+    /// retained widgets when the press was suppressed.  An orphaned release
+    /// can re-open an overlay (e.g. a picker panel) that
+    /// [`handle_global_overlay_clicks`] just closed, because the trigger
+    /// button receives `PointerEvent::Up` without a matching
+    /// `PointerEvent::Down`.
     pub(crate) fn suppress_click(&mut self, window: Entity, button: MouseButton) {
         self.suppress_press(window, button);
-        // NOTE: suppressing release can outlive the originating click across frames,
-        // which may consume the next valid release and leave trigger buttons in a
-        // sticky-pressed state that requires an extra click.
+        self.suppress_release(window, button);
     }
 }
 
@@ -3661,7 +3671,7 @@ mod tests {
             .world_mut()
             .resource_mut::<crate::OverlayPointerRoutingState>();
         assert!(routing.take_suppressed_press(window_entity, MouseButton::Left));
-        assert!(!routing.take_suppressed_release(window_entity, MouseButton::Left));
+        assert!(routing.take_suppressed_release(window_entity, MouseButton::Left));
     }
 
     #[test]
@@ -3778,14 +3788,14 @@ mod tests {
     }
 
     #[test]
-    fn overlay_pointer_routing_suppress_click_only_suppresses_press() {
+    fn overlay_pointer_routing_suppress_click_suppresses_press_and_release() {
         let mut routing = crate::OverlayPointerRoutingState::default();
         let window = Entity::from_raw_u32(7).expect("test entity index should be valid");
 
         routing.suppress_click(window, MouseButton::Left);
 
         assert!(routing.take_suppressed_press(window, MouseButton::Left));
-        assert!(!routing.take_suppressed_release(window, MouseButton::Left));
+        assert!(routing.take_suppressed_release(window, MouseButton::Left));
     }
 
     #[test]
@@ -4146,5 +4156,197 @@ mod tests {
         crate::handle_global_overlay_clicks(&mut world);
 
         assert!(world.get_entity(dialog).is_ok());
+    }
+
+    #[test]
+    fn real_click_on_combo_anchor_closes_dropdown_without_reopening() {
+        let mut app = App::new();
+        app.add_plugins(PicusPlugin);
+        crate::set_active_style_variant_by_name(app.world_mut(), "dark");
+
+        let mut window = Window::default();
+        window.resolution.set(800.0, 600.0);
+        let window_entity = app.world_mut().spawn((window, PrimaryWindow)).id();
+
+        let root = app.world_mut().spawn((UiRoot, crate::UiFlexColumn)).id();
+        let combo = app
+            .world_mut()
+            .spawn((
+                crate::UiComboBox::new(vec![
+                    crate::UiComboOption::new("one", "One"),
+                    crate::UiComboOption::new("two", "Two"),
+                ]),
+                ChildOf(root),
+            ))
+            .id();
+
+        app.update();
+
+        let _dropdown = open_combo_dropdown(&mut app, combo);
+        app.update();
+
+        assert!(
+            app.world()
+                .get::<crate::UiComboBox>(combo)
+                .expect("combo should exist")
+                .is_open
+        );
+
+        let anchor_center = widget_center_for_entity(&app, combo);
+
+        // Simulate a real click that simultaneously triggers
+        // handle_global_overlay_clicks and inject_bevy_input_into_masonry.
+        send_real_click(&mut app, window_entity, anchor_center);
+
+        // The dropdown should be closed and NOT reopened.
+        let combo_after = app
+            .world()
+            .get::<crate::UiComboBox>(combo)
+            .expect("combo should remain");
+        assert!(
+            !combo_after.is_open,
+            "combo dropdown should be closed after clicking anchor, but is_open={}",
+            combo_after.is_open
+        );
+
+        let mut dropdown_query = app.world_mut().query::<(Entity, &crate::AnchoredTo)>();
+        let remaining = dropdown_query
+            .iter(app.world())
+            .filter(|&(_, anchored)| {
+                app.world().get::<crate::UiDropdownMenu>(anchored.0).is_some()
+                    && anchored.0 == combo
+            })
+            .count();
+        assert_eq!(
+            remaining, 0,
+            "no dropdown menu for this combo should remain after anchor click"
+        );
+    }
+
+    #[test]
+    fn real_click_on_color_picker_anchor_closes_panel_without_reopening() {
+        let mut app = App::new();
+        app.add_plugins(PicusPlugin);
+        crate::set_active_style_variant_by_name(app.world_mut(), "dark");
+
+        let mut window = Window::default();
+        window.resolution.set(800.0, 600.0);
+        let window_entity = app.world_mut().spawn((window, PrimaryWindow)).id();
+
+        let root = app.world_mut().spawn((UiRoot, crate::UiFlexColumn)).id();
+        let picker = app
+            .world_mut()
+            .spawn((crate::UiColorPicker::new(12, 34, 56), ChildOf(root)))
+            .id();
+
+        app.update();
+
+        // Open the color picker panel.
+        app.world()
+            .resource::<UiEventQueue>()
+            .push_typed(picker, crate::OverlayUiAction::ToggleColorPicker);
+        app.update();
+        app.update();
+
+        assert!(
+            app.world()
+                .get::<crate::UiColorPicker>(picker)
+                .expect("picker should exist")
+                .is_open
+        );
+
+        let anchor_center = widget_center_for_entity(&app, picker);
+
+        // Simulate a real click on the picker anchor button.
+        send_real_click(&mut app, window_entity, anchor_center);
+
+        let picker_after = app
+            .world()
+            .get::<crate::UiColorPicker>(picker)
+            .expect("picker should remain");
+        assert!(
+            !picker_after.is_open,
+            "color picker panel should be closed after clicking anchor, but is_open={}",
+            picker_after.is_open
+        );
+    }
+
+    #[test]
+    fn real_split_click_on_color_picker_anchor_closes_without_reopening() {
+        let mut app = App::new();
+        app.add_plugins(PicusPlugin);
+        crate::set_active_style_variant_by_name(app.world_mut(), "dark");
+
+        let mut window = Window::default();
+        window.resolution.set(800.0, 600.0);
+        let window_entity = app.world_mut().spawn((window, PrimaryWindow)).id();
+
+        let root = app.world_mut().spawn((UiRoot, crate::UiFlexColumn)).id();
+        let picker = app
+            .world_mut()
+            .spawn((crate::UiColorPicker::new(12, 34, 56), ChildOf(root)))
+            .id();
+
+        app.update();
+
+        // Open the color picker panel.
+        app.world()
+            .resource::<UiEventQueue>()
+            .push_typed(picker, crate::OverlayUiAction::ToggleColorPicker);
+        app.update();
+        app.update();
+
+        assert!(
+            app.world()
+                .get::<crate::UiColorPicker>(picker)
+                .expect("picker should exist")
+                .is_open
+        );
+
+        let anchor_center = widget_center_for_entity(&app, picker);
+
+        // Simulate press and release in SEPARATE frames (reactive mode).
+        set_window_cursor_position(&mut app, window_entity, anchor_center);
+
+        // Press frame: ButtonInput::just_pressed + MouseButtonInput::Pressed
+        if !app.world().contains_resource::<ButtonInput<MouseButton>>() {
+            app.world_mut()
+                .insert_resource(ButtonInput::<MouseButton>::default());
+        }
+        {
+            let mut input = app.world_mut().resource_mut::<ButtonInput<MouseButton>>();
+            input.release(MouseButton::Left);
+            input.clear();
+            input.press(MouseButton::Left);
+        }
+        app.world_mut().write_message(bevy_input::mouse::MouseButtonInput {
+            button: MouseButton::Left,
+            state: bevy_input::ButtonState::Pressed,
+            window: window_entity,
+        });
+        app.update();
+
+        // Release frame: just_released (just_pressed is false) + MouseButtonInput::Released
+        {
+            let mut input = app.world_mut().resource_mut::<ButtonInput<MouseButton>>();
+            input.release(MouseButton::Left);
+            input.clear();
+        }
+        app.world_mut().write_message(bevy_input::mouse::MouseButtonInput {
+            button: MouseButton::Left,
+            state: bevy_input::ButtonState::Released,
+            window: window_entity,
+        });
+        app.update();
+
+        let picker_after = app
+            .world()
+            .get::<crate::UiColorPicker>(picker)
+            .expect("picker should remain");
+        assert!(
+            !picker_after.is_open,
+            "color picker panel should be closed after split-frame anchor click, but is_open={}",
+            picker_after.is_open
+        );
     }
 }

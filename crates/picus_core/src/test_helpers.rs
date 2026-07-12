@@ -117,6 +117,47 @@ pub fn send_primary_click(app: &mut App, window_entity: Entity, position: Vec2) 
     app.update();
 }
 
+/// Simulate a real Bevy click that simultaneously triggers
+/// `handle_global_overlay_clicks` (via `ButtonInput::just_pressed`) and
+/// `inject_bevy_input_into_masonry` (via `MouseButtonInput` events).
+///
+/// This is the faithful equivalent of a physical left-click in reactive mode:
+/// both the `ButtonInput` state transition and the `MouseButtonInput` event
+/// stream are produced in the same frame, so overlay-dismiss logic *and*
+/// retained-widget pointer injection both run.
+pub fn send_real_click(app: &mut App, window_entity: Entity, position: Vec2) {
+    set_window_cursor_position(app, window_entity, position);
+
+    if !app.world().contains_resource::<ButtonInput<MouseButton>>() {
+        app.world_mut()
+            .insert_resource(ButtonInput::<MouseButton>::default());
+    }
+
+    {
+        let mut input = app.world_mut().resource_mut::<ButtonInput<MouseButton>>();
+        input.release(MouseButton::Left);
+        input.clear();
+        input.press(MouseButton::Left);
+    }
+
+    app.world_mut().write_message(MouseButtonInput {
+        button: MouseButton::Left,
+        state: ButtonState::Pressed,
+        window: window_entity,
+    });
+    app.world_mut().write_message(MouseButtonInput {
+        button: MouseButton::Left,
+        state: ButtonState::Released,
+        window: window_entity,
+    });
+
+    app.update();
+
+    let mut input = app.world_mut().resource_mut::<ButtonInput<MouseButton>>();
+    input.release(MouseButton::Left);
+    input.clear();
+}
+
 pub fn run_global_overlay_click(app: &mut App, window_entity: Entity, position: Vec2) {
     set_window_cursor_position(app, window_entity, position);
 

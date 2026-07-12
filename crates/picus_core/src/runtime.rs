@@ -965,6 +965,10 @@ fn parse_entity_debug_binding(debug: &str) -> Option<(u64, bool)> {
         return Some((bits.parse::<u64>().ok()?, false));
     }
 
+    if let Some(bits) = debug.strip_prefix("entity=") {
+        return Some((bits.parse::<u64>().ok()?, false));
+    }
+
     None
 }
 

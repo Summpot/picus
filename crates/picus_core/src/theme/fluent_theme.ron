@@ -889,7 +889,7 @@
           border_width: Var("border-thin"),
         ),
         colors: (
-          bg: Var("surface-overlay"),
+          bg: Var("fill-card-default"),
           border: Var("border-default"),
         ),
       ),
@@ -948,7 +948,7 @@
           gap: Var("space-xs"),
         ),
         colors: (
-          bg: Var("surface-elevated"),
+          bg: Var("fill-card-default"),
           border: Var("border-default"),
         ),
       ),
@@ -963,7 +963,7 @@
           border_width: Var("border-thin"),
         ),
         colors: (
-          bg: Var("surface-panel"),
+          bg: Var("fill-card-default"),
           border: Var("border-default"),
           text: Var("text-primary"),
         ),
@@ -1040,7 +1040,7 @@
           gap: Var("gap-sm"),
         ),
         colors: (
-          bg: Var("surface-elevated"),
+          bg: Var("fill-card-default"),
           border: Var("border-default"),
         ),
       ),
@@ -1069,7 +1069,7 @@
           gap: Var("gap-md"),
         ),
         colors: (
-          bg: Var("surface-subtle"),
+          bg: Var("fill-card-default"),
           border: Var("border-default"),
           text: Var("text-primary"),
         ),
@@ -1221,7 +1221,7 @@
           gap: Var("space-xs"),
         ),
         colors: (
-          bg: Var("surface-elevated"),
+          bg: Var("fill-card-default"),
           border: Var("border-default"),
         ),
         box_shadow: Var("shadow-flyout"),
@@ -1259,7 +1259,7 @@
           align_items: Stretch,
         ),
         colors: (
-          bg: Var("surface-elevated"),
+          bg: Var("fill-card-default"),
           border: Var("border-default"),
         ),
         box_shadow: Var("shadow-flyout"),
@@ -1351,7 +1351,7 @@
           gap: Var("gap-sm"),
         ),
         colors: (
-          bg: Var("surface-elevated"),
+          bg: Var("fill-card-default"),
           border: Var("border-default"),
         ),
         box_shadow: Var("shadow-flyout"),
@@ -1404,7 +1404,7 @@
           gap: Var("space-xs"),
         ),
         colors: (
-          bg: Var("surface-elevated"),
+          bg: Var("fill-card-default"),
           border: Var("border-default"),
         ),
         box_shadow: Var("shadow-flyout"),
@@ -1454,7 +1454,7 @@
           gap: Var("space-xs"),
         ),
         colors: (
-          bg: Var("surface-elevated"),
+          bg: Var("fill-card-default"),
           border: Var("border-default"),
         ),
         box_shadow: Var("shadow-flyout"),
@@ -1515,7 +1515,7 @@
           border_width: Var("border-thin"),
         ),
         colors: (
-          bg: Var("surface-panel"),
+          bg: Var("fill-card-default"),
           border: Var("border-default"),
           text: Var("text-primary"),
         ),
@@ -1533,7 +1533,7 @@
           gap: Var("space-md"),
         ),
         colors: (
-          bg: Var("surface-elevated"),
+          bg: Var("fill-card-default"),
           border: Var("stroke-transparent-interactive"),
           text: Var("text-primary"),
         ),
@@ -1610,7 +1610,7 @@
           gap: Var("gap-sm"),
         ),
         colors: (
-          bg: Var("surface-elevated"),
+          bg: Var("fill-card-default"),
           border: Var("border-default"),
         ),
         box_shadow: Var("shadow-flyout"),
@@ -1677,7 +1677,7 @@
           gap: Var("space-xs"),
         ),
         colors: (
-          bg: Var("surface-elevated"),
+          bg: Var("fill-card-default"),
           border: Var("border-default"),
         ),
         box_shadow: Var("shadow-flyout"),
@@ -1770,7 +1770,7 @@
           gap: Var("space-xs"),
         ),
         colors: (
-          bg: Var("surface-elevated"),
+          bg: Var("fill-card-default"),
           border: Var("border-default"),
         ),
         box_shadow: Var("shadow-flyout"),
@@ -2907,7 +2907,7 @@
           border_width: Var("border-thin"),
         ),
         colors: (
-          bg: Var("surface-elevated"),
+          bg: Var("fill-control-default"),
           border: Var("border-default"),
         ),
         transition: Var("duration-fast"),
@@ -2917,7 +2917,7 @@
       selector: And([Class("template.checkbox.box"), PseudoClass(Hovered)]),
       setter: (
         colors: (
-          bg: Var("surface-subtle-hover"),
+          bg: Var("fill-control-secondary"),
         ),
       ),
     ),
@@ -2925,7 +2925,7 @@
       selector: And([Class("template.checkbox.box"), PseudoClass(Pressed)]),
       setter: (
         colors: (
-          bg: Var("surface-subtle-pressed"),
+          bg: Var("fill-control-tertiary"),
         ),
       ),
     ),
@@ -3031,7 +3031,7 @@
           border_width: Var("border-thin"),
         ),
         colors: (
-          bg: Var("surface-subtle"),
+          bg: Var("fill-control-default"),
           border: Var("border-default"),
         ),
         transition: Var("duration-fast"),
@@ -3041,7 +3041,7 @@
       selector: And([Class("template.switch.track"), PseudoClass(Hovered)]),
       setter: (
         colors: (
-          bg: Var("surface-subtle-hover"),
+          bg: Var("fill-control-secondary"),
         ),
       ),
     ),
@@ -3049,7 +3049,7 @@
       selector: And([Class("template.switch.track"), PseudoClass(Pressed)]),
       setter: (
         colors: (
-          bg: Var("surface-subtle-pressed"),
+          bg: Var("fill-control-tertiary"),
         ),
       ),
     ),
@@ -3094,7 +3094,7 @@
           border_width: 0.0,
         ),
         colors: (
-          bg: Var("text-on-accent"),
+          bg: Var("fill-thumb"),
           border: Var("transparent"),
         ),
         box_shadow: Var("shadow-ui-component"),
@@ -3243,6 +3243,7 @@
               "fill-smoke-default": Color(Rgba8(0, 0, 0, 77)),
               "surface-overlay-item-hover": Color(Rgba8(255, 255, 255, 15)),
               "surface-overlay-item-pressed": Color(Rgba8(255, 255, 255, 10)),
+              "fill-thumb": Color(Rgba8(255, 255, 255, 235)),
             },
           ),
           "acrylic": (
@@ -3262,6 +3263,7 @@
               "fill-smoke-default": Color(Rgba8(0, 0, 0, 77)),
               "surface-overlay-item-hover": Color(Rgba8(255, 255, 255, 15)),
               "surface-overlay-item-pressed": Color(Rgba8(255, 255, 255, 10)),
+              "fill-thumb": Color(Rgba8(255, 255, 255, 235)),
             },
           ),
         },
@@ -3280,6 +3282,7 @@
         "fill-card-default": Color(Hex("#2D2D2D")),
         "fill-card-secondary": Color(Hex("#292929")),
         "fill-smoke-default": Color(Rgba8(0, 0, 0, 148)),
+        "fill-thumb": Color(Hex("#FFFFFF")),
         "surface-bg": Color(Hex("#1F1F1F")),
         "surface-panel": Color(Hex("#292929")),
         "surface-elevated": Color(Hex("#1F1F1F")),
@@ -3448,6 +3451,7 @@
               "fill-smoke-default": Color(Rgba8(0, 0, 0, 77)),
               "surface-overlay-item-hover": Color(Rgba8(0, 0, 0, 9)),
               "surface-overlay-item-pressed": Color(Rgba8(0, 0, 0, 6)),
+              "fill-thumb": Color(Rgba8(255, 255, 255, 235)),
             },
           ),
           "acrylic": (
@@ -3467,6 +3471,7 @@
               "fill-smoke-default": Color(Rgba8(0, 0, 0, 77)),
               "surface-overlay-item-hover": Color(Rgba8(0, 0, 0, 9)),
               "surface-overlay-item-pressed": Color(Rgba8(0, 0, 0, 6)),
+              "fill-thumb": Color(Rgba8(255, 255, 255, 235)),
             },
           ),
         },
@@ -3485,6 +3490,7 @@
         "fill-card-default": Color(Hex("#FFFFFF")),
         "fill-card-secondary": Color(Hex("#F6F6F6")),
         "fill-smoke-default": Color(Rgba8(0, 0, 0, 64)),
+        "fill-thumb": Color(Hex("#FFFFFF")),
         "surface-bg": Color(Hex("#FFFFFF")),
         "surface-panel": Color(Hex("#FFFFFF")),
         "surface-elevated": Color(Hex("#FFFFFF")),
@@ -3651,6 +3657,7 @@
         "fill-card-default": Color(Hex("#000000")),
         "fill-card-secondary": Color(Hex("#0A0A0A")),
         "fill-smoke-default": Color(Rgba8(0, 0, 0, 204)),
+        "fill-thumb": Color(Hex("#000000")),
         "surface-bg": Color(Hex("#000000")),
         "surface-panel": Color(Hex("#000000")),
         "surface-elevated": Color(Hex("#000000")),
