@@ -2779,6 +2779,18 @@
         ),
       ),
     ),
+    // Expand/collapse chevron on hierarchical MenuItems.
+    (
+      selector: Class("nav.item.chevron"),
+      setter: (
+        colors: (
+          text: Var("text-secondary"),
+        ),
+        text: (
+          size: 10.0,
+        ),
+      ),
+    ),
 
     // ── Type ramp presets (Fluent v9) ──────────────────────────
     (

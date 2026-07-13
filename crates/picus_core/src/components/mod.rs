@@ -29,7 +29,7 @@ mod markdown;
 mod menu;
 mod message_bar;
 mod multiline_text_input;
-mod navigation_view;
+pub(crate) mod navigation_view;
 mod numeric_up_down;
 mod password_input;
 mod popover;

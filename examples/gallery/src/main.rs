@@ -67,11 +67,9 @@ fn setup_gallery(mut commands: Commands) {
         })
         .id();
 
-    // Build navigation items from all gallery pages (with Fluent icon glyphs).
-    let nav_items: Vec<NavigationViewItem> = GalleryPage::ALL
-        .iter()
-        .map(|page| NavigationViewItem::new(page.label()).with_icon(page.icon()))
-        .collect();
+    // WinUI Gallery-style hierarchical MenuItems: category parents with leaf pages.
+    // Content children stay in GalleryPage::ALL leaf order so selected leaf index maps 1:1.
+    let nav_items = build_gallery_nav_items();
 
     let nav_view = commands
         .spawn_scene(bsn! {
@@ -88,7 +86,7 @@ fn setup_gallery(mut commands: Commands) {
         })
         .id();
 
-    // Spawn all pages as children of the navigation view (order matches GalleryPage::ALL).
+    // Spawn all leaf pages as children of the navigation view (order matches GalleryPage::ALL).
     for page in GalleryPage::ALL {
         spawn_page(&mut commands, nav_view, page);
     }
@@ -97,6 +95,24 @@ fn setup_gallery(mut commands: Commands) {
         nav_view,
         search_input: Entity::PLACEHOLDER,
     });
+}
+
+/// Build hierarchical nav items: one expandable category per [`GalleryPage::CATEGORIES`],
+/// with leaf control pages as nested MenuItems (WinUI `NavigationViewItem.MenuItems`).
+fn build_gallery_nav_items() -> Vec<NavigationViewItem> {
+    GalleryPage::CATEGORIES
+        .iter()
+        .map(|category| {
+            let children = GalleryPage::ALL
+                [category.first_page_index..category.first_page_index + category.page_count]
+                .iter()
+                .map(|page| NavigationViewItem::new(page.label()).with_icon(page.icon()))
+                .collect::<Vec<_>>();
+            NavigationViewItem::new(category.label)
+                .with_children(children)
+                .expanded()
+        })
+        .collect()
 }
 
 /// Create the top bar with branding, search, theme picker, and badge.
@@ -448,6 +464,24 @@ mod tests {
             next += category.page_count;
         }
         assert_eq!(next, GalleryPage::ALL.len());
+    }
+
+    #[test]
+    fn gallery_nav_items_are_hierarchical_categories() {
+        let items = build_gallery_nav_items();
+        assert_eq!(items.len(), GalleryPage::CATEGORIES.len());
+        let leaf_count: usize = items.iter().map(|item| item.leaf_count()).sum();
+        assert_eq!(leaf_count, GalleryPage::ALL.len());
+        for (item, category) in items.iter().zip(GalleryPage::CATEGORIES.iter()) {
+            assert_eq!(item.label, category.label);
+            assert!(!item.is_leaf(), "category parents must have MenuItems children");
+            assert!(item.is_expanded, "gallery categories start expanded");
+            assert_eq!(item.children.len(), category.page_count);
+            assert!(
+                item.children.iter().all(|child| child.is_leaf()),
+                "control pages must be leaf MenuItems"
+            );
+        }
     }
 
     #[test]

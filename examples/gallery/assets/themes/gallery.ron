@@ -206,6 +206,17 @@
       ),
     ),
     (
+      selector: Class("nav.item.chevron"),
+      setter: (
+        colors: (
+          text: Var("text-secondary"),
+        ),
+        text: (
+          size: 10.0,
+        ),
+      ),
+    ),
+    (
       selector: Class("gallery.content_scroll"),
       setter: (
         layout: (

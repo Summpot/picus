@@ -12,8 +12,8 @@ use crate::{
     OverlayComputedPosition, OverlayConfig, OverlayPlacement, OverlayState, ScrollAxis, UiCheckbox,
     UiCheckboxChanged, UiDataTable, UiDataTableSelectionChanged, UiDataTableSortChanged,
     UiListSelectionMode, UiListView, UiListViewSelectionChanged, UiMultilineTextInput,
-    UiMultilineTextInputChanged, UiNavigationPaneChanged, UiNavigationSelectionChanged,
-    UiNavigationView, UiNumericUpDown,
+    UiMultilineTextInputChanged, UiNavigationItemExpandedChanged, UiNavigationPaneChanged,
+    UiNavigationSelectionChanged, UiNavigationView, UiNumericUpDown,
     UiNumericUpDownChanged, UiOverlayRoot, UiPasswordInput, UiPasswordInputChanged, UiRadioGroup,
     UiRadioGroupChanged, UiRating, UiRatingChanged, UiScrollView, UiScrollViewChanged, UiSlider,
     UiSearch, UiSearchChanged, UiSliderChanged, UiSwitch, UiSwitchChanged, UiTabBar, UiTabChanged,
@@ -31,8 +31,10 @@ pub enum WidgetUiAction {
     SelectRadioItem { group: Entity, index: usize },
     /// Switch the active tab in a tab bar.
     SelectTab { bar: Entity, index: usize },
-    /// Select a navigation item in a [`UiNavigationView`].
+    /// Select a leaf navigation item in a [`UiNavigationView`] by leaf index.
     SelectNavigationItem { nav: Entity, index: usize },
+    /// Expand or collapse a hierarchical navigation menu item (WinUI `IsExpanded`).
+    ToggleNavigationItemExpand { nav: Entity, item: Entity },
     /// Expand or collapse a [`UiNavigationView`] pane.
     ToggleNavigationPane { nav: Entity },
     /// Expand or collapse a tree node.
@@ -363,11 +365,51 @@ pub fn handle_widget_actions(world: &mut World) {
                 }
 
                 let changed = if let Some(mut nav_view) = world.get_mut::<UiNavigationView>(nav) {
-                    nav_view.selected = index;
+                    let max = nav_view.leaf_count().saturating_sub(1);
+                    nav_view.selected = index.min(max);
                     Some(UiNavigationSelectionChanged {
                         nav,
-                        selected: index,
+                        selected: nav_view.selected,
                     })
+                } else {
+                    None
+                };
+
+                if let Some(ev) = changed {
+                    world.resource::<UiEventQueue>().push_typed(nav, ev);
+                }
+            }
+
+            WidgetUiAction::ToggleNavigationItemExpand { nav, item } => {
+                if world.get_entity(nav).is_err() || world.get_entity(item).is_err() {
+                    continue;
+                }
+
+                let path = crate::components::navigation_view::navigation_item_path(world, item);
+                let Some(path) = path else {
+                    continue;
+                };
+
+                let changed = if let Some(mut nav_view) = world.get_mut::<UiNavigationView>(nav) {
+                    if let Some(node) =
+                        crate::components::navigation_view::navigation_item_at_mut(
+                            &mut nav_view.items,
+                            &path,
+                        )
+                    {
+                        if node.is_leaf() {
+                            None
+                        } else {
+                            node.is_expanded = !node.is_expanded;
+                            Some(UiNavigationItemExpandedChanged {
+                                nav,
+                                item,
+                                is_expanded: node.is_expanded,
+                            })
+                        }
+                    } else {
+                        None
+                    }
                 } else {
                     None
                 };

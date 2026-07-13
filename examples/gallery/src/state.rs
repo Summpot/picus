@@ -17,7 +17,9 @@ pub struct GalleryBackdropPicker;
 pub struct GalleryLocaleCombo;
 
 /// A sidebar category heading that groups related control pages.
-#[allow(dead_code)]
+///
+/// Mapped to an expandable WinUI-style `NavigationViewItem` parent with nested
+/// leaf MenuItems for each page in the range.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct NavCategory {
     pub label: &'static str,
@@ -133,8 +135,7 @@ impl GalleryPage {
         Self::I18n,
     ];
 
-    /// Sidebar category groups — WinUI Gallery-style section headings.
-    #[allow(dead_code)]
+    /// Sidebar category groups — WinUI Gallery-style expandable MenuItem parents.
     pub const CATEGORIES: &'static [NavCategory] = &[
         NavCategory {
             label: "Basic Input",

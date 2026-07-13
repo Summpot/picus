@@ -124,6 +124,7 @@ fn discard_logged_actions(world: &mut World) {
         UiTabChanged,
         UiScrollViewChanged,
         picus::UiNavigationPaneChanged,
+        picus::UiNavigationItemExpandedChanged,
     );
 }
 

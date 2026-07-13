@@ -2197,6 +2197,7 @@ pub(crate) fn project_search(search: &UiSearch, ctx: ProjectionCtx<'_>) -> UiVie
 const NAV_INDICATOR_WIDTH: f64 = 3.0;
 const NAV_INDICATOR_HEIGHT: f64 = 16.0;
 const NAV_ITEM_ICON_SIZE: f64 = 20.0;
+const NAV_CHILD_INDENT: f64 = 12.0;
 
 /// Project a [`UiNavigationView`] into a sidebar + content layout.
 pub(crate) fn project_navigation_view(nav: &UiNavigationView, ctx: ProjectionCtx<'_>) -> UiView {
@@ -2218,6 +2219,8 @@ pub(crate) fn project_navigation_view(nav: &UiNavigationView, ctx: ProjectionCtx
         sidebar_style.layout.padding = 4.0;
     }
 
+    // Only top-level menu items (direct children of the nav that carry UiNavigationItem).
+    // Nested MenuItems are projected by their parent item when expanded.
     let mut item_views = pairs
         .iter()
         .filter_map(|(entity, view)| {
@@ -2300,7 +2303,7 @@ pub(crate) fn project_navigation_view(nav: &UiNavigationView, ctx: ProjectionCtx
             .height(Dim::Stretch),
     );
 
-    // --- Content area: show only the selected child, flex-grow to fill space ---
+    // --- Content area: selected leaf index maps to content children ---
     let content: UiView = content_views
         .get(nav.selected)
         .cloned()
@@ -2347,33 +2350,61 @@ pub(crate) fn project_navigation_view(nav: &UiNavigationView, ctx: ProjectionCtx
 }
 
 /// Project a single ECS-backed sidebar item for [`UiNavigationView`].
+///
+/// Parents (with nested MenuItems) toggle expand/collapse and optionally show
+/// children. Leaves select content by leaf index.
 pub(crate) fn project_navigation_item(item: &UiNavigationItem, ctx: ProjectionCtx<'_>) -> UiView {
+    use crate::components::navigation_view::{
+        first_leaf_index_for_path, leaf_index_for_path, navigation_item_at, navigation_item_path,
+        subtree_contains_leaf,
+    };
+
     let Some(nav) = ctx.world.get::<UiNavigationView>(item.nav) else {
         return Arc::new(label(""));
     };
-    let Some(nav_item) = nav.items.get(item.index) else {
+    let Some(path) = navigation_item_path(ctx.world, ctx.entity) else {
+        return Arc::new(label(""));
+    };
+    let Some(nav_item) = navigation_item_at(&nav.items, &path) else {
         return Arc::new(label(""));
     };
 
-    let is_active = item.index == nav.selected;
+    // Clone data needed after we drop the nav borrow for child projection.
+    let label_text = nav_item.label.clone();
+    let icon = nav_item.icon;
+    let is_leaf = nav_item.is_leaf();
+    let is_expanded = nav_item.is_expanded;
     let pane_open = nav.is_pane_open;
-    let mut style = if is_active {
+    let selected = nav.selected;
+    let depth = path.len().saturating_sub(1);
+    let leaf_index = leaf_index_for_path(&nav.items, &path);
+    let first_leaf = first_leaf_index_for_path(&nav.items, &path);
+
+    // Active leaf: exact selection. Parents with a selected descendant only affect
+    // optional chrome (chevron stays); the accent indicator is leaf-only.
+    let is_active_leaf = leaf_index == Some(selected);
+    let _is_active_parent = !is_leaf
+        && first_leaf.is_some_and(|first| {
+            let mut next = first;
+            subtree_contains_leaf(nav_item, selected, &mut next)
+        });
+
+    let mut style = if is_active_leaf {
         resolve_style_for_entity_classes(ctx.world, ctx.entity, ["nav.item", "nav.item.active"])
     } else {
         resolve_style_for_entity_classes(ctx.world, ctx.entity, ["nav.item"])
     };
 
-    // Smooth background transition for active item switching.
-    if is_active && style.transition.is_none() {
+    if is_active_leaf && style.transition.is_none() {
         style.transition = Some(crate::styling::StyleTransition {
             duration: 0.15,
             easing: None,
         });
     }
 
-    // Left selection indicator — WinUI NavigationView vertical accent bar.
+    // Left selection indicator — only solid for the active *leaf*.
     let mut indicator_style = resolve_style_for_classes(ctx.world, ["nav.item.indicator"]);
-    if !is_active {
+    if !is_active_leaf {
         indicator_style.colors.bg = indicator_style
             .colors
             .bg
@@ -2390,7 +2421,23 @@ pub(crate) fn project_navigation_item(item: &UiNavigationItem, ctx: ProjectionCt
         &indicator_style,
     ));
 
-    let icon_view: Option<UiView> = nav_item.icon.map(|icon| -> UiView {
+    // Expand/collapse chevron for parents (WinUI NavigationViewItem chevron).
+    let chevron: Option<UiView> = (!is_leaf && pane_open).then(|| {
+        let chevron_style = resolve_style_for_classes(ctx.world, ["nav.item.chevron"]);
+        let color = chevron_style
+            .colors
+            .text
+            .or(style.colors.text)
+            .unwrap_or(Color::WHITE);
+        let icon = if is_expanded {
+            VectorIcon::ChevronDown
+        } else {
+            VectorIcon::ChevronRight
+        };
+        vector_icon(icon, 10.0, color)
+    });
+
+    let icon_view: Option<UiView> = icon.map(|icon| -> UiView {
         let mut icon_style = ResolvedStyle::default();
         icon_style.colors.text = style.colors.text;
         icon_style.text.size = style.text.size.max(14.0);
@@ -2402,24 +2449,26 @@ pub(crate) fn project_navigation_item(item: &UiNavigationItem, ctx: ProjectionCt
         ) as UiView
     });
 
-    // Compact pane: icon only (or first-letter fallback when no icon is set).
-    let content: UiView = if pane_open {
-        let label_view: UiView =
-            Arc::new(apply_label_style(label(nav_item.label.clone()), &style));
+    // Compact pane: icon only (or first-letter fallback).
+    let label_content: UiView = if pane_open {
+        let label_view: UiView = Arc::new(apply_label_style(label(label_text.clone()), &style));
+        let mut parts = Vec::new();
         if let Some(icon) = icon_view {
-            Arc::new(
-                flex_row(vec![icon.into_any_flex(), label_view.into_any_flex()])
-                    .cross_axis_alignment(CrossAxisAlignment::Center)
-                    .gap(Length::px(8.0)),
-            )
-        } else {
-            label_view
+            parts.push(icon.into_any_flex());
         }
+        parts.push(flex_item(label_view, 1.0).into());
+        if let Some(chevron) = chevron {
+            parts.push(chevron.into_any_flex());
+        }
+        Arc::new(
+            flex_row(parts)
+                .cross_axis_alignment(CrossAxisAlignment::Center)
+                .gap(Length::px(8.0)),
+        )
     } else if let Some(icon) = icon_view {
         icon
     } else {
-        let letter = nav_item
-            .label
+        let letter = label_text
             .chars()
             .next()
             .map(|c| c.to_string())
@@ -2427,31 +2476,101 @@ pub(crate) fn project_navigation_item(item: &UiNavigationItem, ctx: ProjectionCt
         Arc::new(apply_label_style(label(letter), &style))
     };
 
-    // Keep the indicator rail reserved so active/inactive items share layout.
-    // Compact mode still left-aligns inside the button so the indicator stays
-    // on the leading edge of the rail.
-    let row = flex_row(vec![
+    let indent = if pane_open {
+        depth as f64 * NAV_CHILD_INDENT
+    } else {
+        0.0
+    };
+    let indent_spacer: Option<UiView> = (indent > 0.0).then(|| {
+        Arc::new(
+            sized_box(label(""))
+                .width(Dim::Fixed(Length::px(indent)))
+                .height(Dim::Fixed(Length::px(1.0))),
+        ) as UiView
+    });
+
+    let mut row_parts = Vec::new();
+    if let Some(spacer) = indent_spacer {
+        row_parts.push(spacer.into_any_flex());
+    }
+    row_parts.push(
         flex_col(vec![indicator.into_any_flex()])
             .main_axis_alignment(MainAxisAlignment::Center)
             .cross_axis_alignment(CrossAxisAlignment::Center)
             .into_any_flex(),
-        flex_item(content, 1.0).into(),
-    ])
-    .main_axis_alignment(MainAxisAlignment::Start)
-    .cross_axis_alignment(CrossAxisAlignment::Center)
-    .gap(Length::px(if pane_open { 8.0 } else { 4.0 }));
+    );
+    row_parts.push(flex_item(label_content, 1.0).into());
 
-    Arc::new(apply_direct_widget_style(
-        button_with_child_view(
-            ctx.entity,
-            WidgetUiAction::SelectNavigationItem {
-                nav: item.nav,
-                index: item.index,
-            },
-            row,
-        ),
+    let row = flex_row(row_parts)
+        .main_axis_alignment(MainAxisAlignment::Start)
+        .cross_axis_alignment(CrossAxisAlignment::Center)
+        .gap(Length::px(if pane_open { 8.0 } else { 4.0 }));
+
+    let action = if is_leaf {
+        WidgetUiAction::SelectNavigationItem {
+            nav: item.nav,
+            index: leaf_index.unwrap_or(0),
+        }
+    } else {
+        WidgetUiAction::ToggleNavigationItemExpand {
+            nav: item.nav,
+            item: ctx.entity,
+        }
+    };
+
+    let header: UiView = Arc::new(apply_direct_widget_style(
+        button_with_child_view(ctx.entity, action, row),
         &style,
-    ))
+    ));
+
+    // Nested MenuItems: when expanded, append child item projections.
+    if !is_leaf && is_expanded {
+        let mut child_slots = ctx
+            .world
+            .get::<Children>(ctx.entity)
+            .map(|children| {
+                children
+                    .iter()
+                    .copied()
+                    .filter_map(|child| {
+                        ctx.world
+                            .get::<UiNavigationItem>(child)
+                            .filter(|child_item| child_item.nav == item.nav)
+                            .map(|child_item| (child_item.index, child))
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+        child_slots.sort_by_key(|(index, _)| *index);
+
+        // Nested MenuItems are projected as children of this item entity.
+        let child_views: Vec<_> = child_slots
+            .into_iter()
+            .filter_map(|(_, child_entity)| {
+                child_entity_views(&ctx)
+                    .into_iter()
+                    .find(|(e, _)| *e == child_entity)
+                    .map(|(_, view)| view.into_any_flex())
+            })
+            .collect();
+
+        if child_views.is_empty() {
+            return header;
+        }
+
+        let mut column = vec![header.into_any_flex()];
+        column.extend(child_views);
+        return Arc::new(
+            flex_col(column).gap(Length::px(
+                resolve_style_for_classes(ctx.world, ["nav.sidebar"])
+                    .layout
+                    .gap
+                    .max(0.0),
+            )),
+        );
+    }
+
+    header
 }
 
 // ---------------------------------------------------------------------------
