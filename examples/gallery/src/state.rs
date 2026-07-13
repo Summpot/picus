@@ -1,20 +1,22 @@
 //! Gallery state resources, page enumeration, and category groupings.
 //!
-//! This module defines the `GalleryPage` enum (mapping to Fluent UI's component categories),
-//! the `GalleryRuntime` resource that stores entity references for interactive
-//! controls across pages.
-//!
-//! Inspired by the Fluent UI v9 documentation sidebar navigation pattern where components
-//! are organized under category headings.
+//! Mirrors the WinUI Gallery model: the sidebar lists individual controls
+//! (one navigation item per component), grouped under category headings for
+//! documentation/navigation metadata. Each [`GalleryPage`] maps to a single
+//! control showcase page.
 
 use bevy_ecs::prelude::*;
 use picus::{FluentIcon, ToastKind};
 
-/// Marks the Window/Menu page's theme-backed native material picker.
+/// Marks the Window Backdrop page's theme-backed native material picker.
 #[derive(Component, Debug, Clone, Copy, Default)]
 pub struct GalleryBackdropPicker;
 
-/// A sidebar category heading that groups related pages.
+/// Marks the I18n page locale combo so events can switch the active bundle.
+#[derive(Component, Debug, Clone, Copy, Default)]
+pub struct GalleryLocaleCombo;
+
+/// A sidebar category heading that groups related control pages.
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct NavCategory {
@@ -23,163 +25,376 @@ pub struct NavCategory {
     pub page_count: usize,
 }
 
-/// Enum listing all gallery pages, corresponding to Fluent UI component categories.
+/// One gallery page = one Picus component (WinUI Gallery style).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GalleryPage {
-    Buttons,
-    Inputs,
-    Selection,
-    WindowMenu,
-    MessageBox,
-    Lists,
-    GridView,
-    Panels,
-    Layout,
-    Typography,
-    Media,
-    Shapes,
+    // Basic Input
+    Button,
+    ToggleSwitch,
+    CheckBox,
+    RadioButton,
+    Slider,
+    ComboBox,
+    ColorPicker,
+    DatePicker,
+    NumberBox,
+    // Text
+    TextBox,
+    PasswordBox,
+    MultiLineTextBox,
+    // Collections
+    ListView,
+    TreeView,
+    Table,
+    DataTable,
+    // Menus & window
+    MenuBar,
+    TitleBar,
+    WindowBackdrop,
+    // Status & info
+    ProgressBar,
+    Spinner,
+    ToolTip,
+    // Dialogs & flyouts
+    Dialog,
+    Toast,
+    ContextMenu,
+    Popover,
+    // Layout
+    StackPanel,
+    Grid,
+    Responsive,
+    GroupBox,
+    SplitPane,
+    TabBar,
+    Canvas,
+    // Media & design
+    Image,
     Icons,
-    Transitions,
-    Overlay,
+    Shapes,
+    Brushes,
+    Typography,
+    Markdown,
+    Theme,
     I18n,
 }
 
 impl GalleryPage {
-    /// All gallery pages in display order.
-    pub const ALL: [Self; 16] = [
-        Self::Buttons,
-        Self::Inputs,
-        Self::Selection,
-        Self::WindowMenu,
-        Self::MessageBox,
-        Self::Lists,
-        Self::GridView,
-        Self::Panels,
-        Self::Layout,
-        Self::Typography,
-        Self::I18n,
-        Self::Media,
-        Self::Shapes,
+    /// All gallery pages in display order (matches WinUI-style control list).
+    pub const ALL: [Self; 41] = [
+        // Basic Input
+        Self::Button,
+        Self::ToggleSwitch,
+        Self::CheckBox,
+        Self::RadioButton,
+        Self::Slider,
+        Self::ComboBox,
+        Self::ColorPicker,
+        Self::DatePicker,
+        Self::NumberBox,
+        // Text
+        Self::TextBox,
+        Self::PasswordBox,
+        Self::MultiLineTextBox,
+        // Collections
+        Self::ListView,
+        Self::TreeView,
+        Self::Table,
+        Self::DataTable,
+        // Menus & window
+        Self::MenuBar,
+        Self::TitleBar,
+        Self::WindowBackdrop,
+        // Status & info
+        Self::ProgressBar,
+        Self::Spinner,
+        Self::ToolTip,
+        // Dialogs & flyouts
+        Self::Dialog,
+        Self::Toast,
+        Self::ContextMenu,
+        Self::Popover,
+        // Layout
+        Self::StackPanel,
+        Self::Grid,
+        Self::Responsive,
+        Self::GroupBox,
+        Self::SplitPane,
+        Self::TabBar,
+        Self::Canvas,
+        // Media & design
+        Self::Image,
         Self::Icons,
-        Self::Transitions,
-        Self::Overlay,
+        Self::Shapes,
+        Self::Brushes,
+        Self::Typography,
+        Self::Markdown,
+        Self::Theme,
+        Self::I18n,
     ];
 
-    /// Sidebar category groups — matches the Fluent UI pattern of
-    /// grouping related docs under a section heading.
+    /// Sidebar category groups — WinUI Gallery-style section headings.
     #[allow(dead_code)]
     pub const CATEGORIES: &'static [NavCategory] = &[
         NavCategory {
-            label: "Input",
+            label: "Basic Input",
             first_page_index: 0,
+            page_count: 9,
+        },
+        NavCategory {
+            label: "Text",
+            first_page_index: 9,
             page_count: 3,
         },
         NavCategory {
-            label: "Navigation & Lists",
-            first_page_index: 3,
+            label: "Collections",
+            first_page_index: 12,
             page_count: 4,
         },
         NavCategory {
-            label: "Layout & Panels",
-            first_page_index: 7,
+            label: "Menus & Window",
+            first_page_index: 16,
+            page_count: 3,
+        },
+        NavCategory {
+            label: "Status & Info",
+            first_page_index: 19,
+            page_count: 3,
+        },
+        NavCategory {
+            label: "Dialogs & Flyouts",
+            first_page_index: 22,
             page_count: 4,
         },
         NavCategory {
-            label: "Display",
-            first_page_index: 11,
-            page_count: 4,
+            label: "Layout",
+            first_page_index: 26,
+            page_count: 7,
         },
         NavCategory {
-            label: "Overlay & Motion",
-            first_page_index: 15,
-            page_count: 1,
+            label: "Media & Design",
+            first_page_index: 33,
+            page_count: 8,
         },
     ];
 
     /// Short description shown as page intro.
     pub const fn description(self) -> &'static str {
         match self {
-            Self::Buttons => {
-                "Buttons, toggles, switches, checkboxes, sliders, and progress indicators for user actions and settings."
+            Self::Button => {
+                "A button initiates an action. Show default, accent, flat, danger, and disabled variants."
             }
-            Self::Inputs => {
-                "Text input, password, multiline text, combo box, slider, and tooltip controls for data entry."
+            Self::ToggleSwitch => {
+                "A toggle switch represents a physical switch that allows users to turn things on or off."
             }
-            Self::Selection => {
-                "Checkbox groups, radio buttons, color pickers, date pickers, combo boxes, and list views for making selections."
+            Self::CheckBox => {
+                "A checkbox allows the user to select a true (checked) or false (unchecked) option, including an indeterminate state."
             }
-            Self::WindowMenu => "Menu bars with dropdown panels for command-driven navigation.",
-            Self::MessageBox => {
-                "Modal dialogs and message boxes for alerts, confirmations, and prompts."
+            Self::RadioButton => {
+                "A radio button allows users to select one option from a group of mutually exclusive choices."
             }
-            Self::Lists => "List views, tree views, and data tables for structured content.",
-            Self::GridView => "Data tables with sortable columns, selection, and template columns.",
-            Self::Panels => {
-                "Group boxes, split panes, tab bars, and popover containers for organizing content."
+            Self::Slider => {
+                "A slider is a control that lets the user select from a range of values by moving a thumb control along a track."
             }
-            Self::Layout => {
-                "Flex layouts, grid layouts, and canvas/absolute positioning for page structure."
+            Self::ComboBox => {
+                "A combo box presents a list of items in a drop-down; the selected item is shown as the control value."
+            }
+            Self::ColorPicker => {
+                "A color picker lets the user select a color value, including optional alpha."
+            }
+            Self::DatePicker => {
+                "A date picker lets the user pick a calendar date through an anchored month grid."
+            }
+            Self::NumberBox => {
+                "A number box (numeric up/down) lets the user enter or adjust a numeric value with step and precision."
+            }
+            Self::TextBox => "A text box is a single-line text input for free-form string entry.",
+            Self::PasswordBox => {
+                "A password box is a single-line text input that obscures the typed value."
+            }
+            Self::MultiLineTextBox => {
+                "A multi-line text box accepts longer notes and wraps text across lines."
+            }
+            Self::ListView => {
+                "A list view presents a scrollable collection of items with single or multi selection."
+            }
+            Self::TreeView => {
+                "A tree view displays hierarchical data with expandable nodes."
+            }
+            Self::Table => {
+                "A table presents structured rows and columns for compact tabular data."
+            }
+            Self::DataTable => {
+                "A data table supports typed columns, selection, and image cell templates."
+            }
+            Self::MenuBar => {
+                "A menu bar hosts top-level menus that open dropdown command panels."
+            }
+            Self::TitleBar => {
+                "A custom title bar draws window chrome with minimize, maximize, and close actions."
+            }
+            Self::WindowBackdrop => {
+                "Window backdrop selects the native material (None, Mica, Acrylic) and theme-aware fills."
+            }
+            Self::ProgressBar => {
+                "A progress bar shows determinate completion or indeterminate activity."
+            }
+            Self::Spinner => {
+                "A spinner indicates ongoing work without a known completion percentage."
+            }
+            Self::ToolTip => {
+                "A tooltip shows a short description when the pointer hovers a control."
+            }
+            Self::Dialog => {
+                "A dialog is a modal overlay with a title, body, and dismiss action."
+            }
+            Self::Toast => {
+                "A toast is a transient or persistent notification on an overlay surface."
+            }
+            Self::ContextMenu => {
+                "A context menu opens a command list when the user right-clicks a control."
+            }
+            Self::Popover => {
+                "A popover places a floating panel at an anchor or an explicit pixel origin."
+            }
+            Self::StackPanel => {
+                "A stack panel (flex row/column) lays out children along a single axis with gap."
+            }
+            Self::Grid => {
+                "A grid places children into rows and columns with star, auto, and pixel tracks."
+            }
+            Self::Responsive => {
+                "Responsive row, grid, and visibility helpers adapt layout at width breakpoints."
+            }
+            Self::GroupBox => {
+                "A group box nests related controls under a labeled grouping surface."
+            }
+            Self::SplitPane => {
+                "A split pane divides content into resizable primary and secondary regions."
+            }
+            Self::TabBar => {
+                "A tab bar switches between sibling content panels by selected tab."
+            }
+            Self::Canvas => {
+                "A canvas draws vector commands and supports absolute child positioning."
+            }
+            Self::Image => {
+                "An image displays bitmap content, including empty fallback placeholders."
+            }
+            Self::Icons => {
+                "Fluent Design icon glyphs using the Segoe Fluent Icons font fallback stack."
+            }
+            Self::Shapes => {
+                "Canvas-drawn primitives such as rectangles, circles, lines, and paths."
+            }
+            Self::Brushes => {
+                "Solid color swatches and linear/radial gradient brush samples on canvas."
             }
             Self::Typography => {
-                "Text scale, CJK/Unicode support, and text wrapping in various sizes and weights."
+                "Text scale samples from hero through caption, plus wrapping behavior."
             }
-            Self::Media => "Images, canvas drawings, and media placeholders for visual content.",
-            Self::Shapes => "Canvas-drawn primitives, color swatches, and shape samples.",
-            Self::Icons => {
-                "Fluent Design icon glyphs with Segoe Fluent Icons font fallback, displayed in a gallery grid."
+            Self::Markdown => {
+                "Markdown rendering for headings, lists, tables, emphasis, and fenced code."
             }
-            Self::Transitions => {
-                "Theme transitions, spinners, progress bars, and motion indicators."
-            }
-            Self::Overlay => {
-                "Dialogs, toasts, tooltips, combo overlays, and anchored popup surfaces."
+            Self::Theme => {
+                "Theme variant switching and interactive color transition samples."
             }
             Self::I18n => {
-                "Internationalization, locale switching, and CJK font fallback with Fluent bundles."
+                "Locale switching, Fluent bundle keys, and CJK font fallback samples."
             }
         }
     }
 
-    /// Human-readable label for this page, used in navigation and titles.
+    /// Human-readable label for this page (sidebar + title).
     pub const fn label(self) -> &'static str {
         match self {
-            Self::Buttons => "Buttons",
-            Self::Inputs => "Inputs",
-            Self::Selection => "Selection",
-            Self::WindowMenu => "Window/Menu",
-            Self::MessageBox => "MessageBox",
-            Self::Lists => "Lists",
-            Self::GridView => "GridView",
-            Self::Panels => "Panels",
-            Self::Layout => "Layout",
-            Self::Typography => "Typography",
-            Self::Media => "Media",
-            Self::Shapes => "Shapes",
+            Self::Button => "Button",
+            Self::ToggleSwitch => "ToggleSwitch",
+            Self::CheckBox => "CheckBox",
+            Self::RadioButton => "RadioButton",
+            Self::Slider => "Slider",
+            Self::ComboBox => "ComboBox",
+            Self::ColorPicker => "ColorPicker",
+            Self::DatePicker => "DatePicker",
+            Self::NumberBox => "NumberBox",
+            Self::TextBox => "TextBox",
+            Self::PasswordBox => "PasswordBox",
+            Self::MultiLineTextBox => "MultiLineTextBox",
+            Self::ListView => "ListView",
+            Self::TreeView => "TreeView",
+            Self::Table => "Table",
+            Self::DataTable => "DataTable",
+            Self::MenuBar => "MenuBar",
+            Self::TitleBar => "TitleBar",
+            Self::WindowBackdrop => "WindowBackdrop",
+            Self::ProgressBar => "ProgressBar",
+            Self::Spinner => "Spinner",
+            Self::ToolTip => "ToolTip",
+            Self::Dialog => "Dialog",
+            Self::Toast => "Toast",
+            Self::ContextMenu => "ContextMenu",
+            Self::Popover => "Popover",
+            Self::StackPanel => "StackPanel",
+            Self::Grid => "Grid",
+            Self::Responsive => "Responsive",
+            Self::GroupBox => "GroupBox",
+            Self::SplitPane => "SplitPane",
+            Self::TabBar => "TabBar",
+            Self::Canvas => "Canvas",
+            Self::Image => "Image",
             Self::Icons => "Icons",
-            Self::Transitions => "Transitions",
-            Self::Overlay => "Overlay",
+            Self::Shapes => "Shapes",
+            Self::Brushes => "Brushes",
+            Self::Typography => "Typography",
+            Self::Markdown => "Markdown",
+            Self::Theme => "Theme",
             Self::I18n => "I18n",
         }
     }
 
-    /// Icon glyph for this page (used in the sidebar nav).
+    /// Icon glyph for this page (sidebar nav).
     pub const fn icon(self) -> FluentIcon {
         match self {
-            Self::Buttons => FluentIcon::TouchPointer,
-            Self::Inputs => FluentIcon::Character,
-            Self::Selection => FluentIcon::Checkbox,
-            Self::WindowMenu => FluentIcon::GlobalNavigationButton,
-            Self::MessageBox => FluentIcon::Message,
-            Self::Lists => FluentIcon::List,
-            Self::GridView => FluentIcon::ViewAll,
-            Self::Panels => FluentIcon::DockLeft,
-            Self::Layout => FluentIcon::AllApps,
-            Self::Typography => FluentIcon::Font,
-            Self::Media => FluentIcon::Pictures,
-            Self::Shapes => FluentIcon::Placeholder,
+            Self::Button => FluentIcon::TouchPointer,
+            Self::ToggleSwitch => FluentIcon::Checkbox,
+            Self::CheckBox => FluentIcon::Checkbox,
+            Self::RadioButton => FluentIcon::Checkmark,
+            Self::Slider => FluentIcon::Settings,
+            Self::ComboBox => FluentIcon::ChevronDown,
+            Self::ColorPicker => FluentIcon::Edit,
+            Self::DatePicker => FluentIcon::Clock,
+            Self::NumberBox => FluentIcon::Add,
+            Self::TextBox => FluentIcon::Character,
+            Self::PasswordBox => FluentIcon::Contact,
+            Self::MultiLineTextBox => FluentIcon::Character,
+            Self::ListView => FluentIcon::List,
+            Self::TreeView => FluentIcon::Folder,
+            Self::Table => FluentIcon::ViewAll,
+            Self::DataTable => FluentIcon::ViewAll,
+            Self::MenuBar => FluentIcon::GlobalNavigationButton,
+            Self::TitleBar => FluentIcon::AllApps,
+            Self::WindowBackdrop => FluentIcon::Brightness,
+            Self::ProgressBar => FluentIcon::Sync,
+            Self::Spinner => FluentIcon::Sync,
+            Self::ToolTip => FluentIcon::Info,
+            Self::Dialog => FluentIcon::Message,
+            Self::Toast => FluentIcon::Info,
+            Self::ContextMenu => FluentIcon::More,
+            Self::Popover => FluentIcon::Map,
+            Self::StackPanel => FluentIcon::DockLeft,
+            Self::Grid => FluentIcon::ViewAll,
+            Self::Responsive => FluentIcon::AllApps,
+            Self::GroupBox => FluentIcon::Folder,
+            Self::SplitPane => FluentIcon::DockLeft,
+            Self::TabBar => FluentIcon::More,
+            Self::Canvas => FluentIcon::Edit,
+            Self::Image => FluentIcon::Pictures,
             Self::Icons => FluentIcon::AllApps,
-            Self::Transitions => FluentIcon::Sync,
-            Self::Overlay => FluentIcon::Map,
+            Self::Shapes => FluentIcon::Placeholder,
+            Self::Brushes => FluentIcon::Edit,
+            Self::Typography => FluentIcon::Font,
+            Self::Markdown => FluentIcon::Character,
+            Self::Theme => FluentIcon::Brightness,
             Self::I18n => FluentIcon::Globe,
         }
     }
@@ -189,7 +404,7 @@ impl GalleryPage {
 ///
 /// Attached to showcase buttons that only need to echo a toast, dialog, or
 /// transient feedback. The gallery event dispatcher reads this component when
-/// a `BuiltinUiAction::Clicked` does not match a named `GalleryRuntime` entity.
+/// a `BuiltinUiAction::Clicked` is received.
 #[derive(Component, Debug, Clone)]
 pub enum GalleryButtonAction {
     /// Spawn a toast notification with the given message, kind, and duration
@@ -205,20 +420,10 @@ pub enum GalleryButtonAction {
     Info { message: String },
 }
 
-/// Runtime entity references for interactive controls across all pages.
+/// Runtime entity references for gallery shell controls.
 #[derive(Resource, Debug, Clone)]
 pub struct GalleryRuntime {
     pub nav_view: Entity,
     #[allow(dead_code)]
     pub search_input: Entity,
-    pub open_dialog_btn: Entity,
-    pub persistent_toast_btn: Entity,
-    pub success_toast_btn: Entity,
-    pub warning_toast_btn: Entity,
-    pub error_toast_btn: Entity,
-    pub prompt_dialog_btn: Entity,
-    pub native_message_btn: Entity,
-    pub popover_dialog_btn: Entity,
-    pub burst_placeholder_btn: Entity,
-    pub locale_combo: Entity,
 }

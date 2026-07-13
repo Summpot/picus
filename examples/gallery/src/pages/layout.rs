@@ -1,21 +1,19 @@
-use crate::helpers::{card, class, grid, sample_canvas};
+//! Layout control pages (one component per page).
+
+use crate::helpers::{card, class, grid, note, sample_canvas};
+use crate::state::GalleryButtonAction;
 use bevy_ecs::{hierarchy::ChildOf, prelude::*};
 use picus::{
-    UiBadge, UiButton, UiCanvasPosition, UiFlexRow, UiGrid, UiGridCell, UiGridLength, UiLabel,
-    UiResponsiveGrid, UiResponsiveRow, UiTextInput, UiVisibleResponsive,
+    UiBadge, UiButton, UiCanvasPosition, UiCheckbox, UiFlexColumn, UiFlexRow, UiGrid, UiGridCell,
+    UiGridLength, UiGroupBox, UiLabel, UiListView, UiMultilineTextInput, UiResponsiveGrid,
+    UiResponsiveRow, UiSplitPane, UiTabBar, UiTextInput, UiVisibleResponsive,
     scene::{CommandsSceneExt, bsn, template_value},
 };
 
-/// StackPanel/Flex, Grid, and Canvas/Absolute layout component examples.
-///
-/// Corresponds to Fluent UI's Stack, Grid layout primitives, and positioning.
-pub fn spawn_layout_page(commands: &mut Commands, parent: Entity) -> Entity {
-    let g = grid(commands, parent, 2);
+pub fn spawn_stack_panel_page(commands: &mut Commands, parent: Entity) {
+    let g = grid(commands, parent, 1);
 
-    // ------------------------------------------------------------------
-    // 1. Flex row (static)
-    // ------------------------------------------------------------------
-    let flex = card(commands, parent, "StackPanel / Flex");
+    let flex = card(commands, g, "Horizontal stack (flex row)");
     let row = commands
         .spawn_scene(bsn! {
             UiFlexRow
@@ -38,94 +36,17 @@ pub fn spawn_layout_page(commands: &mut Commands, parent: Entity) -> Entity {
         template_value(UiTextInput::new("Horizontal row"))
         ChildOf(flex)
     });
+    note(
+        commands,
+        flex,
+        "StackPanel maps to UiFlexRow / UiFlexColumn for single-axis layout.",
+    );
+}
 
-    // ------------------------------------------------------------------
-    // 2. Responsive Row — collapses to column below "md" (640px)
-    // ------------------------------------------------------------------
-    let resp_row = card(commands, parent, "Responsive Row (collapses at md)");
-    let collapsing = commands
-        .spawn_scene(bsn! {
-            template_value(UiResponsiveRow::new("md"))
-            template_value(class("responsive.demo"))
-            ChildOf(resp_row)
-        })
-        .id();
-    // Children that will stack vertically on narrow windows
-    commands.spawn_scene(bsn! {
-        template_value(UiLabel::new("Item A — responsive row"))
-        template_value(class("gallery.swatch.blue"))
-        ChildOf(collapsing)
-    });
-    commands.spawn_scene(bsn! {
-        template_value(UiLabel::new("Item B — wraps at md"))
-        template_value(class("gallery.swatch.green"))
-        ChildOf(collapsing)
-    });
-    commands.spawn_scene(bsn! {
-        template_value(UiLabel::new("Item C — collapses"))
-        template_value(class("gallery.swatch.gold"))
-        ChildOf(collapsing)
-    });
-    commands.spawn_scene(bsn! {
-        template_value(UiLabel::new("Resize the window narrower to see these items stack vertically."))
-        template_value(class("gallery.note"))
-        ChildOf(collapsing)
-    });
+pub fn spawn_grid_page(commands: &mut Commands, parent: Entity) {
+    let g = grid(commands, parent, 1);
 
-    // ------------------------------------------------------------------
-    // 3. Responsive Visibility — show/hide at breakpoints
-    // ------------------------------------------------------------------
-    let visibility = card(commands, parent, "Responsive Visibility");
-
-    // Always visible label
-    commands.spawn_scene(bsn! {
-        template_value(UiLabel::new("Always visible on all screens"))
-        ChildOf(visibility)
-    });
-
-    // Only visible on md and larger (≥640px)
-    let show_md_up = commands
-        .spawn_scene(bsn! {
-            template_value(UiVisibleResponsive::show_from("md"))
-            ChildOf(visibility)
-        })
-        .id();
-    commands.spawn_scene(bsn! {
-        template_value(UiLabel::new("👁 Visible at md+ (≥640px)"))
-        template_value(class("gallery.swatch.green"))
-        ChildOf(show_md_up)
-    });
-
-    // Only visible below lg (<1024px)
-    let show_below_lg = commands
-        .spawn_scene(bsn! {
-            template_value(UiVisibleResponsive::show_until("lg"))
-            ChildOf(visibility)
-        })
-        .id();
-    commands.spawn_scene(bsn! {
-        template_value(UiLabel::new("👁 Hidden at lg+ (disappears ≥1024px)"))
-        template_value(class("gallery.swatch.gold"))
-        ChildOf(show_below_lg)
-    });
-
-    // Only visible on small screens (≥sm but <md = 480px–639px)
-    let show_sm_only = commands
-        .spawn_scene(bsn! {
-            template_value(UiVisibleResponsive::range("sm", "md"))
-            ChildOf(visibility)
-        })
-        .id();
-    commands.spawn_scene(bsn! {
-        template_value(UiLabel::new("👁 Small screens only (480–639px)"))
-        template_value(class("gallery.swatch.blue"))
-        ChildOf(show_sm_only)
-    });
-
-    // ------------------------------------------------------------------
-    // 4. Grid (static with tracks)
-    // ------------------------------------------------------------------
-    let grid_card = card(commands, g, "Grid (static)");
+    let grid_card = card(commands, g, "Static tracks");
     let layout_grid = commands
         .spawn_scene(bsn! {
             template_value(
@@ -163,19 +84,89 @@ pub fn spawn_layout_page(commands: &mut Commands, parent: Entity) -> Entity {
         template_value(UiGridCell::new(0, 1).with_span(3, 1))
         ChildOf(layout_grid)
     });
+}
 
-    // ------------------------------------------------------------------
-    // 5. Responsive Grid — changes columns at breakpoints
-    // ------------------------------------------------------------------
-    let resp_grid_card = card(commands, g, "Responsive Grid (columns at breakpoints)");
+pub fn spawn_responsive_page(commands: &mut Commands, parent: Entity) {
+    // Responsive row — collapses to column below "md" (640px)
+    let resp_row = card(commands, parent, "Responsive row (collapses at md)");
+    let collapsing = commands
+        .spawn_scene(bsn! {
+            template_value(UiResponsiveRow::new("md"))
+            template_value(class("responsive.demo"))
+            ChildOf(resp_row)
+        })
+        .id();
+    commands.spawn_scene(bsn! {
+        template_value(UiLabel::new("Item A — responsive row"))
+        template_value(class("gallery.swatch.blue"))
+        ChildOf(collapsing)
+    });
+    commands.spawn_scene(bsn! {
+        template_value(UiLabel::new("Item B — wraps at md"))
+        template_value(class("gallery.swatch.green"))
+        ChildOf(collapsing)
+    });
+    commands.spawn_scene(bsn! {
+        template_value(UiLabel::new("Item C — collapses"))
+        template_value(class("gallery.swatch.gold"))
+        ChildOf(collapsing)
+    });
+    commands.spawn_scene(bsn! {
+        template_value(UiLabel::new("Resize the window narrower to see these items stack vertically."))
+        template_value(class("gallery.note"))
+        ChildOf(collapsing)
+    });
+
+    // Responsive visibility
+    let visibility = card(commands, parent, "Responsive visibility");
+    commands.spawn_scene(bsn! {
+        template_value(UiLabel::new("Always visible on all screens"))
+        ChildOf(visibility)
+    });
+    let show_md_up = commands
+        .spawn_scene(bsn! {
+            template_value(UiVisibleResponsive::show_from("md"))
+            ChildOf(visibility)
+        })
+        .id();
+    commands.spawn_scene(bsn! {
+        template_value(UiLabel::new("Visible at md+ (≥640px)"))
+        template_value(class("gallery.swatch.green"))
+        ChildOf(show_md_up)
+    });
+    let show_below_lg = commands
+        .spawn_scene(bsn! {
+            template_value(UiVisibleResponsive::show_until("lg"))
+            ChildOf(visibility)
+        })
+        .id();
+    commands.spawn_scene(bsn! {
+        template_value(UiLabel::new("Hidden at lg+ (disappears ≥1024px)"))
+        template_value(class("gallery.swatch.gold"))
+        ChildOf(show_below_lg)
+    });
+    let show_sm_only = commands
+        .spawn_scene(bsn! {
+            template_value(UiVisibleResponsive::range("sm", "md"))
+            ChildOf(visibility)
+        })
+        .id();
+    commands.spawn_scene(bsn! {
+        template_value(UiLabel::new("Small screens only (480–639px)"))
+        template_value(class("gallery.swatch.blue"))
+        ChildOf(show_sm_only)
+    });
+
+    // Responsive grid
+    let resp_grid_card = card(commands, parent, "Responsive grid (columns at breakpoints)");
     let resp_grid = commands
         .spawn_scene(bsn! {
             template_value(
                 UiResponsiveGrid::new(
                     vec![
-                        ("sm", 1), // <480px  → 1 column
-                        ("md", 2), // 480-639 → 2 columns (note: sm is 480, md is 640)
-                        ("lg", 4), // 640+    → 4 columns
+                        ("sm", 1),
+                        ("md", 2),
+                        ("lg", 4),
                     ],
                     1,
                 )
@@ -185,46 +176,133 @@ pub fn spawn_layout_page(commands: &mut Commands, parent: Entity) -> Entity {
             ChildOf(resp_grid_card)
         })
         .id();
-    commands.spawn_scene(bsn! {
-        template_value(UiLabel::new("Cell 1"))
-        template_value(class("gallery.swatch.blue"))
-        template_value(UiGridCell::new(0, 0))
-        ChildOf(resp_grid)
-    });
-    commands.spawn_scene(bsn! {
-        template_value(UiLabel::new("Cell 2"))
-        template_value(class("gallery.swatch.green"))
-        template_value(UiGridCell::new(1, 0))
-        ChildOf(resp_grid)
-    });
-    commands.spawn_scene(bsn! {
-        template_value(UiLabel::new("Cell 3"))
-        template_value(class("gallery.swatch.gold"))
-        template_value(UiGridCell::new(2, 0))
-        ChildOf(resp_grid)
-    });
-    commands.spawn_scene(bsn! {
-        template_value(UiLabel::new("Cell 4"))
-        template_value(class("gallery.swatch.pink"))
-        template_value(UiGridCell::new(3, 0))
-        ChildOf(resp_grid)
-    });
-    commands.spawn_scene(bsn! {
-        template_value(UiLabel::new("Cell 5"))
-        template_value(class("gallery.swatch.purple"))
-        template_value(UiGridCell::new(4, 0))
-        ChildOf(resp_grid)
-    });
+    for (i, (label, swatch)) in [
+        ("Cell 1", "gallery.swatch.blue"),
+        ("Cell 2", "gallery.swatch.green"),
+        ("Cell 3", "gallery.swatch.gold"),
+        ("Cell 4", "gallery.swatch.pink"),
+        ("Cell 5", "gallery.swatch.purple"),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        commands.spawn_scene(bsn! {
+            template_value(UiLabel::new(label))
+            template_value(class(swatch))
+            template_value(UiGridCell::new(i as u32, 0))
+            ChildOf(resp_grid)
+        });
+    }
     commands.spawn_scene(bsn! {
         template_value(UiLabel::new("Resize window: 1 col <480px, 2 cols ≥480, 4 cols ≥640"))
         template_value(class("gallery.note"))
         ChildOf(resp_grid)
     });
+}
 
-    // ------------------------------------------------------------------
-    // 6. Canvas / Absolute
-    // ------------------------------------------------------------------
-    let canvas_panel = card(commands, g, "Canvas / Absolute");
+pub fn spawn_group_box_page(commands: &mut Commands, parent: Entity) {
+    let g = grid(commands, parent, 1);
+
+    let group_box = card(commands, g, "Nested group");
+    let inner = commands
+        .spawn_scene(bsn! {
+            template_value(UiGroupBox::new("Nested group"))
+            template_value(class("gallery.group_box"))
+            ChildOf(group_box)
+        })
+        .id();
+    commands.spawn_scene(bsn! {
+        template_value(UiLabel::new("Labels and controls can be grouped."))
+        ChildOf(inner)
+    });
+    commands.spawn_scene(bsn! {
+        template_value(UiCheckbox::new("Inside a group", true))
+        ChildOf(inner)
+    });
+    note(
+        commands,
+        group_box,
+        "UiGroupBox is a Picus-owned grouping helper; the gallery supplies local styling.",
+    );
+}
+
+pub fn spawn_split_pane_page(commands: &mut Commands, parent: Entity) {
+    let g = grid(commands, parent, 1);
+
+    let split = card(commands, g, "Resizable split");
+    let pane = commands
+        .spawn_scene(bsn! {
+            template_value(UiSplitPane::new(0.42))
+            ChildOf(split)
+        })
+        .id();
+    let left = commands
+        .spawn_scene(bsn! {
+            UiFlexColumn
+            template_value(class("gallery.split_panel"))
+            ChildOf(pane)
+        })
+        .id();
+    commands.spawn_scene(bsn! {
+        template_value(UiLabel::new("Left panel"))
+        ChildOf(left)
+    });
+    commands.spawn_scene(bsn! {
+        template_value(
+            UiListView::new(["One", "Two", "Three"]).with_selected(0)
+        )
+        ChildOf(left)
+    });
+    let right = commands
+        .spawn_scene(bsn! {
+            UiFlexColumn
+            template_value(class("gallery.split_panel"))
+            ChildOf(pane)
+        })
+        .id();
+    commands.spawn_scene(bsn! {
+        template_value(UiLabel::new("Right panel"))
+        ChildOf(right)
+    });
+    commands.spawn_scene(bsn! {
+        template_value(UiTextInput::new("Resizable split content"))
+        ChildOf(right)
+    });
+}
+
+pub fn spawn_tab_bar_page(commands: &mut Commands, parent: Entity) {
+    let g = grid(commands, parent, 1);
+
+    let tabs = card(commands, g, "Tab bar");
+    let tab_bar = commands
+        .spawn_scene(bsn! {
+            template_value(UiTabBar::new(["Details", "Settings", "Logs"]))
+            ChildOf(tabs)
+        })
+        .id();
+    commands.spawn_scene(bsn! {
+        template_value(UiLabel::new("Details tab content"))
+        ChildOf(tab_bar)
+    });
+    commands.spawn_scene(bsn! {
+        template_value(UiCheckbox::new("Enable option", true))
+        ChildOf(tab_bar)
+    });
+    commands.spawn_scene(bsn! {
+        template_value(UiMultilineTextInput::new("Log line 1\nLog line 2"))
+        ChildOf(tab_bar)
+    });
+    note(
+        commands,
+        tabs,
+        "Each child of UiTabBar is the content for the corresponding tab index.",
+    );
+}
+
+pub fn spawn_canvas_page(commands: &mut Commands, parent: Entity) {
+    let g = grid(commands, parent, 1);
+
+    let canvas_panel = card(commands, g, "Canvas drawing and absolute children");
     let canvas_size = (320.0, 200.0);
     let demo_canvas = commands
         .spawn_scene(bsn! {
@@ -233,21 +311,27 @@ pub fn spawn_layout_page(commands: &mut Commands, parent: Entity) -> Entity {
             ChildOf(canvas_panel)
         })
         .id();
-    // A child anchored to the right/bottom edge of the canvas.
-    let anchored = commands
-        .spawn_scene(bsn! {
-            template_value(UiLabel::new("↘ right/bottom"))
-            template_value(class("gallery.swatch.gold"))
-            template_value(UiCanvasPosition::default().with_right(8.0).with_bottom(8.0))
-            ChildOf(demo_canvas)
-        })
-        .id();
-    let _ = anchored;
+    commands.spawn_scene(bsn! {
+        template_value(UiLabel::new("right/bottom"))
+        template_value(class("gallery.swatch.gold"))
+        template_value(UiCanvasPosition::default().with_right(8.0).with_bottom(8.0))
+        ChildOf(demo_canvas)
+    });
 
-    commands
+    let confetti = commands
         .spawn_scene(bsn! {
             template_value(UiButton::new("Confetti Placeholder"))
             ChildOf(canvas_panel)
         })
-        .id()
+        .id();
+    commands.entity(confetti).insert(GalleryButtonAction::Toast {
+        message: "Confetti placeholder: animated retained canvas is not public yet.".to_string(),
+        kind: picus::ToastKind::Warning,
+        duration: 3.5,
+    });
+    note(
+        commands,
+        canvas_panel,
+        "UiCanvasPosition anchors children against the canvas size (including right/bottom).",
+    );
 }

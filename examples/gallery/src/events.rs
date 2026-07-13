@@ -13,7 +13,7 @@ use picus::{
     spawn_in_overlay_root,
 };
 
-use crate::state::{GalleryBackdropPicker, GalleryButtonAction, GalleryRuntime};
+use crate::state::{GalleryBackdropPicker, GalleryButtonAction, GalleryLocaleCombo, GalleryRuntime};
 
 /// Drain UI actions and execute the gallery interactions that have visible effects.
 pub fn drain_gallery_events(world: &mut World) {
@@ -36,61 +36,7 @@ pub fn drain_gallery_events(world: &mut World) {
             continue;
         }
 
-        if event.entity == rt.open_dialog_btn {
-            spawn_dialog(
-                world,
-                "Button Dialog",
-                "Demonstrates Picus UiDialog for message boxes.",
-            );
-        } else if event.entity == rt.persistent_toast_btn {
-            spawn_toast(
-                world,
-                "Persistent info toast. Close it manually.",
-                ToastKind::Info,
-                0.0,
-            );
-        } else if event.entity == rt.success_toast_btn {
-            spawn_toast(
-                world,
-                "Selection page success toast.",
-                ToastKind::Success,
-                2.4,
-            );
-        } else if event.entity == rt.warning_toast_btn {
-            spawn_toast(
-                world,
-                "Window/Menu placeholder warning.",
-                ToastKind::Warning,
-                3.2,
-            );
-        } else if event.entity == rt.error_toast_btn {
-            spawn_toast(world, "MessageBox error toast.", ToastKind::Error, 3.2);
-        } else if event.entity == rt.prompt_dialog_btn {
-            spawn_dialog(
-                world,
-                "Prompt Placeholder",
-                "Picus UiDialog does not yet expose an input slot, so the prompt sample is represented here.",
-            );
-        } else if event.entity == rt.native_message_btn {
-            spawn_dialog(
-                world,
-                "Native Hook Placeholder",
-                "Platform-native message hooks are not part of the public Picus runtime API.",
-            );
-        } else if event.entity == rt.popover_dialog_btn {
-            spawn_dialog(
-                world,
-                "Popover Note",
-                "Anchored overlays are implemented by combo boxes, menus, color pickers, date pickers, and tooltips.",
-            );
-        } else if event.entity == rt.burst_placeholder_btn {
-            spawn_toast(
-                world,
-                "Confetti placeholder: animated retained canvas is not public yet.",
-                ToastKind::Warning,
-                3.5,
-            );
-        } else if let Some(action) = world.get::<GalleryButtonAction>(event.entity).cloned() {
+        if let Some(action) = world.get::<GalleryButtonAction>(event.entity).cloned() {
             match action {
                 GalleryButtonAction::Toast {
                     message,
@@ -105,7 +51,7 @@ pub fn drain_gallery_events(world: &mut World) {
                 }
             }
         } else if world
-            .get::<crate::pages::overlay::ManualOverlayMarker>(event.entity)
+            .get::<crate::pages::ManualOverlayMarker>(event.entity)
             .is_some()
         {
             picus::spawn_manual_overlay_at(
@@ -139,7 +85,7 @@ pub fn drain_gallery_events(world: &mut World) {
         .resource_mut::<UiEventQueue>()
         .drain_actions::<UiComboBoxChanged>()
     {
-        if event.entity == rt.locale_combo
+        if world.get::<GalleryLocaleCombo>(event.entity).is_some()
             && let Ok(locale) = event
                 .action
                 .value

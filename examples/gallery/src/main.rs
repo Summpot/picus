@@ -1,9 +1,9 @@
-//! Picus Gallery — Fluent UI-inspired component showcase.
+//! Picus Gallery — WinUI Gallery-style component showcase.
 //!
-//! This example demonstrates all Picus UI components in a navigable gallery,
-//! organized following the Fluent UI documentation pattern where related
-//! components are grouped by category and each component variant is shown
-//! as a standalone example.
+//! This example demonstrates Picus UI components in a navigable gallery.
+//! Each sidebar item opens a single-component page with multiple example
+//! cards for that control's variants — the same structure as
+//! [WinUI Gallery](https://github.com/microsoft/WinUI-Gallery).
 //!
 //! ## Architecture
 //!
@@ -11,23 +11,12 @@
 //! - [`state`] — `GalleryPage` enum, `GalleryRuntime` resource, and `NavCategory`
 //! - [`views`] — shell components and projectors for `GalleryRoot` and `GalleryTopBar`
 //! - [`events`] — Event dispatch for all component interactions
-//! - [`pages`] — 16 page modules, each showcasing a component category
-//!
-//! ## Fluent UI Pattern Mapping
-//!
-//! | Picus Gallery          | Fluent UI                          |
-//! |------------------------|------------------------------------|
-//! | `pages/buttons.rs`     | `Button.stories.tsx` variants      |
-//! | `pages/inputs.rs`      | `TextField`, `ComboBox` examples   |
-//! | `pages/selection.rs`   | `Checkbox`, `Radio` examples       |
-//! | Sidebar nav categories | Fluent UI Storybook sidebar groups |
-//! | Top search bar         | Storybook search                   |
-//! | `gallery.ron` theme    | Fluent UI `makeStyles` tokens      |
+//! - [`pages`] — one showcase page per component, grouped into category modules
 
 use picus::{
     AppI18n, AppPicusExt, InlineStyle, LayoutStyle, NavigationViewItem, PicusPlugin,
-    SyncTextSource, UiAvatar, UiFlexColumn, UiFlexRow, UiLabel, UiNavigationView,
-    UiRoot, UiScrollView, UiSearch, UiThemePicker, avatar_sizes,
+    SyncTextSource, UiAvatar, UiFlexColumn, UiFlexRow, UiLabel, UiNavigationView, UiRoot,
+    UiScrollView, UiSearch, UiThemePicker, avatar_sizes,
     bevy_app::{App, Startup, Update},
     bevy_ecs::{hierarchy::ChildOf, prelude::*},
     run_app_with_window_options,
@@ -50,7 +39,7 @@ use views::{GalleryRoot, GalleryTopBar};
 /// Build the full gallery application tree.
 ///
 /// Creates the top bar, sidebar navigation, page content area, and spawns
-/// all 16 component showcase pages.
+/// one content page per [`GalleryPage`] control.
 fn setup_gallery(mut commands: Commands) {
     let root = commands
         .spawn_scene(bsn! {
@@ -99,113 +88,15 @@ fn setup_gallery(mut commands: Commands) {
         })
         .id();
 
-    // Spawn all pages as children of the navigation view
-    let open_dialog_btn = spawn_page(
-        &mut commands,
-        nav_view,
-        GalleryPage::Buttons,
-        pages::buttons::spawn_buttons_page,
-    );
-    let mut runtime_refs = GalleryRuntime {
+    // Spawn all pages as children of the navigation view (order matches GalleryPage::ALL).
+    for page in GalleryPage::ALL {
+        spawn_page(&mut commands, nav_view, page);
+    }
+
+    commands.insert_resource(GalleryRuntime {
         nav_view,
         search_input: Entity::PLACEHOLDER,
-        open_dialog_btn,
-        persistent_toast_btn: spawn_page(
-            &mut commands,
-            nav_view,
-            GalleryPage::Inputs,
-            pages::inputs::spawn_inputs_page,
-        ),
-        success_toast_btn: spawn_page(
-            &mut commands,
-            nav_view,
-            GalleryPage::Selection,
-            pages::selection::spawn_selection_page,
-        ),
-        warning_toast_btn: spawn_page(
-            &mut commands,
-            nav_view,
-            GalleryPage::WindowMenu,
-            pages::window_menu::spawn_window_menu_page,
-        ),
-        error_toast_btn: spawn_page(
-            &mut commands,
-            nav_view,
-            GalleryPage::MessageBox,
-            pages::message_box::spawn_message_box_page,
-        ),
-        prompt_dialog_btn: spawn_page(
-            &mut commands,
-            nav_view,
-            GalleryPage::Lists,
-            pages::lists::spawn_lists_page,
-        ),
-        native_message_btn: spawn_page(
-            &mut commands,
-            nav_view,
-            GalleryPage::GridView,
-            pages::grid_view::spawn_grid_view_page,
-        ),
-        popover_dialog_btn: spawn_page(
-            &mut commands,
-            nav_view,
-            GalleryPage::Panels,
-            pages::panels::spawn_panels_page,
-        ),
-        burst_placeholder_btn: spawn_page(
-            &mut commands,
-            nav_view,
-            GalleryPage::Layout,
-            pages::layout::spawn_layout_page,
-        ),
-        locale_combo: Entity::PLACEHOLDER,
-    };
-
-    spawn_page(
-        &mut commands,
-        nav_view,
-        GalleryPage::Typography,
-        pages::typography::spawn_typography_page,
-    );
-    let locale_combo = spawn_page(
-        &mut commands,
-        nav_view,
-        GalleryPage::I18n,
-        pages::i18n::spawn_i18n_page,
-    );
-    runtime_refs.locale_combo = locale_combo;
-    spawn_page(
-        &mut commands,
-        nav_view,
-        GalleryPage::Media,
-        pages::media::spawn_media_page,
-    );
-    spawn_page(
-        &mut commands,
-        nav_view,
-        GalleryPage::Shapes,
-        pages::shapes::spawn_shapes_page,
-    );
-    spawn_page(
-        &mut commands,
-        nav_view,
-        GalleryPage::Icons,
-        pages::icons::spawn_icons_page,
-    );
-    spawn_page(
-        &mut commands,
-        nav_view,
-        GalleryPage::Transitions,
-        pages::transitions::spawn_transitions_page,
-    );
-    spawn_page(
-        &mut commands,
-        nav_view,
-        GalleryPage::Overlay,
-        pages::overlay::spawn_overlay_page,
-    );
-
-    commands.insert_resource(runtime_refs);
+    });
 }
 
 /// Create the top bar with branding, search, theme picker, and badge.
@@ -246,12 +137,7 @@ fn spawn_top_bar(commands: &mut Commands, root: Entity) {
 }
 
 /// Spawn a single gallery page inside the navigation view.
-fn spawn_page(
-    commands: &mut Commands,
-    nav_view: Entity,
-    page: GalleryPage,
-    build: fn(&mut Commands, Entity) -> Entity,
-) -> Entity {
+fn spawn_page(commands: &mut Commands, nav_view: Entity, page: GalleryPage) {
     let scroll = commands
         .spawn_scene(bsn! {
             template_value(
@@ -280,7 +166,7 @@ fn spawn_page(
             ]
         })
         .id();
-    build(commands, page_col)
+    pages::spawn_page_content(commands, page_col, page);
 }
 
 /// Build the Bevy application with all gallery systems and resources.
@@ -323,7 +209,7 @@ fn build_gallery_app() -> App {
 
 /// Application entry point.
 ///
-/// Creates a 1360×760 window with the Fluent UI-inspired Picus Gallery.
+/// Creates a 1360×760 window with the WinUI Gallery-style Picus Gallery.
 fn main() -> Result<(), EventLoopError> {
     run_app_with_window_options(build_gallery_app(), "Picus Gallery", |options| {
         options.with_initial_inner_size(LogicalSize::new(1360.0, 760.0))
@@ -353,9 +239,7 @@ mod tests {
         app.update();
 
         assert_eq!(
-            picus::resolve_theme_backdrop_material(
-                app.world().resource::<picus::StyleSheet>()
-            ),
+            picus::resolve_theme_backdrop_material(app.world().resource::<picus::StyleSheet>()),
             Some(picus::WindowBackdropMaterial::Mica)
         );
         assert_eq!(
@@ -379,21 +263,15 @@ mod tests {
             0.0
         );
         assert_eq!(
-            picus::resolve_style_for_classes(
-                app.world(),
-                ["template.scroll_view.viewport"],
-            )
-            .colors
-            .bg,
+            picus::resolve_style_for_classes(app.world(), ["template.scroll_view.viewport"],)
+                .colors
+                .bg,
             Some(picus::xilem::Color::TRANSPARENT)
         );
         assert_eq!(
-            picus::resolve_style_for_classes(
-                app.world(),
-                ["template.scroll_view.viewport"],
-            )
-            .layout
-            .border_width,
+            picus::resolve_style_for_classes(app.world(), ["template.scroll_view.viewport"],)
+                .layout
+                .border_width,
             0.0
         );
         assert_eq!(
@@ -451,7 +329,9 @@ mod tests {
             Some(picus::xilem::Color::TRANSPARENT)
         );
         let scroll_entities = {
-            let mut query = app.world_mut().query_filtered::<Entity, With<UiScrollView>>();
+            let mut query = app
+                .world_mut()
+                .query_filtered::<Entity, With<UiScrollView>>();
             query.iter(app.world()).collect::<Vec<_>>()
         };
         assert!(!scroll_entities.is_empty());
@@ -528,35 +408,46 @@ mod tests {
     }
 
     #[test]
-    fn gallery_pages_match_fluent_ui_sections() {
+    fn gallery_pages_are_one_component_each() {
         let labels = GalleryPage::ALL.map(GalleryPage::label);
-        assert_eq!(
-            labels,
-            [
-                "Buttons",
-                "Inputs",
-                "Selection",
-                "Window/Menu",
-                "MessageBox",
-                "Lists",
-                "GridView",
-                "Panels",
-                "Layout",
-                "Typography",
-                "I18n",
-                "Media",
-                "Shapes",
-                "Icons",
-                "Transitions",
-                "Overlay",
-            ],
+        assert_eq!(labels.len(), 41);
+        assert_eq!(labels[0], "Button");
+        assert_eq!(labels[1], "ToggleSwitch");
+        assert_eq!(labels[2], "CheckBox");
+        assert!(
+            labels.contains(&"DataTable"),
+            "expected a dedicated DataTable page"
         );
+        assert!(
+            labels.contains(&"Markdown"),
+            "expected a dedicated Markdown page"
+        );
+        // No multi-component category labels from the old gallery.
+        assert!(!labels.contains(&"Buttons"));
+        assert!(!labels.contains(&"Inputs"));
+        assert!(!labels.contains(&"Selection"));
+        assert!(!labels.contains(&"Window/Menu"));
+        assert!(!labels.contains(&"MessageBox"));
+        assert!(!labels.contains(&"Lists"));
+        assert!(!labels.contains(&"GridView"));
+        assert!(!labels.contains(&"Panels"));
+        assert!(!labels.contains(&"Layout"));
+        assert!(!labels.contains(&"Media"));
+        assert!(!labels.contains(&"Overlay"));
+        assert!(!labels.contains(&"Transitions"));
     }
 
     #[test]
     fn gallery_categories_cover_all_pages() {
         let total: usize = GalleryPage::CATEGORIES.iter().map(|c| c.page_count).sum();
         assert_eq!(total, GalleryPage::ALL.len());
+        // Categories should be contiguous and cover the full index range.
+        let mut next = 0;
+        for category in GalleryPage::CATEGORIES {
+            assert_eq!(category.first_page_index, next);
+            next += category.page_count;
+        }
+        assert_eq!(next, GalleryPage::ALL.len());
     }
 
     #[test]
@@ -574,7 +465,7 @@ mod tests {
     }
 
     #[test]
-    fn gallery_typography_page_exposes_markdown_sample() {
+    fn gallery_markdown_page_exposes_markdown_sample() {
         let mut app = build_gallery_app();
         app.update();
 
@@ -746,10 +637,7 @@ mod tests {
             .height
     }
 
-    fn widget_rect_for_entity(
-        app: &mut App,
-        entity: Entity,
-    ) -> picus::masonry_core::kurbo::Rect {
+    fn widget_rect_for_entity(app: &mut App, entity: Entity) -> picus::masonry_core::kurbo::Rect {
         let mut runtime = app.world_mut().non_send_mut::<picus::MasonryRuntime>();
         let window_runtime = runtime
             .primary_mut()
