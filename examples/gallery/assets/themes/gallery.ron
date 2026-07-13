@@ -141,7 +141,7 @@
       ),
     ),
     (
-      selector: Class("nav.item"),
+      selector: Class("nav.toggle"),
       setter: (
         layout: (
           padding: 8.0,
@@ -161,13 +161,47 @@
       ),
     ),
     (
+      selector: Class("nav.item"),
+      setter: (
+        layout: (
+          padding: 8.0,
+          corner_radius: Var("radius-md"),
+          border_width: 0.0,
+          justify_content: Start,
+        ),
+        colors: (
+          bg: Var("transparent"),
+          hover_bg: Var("fill-subtle-secondary"),
+          pressed_bg: Var("fill-subtle-tertiary"),
+          text: Var("text-primary"),
+        ),
+        text: (
+          size: Var("text-sm"),
+        ),
+      ),
+    ),
+    // Selected: subtle fill + primary text; accent is on the left indicator.
+    (
       selector: Class("nav.item.active"),
       setter: (
         colors: (
+          bg: Var("surface-tab-active"),
+          hover_bg: Var("fill-subtle-secondary"),
+          pressed_bg: Var("fill-subtle-tertiary"),
+          text: Var("text-primary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("nav.item.indicator"),
+      setter: (
+        layout: (
+          corner_radius: 1.5,
+          border_width: 0.0,
+        ),
+        colors: (
           bg: Var("surface-accent"),
-          hover_bg: Var("surface-accent-hover"),
-          pressed_bg: Var("surface-accent-pressed"),
-          text: Var("text-on-accent"),
+          border: Var("transparent"),
         ),
       ),
     ),

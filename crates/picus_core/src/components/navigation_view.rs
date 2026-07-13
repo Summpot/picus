@@ -51,6 +51,11 @@ impl Default for UiNavigationItem {
     }
 }
 
+/// Expanded pane width in logical pixels (labels + icons).
+pub const NAV_PANE_EXPANDED_WIDTH: f64 = 280.0;
+/// Compact pane width in logical pixels (icons only).
+pub const NAV_PANE_COMPACT_WIDTH: f64 = 48.0;
+
 /// Sidebar navigation container with items and a content area.
 ///
 /// The sidebar is rendered as a vertical list of ECS-backed [`UiNavigationItem`]
@@ -59,12 +64,18 @@ impl Default for UiNavigationItem {
 /// [`UiTabBar`](crate::UiTabBar) with hidden headers but with a separate
 /// navigation panel.
 ///
+/// The pane toggles between expanded (labels visible) and compact (icons only)
+/// via a hamburger control, matching WinUI `NavigationView` pane open/close.
+/// Selected items draw a left-edge vertical accent indicator.
+///
 /// # Styling classes
 ///
 /// The projector resolves these class names from the style system:
 /// - `"nav.sidebar"` — sidebar panel
+/// - `"nav.toggle"` — pane open/close (hamburger) button
 /// - `"nav.item"` — each navigation button (base)
 /// - `"nav.item.active"` — the active navigation button
+/// - `"nav.item.indicator"` — left selection indicator on the active item
 /// - `"nav.content"` — content area wrapper
 #[derive(Component, Debug, Clone)]
 pub struct UiNavigationView {
@@ -72,6 +83,11 @@ pub struct UiNavigationView {
     pub items: Vec<NavigationViewItem>,
     /// Index of the currently selected item.
     pub selected: usize,
+    /// Whether the navigation pane is expanded (`true`) or compact (`false`).
+    ///
+    /// When expanded, item labels are shown beside icons. When compact, only
+    /// icons (or a single-letter fallback) remain and the pane narrows.
+    pub is_pane_open: bool,
 }
 
 impl UiNavigationView {
@@ -80,12 +96,20 @@ impl UiNavigationView {
         Self {
             items: items.into_iter().collect(),
             selected: 0,
+            is_pane_open: true,
         }
     }
 
     #[must_use]
     pub fn with_selected(mut self, index: usize) -> Self {
         self.selected = index;
+        self
+    }
+
+    /// Set whether the navigation pane starts expanded.
+    #[must_use]
+    pub fn with_pane_open(mut self, open: bool) -> Self {
+        self.is_pane_open = open;
         self
     }
 }
@@ -103,6 +127,15 @@ pub struct UiNavigationSelectionChanged {
     pub nav: Entity,
     /// The newly selected index.
     pub selected: usize,
+}
+
+/// Emitted when a [`UiNavigationView`] pane is expanded or collapsed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UiNavigationPaneChanged {
+    /// The navigation view entity.
+    pub nav: Entity,
+    /// Whether the pane is now expanded.
+    pub is_pane_open: bool,
 }
 
 impl UiComponentTemplate for UiNavigationView {

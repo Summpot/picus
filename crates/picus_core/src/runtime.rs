@@ -2472,14 +2472,21 @@ mod tests {
         );
         let inactive_hover =
             crate::resolve_style_for_entity_classes(app.world(), inactive_item, ["nav.item"]);
+        let indicator =
+            crate::resolve_style_for_classes(app.world(), ["nav.item.indicator"]);
 
+        // Selected items keep a subtle fill; accent lives on the left indicator.
         assert_eq!(
             active_hover.colors.bg,
-            Some(token_color(app.world(), "surface-accent-hover"))
+            Some(token_color(app.world(), "fill-subtle-secondary"))
         );
         assert_eq!(
             inactive_hover.colors.bg,
             Some(token_color(app.world(), "surface-subtle-hover"))
+        );
+        assert_eq!(
+            indicator.colors.bg,
+            Some(token_color(app.world(), "surface-accent"))
         );
 
         {

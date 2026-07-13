@@ -2656,13 +2656,57 @@
         ),
       ),
     ),
+    // Hamburger / pane toggle control at the top of the nav rail.
+    (
+      selector: Class("nav.toggle"),
+      setter: (
+        layout: (
+          padding: Var("space-sm"),
+          corner_radius: Var("radius-md"),
+          border_width: 0.0,
+          justify_content: Start,
+          align_items: Center,
+        ),
+        colors: (
+          bg: Var("fill-subtle-transparent"),
+          hover_bg: Var("fill-subtle-secondary"),
+          pressed_bg: Var("fill-subtle-tertiary"),
+          border: Var("transparent"),
+          text: Var("text-primary"),
+        ),
+        text: (
+          size: Var("text-sm"),
+        ),
+        transition: Var("duration-fast"),
+      ),
+    ),
+    (
+      selector: And([Class("nav.toggle"), PseudoClass(Hovered)]),
+      setter: (
+        colors: (
+          bg: Var("fill-subtle-secondary"),
+          text: Var("text-primary"),
+        ),
+      ),
+    ),
+    (
+      selector: And([Class("nav.toggle"), PseudoClass(Pressed)]),
+      setter: (
+        colors: (
+          bg: Var("fill-subtle-tertiary"),
+          text: Var("text-primary"),
+        ),
+      ),
+    ),
     (
       selector: Class("nav.item"),
       setter: (
         layout: (
           padding: Var("space-sm"),
           corner_radius: Var("radius-md"),
-          border_width: Var("border-thin"),
+          border_width: 0.0,
+          justify_content: Start,
+          align_items: Center,
         ),
         colors: (
           bg: Var("fill-subtle-transparent"),
@@ -2690,12 +2734,13 @@
         ),
       ),
     ),
+    // Selected item: subtle fill + primary text. Accent lives on the indicator.
     (
       selector: Class("nav.item.active"),
       setter: (
         colors: (
           bg: Var("surface-tab-active"),
-          border: Var("surface-accent"),
+          border: Var("transparent"),
           text: Var("text-primary"),
         ),
       ),
@@ -2704,9 +2749,9 @@
       selector: And([Class("nav.item.active"), PseudoClass(Hovered)]),
       setter: (
         colors: (
-          bg: Var("surface-accent-hover"),
-          border: Var("surface-accent-hover"),
-          text: Var("text-on-accent"),
+          bg: Var("fill-subtle-secondary"),
+          border: Var("transparent"),
+          text: Var("text-primary"),
         ),
       ),
     ),
@@ -2714,9 +2759,23 @@
       selector: And([Class("nav.item.active"), PseudoClass(Pressed)]),
       setter: (
         colors: (
-          bg: Var("surface-accent-pressed"),
-          border: Var("surface-accent-pressed"),
-          text: Var("text-on-accent"),
+          bg: Var("fill-subtle-tertiary"),
+          border: Var("transparent"),
+          text: Var("text-primary"),
+        ),
+      ),
+    ),
+    // Left-edge vertical selection indicator (WinUI NavigationView).
+    (
+      selector: Class("nav.item.indicator"),
+      setter: (
+        layout: (
+          corner_radius: 1.5,
+          border_width: 0.0,
+        ),
+        colors: (
+          bg: Var("surface-accent"),
+          border: Var("transparent"),
         ),
       ),
     ),

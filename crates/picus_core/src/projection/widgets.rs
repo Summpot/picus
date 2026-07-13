@@ -31,6 +31,7 @@ use crate::{
         UiContextMenu, UiDataTable, UiDatePicker, UiDatePickerPanel, UiDivider, UiExpander,
         UiGradientStop, UiGroupBox, UiListSelectionMode, UiListView, UiMenuBar, UiMenuBarItem,
         UiMenuItemPanel, UiMessageBar, UiNavigationItem, UiNavigationView, UiRadioGroup,
+        NAV_PANE_COMPACT_WIDTH, NAV_PANE_EXPANDED_WIDTH,
         UiScrollView, UiSearch, UiSortDirection, UiSpinner, UiSplitPane, UiTabBar, UiTable,
         UiTimePicker, UiTimePickerPanel, UiToast, UiTooltip, UiTreeNode,
     },
@@ -2193,12 +2194,29 @@ pub(crate) fn project_search(search: &UiSearch, ctx: ProjectionCtx<'_>) -> UiVie
 // Navigation View
 // ---------------------------------------------------------------------------
 
+const NAV_INDICATOR_WIDTH: f64 = 3.0;
+const NAV_INDICATOR_HEIGHT: f64 = 16.0;
+const NAV_ITEM_ICON_SIZE: f64 = 20.0;
+
 /// Project a [`UiNavigationView`] into a sidebar + content layout.
 pub(crate) fn project_navigation_view(nav: &UiNavigationView, ctx: ProjectionCtx<'_>) -> UiView {
     let style = resolve_style(ctx.world, ctx.entity);
-    let sidebar_style = resolve_style_for_classes(ctx.world, ["nav.sidebar"]);
+    let mut sidebar_style = resolve_style_for_classes(ctx.world, ["nav.sidebar"]);
     let content_style = resolve_style_for_classes(ctx.world, ["nav.content"]);
+    // Resolve toggle against the nav entity so hover/pressed InteractionState apply.
+    let toggle_style = resolve_style_for_entity_classes(ctx.world, ctx.entity, ["nav.toggle"]);
     let pairs = child_entity_views(&ctx);
+
+    let pane_width = if nav.is_pane_open {
+        NAV_PANE_EXPANDED_WIDTH
+    } else {
+        NAV_PANE_COMPACT_WIDTH
+    };
+
+    // Compact mode keeps a tight icon rail; expanded keeps themed padding.
+    if !nav.is_pane_open {
+        sidebar_style.layout.padding = 4.0;
+    }
 
     let mut item_views = pairs
         .iter()
@@ -2221,11 +2239,66 @@ pub(crate) fn project_navigation_view(nav: &UiNavigationView, ctx: ProjectionCtx
         .map(|(_, view)| view.clone())
         .collect::<Vec<_>>();
 
-    // --- Sidebar column ---
-    let sidebar: UiView = Arc::new(apply_widget_style(
-        flex_col(item_views).gap(Length::px(sidebar_style.layout.gap.max(0.0))),
-        &sidebar_style,
+    // --- Pane toggle (hamburger), WinUI NavigationView style ---
+    let toggle_icon = FluentIcon::GlobalNavigationButton;
+    let toggle_glyph = toggle_icon.glyph_source();
+    let mut toggle_icon_style = ResolvedStyle::default();
+    toggle_icon_style.colors.text = toggle_style.colors.text.or(style.colors.text);
+    toggle_icon_style.text.size = toggle_style.text.size.max(14.0);
+    toggle_icon_style.font_family = Some(toggle_glyph.font_family_vec());
+    let toggle_icon_view: UiView = Arc::new(
+        sized_box(apply_label_style(
+            label(toggle_glyph.glyph().to_string()),
+            &toggle_icon_style,
+        ))
+        .width(Dim::Fixed(Length::px(NAV_ITEM_ICON_SIZE)))
+        .height(Dim::Fixed(Length::px(NAV_ITEM_ICON_SIZE))),
+    );
+    // Expanded pane shows a short action label beside the hamburger glyph.
+    let toggle_content: UiView = if nav.is_pane_open {
+        let mut label_style = toggle_style.clone();
+        label_style.colors.text = toggle_style.colors.text.or(style.colors.text);
+        let label_view: UiView = Arc::new(apply_label_style(label("Menu"), &label_style));
+        Arc::new(
+            flex_row(vec![
+                toggle_icon_view.into_any_flex(),
+                label_view.into_any_flex(),
+            ])
+            .cross_axis_alignment(CrossAxisAlignment::Center)
+            .gap(Length::px(8.0)),
+        )
+    } else {
+        Arc::new(
+            flex_row(vec![toggle_icon_view.into_any_flex()])
+                .main_axis_alignment(MainAxisAlignment::Center)
+                .cross_axis_alignment(CrossAxisAlignment::Center),
+        )
+    };
+    let toggle_btn: UiView = Arc::new(apply_direct_widget_style(
+        button_with_child_view(
+            ctx.entity,
+            WidgetUiAction::ToggleNavigationPane { nav: ctx.entity },
+            toggle_content,
+        ),
+        &toggle_style,
     ));
+
+    // --- Sidebar column: toggle + scrollable items ---
+    let items_col = flex_col(item_views).gap(Length::px(sidebar_style.layout.gap.max(0.0)));
+    let items_portal = scroll_portal(items_col, Point::ORIGIN)
+        .constrain_horizontal(true)
+        .constrain_vertical(false)
+        .content_must_fill(true);
+    let sidebar_body = flex_col(vec![
+        toggle_btn.into_any_flex(),
+        flex_item(items_portal, 1.0).into(),
+    ])
+    .gap(Length::px(sidebar_style.layout.gap.max(4.0)));
+    let sidebar: UiView = Arc::new(
+        sized_box(apply_widget_style(sidebar_body, &sidebar_style))
+            .width(Dim::Fixed(Length::px(pane_width)))
+            .height(Dim::Stretch),
+    );
 
     // --- Content area: show only the selected child, flex-grow to fill space ---
     let content: UiView = content_views
@@ -2254,15 +2327,9 @@ pub(crate) fn project_navigation_view(nav: &UiNavigationView, ctx: ProjectionCtx
             .with_height(Dim::Stretch),
     );
 
-    // --- Sidebar needs its own scroll portal to avoid clipping on small windows ---
-    let sidebar_portal = scroll_portal(sidebar, Point::ORIGIN)
-        .constrain_horizontal(true)
-        .constrain_vertical(false)
-        .content_must_fill(true);
-
-    // --- Layout: sidebar (scrollable) | content (flex-grow: 1) ---
+    // --- Layout: sidebar | content (flex-grow: 1) ---
     let row = flex_row(vec![
-        sidebar_portal.into_any_flex(),
+        sidebar.into_any_flex(),
         flex_item(content_area, 1.0).into(), // .into() preserves flex params via From<FlexItem>
     ]);
     let clipped_row = scroll_portal(row, Point::ORIGIN)
@@ -2289,6 +2356,7 @@ pub(crate) fn project_navigation_item(item: &UiNavigationItem, ctx: ProjectionCt
     };
 
     let is_active = item.index == nav.selected;
+    let pane_open = nav.is_pane_open;
     let mut style = if is_active {
         resolve_style_for_entity_classes(ctx.world, ctx.entity, ["nav.item", "nav.item.active"])
     } else {
@@ -2303,29 +2371,75 @@ pub(crate) fn project_navigation_item(item: &UiNavigationItem, ctx: ProjectionCt
         });
     }
 
+    // Left selection indicator — WinUI NavigationView vertical accent bar.
+    let mut indicator_style = resolve_style_for_classes(ctx.world, ["nav.item.indicator"]);
+    if !is_active {
+        indicator_style.colors.bg = indicator_style
+            .colors
+            .bg
+            .map(|c| c.with_alpha(0.0))
+            .or(Some(Color::TRANSPARENT));
+    }
+    if indicator_style.layout.corner_radius <= 0.0 {
+        indicator_style.layout.corner_radius = NAV_INDICATOR_WIDTH * 0.5;
+    }
+    let indicator: UiView = Arc::new(apply_widget_style(
+        sized_box(label(""))
+            .width(Dim::Fixed(Length::px(NAV_INDICATOR_WIDTH)))
+            .height(Dim::Fixed(Length::px(NAV_INDICATOR_HEIGHT))),
+        &indicator_style,
+    ));
+
     let icon_view: Option<UiView> = nav_item.icon.map(|icon| -> UiView {
         let mut icon_style = ResolvedStyle::default();
         icon_style.colors.text = style.colors.text;
-        icon_style.text.size = style.text.size;
+        icon_style.text.size = style.text.size.max(14.0);
         icon_style.font_family = Some(icon.font_family_vec());
         Arc::new(
             sized_box(apply_label_style(label(icon.glyph().to_string()), &icon_style))
-                .width(Dim::Fixed(Length::px(20.0)))
-                .height(Dim::Fixed(Length::px(20.0))),
+                .width(Dim::Fixed(Length::px(NAV_ITEM_ICON_SIZE)))
+                .height(Dim::Fixed(Length::px(NAV_ITEM_ICON_SIZE))),
         ) as UiView
     });
 
-    let label_view: UiView = Arc::new(apply_label_style(label(nav_item.label.clone()), &style));
-
-    let content: UiView = if let Some(icon) = icon_view {
-        Arc::new(
-            flex_row(vec![icon.into_any_flex(), label_view.into_any_flex()])
-                .cross_axis_alignment(CrossAxisAlignment::Center)
-                .gap(Length::px(8.0)),
-        )
+    // Compact pane: icon only (or first-letter fallback when no icon is set).
+    let content: UiView = if pane_open {
+        let label_view: UiView =
+            Arc::new(apply_label_style(label(nav_item.label.clone()), &style));
+        if let Some(icon) = icon_view {
+            Arc::new(
+                flex_row(vec![icon.into_any_flex(), label_view.into_any_flex()])
+                    .cross_axis_alignment(CrossAxisAlignment::Center)
+                    .gap(Length::px(8.0)),
+            )
+        } else {
+            label_view
+        }
+    } else if let Some(icon) = icon_view {
+        icon
     } else {
-        label_view
+        let letter = nav_item
+            .label
+            .chars()
+            .next()
+            .map(|c| c.to_string())
+            .unwrap_or_else(|| "·".to_string());
+        Arc::new(apply_label_style(label(letter), &style))
     };
+
+    // Keep the indicator rail reserved so active/inactive items share layout.
+    // Compact mode still left-aligns inside the button so the indicator stays
+    // on the leading edge of the rail.
+    let row = flex_row(vec![
+        flex_col(vec![indicator.into_any_flex()])
+            .main_axis_alignment(MainAxisAlignment::Center)
+            .cross_axis_alignment(CrossAxisAlignment::Center)
+            .into_any_flex(),
+        flex_item(content, 1.0).into(),
+    ])
+    .main_axis_alignment(MainAxisAlignment::Start)
+    .cross_axis_alignment(CrossAxisAlignment::Center)
+    .gap(Length::px(if pane_open { 8.0 } else { 4.0 }));
 
     Arc::new(apply_direct_widget_style(
         button_with_child_view(
@@ -2334,7 +2448,7 @@ pub(crate) fn project_navigation_item(item: &UiNavigationItem, ctx: ProjectionCt
                 nav: item.nav,
                 index: item.index,
             },
-            content,
+            row,
         ),
         &style,
     ))

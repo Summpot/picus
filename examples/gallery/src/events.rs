@@ -123,6 +123,7 @@ fn discard_logged_actions(world: &mut World) {
         UiMenuItemSelected,
         UiTabChanged,
         UiScrollViewChanged,
+        picus::UiNavigationPaneChanged,
     );
 }
 
