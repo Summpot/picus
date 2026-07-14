@@ -15,7 +15,7 @@ pub struct CaretColor {
 impl Property for CaretColor {
     fn static_default() -> &'static Self {
         static DEFAULT: CaretColor = CaretColor {
-            color: AlphaColor::BLACK,
+            color: AlphaColor::TRANSPARENT,
         };
         &DEFAULT
     }
@@ -36,8 +36,7 @@ pub struct SelectionColor {
 impl Property for SelectionColor {
     fn static_default() -> &'static Self {
         static DEFAULT: SelectionColor = SelectionColor {
-            // Fluent v9 brandWeb (#0078D4)
-            color: AlphaColor::from_rgb8(0x00, 0x78, 0xD4),
+            color: AlphaColor::TRANSPARENT,
         };
         &DEFAULT
     }

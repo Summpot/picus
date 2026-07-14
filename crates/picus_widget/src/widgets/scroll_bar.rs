@@ -12,7 +12,8 @@ use crate::core::{
 use crate::imaging::{Composite, GroupRef, Painter};
 use crate::kurbo::{Axis, Point, Rect, Size, Stroke};
 use crate::layout::{AsUnit, LenReq, Length};
-use crate::properties::Collapsible;
+use crate::properties::{Collapsible, ContentColor};
+use crate::properties::BorderColor;
 use crate::theme;
 use crate::widgets::AnimatedF32;
 
@@ -169,6 +170,7 @@ impl ScrollBar {
 }
 
 impl UsesProperty<Collapsible> for ScrollBar {}
+impl UsesProperty<ContentColor> for ScrollBar {}
 
 // --- MARK: IMPL WIDGET
 impl Widget for ScrollBar {
@@ -358,7 +360,10 @@ impl Widget for ScrollBar {
     fn register_children(&mut self, _ctx: &mut RegisterCtx<'_>) {}
 
     fn property_changed(&mut self, ctx: &mut UpdateCtx<'_>, property_type: TypeId) {
-        if Collapsible::matches(property_type) {
+        if Collapsible::matches(property_type)
+            || ContentColor::matches(property_type)
+            || BorderColor::matches(property_type)
+        {
             ctx.request_paint_only();
         }
     }
@@ -395,6 +400,8 @@ impl Widget for ScrollBar {
     ) {
         let cache = ctx.property_cache();
         let collapsible = props.get::<Collapsible>(cache).0;
+        let thumb_color = props.get::<ContentColor>(cache).color;
+        let border_color = props.get::<BorderColor>(cache).color;
 
         if self.opacity.value() != 1. {
             painter.push_fill_clip(ctx.border_box());
@@ -423,13 +430,10 @@ impl Widget for ScrollBar {
             .inset((-inset_x0, -inset_y0, -inset_x1, -inset_y1))
             .to_rounded_rect(radius);
 
-        painter.fill(cursor_rect, theme::SCROLLBAR_COLOR).draw();
+        // Colours come from properties; transparent defaults draw nothing.
+        painter.fill(cursor_rect, thumb_color).draw();
         painter
-            .stroke(
-                cursor_rect,
-                &Stroke::new(edge_width),
-                theme::SCROLLBAR_BORDER_COLOR,
-            )
+            .stroke(cursor_rect, &Stroke::new(edge_width), border_color)
             .draw();
 
         if self.opacity.value() != 1. {
@@ -505,7 +509,7 @@ mod tests {
     use crate::core::{NewWidget, TextEvent};
     use crate::properties::Dimensions;
     use crate::testing::{TestHarness, assert_render_snapshot};
-    use crate::theme::test_property_set;
+    use picus_theme_test::test_property_set;
 
     #[test]
     fn simple_scrollbar() {

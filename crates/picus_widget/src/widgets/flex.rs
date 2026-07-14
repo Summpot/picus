@@ -1253,7 +1253,7 @@ mod tests {
     use crate::palette;
     use crate::properties::{BorderColor, BorderWidth, Dimensions, Padding};
     use crate::testing::{ModularWidget, TestHarness, assert_debug_panics, assert_render_snapshot};
-    use crate::theme::{ACCENT_COLOR, test_property_set};
+    use picus_theme_test::{ACCENT_COLOR, test_property_set};
     use crate::widgets::Label;
 
     #[test]

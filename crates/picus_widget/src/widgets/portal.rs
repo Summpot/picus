@@ -920,7 +920,7 @@ mod tests {
     use crate::layout::AsUnit;
     use crate::properties::Dimensions;
     use crate::testing::{ModularWidget, TestHarness, assert_render_snapshot};
-    use crate::theme::test_property_set;
+    use picus_theme_test::test_property_set;
     use crate::widgets::{Button, Flex, SizedBox};
 
     fn button(

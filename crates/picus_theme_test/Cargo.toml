@@ -1,0 +1,10 @@
+[package]
+name = "picus_theme_test"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Test-only retained-widget theme fixtures for Picus (not for production apps)"
+publish = false
+
+[dependencies]
+picus_widget.workspace = true

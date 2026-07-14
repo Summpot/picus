@@ -13,7 +13,7 @@ pub struct CheckmarkColor {
 impl Property for CheckmarkColor {
     fn static_default() -> &'static Self {
         static DEFAULT: CheckmarkColor = CheckmarkColor {
-            color: AlphaColor::BLACK,
+            color: AlphaColor::TRANSPARENT,
         };
         &DEFAULT
     }

@@ -13,3 +13,6 @@ accesskit.workspace = true
 masonry_core.workspace = true
 smallvec.workspace = true
 tracing.workspace = true
+
+[dev-dependencies]
+picus_theme_test.workspace = true

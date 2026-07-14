@@ -231,7 +231,7 @@ A low-level bridge that attaches a Vello renderer to an external Bevy window. Pi
 
 ### picus_widget and picus_view
 
-`picus_widget` is the Picus-owned retained backend crate. It owns widgets, properties, layers, and theme defaults on top of `masonry_core`.
+`picus_widget` is the Picus-owned retained backend crate. It owns widgets, properties, and layers on top of `masonry_core`. Widgets are lookless: production colours come from stylesheet RON via `picus_core`. Test harness skins live in `picus_theme_test`.
 
 `picus_view` is the Picus-owned Xilem-compatible view adapter. It builds on `picus_widget` and `xilem_core` without depending on upstream `masonry` or upstream `xilem`.
 

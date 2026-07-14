@@ -1117,7 +1117,7 @@ mod tests {
     use crate::core::{KeyboardEvent, Modifiers, NewWidget, PropertySet};
     use crate::palette;
     use crate::testing::TestHarness;
-    use crate::theme::test_property_set;
+    use picus_theme_test::test_property_set;
     // Tests of alignment happen in Prose.
 
     #[test]

@@ -220,7 +220,7 @@ mod tests {
     use super::*;
 
     use crate::testing::{TestHarness, TestHarnessParams, assert_render_snapshot};
-    use crate::theme::test_property_set;
+    use picus_theme_test::test_property_set;
     use crate::widgets::Label;
 
     const ROOT_PADDING: u32 = TestHarnessParams::ROOT_PADDING;

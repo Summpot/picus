@@ -5,6 +5,7 @@ members = [
 	"crates/picus_surface",
 	"crates/picus_core",
 	"crates/picus_widget",
+	"crates/picus_theme_test",
 	"crates/picus_view",
 	"examples/async_downloader",
 	"examples/calculator",
@@ -73,6 +74,7 @@ masonry_imaging = { git = "https://github.com/linebender/xilem.git", rev = "4b19
 masonry_winit = { git = "https://github.com/linebender/xilem.git", rev = "4b1922c9728f7b86642b6759c6608f32e0badec2" }
 xilem_core = { git = "https://github.com/linebender/xilem.git", rev = "4b1922c9728f7b86642b6759c6608f32e0badec2" }
 picus_widget = { path = "crates/picus_widget" }
+picus_theme_test = { path = "crates/picus_theme_test" }
 picus_view = { path = "crates/picus_view" }
 vello = { version = "0.8.0", default-features = false, features = ["wgpu"] }
 wgpu = "28.0.0"

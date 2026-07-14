@@ -33,8 +33,7 @@ pub struct BackwardColor(pub AlphaColor<Srgb>);
 
 impl Property for BackwardColor {
     fn static_default() -> &'static Self {
-        /// Purple
-        static DEFAULT: BackwardColor = BackwardColor(AlphaColor::from_rgb8(0xa7, 0x90, 0xd2));
+        static DEFAULT: BackwardColor = BackwardColor(AlphaColor::TRANSPARENT);
         &DEFAULT
     }
 }
@@ -58,8 +57,7 @@ pub struct ForwardColor(pub AlphaColor<Srgb>);
 
 impl Property for ForwardColor {
     fn static_default() -> &'static Self {
-        /// Blue
-        static DEFAULT: ForwardColor = ForwardColor(AlphaColor::from_rgb8(0x2a, 0xd5, 0xe4));
+        static DEFAULT: ForwardColor = ForwardColor(AlphaColor::TRANSPARENT);
         &DEFAULT
     }
 }
@@ -85,7 +83,7 @@ pub struct HeatColor(pub AlphaColor<Srgb>);
 
 impl Property for HeatColor {
     fn static_default() -> &'static Self {
-        static DEFAULT: HeatColor = HeatColor(AlphaColor::WHITE);
+        static DEFAULT: HeatColor = HeatColor(AlphaColor::TRANSPARENT);
         &DEFAULT
     }
 }

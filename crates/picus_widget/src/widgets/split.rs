@@ -5,14 +5,14 @@ use crate::core::keyboard::{Key, NamedKey};
 use crate::core::{
     AccessCtx, AccessEvent, ChildrenIds, CursorIcon, EventCtx, FromDynWidget, LayoutCtx,
     MeasureCtx, NewWidget, NoAction, PaintCtx, PointerButtonEvent, PointerEvent, PointerUpdate,
-    PropertiesMut, PropertiesRef, QueryCtx, RegisterCtx, TextEvent, Update, UpdateCtx, Widget,
-    WidgetId, WidgetMut, WidgetPod,
+    PropertiesMut, PropertiesRef, QueryCtx, RegisterCtx, TextEvent, Update, UpdateCtx,
+    UsesProperty, Widget, WidgetId, WidgetMut, WidgetPod,
 };
 use crate::imaging::Painter;
 use crate::kurbo::{Axis, Join, Line, Point, Size, Stroke};
 use crate::layout::{AsUnit, LayoutSize, LenReq, Length};
 use crate::peniko::Color;
-use crate::theme;
+use crate::properties::ContentColor;
 
 /// The split point, specifying how the available space is divided between the two children.
 ///
@@ -276,19 +276,21 @@ impl<ChildA: Widget + ?Sized, ChildB: Widget + ?Sized> Split<ChildA, ChildB> {
         self.set_chosen_from_child1_len(split_space, child1_len);
     }
 
-    /// Returns the color of the splitter bar.
-    fn bar_color(&self, ctx: &PaintCtx<'_>) -> Color {
-        if !self.draggable || ctx.is_disabled() {
-            return theme::BORDER_DEFAULT;
-        }
-        if ctx.is_active() || ctx.is_hovered() || ctx.is_focus_target() {
-            theme::BRAND_COLOR
-        } else {
-            theme::BORDER_DEFAULT
-        }
+    /// Bar colour from [`ContentColor`] (transparent when no theme/props).
+    fn bar_color(&self, ctx: &mut PaintCtx<'_>, props: &PropertiesRef<'_>) -> Color {
+        let cache = ctx.property_cache();
+        props.get::<ContentColor>(cache).color
     }
 
-    fn paint_focus_bar(&mut self, ctx: &mut PaintCtx<'_>, scene: &mut Painter<'_>) {
+    fn paint_focus_bar(
+        &mut self,
+        ctx: &mut PaintCtx<'_>,
+        props: &PropertiesRef<'_>,
+        scene: &mut Painter<'_>,
+    ) {
+        let cache = ctx.property_cache();
+        let base = props.get::<ContentColor>(cache).color;
+        let active = ctx.is_active();
         let length = ctx.content_box().size().get_coord(self.split_axis);
         let (edge1, edge2) = self.bar_edges(length);
 
@@ -296,7 +298,7 @@ impl<ChildA: Widget + ?Sized, ChildB: Widget + ?Sized> Split<ChildA, ChildB> {
         rect.set_coords(self.split_axis, edge1, edge2);
         let rect = rect.inset(2.0);
 
-        let focus_color = theme::FOCUS_COLOR.with_alpha(if ctx.is_active() { 1.0 } else { 0.5 });
+        let focus_color = base.with_alpha(if active { 1.0 } else { 0.5 });
         let focus_stroke = Stroke::new(1.0).with_join(Join::Miter);
 
         scene.stroke(rect, &focus_stroke, focus_color).draw();
@@ -435,6 +437,13 @@ where
 }
 
 // --- MARK: IMPL WIDGET
+impl<ChildA, ChildB> UsesProperty<ContentColor> for Split<ChildA, ChildB>
+where
+    ChildA: Widget + ?Sized,
+    ChildB: Widget + ?Sized,
+{
+}
+
 impl<ChildA, ChildB> Widget for Split<ChildA, ChildB>
 where
     ChildA: Widget + ?Sized,
@@ -692,11 +701,11 @@ where
     fn paint(
         &mut self,
         ctx: &mut PaintCtx<'_>,
-        _props: &PropertiesRef<'_>,
+        props: &PropertiesRef<'_>,
         painter: &mut Painter<'_>,
     ) {
-        // TODO - Paint differently if the bar is draggable and hovered.
-        let bar_color = self.bar_color(ctx);
+        // Bar colour is property-driven; transparent defaults draw nothing.
+        let bar_color = self.bar_color(ctx, props);
         if self.solid {
             self.paint_solid_bar(ctx, painter, bar_color);
         } else {
@@ -704,7 +713,7 @@ where
         }
 
         if ctx.is_focus_target() && self.draggable && !ctx.is_disabled() {
-            self.paint_focus_bar(ctx, painter);
+            self.paint_focus_bar(ctx, props, painter);
         }
         // TODO: Child painting should probably be clipped, in such a way that
         //       one child won't overflow across the split bar onto the other child.
@@ -776,7 +785,7 @@ mod tests {
     use crate::dpi::PhysicalSize;
     use crate::properties::Padding;
     use crate::testing::{TestHarness, assert_render_snapshot};
-    use crate::theme::test_property_set;
+    use picus_theme_test::test_property_set;
     use crate::widgets::Label;
 
     #[test]

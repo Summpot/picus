@@ -405,7 +405,7 @@ mod tests {
     use crate::core::{StyleProperty, WidgetTag};
     use crate::properties::ContentColor;
     use crate::testing::{TestHarness, assert_render_snapshot};
-    use crate::theme::{ACCENT_COLOR, default_property_set};
+    use picus_theme_test::{ACCENT_COLOR, default_property_set};
     use crate::widgets::Flex;
 
     #[test]

@@ -219,7 +219,7 @@ mod tests {
     use crate::core::NewWidget;
     use crate::peniko::{ImageAlphaType, ImageData, ImageFormat};
     use crate::testing::{TestHarness, assert_render_snapshot};
-    use crate::theme::test_property_set;
+    use picus_theme_test::test_property_set;
 
     /// Painting an empty image shouldn't crash.
     #[test]

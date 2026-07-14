@@ -212,7 +212,7 @@ mod tests {
     use crate::peniko::color::AlphaColor;
     use crate::properties::{Background, BorderColor, BorderWidth, Dimensions};
     use crate::testing::{TestHarness, assert_render_snapshot};
-    use crate::theme::test_property_set;
+    use picus_theme_test::test_property_set;
     use crate::widgets::{Label, SizedBox};
 
     #[test]

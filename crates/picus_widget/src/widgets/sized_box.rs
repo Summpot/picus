@@ -318,7 +318,7 @@ mod tests {
     use crate::properties::types::Gradient;
     use crate::properties::{Background, BorderColor, CornerRadius};
     use crate::testing::{TestHarness, assert_failing_render_snapshot, assert_render_snapshot};
-    use crate::theme::test_property_set;
+    use picus_theme_test::test_property_set;
     use crate::widgets::Label;
 
     // TODO - Add WidgetMut tests

@@ -368,7 +368,7 @@ mod tests {
     use crate::layout::AsUnit;
     use crate::properties::{ContentColor, Padding};
     use crate::testing::{TestHarness, TestHarnessParams, assert_render_snapshot};
-    use crate::theme::{ACCENT_COLOR, test_property_set};
+    use picus_theme_test::{ACCENT_COLOR, test_property_set};
     use crate::widgets::Flex;
 
     #[test]

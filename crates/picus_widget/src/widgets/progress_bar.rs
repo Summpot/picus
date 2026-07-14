@@ -273,7 +273,7 @@ mod tests {
     use crate::palette;
     use crate::properties::{BorderColor, CornerRadius};
     use crate::testing::{TestHarness, assert_render_snapshot};
-    use crate::theme::test_property_set;
+    use picus_theme_test::test_property_set;
 
     #[test]
     fn indeterminate_progressbar() {

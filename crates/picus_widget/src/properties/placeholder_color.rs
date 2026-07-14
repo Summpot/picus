@@ -13,7 +13,7 @@ pub struct PlaceholderColor {
 impl Property for PlaceholderColor {
     fn static_default() -> &'static Self {
         static DEFAULT: PlaceholderColor = PlaceholderColor {
-            color: AlphaColor::BLACK,
+            color: AlphaColor::TRANSPARENT,
         };
         &DEFAULT
     }

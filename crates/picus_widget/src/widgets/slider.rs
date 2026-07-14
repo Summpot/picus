@@ -377,10 +377,11 @@ impl Widget for Slider {
         //   (12 normal / 14 hover / 10 pressed)
 
         let cache = ctx.property_cache();
-        let track_color = props.get::<TrackColor>(cache);
+        let track_color = *props.get::<TrackColor>(cache);
         let outer_thumb_color = props.get::<ThumbColor>(cache).0;
         let track_thickness = props.get::<TrackThickness>(cache).0.get();
         let outer_radius = props.get::<ThumbRadius>(cache).0.get();
+        let rim = props.get::<crate::properties::BorderColor>(cache).color;
 
         // Inner thumb radius matches WinUI scale relative to a 14px base:
         // Normal 12 → 0.86, PointerOver 14 → 1.0, Pressed 10 → 0.71.
@@ -437,11 +438,7 @@ impl Widget for Slider {
         let outer_circle = Circle::new((thumb_x, thumb_y), outer_radius);
         painter.fill(outer_circle, outer_thumb_color).draw();
         painter
-            .stroke(
-                outer_circle,
-                &Stroke::new(1.),
-                theme::SLIDER_OUTER_THUMB_BORDER,
-            )
+            .stroke(outer_circle, &Stroke::new(1.), rim)
             .draw();
 
         // Inner accent thumb.
@@ -493,7 +490,7 @@ mod tests {
     use crate::core::TextEvent;
     use crate::kurbo::Point;
     use crate::testing::{TestHarness, assert_render_snapshot};
-    use crate::theme::test_property_set;
+    use picus_theme_test::test_property_set;
 
     #[test]
     fn slider_initial_state() {

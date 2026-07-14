@@ -4686,6 +4686,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "picus_theme_test"
+version = "0.1.0"
+dependencies = [
+ "picus_widget",
+]
+
+[[package]]
 name = "picus_view"
 version = "0.1.0"
 dependencies = [
@@ -4702,6 +4709,7 @@ version = "0.1.0"
 dependencies = [
  "accesskit",
  "masonry_core",
+ "picus_theme_test",
  "smallvec",
  "tracing",
 ]

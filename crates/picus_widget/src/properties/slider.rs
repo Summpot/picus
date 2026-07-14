@@ -37,8 +37,8 @@ pub struct TrackColor {
 impl Property for TrackColor {
     fn static_default() -> &'static Self {
         static DEFAULT: TrackColor = TrackColor {
-            active: Color::WHITE,
-            inactive: Color::WHITE.with_alpha(0.5),
+            active: Color::TRANSPARENT,
+            inactive: Color::TRANSPARENT,
         };
         &DEFAULT
     }
@@ -76,7 +76,7 @@ pub struct ThumbColor(pub Color);
 
 impl Property for ThumbColor {
     fn static_default() -> &'static Self {
-        static DEFAULT: ThumbColor = ThumbColor(Color::WHITE);
+        static DEFAULT: ThumbColor = ThumbColor(Color::TRANSPARENT);
         &DEFAULT
     }
 }

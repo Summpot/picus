@@ -158,7 +158,7 @@ mod tests {
     use crate::core::{NewWidget, PropertySet};
     use crate::palette;
     use crate::testing::{TestHarness, assert_render_snapshot};
-    use crate::theme::test_property_set;
+    use picus_theme_test::test_property_set;
 
     #[test]
     fn simple_spinner() {

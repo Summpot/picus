@@ -136,7 +136,7 @@ mod tests {
     use super::*;
     use crate::properties::Dimensions;
     use crate::testing::{TestHarness, assert_render_snapshot};
-    use crate::theme::test_property_set;
+    use picus_theme_test::test_property_set;
     use crate::widgets::Label;
 
     #[test]

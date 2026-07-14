@@ -276,7 +276,7 @@ mod tests {
         BorderColor, BorderWidth, BoxShadow, ContentColor, CornerRadius, Gap, Padding,
     };
     use crate::testing::{TestHarness, assert_render_snapshot};
-    use crate::theme::{ACCENT_COLOR, test_property_set};
+    use picus_theme_test::{ACCENT_COLOR, test_property_set};
     use crate::widgets::{Flex, Grid, GridParams, Label, SizedBox};
 
     #[test]

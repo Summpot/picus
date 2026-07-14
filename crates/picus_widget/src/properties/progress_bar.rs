@@ -10,7 +10,7 @@ pub struct BarColor(pub AlphaColor<Srgb>);
 
 impl Property for BarColor {
     fn static_default() -> &'static Self {
-        static DEFAULT: BarColor = BarColor(AlphaColor::BLACK);
+        static DEFAULT: BarColor = BarColor(AlphaColor::TRANSPARENT);
         &DEFAULT
     }
 }

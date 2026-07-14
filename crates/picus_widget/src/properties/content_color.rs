@@ -26,8 +26,9 @@ pub struct ContentColor {
 
 impl Property for ContentColor {
     fn static_default() -> &'static Self {
+        // Transparent: missing theme must not paint brand/fallback text.
         static DEFAULT: ContentColor = ContentColor {
-            color: AlphaColor::BLACK,
+            color: AlphaColor::TRANSPARENT,
         };
         &DEFAULT
     }

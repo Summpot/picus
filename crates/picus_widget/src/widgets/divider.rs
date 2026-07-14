@@ -786,7 +786,7 @@ mod tests {
     use crate::properties::types::{CrossAxisAlignment, MainAxisAlignment};
     use crate::properties::{Background, Dimensions, Gap, Padding};
     use crate::testing::{TestHarness, assert_render_snapshot};
-    use crate::theme::test_property_set;
+    use picus_theme_test::test_property_set;
     use crate::widgets::{Flex, SizedBox, Spinner};
 
     fn pattern(values: &[usize]) -> Vec<Length> {

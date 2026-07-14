@@ -22,7 +22,13 @@ Crates:
 - `picus_core`: implementation crate for ECS-driven UI projection, styling,
   overlays, built-in components, fonts, icons, and runtime integration.
 - `picus_widget`: Picus-owned retained widget/property backend and the long-term
-  home for incremental widget rewrites on top of `masonry_core`.
+  home for incremental widget rewrites on top of `masonry_core`. Widgets are
+  lookless: paint uses properties only. Unbranded geometry metrics live in
+  `picus_widget::theme`; production colours come from stylesheet RON in
+  `picus_core`, not from widget defaults.
+- `picus_theme_test`: test-only retained-widget theme fixtures (dark property
+  sets for harnesses/screenshots). Not for production apps; do not depend on
+  it from application crates.
 - `picus_view`: Picus-owned Xilem-compatible view adapter on top of
   `picus_widget` and `xilem_core`.
 - `picus_surface`: Vello/wgpu rendering surface for an externally owned Bevy
@@ -422,6 +428,11 @@ Runtime styling invariants:
 - Picus' Masonry runtime and Picus-owned text views make retained text defaults
   transparent so missing theme data does not fall through to backend static
   black text.
+- Theme distribution is RON-centric (`fluent_theme.ron` and app overrides), not
+  a separate Fluent crate. `picus_widget` must not ship brand colour palettes or
+  a production `default_property_set`; test skins belong in `picus_theme_test`.
+  Property `static_default` colours that affect paint are transparent so a
+  missing theme draws nothing visible.
 - Active stylesheet RON may declare `default_variant: "<name>"`; loading it
   applies that registered variant only when no active variant has already been
   selected.

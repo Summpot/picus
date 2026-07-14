@@ -4,8 +4,13 @@
 //! Picus-owned retained UI backend.
 //!
 //! This crate is the long-term home for Picus' retained widget runtime. It
-//! builds Picus widgets, properties, layers, and theme defaults directly on
-//! Masonry Core while keeping Xilem view concerns in `picus_view`.
+//! builds Picus widgets, properties, and layers on Masonry Core while keeping
+//! Xilem view concerns in `picus_view`.
+//!
+//! Widgets are lookless: paint uses property values only. Production apps get
+//! colours and control skins from stylesheet RON via `picus_core`. Unbranded
+//! geometry metrics live in [`theme`]; test harness skins live in the separate
+//! `picus_theme_test` crate.
 
 #![forbid(unsafe_code)]
 #![allow(
