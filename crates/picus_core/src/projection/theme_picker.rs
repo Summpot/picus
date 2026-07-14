@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::xilem::style::Style as _;
-use masonry_core::layout::{Dim, Length};
+use crate::masonry_core::layout::{Dim, Length};
 use picus_view::view::{
     CrossAxisAlignment, FlexExt as _, flex_col, flex_row, label, portal, transformed,
 };

@@ -16,7 +16,7 @@ use crate::{
     },
 };
 use bevy_ecs::{hierarchy::Children, prelude::Entity};
-use masonry_core::layout::{Dim, Length};
+use crate::masonry_core::layout::{Dim, Length};
 use picus_view::view::{
     CrossAxisAlignment, FlexExt as _, MainAxisAlignment, flex_col, flex_row, label, transformed,
 };

@@ -36,7 +36,7 @@ use crate::widgets::{Label, TextArea};
 ///
 /// When the window is not focused, this widget will have the `#unfocused` [class].
 ///
-/// [class]: masonry_core::doc::masonry_concepts#classes
+/// [class]: crate::crate::masonry_core::doc::masonry_concepts#classes
 pub struct TextInput {
     text: WidgetPod<TextArea<true>>,
 

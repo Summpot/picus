@@ -2,7 +2,7 @@ use std::marker::PhantomData;
 
 use bevy_ecs::entity::Entity;
 use picus_view::{Pod, ViewCtx, WidgetView};
-use xilem_core::{MessageCtx, MessageResult, Mut, View, ViewMarker};
+use xilem::core::{MessageCtx, MessageResult, Mut, View, ViewMarker};
 
 use crate::retained_widgets::OpaqueHitboxWidget;
 

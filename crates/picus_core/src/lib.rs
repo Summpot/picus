@@ -52,7 +52,7 @@ pub use bevy_scene;
 pub use bevy_tasks;
 pub use bevy_text;
 pub use bevy_window;
-pub use masonry_core;
+pub use picus_widget::masonry_core;
 pub use picus_view;
 pub use rfd;
 

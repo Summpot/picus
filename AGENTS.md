@@ -15,7 +15,11 @@ guides live under [`docs/`](docs/README.md).
 ## 2. Dependency and crate boundaries
 
 - Applications depend on the **`picus` facade only**, not `picus_core`.
-- Do **not** reintroduce upstream `masonry` / `xilem` application crates.
+- Upstream GUI stack is the **`xilem`** facade (currently git-pinned until a
+  crates.io release includes the imaging/layout APIs Picus uses). Masonry Core
+  surfaces are inlined as `picus_widget::masonry_core`; reactive core and winit
+  come from `xilem::core` / `xilem::winit`. Paint adapters: `picus_imaging`
+  (desktop only; no wasm).
 - `picus_widget` is lookless: no production brand colour palettes; test skins
   belong in `picus_theme_test`.
 - Macro expansions may only touch `picus::__macro_support` (doc-hidden).

@@ -8,7 +8,7 @@ use crate::{
     styling::{apply_flex_alignment, apply_widget_style, resolve_style},
 };
 use bevy_ecs::{entity::Entity, hierarchy::Children, prelude::World};
-use masonry_core::{
+use crate::masonry_core::{
     layout::{Dim, Length},
     properties::Dimensions,
 };

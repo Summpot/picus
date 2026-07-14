@@ -1,7 +1,7 @@
 use std::any::TypeId;
 
 use accesskit::{Node, Role, Toggled};
-use masonry_core::debug_panic;
+use crate::debug_panic;
 use tracing::{Span, trace, trace_span};
 
 use crate::core::{

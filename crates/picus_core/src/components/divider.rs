@@ -1,5 +1,5 @@
 use bevy_ecs::prelude::*;
-use masonry_core::kurbo::Axis;
+use crate::masonry_core::kurbo::Axis;
 
 use crate::{ProjectionCtx, UiView, components::UiComponentTemplate};
 

@@ -6,7 +6,7 @@ license.workspace = true
 
 [dependencies]
 bevy_window.workspace = true
-masonry_imaging.workspace = true
+picus_imaging.workspace = true
 pollster.workspace = true
 tracing.workspace = true
 wgpu.workspace = true

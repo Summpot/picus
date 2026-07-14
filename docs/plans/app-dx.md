@@ -569,7 +569,7 @@ docs/
 
 | 现行 AGENTS 区块（约） | 迁往 | 根 `AGENTS.md` 仅保留 |
 |------------------------|------|------------------------|
-| §1 Workspace 长描述 / crate 列表 | `docs/architecture/crates.md` | 一句：依赖 `picus` facade；禁止 reintroduce 上游 masonry/xilem app crate；链到 crates.md |
+| §1 Workspace 长描述 / crate 列表 | `docs/architecture/crates.md` | 一句：依赖 `picus` facade；上游 GUI 经 `xilem` facade；链到 crates.md |
 | §1.1 picuscode / CodeWhale 产品与 bridge | `examples/picuscode/README.md` 与/或 `docs/examples/` | 一句：picuscode 为集成例；测试勿碰用户 `~/.codewhale/` |
 | §1.2 同步 CodeWhale submodule | `docs/contributing/codewhale-submodule.md` | 根保留先读要求；具体强制步骤放 `thirdparty/AGENTS.md`，避免修改 submodule 内文件 |
 | §2 Runtime Architecture | `docs/architecture/runtime.md` | 保留所有跨模块运行时硬不变量；局部 surface 规则可移入 `crates/picus_surface/AGENTS.md` |

@@ -66,7 +66,7 @@ impl ProjectionCtx<'_> {
     pub fn button<A: Clone + Send + Sync + 'static>(
         &self,
         action: A,
-        label: impl Into<masonry_core::core::ArcStr>,
+        label: impl Into<crate::masonry_core::core::ArcStr>,
     ) -> crate::ButtonView<A> {
         debug_assert!(
             self.world

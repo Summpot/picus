@@ -2,7 +2,7 @@ use std::any::{Any, TypeId};
 use std::sync::Arc;
 
 use bevy_ecs::entity::Entity;
-use masonry_core::{
+use crate::masonry_core::{
     accesskit::{Node, Role},
     core::keyboard::{Key, NamedKey},
     core::{
@@ -222,7 +222,7 @@ where
         _props: &mut PropertiesMut<'_>,
         event: &AccessEvent,
     ) {
-        if matches!(event.action, masonry_core::accesskit::Action::Click) {
+        if matches!(event.action, crate::masonry_core::accesskit::Action::Click) {
             self.push_action();
             ctx.submit_action::<Self::Action>(ActionButtonWidgetAction::StateChanged);
             ctx.request_render();
@@ -325,7 +325,7 @@ where
         _props: &PropertiesRef<'_>,
         node: &mut Node,
     ) {
-        node.add_action(masonry_core::accesskit::Action::Click);
+        node.add_action(crate::masonry_core::accesskit::Action::Click);
     }
 
     fn children_ids(&self) -> ChildrenIds {

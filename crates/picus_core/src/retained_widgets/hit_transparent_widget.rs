@@ -1,4 +1,4 @@
-use masonry_core::{
+use crate::masonry_core::{
     accesskit::{Node, Role},
     core::{
         AccessCtx, ChildrenIds, LayoutCtx, MeasureCtx, NewWidget, PaintCtx, PropertiesRef,
@@ -88,9 +88,9 @@ impl Widget for HitTransparentWidget {
 
     fn find_widget_under_pointer<'c>(
         &'c self,
-        _ctx: masonry_core::core::QueryCtx<'c>,
+        _ctx: crate::masonry_core::core::QueryCtx<'c>,
         _pos: Point,
-    ) -> Option<masonry_core::core::WidgetRef<'c, dyn Widget>> {
+    ) -> Option<crate::masonry_core::core::WidgetRef<'c, dyn Widget>> {
         None
     }
 }

@@ -1,5 +1,5 @@
 use bevy_ecs::entity::Entity;
-use masonry_core::{
+use crate::masonry_core::{
     accesskit::{Node, Role},
     core::{
         AccessCtx, ChildrenIds, LayoutCtx, MeasureCtx, NewWidget, PaintCtx, PropertiesRef,

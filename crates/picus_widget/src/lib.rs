@@ -20,17 +20,39 @@
 )]
 
 pub mod layers;
+pub mod masonry_core;
 pub mod properties;
 pub mod theme;
 pub mod widgets;
 mod text_rendering;
 
 pub use accesskit;
-pub use masonry_core;
 pub use masonry_core::imaging;
 pub use masonry_core::palette;
 pub use masonry_core::{app, core, dpi, kurbo, layout, parley, peniko, ui_events, util};
 pub use parley::{Alignment as TextAlign, AlignmentOptions as TextAlignOptions};
+
+/// Panic in debug and `tracing::error` in release mode.
+///
+/// Historical path was `masonry_core::debug_panic`; the `masonry` facade does not
+/// re-export that macro, so Picus defines it here.
+#[macro_export]
+macro_rules! debug_panic {
+    ($msg:expr$(,)?) => {
+        if cfg!(debug_assertions) {
+            panic!($msg);
+        } else {
+            tracing::error!($msg);
+        }
+    };
+    ($fmt:expr, $($arg:tt)+) => {
+        if cfg!(debug_assertions) {
+            panic!($fmt, $($arg)*);
+        } else {
+            tracing::error!($fmt, $($arg)*);
+        }
+    };
+}
 
 /// Transitional namespace for the retained widget/property runtime.
 pub mod retained {

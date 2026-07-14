@@ -7,10 +7,10 @@ use bevy_ecs::{
     hierarchy::{ChildOf, Children},
     prelude::Component,
 };
-use masonry_core::imaging::Painter;
-use masonry_core::kurbo::{Axis, BezPath, Circle, Line, Point, Rect, Stroke};
-use masonry_core::peniko::{self, Gradient};
-use masonry_core::{
+use crate::masonry_core::imaging::Painter;
+use crate::masonry_core::kurbo::{Axis, BezPath, Circle, Line, Point, Rect, Stroke};
+use crate::masonry_core::peniko::{self, Gradient};
+use crate::masonry_core::{
     layout::{Dim, Length},
     properties::Dimensions,
 };
@@ -477,8 +477,8 @@ pub(crate) fn project_canvas(canvas_component: &UiCanvas, ctx: ProjectionCtx<'_>
     let commands = canvas_component.commands.clone();
     let mut canvas_view = canvas(
         move |_: &mut (),
-              _: &mut masonry_core::core::MutateCtx<'_>,
-              scene: &mut masonry_core::imaging::record::Scene,
+              _: &mut crate::masonry_core::core::MutateCtx<'_>,
+              scene: &mut crate::masonry_core::imaging::record::Scene,
               size| {
             let mut painter = Painter::new(scene);
             for command in &commands {

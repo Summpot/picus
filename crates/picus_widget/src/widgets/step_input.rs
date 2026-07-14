@@ -2,8 +2,8 @@ use std::any::TypeId;
 use std::fmt::Debug;
 
 use accesskit::{Action, Node, Role};
-use masonry_core::anymore::AnyDebug;
-use masonry_core::debug_panic;
+use crate::masonry_core::anymore::AnyDebug;
+use crate::debug_panic;
 
 use crate::core::keyboard::{Code, Key, NamedKey};
 use crate::core::{

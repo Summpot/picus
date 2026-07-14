@@ -3,7 +3,7 @@ use picus_view::{
     Pod, ViewCtx,
     picus_widget::widgets::{self, ColorSpectrumChanged},
 };
-use xilem_core::{MessageCtx, MessageResult, Mut, View, ViewMarker};
+use xilem::core::{MessageCtx, MessageResult, Mut, View, ViewMarker};
 
 use crate::events::emit_ui_action;
 

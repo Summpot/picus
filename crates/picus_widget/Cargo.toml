@@ -10,9 +10,10 @@ doctest = false
 
 [dependencies]
 accesskit.workspace = true
-masonry_core.workspace = true
+anymore.workspace = true
 smallvec.workspace = true
 tracing.workspace = true
+xilem.workspace = true
 
 [dev-dependencies]
 picus_theme_test.workspace = true

@@ -16,7 +16,7 @@ use bevy_input::{
 };
 use bevy_math::{Rect, Vec2};
 use bevy_window::{PrimaryWindow, Window, WindowResized};
-use masonry_core::{
+use crate::masonry_core::{
     core::{Widget, WidgetId, WidgetRef, WindowEvent},
     dpi::PhysicalSize,
 };
@@ -272,7 +272,7 @@ pub fn collect_widget_bounds_by_short_name(
 
     if widget.short_type_name() == short_type_name {
         let ctx = widget.ctx();
-        let origin = ctx.to_window(masonry_core::kurbo::Point::ZERO);
+        let origin = ctx.to_window(crate::masonry_core::kurbo::Point::ZERO);
         let size = ctx.border_box().size();
         bounds.push(Rect::from_corners(
             Vec2::new(origin.x as f32, origin.y as f32),
@@ -299,7 +299,7 @@ pub fn widget_center_for_widget_id(app: &App, widget_id: WidgetId) -> Vec2 {
         .expect("widget id should resolve in render tree");
 
     let ctx = widget.ctx();
-    let origin = ctx.to_window(masonry_core::kurbo::Point::ZERO);
+    let origin = ctx.to_window(crate::masonry_core::kurbo::Point::ZERO);
     let size = ctx.border_box().size();
     Vec2::new(
         (origin.x + size.width * 0.5) as f32,
@@ -318,7 +318,7 @@ pub fn widget_inset_point_for_widget_id(app: &App, widget_id: WidgetId, inset: f
         .expect("widget id should resolve in render tree");
 
     let ctx = widget.ctx();
-    let origin = ctx.to_window(masonry_core::kurbo::Point::ZERO);
+    let origin = ctx.to_window(crate::masonry_core::kurbo::Point::ZERO);
     Vec2::new((origin.x + inset) as f32, (origin.y + inset) as f32)
 }
 
@@ -347,7 +347,7 @@ pub fn widget_rect_for_entity(app: &App, entity: Entity) -> Rect {
         .get_widget(widget_id)
         .expect("widget id should resolve in render tree");
     let ctx = widget.ctx();
-    let origin = ctx.to_window(masonry_core::kurbo::Point::ZERO);
+    let origin = ctx.to_window(crate::masonry_core::kurbo::Point::ZERO);
     let size = ctx.border_box().size();
 
     Rect {
@@ -411,7 +411,7 @@ pub fn portal_rects_for_entity(app: &App, entity: Entity) -> Vec<Rect> {
 
         if widget.short_type_name() == "Portal" {
             let ctx = widget.ctx();
-            let origin = ctx.to_window(masonry_core::kurbo::Point::ZERO);
+            let origin = ctx.to_window(crate::masonry_core::kurbo::Point::ZERO);
             let size = ctx.border_box().size();
             rects.push(Rect {
                 min: Vec2::new(origin.x as f32, origin.y as f32),

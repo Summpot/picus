@@ -8,7 +8,7 @@ use crate::{
     styling::{ResolvedStyle, apply_label_style, theme_default_font_family},
 };
 use bevy_ecs::prelude::*;
-use masonry_core::layout::Length;
+use crate::masonry_core::layout::Length;
 use picus_view::style::Style as _;
 use picus_view::view::{label, sized_box};
 

@@ -7,7 +7,7 @@
 mod win32_create_window_hook;
 
 use bevy_window::{CompositeAlphaMode as BevyCompositeAlphaMode, RawHandleWrapper};
-use masonry_imaging::{
+use picus_imaging::{
     PreparedFrame,
     texture_render::{RenderTarget, Renderer},
 };

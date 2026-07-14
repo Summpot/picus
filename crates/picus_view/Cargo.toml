@@ -9,7 +9,7 @@ doctest = false
 
 [dependencies]
 picus_widget.workspace = true
-xilem_core.workspace = true
 smallvec.workspace = true
 tokio = { workspace = true, features = ["rt", "rt-multi-thread", "time", "sync"] }
 tracing.workspace = true
+xilem.workspace = true

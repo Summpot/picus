@@ -13,4 +13,4 @@ mod alignment;
 
 pub use alignment::*;
 
-pub use masonry_core::properties::types::*;
+pub use crate::masonry_core::properties::types::*;

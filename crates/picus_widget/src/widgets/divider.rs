@@ -1,7 +1,7 @@
 use std::any::TypeId;
 
 use accesskit::{Node, Role};
-use masonry_core::debug_panic;
+use crate::debug_panic;
 use smallvec::SmallVec;
 use tracing::{Span, trace_span};
 

@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use bevy_ecs::{entity::Entity, prelude::Resource};
-use masonry_core::{
+use crate::masonry_core::{
     layout::{Dim, Length},
     parley::{Alignment as ParleyAlignment, LineHeight, style::FontWeight},
     peniko::Color,

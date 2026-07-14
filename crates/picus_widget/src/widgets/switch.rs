@@ -40,7 +40,7 @@ use crate::properties::{
 ///
 /// When toggled, this widget will have the `#toggled` [class].
 ///
-/// [class]: masonry_core::doc::masonry_concepts#classes
+/// [class]: crate::crate::masonry_core::doc::masonry_concepts#classes
 pub struct Switch {
     on: bool,
 }

@@ -26,8 +26,8 @@ use bevy_ecs::{
 };
 use bevy_reflect::TypePath;
 use bevy_time::Time;
-use masonry_core::core::UsesProperty;
-use masonry_core::{
+use crate::masonry_core::core::UsesProperty;
+use crate::masonry_core::{
     layout::Length,
     parley::{
         Alignment as ParleyTextAlign, FontFamily, FontFamilyName, GenericFamily, LineHeight,
@@ -4733,10 +4733,10 @@ mod tests {
                 );
                 assert_eq!(gradient.stops.len(), 2);
                 // Geometry: Absolute (0,0)→(0,3) relative to paint target top-left.
-                let rect = masonry_core::kurbo::Rect::new(10.0, 20.0, 110.0, 60.0);
+                let rect = crate::masonry_core::kurbo::Rect::new(10.0, 20.0, 110.0, 60.0);
                 let (p0, p1) = gradient.resolve_points(rect);
-                assert_eq!(p0, masonry_core::kurbo::Point::new(10.0, 20.0));
-                assert_eq!(p1, masonry_core::kurbo::Point::new(10.0, 23.0));
+                assert_eq!(p0, crate::masonry_core::kurbo::Point::new(10.0, 20.0));
+                assert_eq!(p1, crate::masonry_core::kurbo::Point::new(10.0, 23.0));
             }
             other => panic!(
                 "default UiButton border should use AbsoluteLinear elevation brush, got {other:?}"
@@ -4754,10 +4754,10 @@ mod tests {
                     gradient.flip_y,
                     "light ControlElevationBorderBrush should flip_y"
                 );
-                let rect = masonry_core::kurbo::Rect::new(0.0, 0.0, 100.0, 40.0);
+                let rect = crate::masonry_core::kurbo::Rect::new(0.0, 0.0, 100.0, 40.0);
                 let (p0, p1) = gradient.resolve_points(rect);
-                assert_eq!(p0, masonry_core::kurbo::Point::new(0.0, 40.0));
-                assert_eq!(p1, masonry_core::kurbo::Point::new(0.0, 37.0));
+                assert_eq!(p0, crate::masonry_core::kurbo::Point::new(0.0, 40.0));
+                assert_eq!(p1, crate::masonry_core::kurbo::Point::new(0.0, 37.0));
             }
             other => panic!("light UiButton border should use AbsoluteLinear, got {other:?}"),
         }

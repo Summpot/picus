@@ -8,7 +8,7 @@ use crate::{
         resolve_style, resolve_style_for_classes,
     },
 };
-use masonry_core::layout::{Dim, Length};
+use crate::masonry_core::layout::{Dim, Length};
 use picus_view::view::{
     CrossAxisAlignment, FlexExt as _, flex_col, flex_row, label, portal, transformed,
 };

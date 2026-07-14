@@ -16,7 +16,7 @@
 
 pub use picus_widget;
 pub use picus_widget::masonry_core;
-pub use xilem_core as core;
+pub use xilem::core as core;
 
 pub mod style;
 pub mod views;

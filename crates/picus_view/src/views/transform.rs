@@ -155,7 +155,7 @@ where
         message: &mut MessageCtx,
         element: Mut<'_, Self::Element>,
         app_state: &mut State,
-    ) -> xilem_core::MessageResult<Action> {
+    ) -> crate::core::MessageResult<Action> {
         self.child
             .message(&mut view_state.child, message, element, app_state)
     }

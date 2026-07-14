@@ -7,10 +7,11 @@ Masonry Core runs as a retained runtime resource driven by Bevy systems.
 Application (depends on `picus` facade only)
     │
     ▼
-picus  ──facade──►  picus_core  ──►  picus_view / picus_widget / masonry_core
-                         │
-                         └──► picus_surface (Vello/wgpu present)
+picus  ──facade──►  picus_core  ──►  picus_view / picus_widget::masonry_core
+                         │              └── xilem::core / xilem::winit
+                         └──► picus_surface ──► picus_imaging (desktop Vello/wgpu)
 ```
+
 
 ## Frame stages (summary)
 

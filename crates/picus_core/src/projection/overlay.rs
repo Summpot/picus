@@ -4,7 +4,7 @@ use crate::{
     resize::WindowSize,
     styling::{apply_widget_style, resolve_style_for_classes},
 };
-use masonry_core::{
+use crate::masonry_core::{
     layout::{Dim, UnitPoint},
     properties::Dimensions,
 };
@@ -33,8 +33,8 @@ pub(crate) fn project_overlay_root(_: &UiOverlayRoot, ctx: ProjectionCtx<'_>) ->
             && window_size.height > 0.0
         {
             Dimensions::AUTO
-                .with_width(Dim::Fixed(masonry_core::layout::Length::px(window_size.width)))
-                .with_height(Dim::Fixed(masonry_core::layout::Length::px(window_size.height)))
+                .with_width(Dim::Fixed(crate::masonry_core::layout::Length::px(window_size.width)))
+                .with_height(Dim::Fixed(crate::masonry_core::layout::Length::px(window_size.height)))
         } else {
             Dimensions::AUTO
                 .with_width(Dim::Stretch)

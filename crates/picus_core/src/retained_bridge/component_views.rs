@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 
 use bevy_ecs::entity::Entity;
-use masonry_core::{
+use crate::masonry_core::{
     core::{ArcStr, NewWidget},
     parley::{FontFamily, StyleProperty},
     peniko::Color,
@@ -14,7 +14,7 @@ use picus_view::{
     },
     view::TextInput,
 };
-use xilem_core::{MessageCtx, MessageResult, Mut, View, ViewMarker};
+use xilem::core::{MessageCtx, MessageResult, Mut, View, ViewMarker};
 
 use crate::events::emit_ui_action;
 use crate::styling::DEFAULT_TEXT_SIZE;
@@ -597,14 +597,14 @@ mod tests {
     use std::sync::Arc;
 
     use bevy_ecs::world::World;
-    use masonry_core::{
+    use crate::masonry_core::{
         app::{RenderRoot, RenderRootOptions, WindowSizePolicy},
         core::DefaultProperties,
         dpi::PhysicalSize,
     };
 
     use super::*;
-    use xilem_core::{ProxyError, RawProxy, SendMessage, View, ViewId};
+    use xilem::core::{ProxyError, RawProxy, SendMessage, View, ViewId};
 
     #[derive(Debug)]
     struct NoopProxy;

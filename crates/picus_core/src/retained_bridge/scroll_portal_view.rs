@@ -1,8 +1,8 @@
 use std::marker::PhantomData;
 
-use masonry_core::kurbo::Point;
+use crate::masonry_core::kurbo::Point;
 use picus_view::{Pod, ViewCtx, WidgetView, picus_widget::widgets};
-use xilem_core::{MessageCtx, MessageResult, Mut, View, ViewMarker};
+use xilem::core::{MessageCtx, MessageResult, Mut, View, ViewMarker};
 
 /// Portal view with explicit viewport-position configuration.
 pub fn scroll_portal<Child, State, Action>(

@@ -19,7 +19,7 @@ use crate::{
     widget_actions::WidgetUiAction,
 };
 use bevy_ecs::prelude::*;
-use masonry_core::{
+use crate::masonry_core::{
     layout::{Dim, Length, UnitPoint},
     properties::Padding,
 };
@@ -54,11 +54,11 @@ const SLIDER_HORIZONTAL_HEIGHT: f64 = 32.0;
 
 fn map_text_alignment_for_input(
     text_align: crate::styling::TextAlign,
-) -> masonry_core::parley::Alignment {
+) -> crate::masonry_core::parley::Alignment {
     match text_align {
-        crate::styling::TextAlign::Start => masonry_core::parley::Alignment::Start,
-        crate::styling::TextAlign::Center => masonry_core::parley::Alignment::Center,
-        crate::styling::TextAlign::End => masonry_core::parley::Alignment::End,
+        crate::styling::TextAlign::Start => crate::masonry_core::parley::Alignment::Start,
+        crate::styling::TextAlign::Center => crate::masonry_core::parley::Alignment::Center,
+        crate::styling::TextAlign::End => crate::masonry_core::parley::Alignment::End,
     }
 }
 
@@ -708,7 +708,7 @@ pub(crate) fn project_avatar(avatar: &UiAvatar, ctx: ProjectionCtx<'_>) -> UiVie
                 label(initials),
                 &initials_style,
             ))])
-            .alignment(masonry_core::layout::UnitPoint::CENTER),
+            .alignment(crate::masonry_core::layout::UnitPoint::CENTER),
             &avatar_style,
         ))
         .width(Dim::Fixed(Length::px(size_f64)))

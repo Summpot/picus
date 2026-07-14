@@ -84,7 +84,7 @@ impl<State> View<State, (), ViewCtx> for MasonryRoot<State> {
         message: &mut MessageCtx,
         render_root: Mut<'_, Self::Element>,
         app_state: &mut State,
-    ) -> xilem_core::MessageResult<()> {
+    ) -> crate::core::MessageResult<()> {
         render_root.edit_base_layer(|mut root| {
             self.root_widget_view
                 .message(view_state, message, root.downcast(), app_state)

@@ -6,7 +6,7 @@ use crate::core::{Mut, SuperElement, ViewElement};
 /// A container for a [`Widget`] yet to be inserted in the widget tree.
 ///
 /// This exists because the nearest equivalent type in Masonry, [`NewWidget`], can't have
-/// [Xilem Core](xilem_core) traits implemented on it due to Rust's orphan rules.
+/// [Xilem Core](crate::core) traits implemented on it due to Rust's orphan rules.
 ///
 /// If changing transforms of widgets, make sure to use [`transformed`]
 /// (or [`WidgetView::transform`]).

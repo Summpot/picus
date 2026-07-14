@@ -14,7 +14,7 @@ use bevy_input::{
 };
 use bevy_math::Vec2;
 use bevy_window::{PrimaryWindow, Window};
-use masonry_core::core::{Widget, WidgetRef};
+use crate::masonry_core::core::{Widget, WidgetRef};
 
 use crate::projection::dialog::{
     dialog_surface_gap, dialog_surface_padding, estimate_dialog_surface_height_px,
@@ -1605,7 +1605,7 @@ fn collect_entity_hit_boxes(widget: WidgetRef<'_, dyn Widget>, out: &mut Vec<Ent
     };
 
     let ctx = widget.ctx();
-    let origin = ctx.to_window(masonry_core::kurbo::Point::ZERO);
+    let origin = ctx.to_window(crate::masonry_core::kurbo::Point::ZERO);
     let size = ctx.border_box().size();
     out.push(EntityHitBox {
         entity,

@@ -5,7 +5,7 @@
 //! entities in the Masonry retained tree.
 
 use bevy_ecs::prelude::*;
-use masonry_core::peniko::Color;
+use crate::masonry_core::peniko::Color;
 
 /// A rectangular clip region.
 #[derive(Debug, Clone, Copy)]

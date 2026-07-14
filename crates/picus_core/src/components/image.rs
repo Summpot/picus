@@ -1,6 +1,6 @@
 use crate::xilem::Color;
 use bevy_ecs::prelude::*;
-use masonry_core::peniko::{
+use crate::masonry_core::peniko::{
     Blob, ImageAlphaType, ImageBrush, ImageData, ImageFormat, ImageQuality,
 };
 pub use picus_view::view::ObjectFit;

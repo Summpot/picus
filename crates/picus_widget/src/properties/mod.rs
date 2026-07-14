@@ -32,4 +32,4 @@ pub use selection::*;
 pub use slider::*;
 pub use step_input::*;
 
-pub use masonry_core::properties::*;
+pub use crate::masonry_core::properties::*;

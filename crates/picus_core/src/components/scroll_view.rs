@@ -429,11 +429,11 @@ mod tests {
 
         let scroll_x = scroll_widget
             .ctx()
-            .to_window(masonry_core::kurbo::Point::ZERO)
+            .to_window(crate::masonry_core::kurbo::Point::ZERO)
             .x;
         let label_x = label_widget
             .ctx()
-            .to_window(masonry_core::kurbo::Point::ZERO)
+            .to_window(crate::masonry_core::kurbo::Point::ZERO)
             .x;
 
         assert!(

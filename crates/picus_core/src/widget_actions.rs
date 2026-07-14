@@ -5,7 +5,7 @@ use bevy_input::mouse::{MouseScrollUnit, MouseWheel};
 use bevy_math::Vec2;
 use bevy_time::Time;
 use bevy_window::{PrimaryWindow, Window};
-use masonry_core::core::{Widget, WidgetRef};
+use crate::masonry_core::core::{Widget, WidgetRef};
 
 use crate::{
     AnchoredTo, AutoDismiss, HasTooltip, InteractionState, MasonryRuntime, OverlayAnchorRect,
@@ -200,7 +200,7 @@ fn parse_entity_bits_from_debug(debug: &str) -> Option<u64> {
 
 fn collect_scroll_view_targets_from_hit_path(
     window_runtime: &crate::runtime::WindowRuntime,
-    hit_path: &[masonry_core::core::WidgetId],
+    hit_path: &[crate::masonry_core::core::WidgetId],
     parents: &Query<&ChildOf>,
     scroll_markers: &Query<(), With<UiScrollView>>,
 ) -> Vec<Entity> {
@@ -1772,7 +1772,7 @@ mod tests {
         assert_eq!(gradient_canvas.commands.len(), 1);
 
         let image = crate::UiImage::from_bgra8(2, 1, vec![0, 0, 255, 255, 0, 255, 0, 128])
-            .quality(masonry_core::peniko::ImageQuality::High)
+            .quality(crate::masonry_core::peniko::ImageQuality::High)
             .alpha(0.5)
             .view_box(crate::UiImageViewBox::pixels(0.0, 0.0, 1.0, 1.0))
             .alignment(
