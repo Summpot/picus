@@ -75,8 +75,8 @@ pub use plugin::*;
 pub use projection::*;
 pub use resize::*;
 pub use retained_bridge::{
-    ButtonView, ButtonWithChildView, CheckboxView, SliderView, SwitchView, button,
-    button_with_child, checkbox, slider, switch, text_input,
+    ButtonView, ButtonWithChildView, CheckboxView, SliderView, SwitchView, checkbox, slider,
+    switch, text_input,
 };
 pub use runner::*;
 pub use runtime::*;
@@ -140,8 +140,7 @@ pub mod prelude {
         UiThemePickerChanged, UiThemePickerMenu, UiThemePickerOption, UiTitleBar, UiToast,
         UiToolbar, UiTooltip, UiTreeNode, UiTreeNodeToggled, UiView, UiVisibleResponsive, UiWindow,
         WidgetUiAction, WindowBackdropColorScheme, WindowBackdropMaterial, WindowRuntime,
-        WindowSize, XilemFontBridge, bubble_ui_pointer_events, button, button_with_child, checkbox,
-        collect_bevy_font_assets,
+        WindowSize, XilemFontBridge, bubble_ui_pointer_events, checkbox, collect_bevy_font_assets,
         clear_theme_backdrop_material_override, configure_window_for_backdrop,
         dismiss_overlays_on_click, ensure_overlay_root, ensure_overlay_root_entity,
         ensure_template_part, expand_builtin_ui_component_templates, find_template_part,
@@ -150,12 +149,10 @@ pub mod prelude {
         rebuild_masonry_runtime, register_builtin_projectors, register_builtin_style_type_aliases,
         register_builtin_ui_components, resolve_localized_text, resolve_style,
         resolve_style_for_classes, resolve_style_for_entity_classes, route_masonry_view_messages,
-        run_app, run_app_with_window_options, set_theme_backdrop_material, slider,
-        spawn_in_overlay_root,
-        spawn_popover_in_overlay_root, sync_dropdown_positions, sync_fonts_to_xilem,
-        sync_overlay_positions, sync_overlay_stack_lifecycle, synthesize_roots,
-        synthesize_roots_with_stats, synthesize_ui, synthesize_world, text_input,
-        tick_auto_dismiss, tick_toasts, track_window_size,
+        set_theme_backdrop_material, slider, spawn_in_overlay_root, spawn_popover_in_overlay_root,
+        sync_dropdown_positions, sync_fonts_to_xilem, sync_overlay_positions,
+        sync_overlay_stack_lifecycle, synthesize_roots, synthesize_roots_with_stats, synthesize_ui,
+        synthesize_world, text_input, tick_auto_dismiss, tick_toasts, track_window_size,
     };
 
     pub use crate::{

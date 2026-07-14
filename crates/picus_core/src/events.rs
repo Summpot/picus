@@ -507,10 +507,10 @@ pub struct TypedUiEvent<T> {
 
 /// Emit a typed UI action into the active app-owned sink.
 ///
-/// Prefer capturing [`UiActionSender<T>`] from [`crate::ProjectionCtx`] in
-/// application code. This function remains for internal retained callbacks.
-#[doc(hidden)]
-pub fn emit_ui_action<T: Any + Send + Sync>(entity: Entity, action: T) {
+/// Application code should capture [`UiActionSender<T>`] from
+/// [`crate::ProjectionCtx::action_sender`] instead. This remains for retained
+/// bridge views that emit during message handling.
+pub(crate) fn emit_ui_action<T: Any + Send + Sync>(entity: Entity, action: T) {
     push_active_ui_action(entity, action);
 }
 
@@ -646,5 +646,122 @@ mod tests {
             .resource::<bevy_ecs::message::Messages<UiAction<BuiltinUiAction>>>();
         let mut cursor = messages.get_cursor();
         assert_eq!(cursor.read(messages).count(), 1);
+    }
+
+    #[test]
+    fn independent_apps_do_not_share_action_sinks() {
+        let mut app_a = App::new();
+        app_a.add_plugins(PicusPlugin).add_ui_action::<TestAction>();
+        let mut app_b = App::new();
+        app_b.add_plugins(PicusPlugin).add_ui_action::<TestAction>();
+
+        let entity_a = app_a.world_mut().spawn_empty().id();
+        let entity_b = app_b.world_mut().spawn_empty().id();
+
+        app_a
+            .world()
+            .resource::<UiActionSender<TestAction>>()
+            .send(entity_a, TestAction::Inc);
+        app_b
+            .world()
+            .resource::<UiActionSender<TestAction>>()
+            .send(entity_b, TestAction::Clicked);
+
+        app_a
+            .world_mut()
+            .run_system_once(dispatch_ui_actions)
+            .expect("dispatch a");
+        app_b
+            .world_mut()
+            .run_system_once(dispatch_ui_actions)
+            .expect("dispatch b");
+
+        let messages_a = app_a
+            .world()
+            .resource::<bevy_ecs::message::Messages<UiAction<TestAction>>>();
+        let mut cursor_a = messages_a.get_cursor();
+        let collected_a: Vec<_> = cursor_a.read(messages_a).cloned().collect();
+        assert_eq!(collected_a.len(), 1);
+        assert_eq!(collected_a[0].action, TestAction::Inc);
+
+        let messages_b = app_b
+            .world()
+            .resource::<bevy_ecs::message::Messages<UiAction<TestAction>>>();
+        let mut cursor_b = messages_b.get_cursor();
+        let collected_b: Vec<_> = cursor_b.read(messages_b).cloned().collect();
+        assert_eq!(collected_b.len(), 1);
+        assert_eq!(collected_b[0].action, TestAction::Clicked);
+    }
+
+    #[test]
+    fn fifo_order_preserves_handler_enqueued_actions() {
+        let mut app = App::new();
+        app.add_plugins(PicusPlugin).add_ui_action::<TestAction>();
+
+        // Register an extra handler that enqueues a follow-up action.
+        app.world_mut()
+            .resource_mut::<UiActionRegistry>()
+            .register_handler::<TestAction, _>(|world, entity, action| {
+                if *action == TestAction::Inc {
+                    world
+                        .resource::<InternalUiEventQueue>()
+                        .push_typed(entity, TestAction::Clicked);
+                }
+            });
+
+        let entity = app.world_mut().spawn_empty().id();
+        app.world()
+            .resource::<InternalUiEventQueue>()
+            .push_typed(entity, TestAction::Inc);
+
+        app.world_mut()
+            .run_system_once(dispatch_ui_actions)
+            .expect("dispatch");
+
+        let messages = app
+            .world()
+            .resource::<bevy_ecs::message::Messages<UiAction<TestAction>>>();
+        let mut cursor = messages.get_cursor();
+        let collected: Vec<_> = cursor.read(messages).map(|m| m.action.clone()).collect();
+        assert_eq!(
+            collected,
+            vec![TestAction::Inc, TestAction::Clicked],
+            "handler-derived actions must be processed after already-queued FIFO entries"
+        );
+    }
+
+    #[test]
+    fn dispatch_limit_defers_remaining_actions() {
+        let mut app = App::new();
+        app.add_plugins(PicusPlugin).add_ui_action::<TestAction>();
+
+        let entity = app.world_mut().spawn_empty().id();
+        // Self-triggering handler would loop forever without the cap.
+        app.world_mut()
+            .resource_mut::<UiActionRegistry>()
+            .register_handler::<TestAction, _>(|world, entity, _| {
+                world
+                    .resource::<InternalUiEventQueue>()
+                    .push_typed(entity, TestAction::Inc);
+            });
+
+        app.world()
+            .resource::<InternalUiEventQueue>()
+            .push_typed(entity, TestAction::Inc);
+
+        app.world_mut()
+            .run_system_once(dispatch_ui_actions)
+            .expect("dispatch");
+
+        // Queue should still contain deferred work after hitting the limit.
+        let remaining = app
+            .world_mut()
+            .resource_mut::<InternalUiEventQueue>()
+            .drain_all()
+            .len();
+        assert!(
+            remaining > 0,
+            "dispatch limit should re-queue remaining work instead of spinning forever"
+        );
     }
 }

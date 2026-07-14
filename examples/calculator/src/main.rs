@@ -5,7 +5,7 @@ use picus::{
     UiThemePicker, UiView, apply_label_style, apply_widget_style,
     bevy_app::{App, Startup, Update},
     bevy_ecs::{message::MessageReader, prelude::*},
-    button, resolve_style, resolve_style_for_classes, BevyWindowOptions, UiAction, 
+    resolve_style, resolve_style_for_classes, BevyWindowOptions, UiAction, 
     scene::{CommandsSceneExt, Scene, SceneList, bsn, bsn_list, template_value},
     xilem::{
         view::{FlexExt as _, flex_col, flex_row, label},
@@ -404,7 +404,7 @@ fn calc_button_rows() -> Vec<Vec<CalcButtonSpec>> {
     ]
 }
 
-fn project_calc_button(entity: Entity, button_data: &CalcButtonSpec, world: &World) -> UiView {
+fn project_calc_button(ctx: &ProjectionCtx<'_>, button_data: &CalcButtonSpec) -> UiView {
     let event = button_data.event.clone();
 
     let button_class = match button_data.kind {
@@ -413,10 +413,10 @@ fn project_calc_button(entity: Entity, button_data: &CalcButtonSpec, world: &Wor
         CalcButtonKind::Operator => "calc.button.operator",
     };
 
-    let button_style = resolve_style_for_classes(world, [button_class]);
+    let button_style = resolve_style_for_classes(ctx.world, [button_class]);
 
     Arc::new(apply_widget_style(
-        button(entity, event, button_data.label),
+        ctx.button(event, button_data.label),
         &button_style,
     ))
 }
@@ -480,7 +480,7 @@ impl UiComponentTemplate for CalcButtonRow {
 
 impl UiComponentTemplate for CalcButtonSpec {
     fn project(button_data: &Self, ctx: ProjectionCtx<'_>) -> UiView {
-        project_calc_button(ctx.entity, button_data, ctx.world)
+        project_calc_button(&ctx, button_data)
     }
 }
 

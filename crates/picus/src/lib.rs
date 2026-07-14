@@ -61,7 +61,7 @@ pub mod components {
         UiTextInput, UiTextInputChanged, UiThemePicker, UiThemePickerChanged, UiThemePickerMenu,
         UiThemePickerOption, UiTitleBar, UiToast, UiToolbar, UiTooltip, UiTreeNode,
         UiTreeNodeToggled, UiView, UiVisibleResponsive, UiWindow, WindowBackdropColorScheme,
-        WindowBackdropMaterial, button, button_with_child, checkbox, slider, switch, text_input,
+        WindowBackdropMaterial, checkbox, slider, switch, text_input,
     };
     pub use picus_core::avatar_sizes;
     pub use picus_core::icon::{
@@ -73,7 +73,7 @@ pub mod components {
 pub mod projection {
     pub use picus_core::{
         ButtonView, ButtonWithChildView, CheckboxView, ProjectionCtx, SliderView, SwitchView,
-        UiView, button, button_with_child, checkbox, slider, switch, text_input,
+        UiView, checkbox, slider, switch, text_input,
     };
 }
 
@@ -86,7 +86,7 @@ pub mod styling {
         StyleTransition, SyncAssetSource, SyncTextSource, TargetColorStyle, TextStyle,
         ThemeBackdrop, ThemeBackdropOverride, TokenValue, WINDOW_BACKDROP_TOKEN,
         apply_active_stylesheet_ron, apply_direct_text_input_style, apply_direct_widget_style,
-        apply_label_style, apply_text_input_style, apply_widget_style,
+        apply_label_style, apply_text_input_style, apply_widget_style, styled,
         clear_theme_backdrop_material_override, mark_style_dirty, parse_stylesheet_ron,
         register_builtin_style_type_aliases, resolve_style, resolve_style_for_classes,
         resolve_style_for_classes_with_state, resolve_style_for_entity_classes,
@@ -244,16 +244,6 @@ pub use styling::*;
 
 // Masonry / xilem bridge types used by custom projection.
 pub use picus_core::{masonry_core, picus_view, xilem};
-// Compatibility alias used by some examples.
-pub use picus_core as core;
-
-/// Low-level emit into the active app action sink.
-///
-/// Prefer capturing [`UiActionSender`] from [`ProjectionCtx`] in new code.
-/// This remains available for retained task callbacks that already hold only an
-/// entity id.
-pub use picus_core::emit_ui_action;
-
 
 /// Read newly arrived [`UiAction`] messages in an exclusive `World` system.
 ///

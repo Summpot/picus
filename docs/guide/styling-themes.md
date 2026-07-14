@@ -31,8 +31,14 @@ Priority when configured:
 |-------|-----|
 | 0 | No theme = no visible defaults |
 | 1 | Load Fluent bundle / app RON + variant |
-| 2 | Inline / builder styles |
+| 2 | Inline / builder styles (`InlineStyle`, `styled`) |
 | 3 | Class + app RON override |
 | 4 | Full multi-brand stylesheet |
+
+### Helpers
+
+- `styled(view, &resolved)` — apply a `ResolvedStyle` to any widget view
+- `ProjectionCtx::styled(view)` — resolve this entity's style and apply it
+- `InlineStyle::new().padding(8.0).bg(color).text_size(14.0)` — common inline builder
 
 Production colours come from stylesheet RON, not widget defaults.

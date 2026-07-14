@@ -7,7 +7,7 @@ use picus::{
     ProjectionCtx, UiComponentTemplate, UiView, apply_direct_text_input_style, apply_label_style,
     apply_widget_style,
     bevy_ecs::hierarchy::Children,
-    button_with_child, emit_ui_action, icon,
+    icon,
     icons::{FluentIcon, IconGlyph},
     masonry_core::{
         layout::{Dim, Length},
@@ -266,8 +266,11 @@ impl UiComponentTemplate for ComposerView {
             text_input(input_entity, draft, PicusCodeAction::ComposerChanged)
                 .placeholder("Message CodeWhale...")
                 .insert_newline(InsertNewline::OnShiftEnter)
-                .on_enter(move |_| {
-                    emit_ui_action(enter_entity, PicusCodeAction::Send);
+                .on_enter({
+                    let sender = ctx.action_sender::<PicusCodeAction>();
+                    move |_| {
+                        sender.send(enter_entity, PicusCodeAction::Send);
+                    }
                 }),
             &input_style,
         );
@@ -555,7 +558,7 @@ fn toolbar_button(
     .main_axis_alignment(MainAxisAlignment::Center)
     .gap(Length::px(6.0));
     Arc::new(apply_widget_style(
-        button_with_child(ctx.entity, action, content),
+        ctx.button_with_child(action, content),
         &style,
     ))
 }
@@ -578,7 +581,7 @@ fn primary_button(
     .main_axis_alignment(MainAxisAlignment::Center)
     .gap(Length::px(8.0));
     Arc::new(apply_widget_style(
-        button_with_child(ctx.entity, action, content),
+        ctx.button_with_child(action, content),
         &style,
     ))
 }
@@ -621,8 +624,7 @@ fn suggestion_button(ctx: &ProjectionCtx<'_>, prompt: &'static str, meta: &'stat
     .cross_axis_alignment(CrossAxisAlignment::Start)
     .gap(Length::px(3.0));
     Arc::new(apply_widget_style(
-        button_with_child(
-            ctx.entity,
+        ctx.button_with_child(
             PicusCodeAction::ComposerChanged(prompt.to_string()),
             content,
         ),
@@ -735,8 +737,7 @@ fn sidebar_thread_item(ctx: &ProjectionCtx<'_>, thread: &ThreadSummary, is_activ
         text_view(ctx, ["picuscode.thread.meta"], meta).into_any_flex(),
     ])
     .gap(Length::px(3.0));
-    let btn = button_with_child(
-        ctx.entity,
+    let btn = ctx.button_with_child(
         PicusCodeAction::SelectThread(thread.id.clone()),
         apply_widget_style(content, &item_style),
     );
@@ -797,7 +798,7 @@ fn sidebar_nav_button(
     .cross_axis_alignment(CrossAxisAlignment::Center)
     .gap(Length::px(8.0));
     Arc::new(apply_widget_style(
-        button_with_child(ctx.entity, action, content),
+        ctx.button_with_child(action, content),
         &style,
     ))
 }

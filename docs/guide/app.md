@@ -65,7 +65,19 @@ fn main() -> Result<(), EventLoopError> {
 - BSN: attach `template_value(UiEmit::new(AppAction::Inc))` on a `UiButton` entity.
 - Without `UiEmit`, enabled buttons emit `BuiltinUiAction::Clicked`.
 - Disabled buttons emit nothing.
-- Custom projection: `ctx.button(action, label)` / `ctx.action_sender::<T>()`.
+- Custom projection: `ctx.button(action, label)` / `ctx.button_with_child(...)` /
+  `ctx.action_sender::<T>()` (do not use free `button(entity, ...)` helpers).
+- Deferred / async emits: clone `UiActionSender<T>` and call `send(source, action)`.
+- Style helpers: `styled(view, &resolved)` / `ctx.styled(view)`; layout:
+  `ctx.flex_col([...])` / `ctx.flex_row([...])`.
+- Inline overrides: `InlineStyle::new().padding(8.0).bg(color)`.
+
+## When not to split a Component
+
+Prefer a single container component that maps children or builds a small view tree
+when the piece is not reused, has no independent style type, and does not need its
+own projection resources. Split into a `UiComponent` when the subtree is reused,
+has distinct styles/classes, or registers its own resource dependencies.
 
 ## When to use exclusive systems
 

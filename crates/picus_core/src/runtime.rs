@@ -57,7 +57,10 @@ use xilem_core::{
 };
 
 use crate::{
-    events::{InternalUiEventQueue, install_global_ui_event_queue},
+    events::{
+        InternalUiActionSink, InternalUiEventQueue, install_app_ui_action_sink,
+        install_global_ui_event_queue,
+    },
     fonts::{XilemFontBridge, font_bytes_fingerprint},
     overlay::OverlayPointerRoutingState,
     projection::{UiAnyView, UiView},
@@ -147,6 +150,8 @@ pub struct WindowRuntime {
     view_state: RuntimeViewState,
     current_view: UiView,
     window_entity: Entity,
+    /// App-owned action sink shared by every window of the same Bevy `App`.
+    action_sink: InternalUiActionSink,
     window_scale_factor: f64,
     window_transparent: bool,
     pointer_info: PointerInfo,
@@ -171,11 +176,21 @@ pub struct WindowRuntime {
 }
 
 impl WindowRuntime {
+    /// Install this window's app action sink as the active thread-local target
+    /// for retained widget emissions.
+    pub(crate) fn install_action_sink(&self) {
+        install_app_ui_action_sink(self.action_sink.clone());
+    }
+
     fn new(
         window_entity: Entity,
         initial_view: UiView,
         event_loop_proxy: Arc<Mutex<Option<EventLoopProxy<WinitUserEvent>>>>,
+        action_sink: InternalUiActionSink,
     ) -> Self {
+        // Ensure retained widgets built during construction write to this app.
+        install_app_ui_action_sink(action_sink.clone());
+
         let (view_message_sender, view_message_receiver) = mpsc::channel::<QueuedViewMessage>();
         let mut view_ctx = ViewCtx::new(
             Arc::new(ChannelProxy {
@@ -248,6 +263,7 @@ impl WindowRuntime {
             view_state,
             current_view: initial_view,
             window_entity,
+            action_sink,
             window_scale_factor: 1.0,
             window_transparent: false,
             pointer_info: PointerInfo {
@@ -1001,18 +1017,23 @@ pub struct MasonryRuntime {
     pub windows: HashMap<Entity, WindowRuntime>,
     primary_window: Option<Entity>,
     event_loop_proxy: Arc<Mutex<Option<EventLoopProxy<WinitUserEvent>>>>,
+    /// Shared write sink for every window attached to this app.
+    action_sink: InternalUiActionSink,
 }
 
 impl FromWorld for MasonryRuntime {
     fn from_world(world: &mut World) -> Self {
         world.init_resource::<InternalUiEventQueue>();
-        let queue = world.resource::<InternalUiEventQueue>().shared_queue();
-        install_global_ui_event_queue(queue);
+        let action_sink = world.resource::<InternalUiEventQueue>().sink();
+        install_app_ui_action_sink(action_sink.clone());
+        // Compatibility install for call sites still holding a raw SegQueue handle.
+        install_global_ui_event_queue(action_sink.shared_queue());
 
         Self {
             windows: HashMap::new(),
             primary_window: None,
             event_loop_proxy: Arc::new(Mutex::new(None)),
+            action_sink,
         }
     }
 }
@@ -1054,6 +1075,14 @@ impl MasonryRuntime {
         self.windows.get_mut(&entity)
     }
 
+    /// Install this app's action sink as the active thread-local target.
+    ///
+    /// Call before retained input/rebuild work so multi-app hosts cannot leak
+    /// emissions across Bevy `App` instances on the same thread.
+    pub(crate) fn install_action_sink(&self) {
+        install_app_ui_action_sink(self.action_sink.clone());
+    }
+
     /// Create a window runtime for `entity` if one does not already exist.
     ///
     /// If `is_primary` is `true`, the entity is recorded as the primary window.
@@ -1063,11 +1092,14 @@ impl MasonryRuntime {
             self.primary_window = Some(entity);
         }
 
+        let action_sink = self.action_sink.clone();
+        let event_loop_proxy = Arc::clone(&self.event_loop_proxy);
         self.windows.entry(entity).or_insert_with(|| {
             WindowRuntime::new(
                 entity,
                 WindowRuntime::initial_placeholder_view(),
-                Arc::clone(&self.event_loop_proxy),
+                event_loop_proxy,
+                action_sink,
             )
         })
     }
@@ -1292,6 +1324,7 @@ pub fn inject_bevy_input_into_masonry(
     let Some(mut runtime) = runtime else {
         return;
     };
+    runtime.install_action_sink();
 
     let primary_window_entity = primary_window_entity_query.iter().next();
 
@@ -1662,6 +1695,7 @@ pub fn rebuild_masonry_runtime(world: &mut World) {
         let Some(window_runtime) = runtime.window_mut(window_entity) else {
             continue;
         };
+        window_runtime.install_action_sink();
         window_runtime.rebuild_root_view(window_view);
     }
 }
@@ -1678,6 +1712,7 @@ pub fn route_masonry_view_messages(runtime: Option<NonSendMut<MasonryRuntime>>) 
     let entities: Vec<Entity> = runtime.window_entities().collect();
     for entity in entities {
         if let Some(window_runtime) = runtime.window_mut(entity) {
+            window_runtime.install_action_sink();
             window_runtime.route_pending_view_messages();
         }
     }
@@ -1835,6 +1870,7 @@ mod tests {
             windows: HashMap::new(),
             primary_window: None,
             event_loop_proxy: Arc::new(Mutex::new(None)),
+            action_sink: InternalUiActionSink::default(),
         };
 
         let a = Entity::from_bits(1);
@@ -1865,6 +1901,7 @@ mod tests {
             windows: HashMap::new(),
             primary_window: None,
             event_loop_proxy: Arc::new(Mutex::new(None)),
+            action_sink: InternalUiActionSink::default(),
         };
         let window = Entity::from_bits(7);
 

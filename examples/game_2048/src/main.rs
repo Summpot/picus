@@ -20,10 +20,10 @@ use picus::{BevyWindowOptions,
     AppPicusExt, PicusPlugin, ProjectionCtx, StyleClass, UiComponentTemplate, UiRoot,
     UiThemePicker, UiView, apply_label_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
-    bevy_ecs::{message::MessageCursor, prelude::*},
+    bevy_ecs::prelude::*,
     bevy_input::{ButtonInput, keyboard::KeyCode},
     bevy_window::WindowResized,
-    button, emit_ui_action, take_ui_actions, UiAction,
+    UiActionSender,
     picus_view::{
         Pod, ViewCtx, WidgetView,
         core::{MessageCtx, MessageResult, Mut, View, ViewId, ViewMarker, ViewPathTracker},
@@ -541,19 +541,25 @@ struct HintLine;
 
 struct HotkeyCaptureWidget<W: Widget + FromDynWidget + ?Sized> {
     entity: Entity,
+    sender: UiActionSender<KeyboardAction>,
     child: WidgetPod<W>,
 }
 
 impl<W: Widget + FromDynWidget + ?Sized> HotkeyCaptureWidget<W> {
-    fn new(entity: Entity, child: NewWidget<W>) -> Self {
+    fn new(entity: Entity, sender: UiActionSender<KeyboardAction>, child: NewWidget<W>) -> Self {
         Self {
             entity,
+            sender,
             child: child.to_pod(),
         }
     }
 
     fn set_entity(this: &mut WidgetMut<'_, Self>, entity: Entity) {
         this.widget.entity = entity;
+    }
+
+    fn set_sender(this: &mut WidgetMut<'_, Self>, sender: UiActionSender<KeyboardAction>) {
+        this.widget.sender = sender;
     }
 
     fn child_mut<'t>(this: &'t mut WidgetMut<'_, Self>) -> WidgetMut<'t, W> {
@@ -584,7 +590,7 @@ impl<W: Widget + FromDynWidget + ?Sized> Widget for HotkeyCaptureWidget<W> {
         if let TextEvent::Keyboard(event) = event
             && let Some(key) = keycode_from_key(&event.key)
         {
-            emit_ui_action(
+            self.sender.send(
                 self.entity,
                 KeyboardAction {
                     key,
@@ -656,16 +662,25 @@ impl<W: Widget + FromDynWidget + ?Sized> Widget for HotkeyCaptureWidget<W> {
 
 struct HotkeyCaptureView<Child> {
     entity: Entity,
+    sender: UiActionSender<KeyboardAction>,
     child: Child,
 }
 
 const HOTKEY_CAPTURE_CHILD_VIEW_ID: ViewId = ViewId::new(0x2048_0001);
 
-fn hotkey_capture<Child>(entity: Entity, child: Child) -> HotkeyCaptureView<Child>
+fn hotkey_capture<Child>(
+    entity: Entity,
+    sender: UiActionSender<KeyboardAction>,
+    child: Child,
+) -> HotkeyCaptureView<Child>
 where
     Child: WidgetView<(), ()>,
 {
-    HotkeyCaptureView { entity, child }
+    HotkeyCaptureView {
+        entity,
+        sender,
+        child,
+    }
 }
 
 impl<Child> ViewMarker for HotkeyCaptureView<Child> where Child: WidgetView<(), ()> {}
@@ -683,7 +698,11 @@ where
         });
         (
             ctx.with_action_widget(|ctx| {
-                ctx.create_pod(HotkeyCaptureWidget::new(self.entity, child.new_widget))
+                ctx.create_pod(HotkeyCaptureWidget::new(
+                    self.entity,
+                    self.sender.clone(),
+                    child.new_widget,
+                ))
             }),
             child_state,
         )
@@ -700,6 +719,7 @@ where
         if self.entity != prev.entity {
             HotkeyCaptureWidget::set_entity(&mut element, self.entity);
         }
+        HotkeyCaptureWidget::set_sender(&mut element, self.sender.clone());
 
         ctx.with_id(HOTKEY_CAPTURE_CHILD_VIEW_ID, |ctx| {
             self.child.rebuild(
@@ -754,6 +774,8 @@ where
 impl UiComponentTemplate for GameRoot {
     fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
         let style = resolve_style(ctx.world, ctx.entity);
+        let sender = ctx.action_sender::<KeyboardAction>();
+        let entity = ctx.entity;
         let mut children = ctx.children.into_iter();
         let theme_picker = children.next().unwrap_or_else(|| Arc::new(label("")));
         let content_children = children
@@ -773,7 +795,7 @@ impl UiComponentTemplate for GameRoot {
             &style,
         );
 
-        Arc::new(hotkey_capture(ctx.entity, portal(content)))
+        Arc::new(hotkey_capture(entity, sender, portal(content)))
     }
 }
 
@@ -989,7 +1011,7 @@ impl UiComponentTemplate for UiComponentButton {
 
         Arc::new(
             sized_box(
-                button(ctx.entity, button_info.action, button_info.label)
+                ctx.button(button_info.action, button_info.label)
                     .padding(Padding::all(Length::px(style.layout.padding)))
                     .corner_radius(Length::px(style.layout.corner_radius))
                     .border(

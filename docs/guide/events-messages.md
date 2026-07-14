@@ -24,9 +24,14 @@ UiActionRegistry (TypeId → handlers)
 |------------|------|
 | `UiAction<T> { source, action }` | Bevy `Message` apps read |
 | `add_ui_action::<T>()` | Registers messages + `UiActionSender<T>` + dispatcher |
-| `UiActionSender<T>` | Cloneable write handle for deferred emits |
+| `UiActionSender<T>` | Cloneable write handle for deferred emits (async tasks, custom widgets) |
 | `UiEmit` | Non-generic ECS component binding a button to `T` |
+| `ProjectionCtx::button` / `button_with_child` | Action-aware retained buttons for custom projection |
+| `ProjectionCtx::action_sender` | Capture a sender while projecting |
 | `PicusUiSet` | PreUpdate chain: Input → RetainedRouting → DispatchActions |
+
+There is **no** public global `emit_ui_action`. Prefer capturing `UiActionSender<T>` from
+`ProjectionCtx` or `Res<UiActionSender<T>>` in systems.
 
 ## Scheduling
 

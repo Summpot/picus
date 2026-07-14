@@ -9,7 +9,7 @@ use picus::{
     UiComponentTemplate, UiRoot, UiThemePicker, UiView, apply_label_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
     bevy_ecs::{message::MessageCursor, prelude::*},
-    button, button_with_child, checkbox,
+    checkbox,
     masonry_core::{
         dpi::LogicalSize,
         layout::{AsUnit, Length},
@@ -447,7 +447,8 @@ struct ChessUiComponentsPanel;
 #[derive(Component, Debug, Clone, Copy, Default)]
 struct ChessBoardPanel;
 
-fn build_chess_board_view(world: &World, ui: &ChessUiResource, action_entity: Entity) -> UiView {
+fn build_chess_board_view(ctx: &ProjectionCtx<'_>, ui: &ChessUiResource) -> UiView {
+    let world = ctx.world;
     let board_style = resolve_style_for_classes(world, ["chess.board"]);
     let cell_style = resolve_style_for_classes(world, ["chess.cell"]);
     let light_cell_style = resolve_style_for_classes(world, ["chess.cell.light"]);
@@ -494,19 +495,16 @@ fn build_chess_board_view(world: &World, ui: &ChessUiResource, action_entity: En
                 &piece_style,
             );
 
-            let cell = button_with_child(
-                action_entity,
-                ChessEvent::ClickSquare { row, col },
-                label_piece,
-            )
-            .padding(Padding::all(Length::px(cell_style.layout.padding)))
-            .corner_radius(Length::px(cell_style.layout.corner_radius))
-            .border(
-                cell_style.colors.border.unwrap_or(Color::TRANSPARENT),
-                Length::px(cell_style.layout.border_width),
-            )
-            .background_color(color)
-            .grid_pos(draw_col as i32, draw_row as i32);
+            let cell = ctx
+                .button_with_child(ChessEvent::ClickSquare { row, col }, label_piece)
+                .padding(Padding::all(Length::px(cell_style.layout.padding)))
+                .corner_radius(Length::px(cell_style.layout.corner_radius))
+                .border(
+                    cell_style.colors.border.unwrap_or(Color::TRANSPARENT),
+                    Length::px(cell_style.layout.border_width),
+                )
+                .background_color(color)
+                .grid_pos(draw_col as i32, draw_row as i32);
 
             cells.push(cell);
         }
@@ -519,12 +517,12 @@ fn build_chess_board_view(world: &World, ui: &ChessUiResource, action_entity: En
 }
 
 fn build_chess_ui_components_view(
-    world: &World,
+    ctx: &ProjectionCtx<'_>,
     game_res: &ChessGameResource,
     ui: &ChessUiResource,
     flow: &ChessFlowResource,
-    action_entity: Entity,
 ) -> UiView {
+    let world = ctx.world;
     let ui_components_style = resolve_style_for_classes(world, ["chess.ui-components"]);
     let status_style = resolve_style_for_classes(world, ["chess.status"]);
     let clock_style = resolve_style_for_classes(world, ["chess.clock"]);
@@ -536,17 +534,17 @@ fn build_chess_ui_components_view(
     let movelist_text = ui.movelist_text();
 
     let rotate_button = apply_widget_style(
-        button(action_entity, ChessEvent::Rotate, "Rotate"),
+        ctx.button(ChessEvent::Rotate, "Rotate"),
         &action_button_style,
     );
 
     let new_game_button = apply_widget_style(
-        button(action_entity, ChessEvent::NewGame, "New game"),
+        ctx.button(ChessEvent::NewGame, "New game"),
         &action_button_style,
     );
 
     let print_movelist_button = apply_widget_style(
-        button(action_entity, ChessEvent::PrintMovelist, "Print movelist"),
+        ctx.button(ChessEvent::PrintMovelist, "Print movelist"),
         &action_button_style,
     );
 
@@ -566,7 +564,7 @@ fn build_chess_ui_components_view(
                 &time_per_move_style,
             ),
             slider(
-                action_entity,
+                ctx.entity,
                 0.1,
                 5.0,
                 game_res.time_per_move,
@@ -574,7 +572,7 @@ fn build_chess_ui_components_view(
             ),
             apply_widget_style(
                 checkbox(
-                    action_entity,
+                    ctx.entity,
                     "Engine plays white",
                     ui.engine_plays_white,
                     |_| ChessEvent::ToggleEngineWhite,
@@ -584,7 +582,7 @@ fn build_chess_ui_components_view(
             ),
             apply_widget_style(
                 checkbox(
-                    action_entity,
+                    ctx.entity,
                     "Engine plays black",
                     ui.engine_plays_black,
                     |_| ChessEvent::ToggleEngineBlack,
@@ -634,14 +632,14 @@ impl UiComponentTemplate for ChessUiComponentsPanel {
         let game_res = ctx.world.resource::<ChessGameResource>();
         let ui = ctx.world.resource::<ChessUiResource>();
         let flow = ctx.world.resource::<ChessFlowResource>();
-        build_chess_ui_components_view(ctx.world, game_res, ui, flow, ctx.entity)
+        build_chess_ui_components_view(&ctx, game_res, ui, flow)
     }
 }
 
 impl UiComponentTemplate for ChessBoardPanel {
     fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
         let ui = ctx.world.resource::<ChessUiResource>();
-        build_chess_board_view(ctx.world, ui, ctx.entity)
+        build_chess_board_view(&ctx, ui)
     }
 }
 

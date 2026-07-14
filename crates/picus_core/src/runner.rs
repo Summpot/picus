@@ -230,18 +230,8 @@ fn configure_primary_window(app: &mut App, title: &str, options: &BevyWindowOpti
     }
 }
 
-/// Run a Bevy app using Bevy's native runner and default `bevy_winit` event loop.
-///
-/// This no longer creates a separate Xilem runner/event loop.
-pub fn run_app(bevy_app: App, window_title: impl Into<String>) -> Result<(), EventLoopError> {
-    run_app_with_window_options(bevy_app, window_title, |options| options)
-}
-
-/// Same as [`run_app`] with primary-window option overrides.
-///
-/// The closure receives and returns [`BevyWindowOptions`], preserving ergonomic
-/// call sites while delegating execution to Bevy's own runner.
-pub fn run_app_with_window_options(
+/// Internal runner used by [`crate::AppPicusExt::run_picus`].
+pub(crate) fn run_app_with_window_options(
     mut bevy_app: App,
     window_title: impl Into<String>,
     configure_window: impl Fn(BevyWindowOptions) -> BevyWindowOptions + Send + Sync + 'static,

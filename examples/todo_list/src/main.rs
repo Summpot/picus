@@ -7,10 +7,9 @@ use picus::{
     bevy_app::{App, Startup, Update},
     bevy_ecs::{
         hierarchy::{ChildOf, Children},
-        message::MessageReader,
         prelude::*,
     },
-    button, checkbox, emit_ui_action,
+    checkbox,
     masonry_core::layout::Length,
     resolve_style, resolve_style_for_classes, resolve_style_for_entity_classes,
     scene::{Scene, WorldSceneExt, bsn, template_value},
@@ -120,6 +119,7 @@ impl UiComponentTemplate for TodoInputArea {
         let draft = ctx.world.resource::<DraftTodo>().0.clone();
         let input_entity = ctx.entity;
         let entity_for_enter = ctx.entity;
+        let enter_sender = ctx.action_sender::<TodoEvent>();
 
         Arc::new(apply_widget_style(
             flex_row((
@@ -128,13 +128,13 @@ impl UiComponentTemplate for TodoInputArea {
                         .placeholder("What needs to be done?")
                         .insert_newline(InsertNewline::OnShiftEnter)
                         .on_enter(move |_| {
-                            emit_ui_action(entity_for_enter, TodoEvent::SubmitDraft);
+                            enter_sender.send(entity_for_enter, TodoEvent::SubmitDraft);
                         }),
                     &input_style,
                 )
                 .flex(1.0),
                 apply_widget_style(
-                    button(ctx.entity, TodoEvent::SubmitDraft, "Add task"),
+                    ctx.button(TodoEvent::SubmitDraft, "Add task"),
                     &add_button_style,
                 ),
             )),
@@ -215,7 +215,7 @@ impl UiComponentTemplate for TodoItem {
                 ),
                 FlexSpacer::Flex(1.0),
                 apply_widget_style(
-                    button(entity, TodoEvent::Delete(entity), "Delete"),
+                    ctx.button(TodoEvent::Delete(entity), "Delete"),
                     &delete_button_style,
                 ),
             )),

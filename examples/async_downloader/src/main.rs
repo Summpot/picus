@@ -5,13 +5,13 @@ use std::{
     time::{Duration, Instant},
 };
 
-use picus::{BevyWindowOptions, UiAction, take_ui_actions, 
-    AppPicusExt, PicusPlugin, ProjectionCtx, StyleClass, UiComponentTemplate, UiDialog,
-    UiRoot, UiThemePicker, UiView, apply_label_style, apply_widget_style,
+use picus::{BevyWindowOptions, 
+    AppPicusExt, PicusPlugin, ProjectionCtx, StyleClass, UiActionSender, UiComponentTemplate,
+    UiDialog, UiRoot, UiThemePicker, UiView, apply_label_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
-    bevy_ecs::{message::MessageCursor, prelude::*},
+    bevy_ecs::prelude::*,
     bevy_tasks::{IoTaskPool, TaskPoolBuilder},
-    button, emit_ui_action, resolve_style, resolve_style_for_classes, rfd,
+    resolve_style, resolve_style_for_classes, rfd,
 
     scene::{CommandsSceneExt, bsn},
     spawn_in_overlay_root, switch, text_input,
@@ -163,12 +163,12 @@ fn format_bytes(bytes: u64) -> String {
     }
 }
 
-fn spawn_download_worker(entity: Entity, url: String) {
+fn spawn_download_worker(entity: Entity, url: String, sender: UiActionSender<DownloadEvent>) {
     ensure_io_task_pool();
     IoTaskPool::get()
         .spawn(async move {
             let fail = |msg: String| {
-                emit_ui_action(entity, DownloadEvent::WorkerFailed(msg));
+                sender.send(entity, DownloadEvent::WorkerFailed(msg));
             };
 
             let file_name = url_file_name(&url);
@@ -192,7 +192,7 @@ fn spawn_download_worker(entity: Entity, url: String) {
             }
 
             let total_bytes = response.content_length();
-            emit_ui_action(
+            sender.send(
                 entity,
                 DownloadEvent::WorkerStarted {
                     total_bytes,
@@ -233,7 +233,7 @@ fn spawn_download_worker(entity: Entity, url: String) {
                 downloaded_bytes += u64::try_from(read_count).unwrap_or(0);
 
                 if last_emit.elapsed() >= Duration::from_millis(HEARTBEAT_MS) {
-                    emit_ui_action(
+                    sender.send(
                         entity,
                         DownloadEvent::WorkerProgress {
                             downloaded_bytes,
@@ -244,14 +244,14 @@ fn spawn_download_worker(entity: Entity, url: String) {
                 }
             }
 
-            emit_ui_action(
+            sender.send(
                 entity,
                 DownloadEvent::WorkerProgress {
                     downloaded_bytes,
                     total_bytes,
                 },
             );
-            emit_ui_action(
+            sender.send(
                 entity,
                 DownloadEvent::WorkerFinished {
                     target: target_text,
@@ -261,7 +261,12 @@ fn spawn_download_worker(entity: Entity, url: String) {
         .detach();
 }
 
-fn spawn_system_dialog(entity: Entity, title: String, description: String) {
+fn spawn_system_dialog(
+    entity: Entity,
+    title: String,
+    description: String,
+    sender: UiActionSender<DownloadEvent>,
+) {
     ensure_io_task_pool();
     IoTaskPool::get()
         .spawn(async move {
@@ -272,7 +277,7 @@ fn spawn_system_dialog(entity: Entity, title: String, description: String) {
                 .set_buttons(rfd::MessageButtons::Ok)
                 .show();
 
-            emit_ui_action(entity, DownloadEvent::SystemDialogClosed);
+            sender.send(entity, DownloadEvent::SystemDialogClosed);
         })
         .detach();
 }
@@ -287,6 +292,8 @@ fn progress_value(state: &DownloadState) -> Option<f64> {
 impl UiComponentTemplate for DownloadRootView {
     fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
         let root_style = resolve_style(ctx.world, ctx.entity);
+        let heartbeat_entity = ctx.entity;
+        let tick_sender = ctx.action_sender::<DownloadEvent>();
         let content = apply_widget_style(
             flex_col(
                 ctx.children
@@ -297,8 +304,6 @@ impl UiComponentTemplate for DownloadRootView {
             .cross_axis_alignment(CrossAxisAlignment::Start),
             &root_style,
         );
-
-        let heartbeat_entity = ctx.entity;
         let heartbeat = task(
             |proxy, _: &mut ()| async move {
                 let mut interval = tokio::time::interval(Duration::from_millis(HEARTBEAT_MS));
@@ -310,7 +315,7 @@ impl UiComponentTemplate for DownloadRootView {
                 }
             },
             move |_: &mut (), ()| {
-                emit_ui_action(heartbeat_entity, DownloadEvent::Tick);
+                tick_sender.send(heartbeat_entity, DownloadEvent::Tick);
             },
         );
 
@@ -364,7 +369,7 @@ impl UiComponentTemplate for DownloadActionRow {
 
         Arc::new(apply_widget_style(
             flex_row((apply_widget_style(
-                button(ctx.entity, DownloadEvent::StartDownload, button_text),
+                ctx.button(DownloadEvent::StartDownload, button_text),
                 &button_style,
             ),))
             .main_axis_alignment(MainAxisAlignment::Start),
@@ -488,12 +493,14 @@ fn drain_download_events(world: &mut World) {
                 }
 
                 if should_start {
-                    spawn_download_worker(entity, url);
+                    let sender = world.resource::<UiActionSender<DownloadEvent>>().clone();
+                    spawn_download_worker(entity, url, sender);
                 }
             }
             DownloadEvent::Tick => {}
             DownloadEvent::ShowSystemDialog { title, description } => {
-                spawn_system_dialog(event.source, title, description);
+                let sender = world.resource::<UiActionSender<DownloadEvent>>().clone();
+                spawn_system_dialog(event.source, title, description, sender);
             }
             DownloadEvent::SystemDialogClosed => {
                 let mut state = world.resource_mut::<DownloadState>();
@@ -537,13 +544,15 @@ fn drain_download_events(world: &mut World) {
                 };
 
                 if use_system_dialog {
-                    emit_ui_action(
-                        event.source,
-                        DownloadEvent::ShowSystemDialog {
-                            title: "Download finished".to_string(),
-                            description: message,
-                        },
-                    );
+                    world
+                        .resource::<UiActionSender<DownloadEvent>>()
+                        .send(
+                            event.source,
+                            DownloadEvent::ShowSystemDialog {
+                                title: "Download finished".to_string(),
+                                description: message,
+                            },
+                        );
                 } else {
                     spawn_download_modal(world, message);
                 }

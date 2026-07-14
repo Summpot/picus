@@ -3,7 +3,7 @@ use std::sync::Arc;
 use bevy_ecs::prelude::*;
 use picus_view::view::{AnyFlexChild, FlexExt as _, FlexSpacer, flex_row, label};
 
-use crate::{ProjectionCtx, UiView, button, components::UiComponentTemplate};
+use crate::{ProjectionCtx, UiView, components::UiComponentTemplate};
 
 /// Title bar icon type.
 #[derive(Debug, Clone)]
@@ -77,15 +77,26 @@ impl UiComponentTemplate for UiTitleBar {
         // Spacer to push control buttons to the right
         children.push(FlexSpacer::Flex(1.0).into_any_flex());
 
-        // Window control buttons
+        // Window control buttons — TitleBarAction is consumed by the internal
+        // titlebar system (not application UiAction messages), so use the
+        // retained bridge helper rather than ProjectionCtx::button.
         if component.show_minimize {
-            children.push(button(ctx.entity, TitleBarAction::Minimize, "─").into_any_flex());
+            children.push(
+                crate::retained_bridge::button(ctx.entity, TitleBarAction::Minimize, "─")
+                    .into_any_flex(),
+            );
         }
         if component.show_maximize {
-            children.push(button(ctx.entity, TitleBarAction::Maximize, "□").into_any_flex());
+            children.push(
+                crate::retained_bridge::button(ctx.entity, TitleBarAction::Maximize, "□")
+                    .into_any_flex(),
+            );
         }
         if component.show_close {
-            children.push(button(ctx.entity, TitleBarAction::Close, "✕").into_any_flex());
+            children.push(
+                crate::retained_bridge::button(ctx.entity, TitleBarAction::Close, "✕")
+                    .into_any_flex(),
+            );
         }
 
         Arc::new(flex_row(children))

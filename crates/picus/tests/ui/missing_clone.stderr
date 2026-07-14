@@ -1,0 +1,45 @@
+error[E0277]: the trait bound `NoClone: Clone` is not satisfied
+ --> tests/ui/missing_clone.rs:4:8
+  |
+4 | struct NoClone;
+  |        ^^^^^^^ the trait `Clone` is not implemented for `NoClone`
+  |
+note: required by a bound in `_assert_clone`
+ --> tests/ui/missing_clone.rs:3:19
+  |
+3 | #[derive(Default, UiComponent)]
+  |                   ^^^^^^^^^^^ required by this bound in `_assert_clone`
+  = note: this error originates in the derive macro `UiComponent` (in Nightly builds, run with -Z macro-backtrace for more info)
+help: consider annotating `NoClone` with `#[derive(Clone)]`
+  |
+4 + #[derive(Clone)]
+5 | struct NoClone;
+  |
+
+error[E0277]: the trait bound `NoClone: UiComponentTemplate` is not satisfied
+ --> tests/ui/missing_clone.rs:3:19
+  |
+3 | #[derive(Default, UiComponent)]
+  |                   ^^^^^^^^^^^ unsatisfied trait bound
+  |
+help: the trait `UiComponentTemplate` is not implemented for `NoClone`
+ --> tests/ui/missing_clone.rs:4:1
+  |
+4 | struct NoClone;
+  | ^^^^^^^^^^^^^^
+  = help: the following other types implement trait `UiComponentTemplate`:
+            UiAvatar
+            UiBadge
+            UiBreadcrumb
+            UiBreadcrumbItem
+            UiButton
+            UiCanvas
+            UiCard
+            UiCheckbox
+          and $N others
+note: required by a bound in `picus::__macro_support::register_ui_component`
+ --> src/lib.rs
+  |
+  |     pub fn register_ui_component<T: UiComponentTemplate>(app: &mut App) {
+  |                                     ^^^^^^^^^^^^^^^^^^^ required by this bound in `register_ui_component`
+  = note: this error originates in the derive macro `UiComponent` (in Nightly builds, run with -Z macro-backtrace for more info)

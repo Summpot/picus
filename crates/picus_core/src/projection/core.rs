@@ -7,6 +7,8 @@ use bevy_ecs::{
 use picus_view::AnyWidgetView;
 use std::{any::TypeId, fmt, marker::PhantomData, sync::Arc};
 
+// UiView is Arc-based; FlexExt is imported in helper methods that need it.
+
 /// Xilem state used by synthesized UI views.
 pub type UiXilemState = ();
 /// Xilem action type used by synthesized UI views.
@@ -97,6 +99,48 @@ impl ProjectionCtx<'_> {
             std::any::type_name::<A>(),
         );
         crate::retained_bridge::button_with_child(self.entity, action, child)
+    }
+
+    /// Apply this entity's resolved style to a child view.
+    #[must_use]
+    pub fn styled<V>(&self, view: V) -> UiView
+    where
+        V: picus_view::WidgetView<(), ()> + 'static,
+    {
+        let style = crate::resolve_style(self.world, self.entity);
+        Arc::new(crate::apply_widget_style(view, &style))
+    }
+
+    /// Flex column with the provided children (projection helper to reduce dual writing).
+    #[must_use]
+    pub fn flex_col(
+        &self,
+        children: impl IntoIterator<Item = UiView>,
+    ) -> impl picus_view::WidgetView<(), ()> {
+        use picus_view::view::FlexExt as _;
+        let _ = self;
+        picus_view::view::flex_col(
+            children
+                .into_iter()
+                .map(|child| child.into_any_flex())
+                .collect::<Vec<_>>(),
+        )
+    }
+
+    /// Flex row with the provided children (projection helper to reduce dual writing).
+    #[must_use]
+    pub fn flex_row(
+        &self,
+        children: impl IntoIterator<Item = UiView>,
+    ) -> impl picus_view::WidgetView<(), ()> {
+        use picus_view::view::FlexExt as _;
+        let _ = self;
+        picus_view::view::flex_row(
+            children
+                .into_iter()
+                .map(|child| child.into_any_flex())
+                .collect::<Vec<_>>(),
+        )
     }
 }
 

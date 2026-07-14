@@ -101,6 +101,74 @@ pub struct InlineStyle {
     pub transition: Option<StyleTransition>,
 }
 
+impl InlineStyle {
+    /// Start from an empty inline override set.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    #[must_use]
+    pub fn padding(mut self, padding: f64) -> Self {
+        self.layout.padding = Some(padding);
+        self
+    }
+
+    #[must_use]
+    pub fn gap(mut self, gap: f64) -> Self {
+        self.layout.gap = Some(gap);
+        self
+    }
+
+    #[must_use]
+    pub fn corner_radius(mut self, corner_radius: f64) -> Self {
+        self.layout.corner_radius = Some(corner_radius);
+        self
+    }
+
+    #[must_use]
+    pub fn border_width(mut self, border_width: f64) -> Self {
+        self.layout.border_width = Some(border_width);
+        self
+    }
+
+    #[must_use]
+    pub fn flex_grow(mut self, flex_grow: f64) -> Self {
+        self.layout.flex_grow = Some(flex_grow);
+        self
+    }
+
+    #[must_use]
+    pub fn bg(mut self, color: Color) -> Self {
+        self.colors.bg = Some(color);
+        self
+    }
+
+    #[must_use]
+    pub fn text_color(mut self, color: Color) -> Self {
+        self.colors.text = Some(color);
+        self
+    }
+
+    #[must_use]
+    pub fn border_color(mut self, color: Color) -> Self {
+        self.colors.border = Some(color);
+        self
+    }
+
+    #[must_use]
+    pub fn text_size(mut self, size: f32) -> Self {
+        self.text.size = Some(size);
+        self
+    }
+
+    #[must_use]
+    pub fn text_weight(mut self, weight: f32) -> Self {
+        self.text.weight = Some(weight);
+        self
+    }
+}
+
 /// Inline layout style that can be attached to entities.
 #[derive(Component, Debug, Clone, Copy, Default, PartialEq, Deserialize)]
 pub struct LayoutStyle {
@@ -2463,6 +2531,15 @@ where
     V: StyleFlexAlignmentExt,
 {
     view.with_style_alignment(style)
+}
+
+/// Apply a resolved style to a view (short alias for [`apply_widget_style`]).
+#[must_use]
+pub fn styled<V>(view: V, style: &ResolvedStyle) -> impl WidgetView<(), ()>
+where
+    V: WidgetView<(), ()>,
+{
+    apply_widget_style(view, style)
 }
 
 /// Apply box/layout styling on any widget view.
@@ -6320,5 +6397,68 @@ mod tests {
         .blur(crate::masonry_core::layout::Length::px(24.0));
 
         assert_eq!(resolved.box_shadow, Some(expected));
+    }
+
+    #[test]
+    fn missing_theme_resolves_without_framework_default_colors() {
+        let mut world = World::new();
+        let entity = world.spawn_empty().id();
+        let resolved = crate::resolve_style(&world, entity);
+        assert!(
+            resolved.colors.bg.is_none(),
+            "no theme must not inject a default background color"
+        );
+        assert!(
+            resolved.colors.text.is_none(),
+            "no theme must not inject a default text color"
+        );
+        assert!(
+            resolved.colors.border.is_none(),
+            "no theme must not inject a default border color"
+        );
+    }
+
+    #[test]
+    fn partial_theme_leaves_uncovered_components_transparent() {
+        let ron = r#"(
+            rules: [
+                (
+                    selector: Class("covered"),
+                    setter: (
+                        bg: Color((1.0, 0.0, 0.0, 1.0)),
+                    ),
+                ),
+            ],
+        )"#;
+        let sheet = crate::styling::parse_stylesheet_ron_for_tests(ron)
+            .expect("partial stylesheet should parse");
+
+        let mut world = World::new();
+        world.insert_resource(sheet);
+
+        let covered = world
+            .spawn(crate::StyleClass(vec!["covered".into()]))
+            .id();
+        let uncovered = world.spawn_empty().id();
+
+        crate::mark_style_dirty(&mut world);
+        crate::sync_style_targets(&mut world);
+
+        let uncovered_style = crate::resolve_style(&world, uncovered);
+        assert!(
+            uncovered_style.colors.bg.is_none() && uncovered_style.colors.text.is_none(),
+            "uncovered entities keep empty/transparent resolved colors"
+        );
+
+        // Covered class may match; partial themes must load without structural error.
+        let _ = crate::resolve_style(&world, covered);
+        let _ = resolve_style_for_classes(&world, ["covered"]);
+    }
+
+    #[test]
+    fn invalid_stylesheet_ron_is_structural_error() {
+        let err = crate::parse_stylesheet_ron("not valid ron {{{")
+            .expect_err("invalid RON must fail");
+        assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
     }
 }

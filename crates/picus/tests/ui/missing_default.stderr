@@ -1,0 +1,45 @@
+error[E0277]: the trait bound `NoDefault: std::default::Default` is not satisfied
+ --> tests/ui/missing_default.rs:5:8
+  |
+5 | struct NoDefault;
+  |        ^^^^^^^^^ the trait `std::default::Default` is not implemented for `NoDefault`
+  |
+note: required by a bound in `_assert_default`
+ --> tests/ui/missing_default.rs:4:17
+  |
+4 | #[derive(Clone, UiComponent)]
+  |                 ^^^^^^^^^^^ required by this bound in `_assert_default`
+  = note: this error originates in the derive macro `UiComponent` (in Nightly builds, run with -Z macro-backtrace for more info)
+help: consider annotating `NoDefault` with `#[derive(Default)]`
+  |
+5 + #[derive(Default)]
+6 | struct NoDefault;
+  |
+
+error[E0277]: the trait bound `NoDefault: UiComponentTemplate` is not satisfied
+ --> tests/ui/missing_default.rs:4:17
+  |
+4 | #[derive(Clone, UiComponent)]
+  |                 ^^^^^^^^^^^ unsatisfied trait bound
+  |
+help: the trait `UiComponentTemplate` is not implemented for `NoDefault`
+ --> tests/ui/missing_default.rs:5:1
+  |
+5 | struct NoDefault;
+  | ^^^^^^^^^^^^^^^^
+  = help: the following other types implement trait `UiComponentTemplate`:
+            UiAvatar
+            UiBadge
+            UiBreadcrumb
+            UiBreadcrumbItem
+            UiButton
+            UiCanvas
+            UiCard
+            UiCheckbox
+          and $N others
+note: required by a bound in `picus::__macro_support::register_ui_component`
+ --> src/lib.rs
+  |
+  |     pub fn register_ui_component<T: UiComponentTemplate>(app: &mut App) {
+  |                                     ^^^^^^^^^^^^^^^^^^^ required by this bound in `register_ui_component`
+  = note: this error originates in the derive macro `UiComponent` (in Nightly builds, run with -Z macro-backtrace for more info)

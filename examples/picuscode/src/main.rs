@@ -837,7 +837,7 @@ fn build_picuscode_app() -> App {
                 poll_bridge_events,
             )
                 .chain()
-                .after(picus::core::route_masonry_view_messages),
+                .after(picus::runtime::advanced::route_masonry_view_messages),
         )
         .add_systems(
             PreUpdate,
