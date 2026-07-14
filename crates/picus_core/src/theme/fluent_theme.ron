@@ -2608,12 +2608,12 @@
       ),
     ),
 
-    // ── Navigation View ───────────────────────────────────────
+    // ── Navigation View (WinUI left-shell) ────────────────────
     (
       selector: Type("UiNavigationView"),
       setter: (
         layout: (
-          corner_radius: Var("radius-md"),
+          corner_radius: 0.0,
           border_width: 0.0,
           justify_content: Start,
           align_items: Stretch,
@@ -2640,23 +2640,51 @@
       ),
     ),
     (
+      selector: Class("nav.footer"),
+      setter: (
+        layout: (
+          padding: 0.0,
+          gap: Var("space-xs"),
+          border_width: 0.0,
+        ),
+        colors: (
+          bg: Var("transparent"),
+          border: Var("transparent"),
+        ),
+      ),
+    ),
+    (
       selector: Class("nav.content"),
       setter: (
         layout: (
           padding: Var("space-md"),
-          corner_radius: Var("radius-md"),
-          border_width: 0.0,
+          corner_radius: 8.0,
+          border_width: 1.0,
           justify_content: Start,
           align_items: Stretch,
         ),
         colors: (
           bg: Var("fill-layer-background"),
-          border: Var("transparent"),
+          border: Var("border-subtle"),
           text: Var("text-primary"),
         ),
       ),
     ),
-    // Hamburger / pane toggle control at the top of the nav rail.
+    (
+      selector: Class("nav.content.header"),
+      setter: (
+        layout: (
+          padding: Var("space-sm"),
+        ),
+        colors: (
+          text: Var("text-primary"),
+        ),
+        text: (
+          size: Var("text-lg"),
+          weight: Var("font-weight-semibold"),
+        ),
+      ),
+    ),
     (
       selector: Class("nav.toggle"),
       setter: (
@@ -2699,6 +2727,46 @@
       ),
     ),
     (
+      selector: Class("nav.back"),
+      setter: (
+        layout: (
+          padding: Var("space-sm"),
+          corner_radius: Var("radius-md"),
+          border_width: 0.0,
+          justify_content: Center,
+          align_items: Center,
+        ),
+        colors: (
+          bg: Var("fill-subtle-transparent"),
+          hover_bg: Var("fill-subtle-secondary"),
+          pressed_bg: Var("fill-subtle-tertiary"),
+          border: Var("transparent"),
+          text: Var("text-primary"),
+        ),
+        transition: Var("duration-fast"),
+      ),
+    ),
+    (
+      selector: And([Class("nav.back"), PseudoClass(Hovered)]),
+      setter: (
+        colors: (
+          bg: Var("fill-subtle-secondary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("nav.pane_title"),
+      setter: (
+        colors: (
+          text: Var("text-primary"),
+        ),
+        text: (
+          size: Var("text-sm"),
+          weight: Var("font-weight-semibold"),
+        ),
+      ),
+    ),
+    (
       selector: Class("nav.item"),
       setter: (
         layout: (
@@ -2734,19 +2802,9 @@
         ),
       ),
     ),
-    // Selected item: subtle fill + primary text. Accent lives on the indicator.
+    // Selected: WinUI SubtleFill secondary + primary text.
     (
       selector: Class("nav.item.active"),
-      setter: (
-        colors: (
-          bg: Var("surface-tab-active"),
-          border: Var("transparent"),
-          text: Var("text-primary"),
-        ),
-      ),
-    ),
-    (
-      selector: And([Class("nav.item.active"), PseudoClass(Hovered)]),
       setter: (
         colors: (
           bg: Var("fill-subtle-secondary"),
@@ -2756,7 +2814,7 @@
       ),
     ),
     (
-      selector: And([Class("nav.item.active"), PseudoClass(Pressed)]),
+      selector: And([Class("nav.item.active"), PseudoClass(Hovered)]),
       setter: (
         colors: (
           bg: Var("fill-subtle-tertiary"),
@@ -2765,7 +2823,24 @@
         ),
       ),
     ),
-    // Left-edge vertical selection indicator (WinUI NavigationView).
+    (
+      selector: And([Class("nav.item.active"), PseudoClass(Pressed)]),
+      setter: (
+        colors: (
+          bg: Var("fill-subtle-secondary"),
+          border: Var("transparent"),
+          text: Var("text-primary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("nav.item.child_selected"),
+      setter: (
+        colors: (
+          text: Var("text-primary"),
+        ),
+      ),
+    ),
     (
       selector: Class("nav.item.indicator"),
       setter: (
@@ -2779,7 +2854,6 @@
         ),
       ),
     ),
-    // Expand/collapse chevron on hierarchical MenuItems.
     (
       selector: Class("nav.item.chevron"),
       setter: (
@@ -2788,6 +2862,77 @@
         ),
         text: (
           size: 10.0,
+        ),
+      ),
+    ),
+    (
+      selector: Class("nav.item.badge"),
+      setter: (
+        layout: (
+          padding: 2.0,
+          corner_radius: Var("radius-sm"),
+        ),
+        colors: (
+          bg: Var("surface-accent"),
+          text: Var("text-on-accent"),
+        ),
+        text: (
+          size: 10.0,
+        ),
+      ),
+    ),
+    (
+      selector: Class("nav.header"),
+      setter: (
+        layout: (
+          padding: Var("space-sm"),
+        ),
+        colors: (
+          text: Var("text-secondary"),
+        ),
+        text: (
+          size: Var("font-size-caption1"),
+          weight: Var("font-weight-semibold"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("nav.separator"),
+      setter: (
+        layout: (
+          border_width: 0.0,
+        ),
+        colors: (
+          bg: Var("border-subtle"),
+          border: Var("transparent"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("nav.flyout"),
+      setter: (
+        layout: (
+          padding: Var("space-sm"),
+          corner_radius: Var("radius-md"),
+          border_width: 1.0,
+          gap: Var("space-xs"),
+        ),
+        colors: (
+          bg: Var("surface-elevated"),
+          border: Var("border-subtle"),
+          text: Var("text-primary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("nav.overlay_scrim"),
+      setter: (
+        layout: (
+          border_width: 0.0,
+        ),
+        colors: (
+          bg: Var("fill-smoke-default"),
+          border: Var("transparent"),
         ),
       ),
     ),

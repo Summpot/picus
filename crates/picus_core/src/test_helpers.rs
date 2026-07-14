@@ -486,7 +486,8 @@ pub fn spawn_navigation_height_probe(app: &mut App) -> Entity {
             crate::UiNavigationView::new([
                 crate::NavigationViewItem::new("First"),
                 crate::NavigationViewItem::new("Second"),
-            ]),
+            ])
+            .with_settings_visible(false),
             crate::InlineStyle {
                 layout: crate::LayoutStyle {
                     flex_grow: Some(1.0),
@@ -514,7 +515,8 @@ pub fn spawn_navigation_clipping_probe(app: &mut App) -> Entity {
             crate::UiNavigationView::new([
                 crate::NavigationViewItem::new("First"),
                 crate::NavigationViewItem::new("Second"),
-            ]),
+            ])
+            .with_settings_visible(false),
             crate::InlineStyle {
                 layout: crate::LayoutStyle {
                     flex_grow: Some(1.0),

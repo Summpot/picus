@@ -237,6 +237,9 @@ pub fn register_builtin_ui_components(app: &mut App) {
 
     app.add_systems(
         bevy_app::Update,
-        navigation_view::sync_navigation_view_item_templates,
+        (
+            navigation_view::sync_navigation_view_item_templates,
+            navigation_view::update_navigation_view_display_mode,
+        ),
     );
 }

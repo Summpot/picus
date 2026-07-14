@@ -4598,8 +4598,9 @@ mod tests {
         assert!(badge_style.colors.border.is_some());
 
         let progress_style = resolve_style(app.world(), progress);
+        // WinUI ProgressBar shell is transparent; track/fill are template parts.
         assert_eq!(progress_style.layout.padding, 0.0);
-        assert!(progress_style.layout.corner_radius > 20.0);
+        assert_eq!(progress_style.layout.corner_radius, 0.0);
         assert!(progress_style.colors.bg.is_some());
 
         let checkbox_box = crate::resolve_style_for_classes(app.world(), ["template.checkbox.box"]);

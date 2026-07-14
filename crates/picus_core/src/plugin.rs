@@ -407,6 +407,7 @@ mod tests {
         assert_component::<crate::UiMessageBar>();
         assert_component::<crate::UiMultilineTextInput>();
         assert_component::<crate::UiNavigationItem>();
+        assert_component::<crate::UiNavigationSettingsItem>();
         assert_component::<crate::UiNavigationView>();
         assert_component::<crate::UiPasswordInput>();
         assert_component::<crate::UiPopover>();
@@ -454,6 +455,11 @@ mod tests {
         assert_value::<crate::GradientStop>();
         assert_value::<crate::MessageBarKind>();
         assert_value::<crate::NavigationViewItem>();
+        assert_value::<crate::NavigationViewItemKind>();
+        assert_value::<crate::NavigationPaneDisplayMode>();
+        assert_value::<crate::NavigationDisplayMode>();
+        assert_value::<crate::NavigationBackButtonVisible>();
+        assert_value::<crate::NavigationItemRegion>();
         assert_value::<crate::RatingColor>();
         assert_value::<crate::RatingSize>();
         assert_value::<crate::ScrollAxis>();

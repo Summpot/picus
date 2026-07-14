@@ -12,8 +12,9 @@ use crate::{
     OverlayComputedPosition, OverlayConfig, OverlayPlacement, OverlayState, ScrollAxis, UiCheckbox,
     UiCheckboxChanged, UiDataTable, UiDataTableSelectionChanged, UiDataTableSortChanged,
     UiListSelectionMode, UiListView, UiListViewSelectionChanged, UiMultilineTextInput,
-    UiMultilineTextInputChanged, UiNavigationItemExpandedChanged, UiNavigationPaneChanged,
-    UiNavigationSelectionChanged, UiNavigationView, UiNumericUpDown,
+    NavigationDisplayMode, NavigationItemRegion, UiMultilineTextInputChanged,
+    UiNavigationBackRequested, UiNavigationItemExpandedChanged, UiNavigationItemInvoked,
+    UiNavigationPaneChanged, UiNavigationSelectionChanged, UiNavigationView, UiNumericUpDown,
     UiNumericUpDownChanged, UiOverlayRoot, UiPasswordInput, UiPasswordInputChanged, UiRadioGroup,
     UiRadioGroupChanged, UiRating, UiRatingChanged, UiScrollView, UiScrollViewChanged, UiSlider,
     UiSearch, UiSearchChanged, UiSliderChanged, UiSwitch, UiSwitchChanged, UiTabBar, UiTabChanged,
@@ -33,10 +34,27 @@ pub enum WidgetUiAction {
     SelectTab { bar: Entity, index: usize },
     /// Select a leaf navigation item in a [`UiNavigationView`] by leaf index.
     SelectNavigationItem { nav: Entity, index: usize },
+    /// User invoke of a navigation item (WinUI `ItemInvoked` pipeline).
+    InvokeNavigationItem {
+        nav: Entity,
+        item: Entity,
+        /// Selectable leaf index when the target is a leaf / Settings.
+        leaf_index: Option<usize>,
+        is_settings: bool,
+        /// When true, parent should expand/collapse or open a flyout.
+        is_parent: bool,
+        selects_on_invoked: bool,
+    },
     /// Expand or collapse a hierarchical navigation menu item (WinUI `IsExpanded`).
     ToggleNavigationItemExpand { nav: Entity, item: Entity },
+    /// Toggle compact hierarchy flyout for a parent item.
+    ToggleNavigationItemFlyout { nav: Entity, item: Entity },
     /// Expand or collapse a [`UiNavigationView`] pane.
     ToggleNavigationPane { nav: Entity },
+    /// Light-dismiss / close the navigation pane (overlay modes).
+    CloseNavigationPane { nav: Entity },
+    /// Back button pressed.
+    NavigationBack { nav: Entity },
     /// Expand or collapse a tree node.
     ToggleTreeNode { node: Entity },
     /// Toggle a checkbox.
@@ -366,11 +384,18 @@ pub fn handle_widget_actions(world: &mut World) {
 
                 let changed = if let Some(mut nav_view) = world.get_mut::<UiNavigationView>(nav) {
                     let max = nav_view.leaf_count().saturating_sub(1);
-                    nav_view.selected = index.min(max);
-                    Some(UiNavigationSelectionChanged {
-                        nav,
-                        selected: nav_view.selected,
-                    })
+                    let selected = index.min(max);
+                    if nav_view.selected != selected {
+                        nav_view.selected = selected;
+                        let is_settings_selected = nav_view.is_settings_selected();
+                        Some(UiNavigationSelectionChanged {
+                            nav,
+                            selected,
+                            is_settings_selected,
+                        })
+                    } else {
+                        None
+                    }
                 } else {
                     None
                 };
@@ -380,32 +405,176 @@ pub fn handle_widget_actions(world: &mut World) {
                 }
             }
 
+            WidgetUiAction::InvokeNavigationItem {
+                nav,
+                item,
+                leaf_index,
+                is_settings,
+                is_parent,
+                selects_on_invoked,
+            } => {
+                if world.get_entity(nav).is_err() {
+                    continue;
+                }
+
+                world.resource::<UiEventQueue>().push_typed(
+                    nav,
+                    UiNavigationItemInvoked {
+                        nav,
+                        selected: leaf_index,
+                        is_settings_invoked: is_settings,
+                        item: Some(item),
+                    },
+                );
+
+                // Selection
+                if selects_on_invoked {
+                    if let Some(index) = leaf_index {
+                        let changed =
+                            if let Some(mut nav_view) = world.get_mut::<UiNavigationView>(nav) {
+                                let max = nav_view.leaf_count().saturating_sub(1);
+                                let selected = index.min(max);
+                                if nav_view.selected != selected {
+                                    nav_view.selected = selected;
+                                    let is_settings_selected = nav_view.is_settings_selected();
+                                    Some(UiNavigationSelectionChanged {
+                                        nav,
+                                        selected,
+                                        is_settings_selected,
+                                    })
+                                } else {
+                                    None
+                                }
+                            } else {
+                                None
+                            };
+                        if let Some(ev) = changed {
+                            world.resource::<UiEventQueue>().push_typed(nav, ev);
+                        }
+                    }
+                }
+
+                // Parent expand / flyout
+                if is_parent && world.get_entity(item).is_ok() {
+                    let uses_flyout = world
+                        .get::<UiNavigationView>(nav)
+                        .is_some_and(|n| n.uses_hierarchy_flyout());
+                    if uses_flyout {
+                        if let Some(mut nav_view) = world.get_mut::<UiNavigationView>(nav) {
+                            if nav_view.open_flyout_item == Some(item) {
+                                nav_view.open_flyout_item = None;
+                            } else {
+                                nav_view.open_flyout_item = Some(item);
+                            }
+                        }
+                    } else {
+                        // Inline expand/collapse
+                        let path =
+                            crate::components::navigation_view::navigation_item_path(world, item);
+                        let region = world
+                            .get::<crate::UiNavigationItem>(item)
+                            .map(|i| i.region);
+                        if let (Some(path), Some(region)) = (path, region) {
+                            let changed = if let Some(mut nav_view) =
+                                world.get_mut::<UiNavigationView>(nav)
+                            {
+                                let list = match region {
+                                    NavigationItemRegion::Menu => Some(&mut nav_view.items),
+                                    NavigationItemRegion::Footer => {
+                                        Some(&mut nav_view.footer_items)
+                                    }
+                                    NavigationItemRegion::Settings => None,
+                                };
+                                if let Some(list) = list {
+                                    if let Some(node) =
+                                        crate::components::navigation_view::navigation_item_at_mut(
+                                            list, &path,
+                                        )
+                                    {
+                                        if node.is_parent() {
+                                            node.is_expanded = !node.is_expanded;
+                                            Some(UiNavigationItemExpandedChanged {
+                                                nav,
+                                                item,
+                                                is_expanded: node.is_expanded,
+                                            })
+                                        } else {
+                                            None
+                                        }
+                                    } else {
+                                        None
+                                    }
+                                } else {
+                                    None
+                                }
+                            } else {
+                                None
+                            };
+                            if let Some(ev) = changed {
+                                world.resource::<UiEventQueue>().push_typed(nav, ev);
+                            }
+                        }
+                    }
+                }
+
+                // Close overlay pane after leaf navigate (WinUI).
+                if leaf_index.is_some() {
+                    if let Some(mut nav_view) = world.get_mut::<UiNavigationView>(nav) {
+                        if nav_view.display_mode != NavigationDisplayMode::Expanded
+                            && nav_view.is_pane_open
+                        {
+                            nav_view.is_pane_open = false;
+                            nav_view.force_closed = true;
+                            nav_view.open_flyout_item = None;
+                            let is_pane_open = nav_view.is_pane_open;
+                            world.resource::<UiEventQueue>().push_typed(
+                                nav,
+                                UiNavigationPaneChanged { nav, is_pane_open },
+                            );
+                        } else {
+                            // Always dismiss flyout after leaf select.
+                            nav_view.open_flyout_item = None;
+                        }
+                    }
+                }
+            }
+
             WidgetUiAction::ToggleNavigationItemExpand { nav, item } => {
                 if world.get_entity(nav).is_err() || world.get_entity(item).is_err() {
                     continue;
                 }
 
                 let path = crate::components::navigation_view::navigation_item_path(world, item);
+                let region = world
+                    .get::<crate::UiNavigationItem>(item)
+                    .map(|i| i.region);
                 let Some(path) = path else {
+                    continue;
+                };
+                let Some(region) = region else {
                     continue;
                 };
 
                 let changed = if let Some(mut nav_view) = world.get_mut::<UiNavigationView>(nav) {
+                    let list = match region {
+                        NavigationItemRegion::Menu => &mut nav_view.items,
+                        NavigationItemRegion::Footer => &mut nav_view.footer_items,
+                        NavigationItemRegion::Settings => {
+                            continue;
+                        }
+                    };
                     if let Some(node) =
-                        crate::components::navigation_view::navigation_item_at_mut(
-                            &mut nav_view.items,
-                            &path,
-                        )
+                        crate::components::navigation_view::navigation_item_at_mut(list, &path)
                     {
-                        if node.is_leaf() {
-                            None
-                        } else {
+                        if node.is_parent() {
                             node.is_expanded = !node.is_expanded;
                             Some(UiNavigationItemExpandedChanged {
                                 nav,
                                 item,
                                 is_expanded: node.is_expanded,
                             })
+                        } else {
+                            None
                         }
                     } else {
                         None
@@ -419,6 +588,19 @@ pub fn handle_widget_actions(world: &mut World) {
                 }
             }
 
+            WidgetUiAction::ToggleNavigationItemFlyout { nav, item } => {
+                if world.get_entity(nav).is_err() || world.get_entity(item).is_err() {
+                    continue;
+                }
+                if let Some(mut nav_view) = world.get_mut::<UiNavigationView>(nav) {
+                    if nav_view.open_flyout_item == Some(item) {
+                        nav_view.open_flyout_item = None;
+                    } else {
+                        nav_view.open_flyout_item = Some(item);
+                    }
+                }
+            }
+
             WidgetUiAction::ToggleNavigationPane { nav } => {
                 if world.get_entity(nav).is_err() {
                     continue;
@@ -426,6 +608,8 @@ pub fn handle_widget_actions(world: &mut World) {
 
                 let changed = if let Some(mut nav_view) = world.get_mut::<UiNavigationView>(nav) {
                     nav_view.is_pane_open = !nav_view.is_pane_open;
+                    nav_view.force_closed = !nav_view.is_pane_open;
+                    nav_view.open_flyout_item = None;
                     Some(UiNavigationPaneChanged {
                         nav,
                         is_pane_open: nav_view.is_pane_open,
@@ -436,6 +620,44 @@ pub fn handle_widget_actions(world: &mut World) {
 
                 if let Some(ev) = changed {
                     world.resource::<UiEventQueue>().push_typed(nav, ev);
+                }
+            }
+
+            WidgetUiAction::CloseNavigationPane { nav } => {
+                if world.get_entity(nav).is_err() {
+                    continue;
+                }
+                let changed = if let Some(mut nav_view) = world.get_mut::<UiNavigationView>(nav) {
+                    if nav_view.is_pane_open {
+                        nav_view.is_pane_open = false;
+                        nav_view.force_closed = true;
+                        nav_view.open_flyout_item = None;
+                        Some(UiNavigationPaneChanged {
+                            nav,
+                            is_pane_open: false,
+                        })
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                };
+                if let Some(ev) = changed {
+                    world.resource::<UiEventQueue>().push_typed(nav, ev);
+                }
+            }
+
+            WidgetUiAction::NavigationBack { nav } => {
+                if world.get_entity(nav).is_err() {
+                    continue;
+                }
+                let enabled = world
+                    .get::<UiNavigationView>(nav)
+                    .is_some_and(|n| n.is_back_enabled && n.back_button_shown());
+                if enabled {
+                    world
+                        .resource::<UiEventQueue>()
+                        .push_typed(nav, UiNavigationBackRequested { nav });
                 }
             }
 

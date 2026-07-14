@@ -31,7 +31,6 @@ use crate::{
         UiContextMenu, UiDataTable, UiDatePicker, UiDatePickerPanel, UiDivider, UiExpander,
         UiGradientStop, UiGroupBox, UiListSelectionMode, UiListView, UiMenuBar, UiMenuBarItem,
         UiMenuItemPanel, UiMessageBar, UiNavigationItem, UiNavigationView, UiRadioGroup,
-        NAV_PANE_COMPACT_WIDTH, NAV_PANE_EXPANDED_WIDTH,
         UiScrollView, UiSearch, UiSortDirection, UiSpinner, UiSplitPane, UiTabBar, UiTable,
         UiTimePicker, UiTimePickerPanel, UiToast, UiTooltip, UiTreeNode,
     },
@@ -2197,44 +2196,233 @@ pub(crate) fn project_search(search: &UiSearch, ctx: ProjectionCtx<'_>) -> UiVie
 const NAV_INDICATOR_WIDTH: f64 = 3.0;
 const NAV_INDICATOR_HEIGHT: f64 = 16.0;
 const NAV_ITEM_ICON_SIZE: f64 = 20.0;
-const NAV_CHILD_INDENT: f64 = 12.0;
+/// WinUI depth indent is ~31px; keep slightly tighter for dense trees.
+const NAV_CHILD_INDENT: f64 = 28.0;
+const NAV_MINIMAL_CHROME_WIDTH: f64 = 48.0;
 
-/// Project a [`UiNavigationView`] into a sidebar + content layout.
-pub(crate) fn project_navigation_view(nav: &UiNavigationView, ctx: ProjectionCtx<'_>) -> UiView {
+fn nav_glyph_icon(icon: FluentIcon, color: Option<Color>, size: f32) -> UiView {
+    let glyph = icon.glyph_source();
+    let mut icon_style = ResolvedStyle::default();
+    icon_style.colors.text = color;
+    icon_style.text.size = size.max(14.0);
+    icon_style.font_family = Some(glyph.font_family_vec());
+    Arc::new(
+        sized_box(apply_label_style(
+            label(glyph.glyph().to_string()),
+            &icon_style,
+        ))
+        .width(Dim::Fixed(Length::px(NAV_ITEM_ICON_SIZE)))
+        .height(Dim::Fixed(Length::px(NAV_ITEM_ICON_SIZE))),
+    )
+}
+
+fn project_nav_chrome_button(
+    entity: Entity,
+    action: WidgetUiAction,
+    content: UiView,
+    style: &ResolvedStyle,
+) -> UiView {
+    Arc::new(apply_direct_widget_style(
+        button_with_child_view(entity, action, content),
+        style,
+    ))
+}
+
+/// Build back + toggle chrome row for the pane header.
+fn project_nav_pane_header(nav: &UiNavigationView, ctx: &ProjectionCtx<'_>) -> UiView {
+    use crate::components::navigation_view::NavigationDisplayMode;
+
     let style = resolve_style(ctx.world, ctx.entity);
-    let mut sidebar_style = resolve_style_for_classes(ctx.world, ["nav.sidebar"]);
-    let content_style = resolve_style_for_classes(ctx.world, ["nav.content"]);
-    // Resolve toggle against the nav entity so hover/pressed InteractionState apply.
-    let toggle_style = resolve_style_for_entity_classes(ctx.world, ctx.entity, ["nav.toggle"]);
-    let pairs = child_entity_views(&ctx);
+    let shows_labels = nav.pane_shows_labels();
+    let mut parts: Vec<_> = Vec::new();
 
-    let pane_width = if nav.is_pane_open {
-        NAV_PANE_EXPANDED_WIDTH
-    } else {
-        NAV_PANE_COMPACT_WIDTH
-    };
-
-    // Compact mode keeps a tight icon rail; expanded keeps themed padding.
-    if !nav.is_pane_open {
-        sidebar_style.layout.padding = 4.0;
+    if nav.back_button_shown() {
+        let back_style = resolve_style_for_entity_classes(ctx.world, ctx.entity, ["nav.back"]);
+        let color = back_style.colors.text.or(style.colors.text);
+        let icon = nav_glyph_icon(FluentIcon::Back, color, back_style.text.size.max(14.0));
+        let content: UiView = if shows_labels {
+            Arc::new(
+                flex_row(vec![icon.into_any_flex()])
+                    .main_axis_alignment(MainAxisAlignment::Start)
+                    .cross_axis_alignment(CrossAxisAlignment::Center),
+            )
+        } else {
+            Arc::new(
+                flex_row(vec![icon.into_any_flex()])
+                    .main_axis_alignment(MainAxisAlignment::Center)
+                    .cross_axis_alignment(CrossAxisAlignment::Center),
+            )
+        };
+        parts.push(
+            project_nav_chrome_button(
+                ctx.entity,
+                WidgetUiAction::NavigationBack { nav: ctx.entity },
+                content,
+                &back_style,
+            )
+            .into_any_flex(),
+        );
     }
 
-    // Only top-level menu items (direct children of the nav that carry UiNavigationItem).
-    // Nested MenuItems are projected by their parent item when expanded.
+    if nav.is_pane_toggle_button_visible {
+        let toggle_style =
+            resolve_style_for_entity_classes(ctx.world, ctx.entity, ["nav.toggle"]);
+        let color = toggle_style.colors.text.or(style.colors.text);
+        let icon = nav_glyph_icon(
+            FluentIcon::GlobalNavigationButton,
+            color,
+            toggle_style.text.size.max(14.0),
+        );
+        let toggle_content: UiView = if shows_labels && !nav.pane_title.is_empty() {
+            let title_style = resolve_style_for_classes(ctx.world, ["nav.pane_title"]);
+            let mut label_style = title_style.clone();
+            label_style.colors.text = title_style.colors.text.or(color);
+            let title: UiView =
+                Arc::new(apply_label_style(label(nav.pane_title.clone()), &label_style));
+            Arc::new(
+                flex_row(vec![icon.into_any_flex(), flex_item(title, 1.0).into()])
+                    .cross_axis_alignment(CrossAxisAlignment::Center)
+                    .gap(Length::px(8.0)),
+            )
+        } else if shows_labels {
+            Arc::new(
+                flex_row(vec![icon.into_any_flex()])
+                    .cross_axis_alignment(CrossAxisAlignment::Center),
+            )
+        } else {
+            Arc::new(
+                flex_row(vec![icon.into_any_flex()])
+                    .main_axis_alignment(MainAxisAlignment::Center)
+                    .cross_axis_alignment(CrossAxisAlignment::Center),
+            )
+        };
+        parts.push(
+            project_nav_chrome_button(
+                ctx.entity,
+                WidgetUiAction::ToggleNavigationPane { nav: ctx.entity },
+                toggle_content,
+                &toggle_style,
+            )
+            .into_any_flex(),
+        );
+    }
+
+    // Minimal closed: still need a toggle somewhere.
+    if parts.is_empty() && matches!(nav.display_mode, NavigationDisplayMode::Minimal) {
+        let toggle_style =
+            resolve_style_for_entity_classes(ctx.world, ctx.entity, ["nav.toggle"]);
+        let color = toggle_style.colors.text.or(style.colors.text);
+        let icon = nav_glyph_icon(
+            FluentIcon::GlobalNavigationButton,
+            color,
+            toggle_style.text.size.max(14.0),
+        );
+        parts.push(
+            project_nav_chrome_button(
+                ctx.entity,
+                WidgetUiAction::ToggleNavigationPane { nav: ctx.entity },
+                icon,
+                &toggle_style,
+            )
+            .into_any_flex(),
+        );
+    }
+
+    Arc::new(
+        flex_row(parts)
+            .cross_axis_alignment(CrossAxisAlignment::Center)
+            .gap(Length::px(4.0)),
+    )
+}
+
+fn collect_region_item_views(
+    pairs: &[(Entity, UiView)],
+    world: &bevy_ecs::world::World,
+    nav_entity: Entity,
+    region: crate::NavigationItemRegion,
+    max_index: usize,
+) -> Vec<UiView> {
+    use crate::NavigationItemRegion;
     let mut item_views = pairs
         .iter()
         .filter_map(|(entity, view)| {
-            ctx.world
+            world
                 .get::<UiNavigationItem>(*entity)
-                .filter(|item| item.nav == ctx.entity && item.index < nav.items.len())
+                .filter(|item| {
+                    item.nav == nav_entity
+                        && item.region == region
+                        && item.index < max_index
+                        && matches!(
+                            region,
+                            NavigationItemRegion::Menu | NavigationItemRegion::Footer
+                        )
+                        // Only top-level: parent is the nav entity.
+                        && world
+                            .get::<ChildOf>(*entity)
+                            .is_some_and(|c| c.parent() == nav_entity)
+                })
                 .map(|item| (item.index, view.clone()))
         })
         .collect::<Vec<_>>();
     item_views.sort_by_key(|(index, _)| *index);
-    let item_views = item_views
-        .into_iter()
-        .map(|(_, view)| view.into_any_flex())
-        .collect::<Vec<_>>();
+    item_views.into_iter().map(|(_, v)| v).collect()
+}
+
+/// Project a [`UiNavigationView`] into a sidebar + content layout.
+pub(crate) fn project_navigation_view(nav: &UiNavigationView, ctx: ProjectionCtx<'_>) -> UiView {
+    use crate::components::navigation_view::{
+        NavigationDisplayMode, NavigationItemRegion,
+    };
+
+    let style = resolve_style(ctx.world, ctx.entity);
+    let mut sidebar_style = resolve_style_for_classes(ctx.world, ["nav.sidebar"]);
+    let content_style = resolve_style_for_classes(ctx.world, ["nav.content"]);
+    let footer_style = resolve_style_for_classes(ctx.world, ["nav.footer"]);
+    let pairs = child_entity_views(&ctx);
+
+    let shows_labels = nav.pane_shows_labels();
+    let is_rail = nav.is_rail_mode();
+    let is_overlay = nav.is_overlay_pane();
+    let is_minimal_closed =
+        matches!(nav.display_mode, NavigationDisplayMode::Minimal) && !nav.is_pane_open;
+
+    let open_width = nav.open_pane_length.max(0.0);
+    let compact_width = nav.compact_pane_length.max(0.0);
+    let pane_width = if is_minimal_closed {
+        NAV_MINIMAL_CHROME_WIDTH.min(compact_width.max(NAV_MINIMAL_CHROME_WIDTH))
+    } else if shows_labels || is_overlay {
+        open_width
+    } else {
+        compact_width
+    };
+
+    if is_rail || is_minimal_closed {
+        sidebar_style.layout.padding = 4.0;
+    }
+
+    // Top-level menu / footer / settings template views.
+    let menu_views = collect_region_item_views(
+        &pairs,
+        ctx.world,
+        ctx.entity,
+        NavigationItemRegion::Menu,
+        nav.items.len(),
+    );
+    let footer_views = collect_region_item_views(
+        &pairs,
+        ctx.world,
+        ctx.entity,
+        NavigationItemRegion::Footer,
+        nav.footer_items.len(),
+    );
+    let settings_view = pairs.iter().find_map(|(entity, view)| {
+        ctx.world
+            .get::<UiNavigationItem>(*entity)
+            .filter(|item| {
+                item.nav == ctx.entity && item.region == NavigationItemRegion::Settings
+            })
+            .map(|_| view.clone())
+    });
 
     let content_views = pairs
         .iter()
@@ -2242,106 +2430,262 @@ pub(crate) fn project_navigation_view(nav: &UiNavigationView, ctx: ProjectionCtx
         .map(|(_, view)| view.clone())
         .collect::<Vec<_>>();
 
-    // --- Pane toggle (hamburger), WinUI NavigationView style ---
-    let toggle_icon = FluentIcon::GlobalNavigationButton;
-    let toggle_glyph = toggle_icon.glyph_source();
-    let mut toggle_icon_style = ResolvedStyle::default();
-    toggle_icon_style.colors.text = toggle_style.colors.text.or(style.colors.text);
-    toggle_icon_style.text.size = toggle_style.text.size.max(14.0);
-    toggle_icon_style.font_family = Some(toggle_glyph.font_family_vec());
-    let toggle_icon_view: UiView = Arc::new(
-        sized_box(apply_label_style(
-            label(toggle_glyph.glyph().to_string()),
-            &toggle_icon_style,
-        ))
-        .width(Dim::Fixed(Length::px(NAV_ITEM_ICON_SIZE)))
-        .height(Dim::Fixed(Length::px(NAV_ITEM_ICON_SIZE))),
-    );
-    // Expanded pane shows a short action label beside the hamburger glyph.
-    let toggle_content: UiView = if nav.is_pane_open {
-        let mut label_style = toggle_style.clone();
-        label_style.colors.text = toggle_style.colors.text.or(style.colors.text);
-        let label_view: UiView = Arc::new(apply_label_style(label("Menu"), &label_style));
-        Arc::new(
-            flex_row(vec![
-                toggle_icon_view.into_any_flex(),
-                label_view.into_any_flex(),
-            ])
-            .cross_axis_alignment(CrossAxisAlignment::Center)
-            .gap(Length::px(8.0)),
-        )
-    } else {
-        Arc::new(
-            flex_row(vec![toggle_icon_view.into_any_flex()])
-                .main_axis_alignment(MainAxisAlignment::Center)
-                .cross_axis_alignment(CrossAxisAlignment::Center),
-        )
-    };
-    let toggle_btn: UiView = Arc::new(apply_direct_widget_style(
-        button_with_child_view(
-            ctx.entity,
-            WidgetUiAction::ToggleNavigationPane { nav: ctx.entity },
-            toggle_content,
-        ),
-        &toggle_style,
-    ));
+    let header_chrome = project_nav_pane_header(nav, &ctx);
 
-    // --- Sidebar column: toggle + scrollable items ---
-    let items_col = flex_col(item_views).gap(Length::px(sidebar_style.layout.gap.max(0.0)));
-    let items_portal = scroll_portal(items_col, Point::ORIGIN)
-        .constrain_horizontal(true)
-        .constrain_vertical(false)
-        .content_must_fill(true);
-    let sidebar_body = flex_col(vec![
-        toggle_btn.into_any_flex(),
-        flex_item(items_portal, 1.0).into(),
-    ])
-    .gap(Length::px(sidebar_style.layout.gap.max(4.0)));
+    // --- Pane body: header + menu scroll + footer ---
+    let gap = sidebar_style.layout.gap.max(0.0);
+    let mut pane_column: Vec<_> = vec![header_chrome.into_any_flex()];
+
+    if !is_minimal_closed {
+        let menu_col = flex_col(
+            menu_views
+                .into_iter()
+                .map(|v| v.into_any_flex())
+                .collect::<Vec<_>>(),
+        )
+        .gap(Length::px(gap));
+        let menu_portal = scroll_portal(menu_col, Point::ORIGIN)
+            .constrain_horizontal(true)
+            .constrain_vertical(false)
+            .content_must_fill(true);
+        pane_column.push(flex_item(menu_portal, 1.0).into());
+
+        // Footer + settings sticky region.
+        let mut footer_parts: Vec<_> = Vec::new();
+        if !footer_views.is_empty() || settings_view.is_some() {
+            let sep_style = resolve_style_for_classes(ctx.world, ["nav.separator"]);
+            let sep: UiView = Arc::new(apply_widget_style(
+                sized_box(label(""))
+                    .width(Dim::Stretch)
+                    .height(Dim::Fixed(Length::px(1.0))),
+                &sep_style,
+            ));
+            footer_parts.push(sep.into_any_flex());
+        }
+        for v in footer_views {
+            footer_parts.push(v.into_any_flex());
+        }
+        if let Some(settings) = settings_view {
+            footer_parts.push(settings.into_any_flex());
+        }
+        if !footer_parts.is_empty() {
+            let footer_col = apply_widget_style(
+                flex_col(footer_parts).gap(Length::px(gap.max(4.0))),
+                &footer_style,
+            );
+            pane_column.push(footer_col.into_any_flex());
+        }
+    }
+
+    let sidebar_body = flex_col(pane_column).gap(Length::px(gap.max(4.0)));
     let sidebar: UiView = Arc::new(
         sized_box(apply_widget_style(sidebar_body, &sidebar_style))
             .width(Dim::Fixed(Length::px(pane_width)))
             .height(Dim::Stretch),
     );
 
-    // --- Content area: selected leaf index maps to content children ---
-    let content: UiView = content_views
+    // --- Content area ---
+    let page: UiView = content_views
         .get(nav.selected)
         .cloned()
         .unwrap_or_else(|| Arc::new(label("")));
 
-    let content_body = flex_col(vec![
-        flex_item(content, 1.0), // flex:1 preserved via From<FlexItem>, NOT .into_any_flex()
-    ])
-    .dims(
+    let mut content_parts: Vec<_> = Vec::new();
+    if !nav.header.is_empty() {
+        let header_style = resolve_style_for_classes(ctx.world, ["nav.content.header"]);
+        let header_label: UiView =
+            Arc::new(apply_label_style(label(nav.header.clone()), &header_style));
+        content_parts.push(header_label.into_any_flex());
+    }
+    content_parts.push(flex_item(page, 1.0).into());
+
+    let content_body = flex_col(content_parts).dims(
         Dimensions::AUTO
             .with_width(Dim::Stretch)
             .with_height(Dim::Stretch),
     );
-    let content_area = sized_box(apply_widget_style(
-        scroll_portal(content_body, Point::ORIGIN)
-            .constrain_horizontal(true)
-            .constrain_vertical(true)
-            .content_must_fill(true),
-        &content_style,
-    ))
-    .dims(
-        Dimensions::AUTO
-            .with_width(Dim::Stretch)
-            .with_height(Dim::Stretch),
+    let content_area: UiView = Arc::new(
+        sized_box(apply_widget_style(
+            scroll_portal(content_body, Point::ORIGIN)
+                .constrain_horizontal(true)
+                .constrain_vertical(true)
+                .content_must_fill(true),
+            &content_style,
+        ))
+        .dims(
+            Dimensions::AUTO
+                .with_width(Dim::Stretch)
+                .with_height(Dim::Stretch),
+        ),
     );
 
-    // --- Layout: sidebar | content (flex-grow: 1) ---
-    let row = flex_row(vec![
-        sidebar.into_any_flex(),
-        flex_item(content_area, 1.0).into(), // .into() preserves flex params via From<FlexItem>
-    ]);
-    let clipped_row = scroll_portal(row, Point::ORIGIN)
+    // Hierarchy flyout (rail mode): project children of open_flyout_item as a
+    // simple panel stacked over content near the left edge.
+    let flyout_panel: Option<UiView> = nav.open_flyout_item.and_then(|flyout_item| {
+        if !nav.uses_hierarchy_flyout() {
+            return None;
+        }
+        let flyout_style = resolve_style_for_classes(ctx.world, ["nav.flyout"]);
+        // Collect projected child views from the item entity's Children.
+        let mut child_slots = ctx
+            .world
+            .get::<Children>(flyout_item)
+            .map(|children| {
+                children
+                    .iter()
+                    .copied()
+                    .filter_map(|child| {
+                        ctx.world
+                            .get::<UiNavigationItem>(child)
+                            .filter(|ci| ci.nav == ctx.entity)
+                            .map(|ci| (ci.index, child))
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+        child_slots.sort_by_key(|(i, _)| *i);
+        // Flyout items need to be projected — re-project via item projector by
+        // finding matching views under any parent. For nested templates, they
+        // are children of the flyout item entity; synthesis attaches them as
+        // child views of that item when it was projected. When the parent is in
+        // rail mode it does not expand children into its own view, so we build
+        // lightweight invoke rows from authoring data instead.
+        let nav_ref = ctx.world.get::<UiNavigationView>(ctx.entity)?;
+        let path =
+            crate::components::navigation_view::navigation_item_path(ctx.world, flyout_item)?;
+        let region = ctx.world.get::<UiNavigationItem>(flyout_item)?.region;
+        let parent_item = match region {
+            NavigationItemRegion::Menu => {
+                crate::components::navigation_view::navigation_item_at(&nav_ref.items, &path)?
+            }
+            NavigationItemRegion::Footer => {
+                crate::components::navigation_view::navigation_item_at(
+                    &nav_ref.footer_items,
+                    &path,
+                )?
+            }
+            NavigationItemRegion::Settings => return None,
+        };
+        let base_leaf = match region {
+            NavigationItemRegion::Menu => {
+                crate::components::navigation_view::first_leaf_index_for_path(
+                    &nav_ref.items,
+                    &path,
+                )?
+            }
+            NavigationItemRegion::Footer => {
+                nav_ref.footer_leaf_base()
+                    + crate::components::navigation_view::first_leaf_index_for_path(
+                        &nav_ref.footer_items,
+                        &path,
+                    )?
+            }
+            NavigationItemRegion::Settings => return None,
+        };
+        let mut rows: Vec<_> = Vec::new();
+        let mut leaf_cursor = base_leaf;
+        for (idx, child) in parent_item.children.iter().enumerate() {
+            let child_entity = child_slots
+                .iter()
+                .find(|(i, _)| *i == idx)
+                .map(|(_, e)| *e);
+            let row = project_nav_flyout_row(
+                &ctx,
+                child,
+                child_entity.unwrap_or(flyout_item),
+                &mut leaf_cursor,
+                nav.selected,
+            );
+            rows.push(row.into_any_flex());
+        }
+        if rows.is_empty() {
+            return None;
+        }
+        let panel: UiView = Arc::new(
+            sized_box(apply_widget_style(
+                flex_col(rows).gap(Length::px(4.0)),
+                &flyout_style,
+            ))
+            .width(Dim::Fixed(Length::px(open_width.min(280.0))))
+            .height(Dim::Auto),
+        );
+        Some(panel)
+    });
+
+    let shell: UiView = if is_overlay {
+        // Content full-bleed with left overlay pane + light-dismiss scrim.
+        let scrim_style = resolve_style_for_classes(ctx.world, ["nav.overlay_scrim"]);
+        let scrim: UiView = Arc::new(apply_direct_widget_style(
+            button_with_child_view(
+                ctx.entity,
+                WidgetUiAction::CloseNavigationPane { nav: ctx.entity },
+                Arc::new(sized_box(label("")).dims(
+                    Dimensions::AUTO
+                        .with_width(Dim::Stretch)
+                        .with_height(Dim::Stretch),
+                )),
+            ),
+            &scrim_style,
+        ));
+        let overlay_row = flex_row(vec![
+            sidebar.into_any_flex(),
+            flex_item(scrim, 1.0).into(),
+        ]);
+        Arc::new(zstack((
+            content_area,
+            Arc::new(
+                sized_box(overlay_row).dims(
+                    Dimensions::AUTO
+                        .with_width(Dim::Stretch)
+                        .with_height(Dim::Stretch),
+                ),
+            ),
+        )))
+    } else {
+        // Inline: rail/pane | content. Optional flyout stacked over content.
+        let row = flex_row(vec![
+            sidebar.into_any_flex(),
+            flex_item(content_area, 1.0).into(),
+        ]);
+        if let Some(flyout) = flyout_panel {
+            // Position flyout over the content area, left-aligned after rail.
+            let flyout_layer = flex_row(vec![
+                sized_box(label(""))
+                    .width(Dim::Fixed(Length::px(pane_width)))
+                    .height(Dim::Fixed(Length::px(1.0)))
+                    .into_any_flex(),
+                flex_col(vec![
+                    sized_box(label(""))
+                        .height(Dim::Fixed(Length::px(48.0)))
+                        .into_any_flex(),
+                    flyout.into_any_flex(),
+                    flex_item(label(""), 1.0).into(),
+                ])
+                .into_any_flex(),
+                flex_item(label(""), 1.0).into(),
+            ]);
+            Arc::new(zstack((
+                Arc::new(row),
+                Arc::new(
+                    sized_box(flyout_layer).dims(
+                        Dimensions::AUTO
+                            .with_width(Dim::Stretch)
+                            .with_height(Dim::Stretch),
+                    ),
+                ),
+            )))
+        } else {
+            Arc::new(row)
+        }
+    };
+
+    let clipped = scroll_portal(shell, Point::ORIGIN)
         .constrain_horizontal(true)
         .constrain_vertical(true)
         .content_must_fill(true);
 
     Arc::new(
-        sized_box(apply_widget_style(clipped_row, &style)).dims(
+        sized_box(apply_widget_style(clipped, &style)).dims(
             Dimensions::AUTO
                 .with_width(Dim::Stretch)
                 .with_height(Dim::Stretch),
@@ -2349,41 +2693,189 @@ pub(crate) fn project_navigation_view(nav: &UiNavigationView, ctx: ProjectionCtx
     )
 }
 
+/// Lightweight flyout row for compact hierarchy children.
+fn project_nav_flyout_row(
+    ctx: &ProjectionCtx<'_>,
+    item: &crate::NavigationViewItem,
+    entity: Entity,
+    leaf_cursor: &mut usize,
+    selected: usize,
+) -> UiView {
+    use crate::components::navigation_view::NavigationViewItemKind;
+
+    match item.kind {
+        NavigationViewItemKind::Header => {
+            let style = resolve_style_for_classes(ctx.world, ["nav.header"]);
+            Arc::new(apply_label_style(label(item.label.clone()), &style))
+        }
+        NavigationViewItemKind::Separator => {
+            let style = resolve_style_for_classes(ctx.world, ["nav.separator"]);
+            Arc::new(apply_widget_style(
+                sized_box(label(""))
+                    .width(Dim::Stretch)
+                    .height(Dim::Fixed(Length::px(1.0))),
+                &style,
+            ))
+        }
+        NavigationViewItemKind::Item if item.children.is_empty() => {
+            let leaf = *leaf_cursor;
+            *leaf_cursor += 1;
+            let is_active = leaf == selected;
+            let style = if is_active {
+                resolve_style_for_classes(ctx.world, ["nav.item", "nav.item.active"])
+            } else {
+                resolve_style_for_classes(ctx.world, ["nav.item"])
+            };
+            let row: UiView = Arc::new(apply_label_style(label(item.label.clone()), &style));
+            Arc::new(apply_direct_widget_style(
+                button_with_child_view(
+                    entity,
+                    WidgetUiAction::InvokeNavigationItem {
+                        nav: ctx
+                            .world
+                            .get::<UiNavigationItem>(entity)
+                            .map(|i| i.nav)
+                            .unwrap_or(ctx.entity),
+                        item: entity,
+                        leaf_index: Some(leaf),
+                        is_settings: false,
+                        is_parent: false,
+                        selects_on_invoked: item.selects_on_invoked,
+                    },
+                    row,
+                ),
+                &style,
+            ))
+        }
+        NavigationViewItemKind::Item => {
+            // Nested parent in flyout: show label only; deeper nesting deferred.
+            let style = resolve_style_for_classes(ctx.world, ["nav.item"]);
+            *leaf_cursor += item.leaf_count();
+            Arc::new(apply_label_style(label(item.label.clone()), &style))
+        }
+    }
+}
+
 /// Project a single ECS-backed sidebar item for [`UiNavigationView`].
-///
-/// Parents (with nested MenuItems) toggle expand/collapse and optionally show
-/// children. Leaves select content by leaf index.
 pub(crate) fn project_navigation_item(item: &UiNavigationItem, ctx: ProjectionCtx<'_>) -> UiView {
     use crate::components::navigation_view::{
-        first_leaf_index_for_path, leaf_index_for_path, navigation_item_at, navigation_item_path,
+        NavigationItemRegion, NavigationViewItemKind, global_first_leaf_for_entity,
+        global_leaf_index_for_entity, navigation_item_for_entity, navigation_item_path,
         subtree_contains_leaf,
     };
 
     let Some(nav) = ctx.world.get::<UiNavigationView>(item.nav) else {
         return Arc::new(label(""));
     };
-    let Some(path) = navigation_item_path(ctx.world, ctx.entity) else {
-        return Arc::new(label(""));
-    };
-    let Some(nav_item) = navigation_item_at(&nav.items, &path) else {
+
+    // Settings synthetic item.
+    if item.region == NavigationItemRegion::Settings {
+        let label_text = nav.settings_label.clone();
+        let leaf_index = nav.settings_leaf_index();
+        let selected = nav.selected;
+        let is_active = leaf_index == Some(selected);
+        let shows_labels = nav.pane_shows_labels();
+        let style = if is_active {
+            resolve_style_for_entity_classes(ctx.world, ctx.entity, ["nav.item", "nav.item.active"])
+        } else {
+            resolve_style_for_entity_classes(ctx.world, ctx.entity, ["nav.item"])
+        };
+        let mut indicator_style = resolve_style_for_classes(ctx.world, ["nav.item.indicator"]);
+        if !is_active {
+            indicator_style.colors.bg = indicator_style
+                .colors
+                .bg
+                .map(|c| c.with_alpha(0.0))
+                .or(Some(Color::TRANSPARENT));
+        }
+        let indicator: UiView = Arc::new(apply_widget_style(
+            sized_box(label(""))
+                .width(Dim::Fixed(Length::px(NAV_INDICATOR_WIDTH)))
+                .height(Dim::Fixed(Length::px(NAV_INDICATOR_HEIGHT))),
+            &indicator_style,
+        ));
+        let icon = nav_glyph_icon(
+            FluentIcon::Settings,
+            style.colors.text,
+            style.text.size.max(14.0),
+        );
+        let content: UiView = if shows_labels {
+            let text: UiView = Arc::new(apply_label_style(label(label_text), &style));
+            Arc::new(
+                flex_row(vec![icon.into_any_flex(), flex_item(text, 1.0).into()])
+                    .cross_axis_alignment(CrossAxisAlignment::Center)
+                    .gap(Length::px(8.0)),
+            )
+        } else {
+            icon
+        };
+        let row = flex_row(vec![
+            flex_col(vec![indicator.into_any_flex()])
+                .main_axis_alignment(MainAxisAlignment::Center)
+                .into_any_flex(),
+            flex_item(content, 1.0).into(),
+        ])
+        .cross_axis_alignment(CrossAxisAlignment::Center)
+        .gap(Length::px(8.0));
+        return Arc::new(apply_direct_widget_style(
+            button_with_child_view(
+                ctx.entity,
+                WidgetUiAction::InvokeNavigationItem {
+                    nav: item.nav,
+                    item: ctx.entity,
+                    leaf_index,
+                    is_settings: true,
+                    is_parent: false,
+                    selects_on_invoked: true,
+                },
+                row,
+            ),
+            &style,
+        ));
+    }
+
+    let Some(nav_item) = navigation_item_for_entity(nav, ctx.world, ctx.entity) else {
         return Arc::new(label(""));
     };
 
-    // Clone data needed after we drop the nav borrow for child projection.
+    // Header / separator (non-interactive).
+    match nav_item.kind {
+        NavigationViewItemKind::Header => {
+            if nav.is_rail_mode() {
+                // Collapse header text in closed compact rail (WinUI).
+                return Arc::new(sized_box(label("")).height(Dim::Fixed(Length::px(0.0))));
+            }
+            let style = resolve_style_for_entity_classes(ctx.world, ctx.entity, ["nav.header"]);
+            return Arc::new(apply_label_style(label(nav_item.label.clone()), &style));
+        }
+        NavigationViewItemKind::Separator => {
+            let style = resolve_style_for_entity_classes(ctx.world, ctx.entity, ["nav.separator"]);
+            return Arc::new(apply_widget_style(
+                sized_box(label(""))
+                    .width(Dim::Stretch)
+                    .height(Dim::Fixed(Length::px(1.0))),
+                &style,
+            ));
+        }
+        NavigationViewItemKind::Item => {}
+    }
+
     let label_text = nav_item.label.clone();
     let icon = nav_item.icon;
-    let is_leaf = nav_item.is_leaf();
+    let is_parent = nav_item.is_parent();
     let is_expanded = nav_item.is_expanded;
-    let pane_open = nav.is_pane_open;
+    let selects_on_invoked = nav_item.selects_on_invoked;
+    let info_badge = nav_item.info_badge.clone();
+    let shows_labels = nav.pane_shows_labels();
+    let uses_flyout = nav.uses_hierarchy_flyout();
     let selected = nav.selected;
+    let path = navigation_item_path(ctx.world, ctx.entity).unwrap_or_default();
     let depth = path.len().saturating_sub(1);
-    let leaf_index = leaf_index_for_path(&nav.items, &path);
-    let first_leaf = first_leaf_index_for_path(&nav.items, &path);
+    let leaf_index = global_leaf_index_for_entity(nav, ctx.world, ctx.entity);
+    let first_leaf = global_first_leaf_for_entity(nav, ctx.world, ctx.entity);
 
-    // Active leaf: exact selection. Parents with a selected descendant only affect
-    // optional chrome (chevron stays); the accent indicator is leaf-only.
     let is_active_leaf = leaf_index == Some(selected);
-    let _is_active_parent = !is_leaf
+    let is_child_selected = is_parent
         && first_leaf.is_some_and(|first| {
             let mut next = first;
             subtree_contains_leaf(nav_item, selected, &mut next)
@@ -2391,6 +2883,12 @@ pub(crate) fn project_navigation_item(item: &UiNavigationItem, ctx: ProjectionCt
 
     let mut style = if is_active_leaf {
         resolve_style_for_entity_classes(ctx.world, ctx.entity, ["nav.item", "nav.item.active"])
+    } else if is_child_selected {
+        resolve_style_for_entity_classes(
+            ctx.world,
+            ctx.entity,
+            ["nav.item", "nav.item.child_selected"],
+        )
     } else {
         resolve_style_for_entity_classes(ctx.world, ctx.entity, ["nav.item"])
     };
@@ -2402,7 +2900,6 @@ pub(crate) fn project_navigation_item(item: &UiNavigationItem, ctx: ProjectionCt
         });
     }
 
-    // Left selection indicator — only solid for the active *leaf*.
     let mut indicator_style = resolve_style_for_classes(ctx.world, ["nav.item.indicator"]);
     if !is_active_leaf {
         indicator_style.colors.bg = indicator_style
@@ -2421,8 +2918,9 @@ pub(crate) fn project_navigation_item(item: &UiNavigationItem, ctx: ProjectionCt
         &indicator_style,
     ));
 
-    // Expand/collapse chevron for parents (WinUI NavigationViewItem chevron).
-    let chevron: Option<UiView> = (!is_leaf && pane_open).then(|| {
+    // Chevron: hide for top-level in flyout/rail mode (WinUI).
+    let show_chevron = is_parent && shows_labels && !uses_flyout;
+    let chevron: Option<UiView> = show_chevron.then(|| {
         let chevron_style = resolve_style_for_classes(ctx.world, ["nav.item.chevron"]);
         let color = chevron_style
             .colors
@@ -2449,14 +2947,21 @@ pub(crate) fn project_navigation_item(item: &UiNavigationItem, ctx: ProjectionCt
         ) as UiView
     });
 
-    // Compact pane: icon only (or first-letter fallback).
-    let label_content: UiView = if pane_open {
+    let badge_view: Option<UiView> = info_badge.as_ref().map(|badge| {
+        let badge_style = resolve_style_for_classes(ctx.world, ["nav.item.badge"]);
+        Arc::new(apply_label_style(label(badge.clone()), &badge_style)) as UiView
+    });
+
+    let label_content: UiView = if shows_labels {
         let label_view: UiView = Arc::new(apply_label_style(label(label_text.clone()), &style));
         let mut parts = Vec::new();
         if let Some(icon) = icon_view {
             parts.push(icon.into_any_flex());
         }
         parts.push(flex_item(label_view, 1.0).into());
+        if let Some(badge) = badge_view {
+            parts.push(badge.into_any_flex());
+        }
         if let Some(chevron) = chevron {
             parts.push(chevron.into_any_flex());
         }
@@ -2476,7 +2981,7 @@ pub(crate) fn project_navigation_item(item: &UiNavigationItem, ctx: ProjectionCt
         Arc::new(apply_label_style(label(letter), &style))
     };
 
-    let indent = if pane_open {
+    let indent = if shows_labels {
         depth as f64 * NAV_CHILD_INDENT
     } else {
         0.0
@@ -2504,18 +3009,15 @@ pub(crate) fn project_navigation_item(item: &UiNavigationItem, ctx: ProjectionCt
     let row = flex_row(row_parts)
         .main_axis_alignment(MainAxisAlignment::Start)
         .cross_axis_alignment(CrossAxisAlignment::Center)
-        .gap(Length::px(if pane_open { 8.0 } else { 4.0 }));
+        .gap(Length::px(if shows_labels { 8.0 } else { 4.0 }));
 
-    let action = if is_leaf {
-        WidgetUiAction::SelectNavigationItem {
-            nav: item.nav,
-            index: leaf_index.unwrap_or(0),
-        }
-    } else {
-        WidgetUiAction::ToggleNavigationItemExpand {
-            nav: item.nav,
-            item: ctx.entity,
-        }
+    let action = WidgetUiAction::InvokeNavigationItem {
+        nav: item.nav,
+        item: ctx.entity,
+        leaf_index,
+        is_settings: false,
+        is_parent,
+        selects_on_invoked,
     };
 
     let header: UiView = Arc::new(apply_direct_widget_style(
@@ -2523,8 +3025,8 @@ pub(crate) fn project_navigation_item(item: &UiNavigationItem, ctx: ProjectionCt
         &style,
     ));
 
-    // Nested MenuItems: when expanded, append child item projections.
-    if !is_leaf && is_expanded {
+    // Nested MenuItems: inline when expanded and not in flyout mode.
+    if is_parent && is_expanded && shows_labels && !uses_flyout {
         let mut child_slots = ctx
             .world
             .get::<Children>(ctx.entity)
@@ -2543,7 +3045,6 @@ pub(crate) fn project_navigation_item(item: &UiNavigationItem, ctx: ProjectionCt
             .unwrap_or_default();
         child_slots.sort_by_key(|(index, _)| *index);
 
-        // Nested MenuItems are projected as children of this item entity.
         let child_views: Vec<_> = child_slots
             .into_iter()
             .filter_map(|(_, child_entity)| {

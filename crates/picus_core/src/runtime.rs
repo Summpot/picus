@@ -2070,7 +2070,8 @@ mod tests {
             UiNavigationView::new([
                 NavigationViewItem::new("One"),
                 NavigationViewItem::new("Two"),
-            ]),
+            ])
+            .with_settings_visible(false),
         ));
 
         app.update();
@@ -2475,14 +2476,15 @@ mod tests {
         let indicator =
             crate::resolve_style_for_classes(app.world(), ["nav.item.indicator"]);
 
-        // Selected items keep a subtle fill; accent lives on the left indicator.
+        // Selected: WinUI SubtleFill secondary; hover steps to tertiary.
+        // Accent lives on the left indicator.
         assert_eq!(
             active_hover.colors.bg,
-            Some(token_color(app.world(), "fill-subtle-secondary"))
+            Some(token_color(app.world(), "fill-subtle-tertiary"))
         );
         assert_eq!(
             inactive_hover.colors.bg,
-            Some(token_color(app.world(), "surface-subtle-hover"))
+            Some(token_color(app.world(), "fill-subtle-secondary"))
         );
         assert_eq!(
             indicator.colors.bg,

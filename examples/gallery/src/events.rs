@@ -25,6 +25,11 @@ pub fn drain_gallery_events(world: &mut World) {
         .resource_mut::<UiEventQueue>()
         .drain_actions::<UiNavigationSelectionChanged>()
     {
+        if event.action.is_settings_selected {
+            // Settings is a framework leaf after menu pages; keep selection without
+            // remapping into GalleryPage content slots.
+            continue;
+        }
         set_gallery_page(world, &rt, event.action.selected);
     }
 
@@ -125,12 +130,16 @@ fn discard_logged_actions(world: &mut World) {
         UiScrollViewChanged,
         picus::UiNavigationPaneChanged,
         picus::UiNavigationItemExpandedChanged,
+        picus::UiNavigationItemInvoked,
+        picus::UiNavigationDisplayModeChanged,
+        picus::UiNavigationBackRequested,
     );
 }
 
 fn set_gallery_page(world: &mut World, rt: &GalleryRuntime, page: usize) {
     if let Some(mut nav_view) = world.get_mut::<UiNavigationView>(rt.nav_view) {
-        nav_view.selected = page.min(nav_view.items.len().saturating_sub(1));
+        // Unified leaf index spans menu leaves (+ footer/settings when present).
+        nav_view.selected = page.min(nav_view.leaf_count().saturating_sub(1));
     }
 }
 

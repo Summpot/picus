@@ -73,7 +73,12 @@ fn setup_gallery(mut commands: Commands) {
 
     let nav_view = commands
         .spawn_scene(bsn! {
-            template_value(UiNavigationView::new(nav_items))
+            template_value(
+                UiNavigationView::new(nav_items)
+                    .with_settings_visible(true)
+                    .with_pane_title("Gallery")
+                    .with_settings_label("Settings"),
+            )
             template_value(class("gallery.nav_view"))
             template_value(InlineStyle {
                 layout: LayoutStyle {

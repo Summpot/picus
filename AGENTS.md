@@ -248,6 +248,14 @@ text/image cell templates, `UiNavigationView` with ECS-backed `UiNavigationItem`
 sidebar template entities, `UiNumericUpDown`, `UiMarkdown`, `UiStreamingMarkdown`,
 and `LocalizeText`.
 
+`UiNavigationView` is a WinUI left-shell subset: hierarchical menu items with
+inline expand or compact flyouts, footer items, optional Settings leaf, pane
+display modes (`Left` / `LeftCompact` / `LeftMinimal` / `Auto`), pane title /
+toggle / back chrome, headers and separators, and unified leaf selection across
+menu → footer → settings. Content children map 1:1 to that leaf order. Top pane
+mode and full a11y peers are deferred. Defaults follow WinUI where practical
+(`OpenPaneLength` 320, `CompactPaneLength` 48, settings visible).
+
 Icon-capable public authoring values store `IconGlyph` (glyph plus font fallback
 stack) instead of a bare `char`. `PicusIcon` remains the bundled Lucide-backed
 compatibility set; `FluentIcon` is the Fluent Design / WinUI symbol set. Use
