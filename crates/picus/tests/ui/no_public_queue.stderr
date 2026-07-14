@@ -1,0 +1,5 @@
+error[E0432]: unresolved import `picus::UiEventQueue`
+ --> tests/ui/no_public_queue.rs:2:5
+  |
+2 | use picus::UiEventQueue;
+  |     ^^^^^^^^^^^^^^^^^^^ no `UiEventQueue` in the root

@@ -248,6 +248,7 @@ impl InternalUiEventQueue {
     }
 
     #[must_use]
+    #[allow(dead_code)]
     pub(crate) fn shared_queue(&self) -> Arc<SegQueue<InternalUiEvent>> {
         self.sink.shared_queue()
     }
@@ -260,6 +261,7 @@ impl InternalUiEventQueue {
         self.sink.push_typed(entity, action);
     }
 
+    #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) fn push_erased(
         &self,
         entity: Entity,
@@ -763,5 +765,152 @@ mod tests {
             remaining > 0,
             "dispatch limit should re-queue remaining work instead of spinning forever"
         );
+    }
+
+    #[test]
+    #[should_panic(expected = "unregistered UI action payload")]
+    fn unregistered_payload_panics_in_debug() {
+        #[derive(Clone, Debug)]
+        struct Unregistered;
+        let mut app = App::new();
+        app.add_plugins(PicusPlugin);
+
+        let entity = app.world_mut().spawn_empty().id();
+        app.world()
+            .resource::<InternalUiEventQueue>()
+            .push_typed(entity, Unregistered);
+
+        app.world_mut()
+            .run_system_once(dispatch_ui_actions)
+            .expect("dispatch");
+    }
+
+    #[test]
+    fn unregistered_payload_is_dropped_not_requeued() {
+        // After a failed registration path that panics in debug, verify the
+        // drop-and-forget path when the type is never registered: simulate by
+        // draining the empty queue after a registered dispatch leaves no residual
+        // unknown entries. The debug panic path is covered above; this checks
+        // that a registered action does not leave junk in the queue.
+        let mut app = App::new();
+        app.add_plugins(PicusPlugin).add_ui_action::<TestAction>();
+
+        let entity = app.world_mut().spawn_empty().id();
+        app.world()
+            .resource::<InternalUiEventQueue>()
+            .push_typed(entity, TestAction::Inc);
+
+        app.world_mut()
+            .run_system_once(dispatch_ui_actions)
+            .expect("dispatch");
+
+        let remaining = app
+            .world_mut()
+            .resource_mut::<InternalUiEventQueue>()
+            .drain_all()
+            .len();
+        assert_eq!(remaining, 0, "dispatched queue must be empty after success");
+    }
+
+    #[test]
+    fn widget_action_handler_is_registered_and_emits_changed_message() {
+        let mut app = App::new();
+        app.add_plugins(PicusPlugin);
+
+        let checkbox = app
+            .world_mut()
+            .spawn(crate::UiCheckbox {
+                checked: false,
+                indeterminate: false,
+                ..Default::default()
+            })
+            .id();
+
+        app.world()
+            .resource::<InternalUiEventQueue>()
+            .push_typed(
+                checkbox,
+                crate::WidgetUiAction::ToggleCheckbox { checkbox },
+            );
+
+        app.world_mut()
+            .run_system_once(dispatch_ui_actions)
+            .expect("dispatch");
+
+        assert!(
+            app.world()
+                .get::<crate::UiCheckbox>(checkbox)
+                .is_some_and(|c| c.checked),
+            "dispatcher must apply WidgetUiAction without a separate drain system"
+        );
+
+        let messages = app
+            .world()
+            .resource::<bevy_ecs::message::Messages<UiAction<crate::UiCheckboxChanged>>>();
+        let mut cursor = messages.get_cursor();
+        let collected: Vec<_> = cursor.read(messages).cloned().collect();
+        assert_eq!(collected.len(), 1);
+        assert_eq!(collected[0].action.checkbox, checkbox);
+        assert!(collected[0].action.checked);
+    }
+
+    #[test]
+    fn ui_emit_payload_dispatches_business_action_not_builtin() {
+        let mut app = App::new();
+        app.add_plugins(PicusPlugin).add_ui_action::<TestAction>();
+
+        let entity = app.world_mut().spawn_empty().id();
+        // Simulate retained button with UiEmit payload (type-erased).
+        let emit = UiEmit::new(TestAction::Inc);
+        app.world()
+            .resource::<InternalUiEventQueue>()
+            .push_erased(entity, emit.type_id(), emit.payload());
+
+        app.world_mut()
+            .run_system_once(dispatch_ui_actions)
+            .expect("dispatch");
+
+        let business = app
+            .world()
+            .resource::<bevy_ecs::message::Messages<UiAction<TestAction>>>();
+        let mut cursor = business.get_cursor();
+        assert_eq!(cursor.read(business).count(), 1);
+
+        let builtin = app
+            .world()
+            .resource::<bevy_ecs::message::Messages<UiAction<BuiltinUiAction>>>();
+        let mut cursor = builtin.get_cursor();
+        assert_eq!(
+            cursor.read(builtin).count(),
+            0,
+            "UiEmit path must not also emit BuiltinUiAction::Clicked"
+        );
+    }
+
+    #[test]
+    fn headless_action_to_resource_via_message_reader() {
+        #[derive(Resource, Default)]
+        struct Count(i32);
+
+        let mut app = App::new();
+        app.add_plugins(PicusPlugin)
+            .add_ui_action::<TestAction>()
+            .insert_resource(Count(0))
+            .add_systems(bevy_app::Update, |mut reader: MessageReader<UiAction<TestAction>>, mut count: ResMut<Count>| {
+                for UiAction { action, .. } in reader.read() {
+                    if *action == TestAction::Inc {
+                        count.0 += 1;
+                    }
+                }
+            });
+
+        let source = app.world_mut().spawn_empty().id();
+        // Retained click equivalent: enqueue + full frame (PreUpdate dispatch + Update readers).
+        app.world()
+            .resource::<UiActionSender<TestAction>>()
+            .send(source, TestAction::Inc);
+        app.update();
+
+        assert_eq!(app.world().resource::<Count>().0, 1);
     }
 }

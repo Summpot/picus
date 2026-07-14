@@ -79,9 +79,46 @@ when the piece is not reused, has no independent style type, and does not need i
 own projection resources. Split into a `UiComponent` when the subtree is reused,
 has distinct styles/classes, or registers its own resource dependencies.
 
+## Fine-grained components vs container map (todo pattern)
+
+Two common authoring styles:
+
+| Style | When | Shape |
+|-------|------|--------|
+| **Fine-grained** | Each row has independent interaction, style classes, or resources | Spawn one ECS entity per item (`TodoItem` component + `UiEmit` / child buttons) |
+| **Container map** | List is pure projection of a resource; items are not independently styled | One `TodoList` component reads `Res<Todos>` and builds labels/buttons in `project` via `ctx.flex_col` |
+
+Guidelines:
+
+- Prefer **container map** for short-lived or purely derived lists (less registration noise).
+- Prefer **fine-grained entities** when items need hit testing identity, per-row
+  `UiEmit`, focus, or stylesheet type/class selectors.
+- See `examples/todo_list` for a hybrid: list state in a resource, rows as projected
+  structure with typed actions.
+
+Helpers that reduce dual writing without new components:
+
+- `ctx.flex_col` / `ctx.flex_row`
+- `ctx.button` / `ctx.button_with_child` / `ctx.styled`
+- `classes!("…")` + RON rules instead of one-off styled wrappers
+
+Composite layout components (e.g. form rows) remain optional convenience; they are
+not required for the default app path.
+
 ## When to use exclusive systems
 
 Prefer ordinary `MessageReader` systems. For world-exclusive mutation, use
 `picus::drain_ui_actions::<T>(world)` which reads only newly arrived messages.
 
-See also [events-messages.md](events-messages.md) and [macros.md](macros.md).
+## Related guides
+
+| Topic | Doc |
+|-------|-----|
+| Actions / schedule | [events-messages.md](events-messages.md) |
+| Macros | [macros.md](macros.md) |
+| Themes | [styling-themes.md](styling-themes.md) |
+| i18n / fonts | [i18n-fonts-icons.md](i18n-fonts-icons.md) |
+| Multi-window | [multi-window.md](multi-window.md) |
+| Overlays / scroll | [overlays-scroll.md](overlays-scroll.md) |
+
+Rustdoc on the `picus` crate points at these guide names; long tutorials live only here.

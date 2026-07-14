@@ -113,9 +113,13 @@ See [`docs/guide/styling-themes.md`](docs/guide/styling-themes.md).
 | Events | [`docs/guide/events-messages.md`](docs/guide/events-messages.md) |
 | Macros | [`docs/guide/macros.md`](docs/guide/macros.md) |
 | Themes | [`docs/guide/styling-themes.md`](docs/guide/styling-themes.md) |
+| Overlays / scroll | [`docs/guide/overlays-scroll.md`](docs/guide/overlays-scroll.md) |
+| i18n / fonts | [`docs/guide/i18n-fonts-icons.md`](docs/guide/i18n-fonts-icons.md) |
+| Multi-window | [`docs/guide/multi-window.md`](docs/guide/multi-window.md) |
 | Architecture | [`docs/architecture/overview.md`](docs/architecture/overview.md) |
 | Examples | [`docs/examples/index.md`](docs/examples/index.md) |
 | DX plan | [`docs/plans/app-dx.md`](docs/plans/app-dx.md) |
+| Nested rules | `crates/picus_core/AGENTS.md`, `crates/picus_surface/AGENTS.md`, `examples/picuscode/AGENTS.md`, `thirdparty/AGENTS.md` |
 
 ## 7. Editing this file
 

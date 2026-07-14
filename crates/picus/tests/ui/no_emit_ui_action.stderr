@@ -1,0 +1,5 @@
+error[E0432]: unresolved import `picus::emit_ui_action`
+ --> tests/ui/no_emit_ui_action.rs:2:5
+  |
+2 | use picus::emit_ui_action;
+  |     ^^^^^^^^^^^^^^^^^^^^^ no `emit_ui_action` in the root

@@ -30,6 +30,11 @@ UiActionRegistry (TypeId → handlers)
 | `ProjectionCtx::action_sender` | Capture a sender while projecting |
 | `PicusUiSet` | PreUpdate chain: Input → RetainedRouting → DispatchActions |
 
+Built-in widget/overlay interactions (`WidgetUiAction`, `OverlayUiAction`) are applied
+by the **same** PreUpdate dispatcher via registry handlers; applications never drain
+those types. High-level `*Changed` payloads are already registered as `UiAction`
+messages by `PicusPlugin`.
+
 There is **no** public global `emit_ui_action`. Prefer capturing `UiActionSender<T>` from
 `ProjectionCtx` or `Res<UiActionSender<T>>` in systems.
 

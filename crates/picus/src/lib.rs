@@ -12,10 +12,23 @@
 //! 5. Handle [`UiAction`] with Bevy `MessageReader`
 //! 6. Run with [`AppPicusExt::run_picus`]
 //!
-//! See `docs/guide/app.md` for the full application guide.
+//! # Guides (long form lives in `docs/`, not rustdoc)
+//!
+//! | Topic | Doc path |
+//! |-------|----------|
+//! | Application entry | `docs/guide/app.md` |
+//! | Actions / schedule | `docs/guide/events-messages.md` |
+//! | Themes | `docs/guide/styling-themes.md` |
+//! | Macros | `docs/guide/macros.md` |
+//! | Overlays / scroll | `docs/guide/overlays-scroll.md` |
+//! | i18n / fonts | `docs/guide/i18n-fonts-icons.md` |
+//! | Multi-window | `docs/guide/multi-window.md` |
+//! | Doc map | `docs/README.md` |
 #![forbid(unsafe_code)]
 
 /// Application setup, plugins, runners, and Bevy re-exports.
+///
+/// See `docs/guide/app.md`.
 pub mod app {
     pub use picus_core::{
         AppPicusExt, BevyWindowOptions, PicusBuiltinsPlugin, PicusPlugin, PicusUiSet,
@@ -78,6 +91,8 @@ pub mod projection {
 }
 
 /// Styling, themes, and selector APIs.
+///
+/// See `docs/guide/styling-themes.md`.
 pub mod styling {
     pub use picus_core::{
         ActiveStyleVariant, BackdropStyle, BaseStyleSheet, ColorStyle, ComputedStyle,
@@ -96,6 +111,8 @@ pub mod styling {
 }
 
 /// Application-facing UI actions and Bevy message integration.
+///
+/// See `docs/guide/events-messages.md`.
 pub mod events {
     pub use picus_core::{
         AcceleratorActivated, AcceleratorModifiers, AcceleratorScope, AcceleratorTextOverride,

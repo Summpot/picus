@@ -1,0 +1,5 @@
+error[E0432]: unresolved import `picus::core`
+ --> tests/ui/no_core_alias.rs:2:5
+  |
+2 | use picus::core;
+  |     ^^^^^^^^^^^ no `core` in the root

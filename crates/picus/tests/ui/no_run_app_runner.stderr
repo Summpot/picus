@@ -1,0 +1,5 @@
+error[E0432]: unresolved import `picus::run_app`
+ --> tests/ui/no_run_app_runner.rs:2:5
+  |
+2 | use picus::run_app;
+  |     ^^^^^^^^^^^^^^ no `run_app` in the root

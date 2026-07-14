@@ -32,10 +32,10 @@ use crate::{
     fonts::{XilemFontBridge, collect_bevy_font_assets, sync_fonts_to_xilem},
     i18n::AppI18n,
     overlay::{
-        OverlayPointerRoutingState, bubble_ui_pointer_events, ensure_overlay_defaults,
-        ensure_overlay_root, handle_context_menu_right_clicks, handle_global_overlay_clicks,
-        handle_overlay_actions, reparent_overlay_entities, sync_overlay_positions,
-        sync_overlay_stack_lifecycle,
+        OverlayPointerRoutingState, OverlayUiAction, apply_overlay_ui_action,
+        bubble_ui_pointer_events, ensure_overlay_defaults, ensure_overlay_root,
+        handle_context_menu_right_clicks, handle_global_overlay_clicks,
+        reparent_overlay_entities, sync_overlay_positions, sync_overlay_stack_lifecycle,
     },
     projection::markdown::{
         StreamingMarkdownParseCache, evict_streaming_markdown_cache,
@@ -63,7 +63,7 @@ use crate::{
     },
     track_window_size,
     widget_actions::{
-        handle_scroll_view_wheel, handle_tooltip_hovers, handle_widget_actions,
+        WidgetUiAction, apply_widget_ui_action, handle_scroll_view_wheel, handle_tooltip_hovers,
         sync_scroll_view_layout_geometry, tick_auto_dismiss,
     },
 };
@@ -211,12 +211,8 @@ impl Plugin for PicusPlugin {
             .add_systems(
                 PreUpdate,
                 (
-                    // Internal typed drains still used by widget/overlay systems until
-                    // those handlers are fully folded into the registry.
-                    handle_widget_actions,
-                    handle_overlay_actions,
                     sync_ui_interaction_markers,
-                    // Application Message conversion for registered payloads.
+                    // Sole consumer: built-in widget/overlay handlers + app Messages.
                     dispatch_ui_actions,
                 )
                     .chain()
@@ -228,8 +224,6 @@ impl Plugin for PicusPlugin {
                     ensure_overlay_root,
                     reparent_overlay_entities,
                     ensure_overlay_defaults,
-                    handle_overlay_actions,
-                    handle_widget_actions,
                     // Convert any actions re-queued during Update into Messages.
                     dispatch_ui_actions,
                     activate_debounced_hovers,
@@ -302,6 +296,9 @@ impl Plugin for PicusPlugin {
 
 /// Register built-in action payloads so apps can read them via `MessageReader<UiAction<T>>`
 /// without calling `add_ui_action` for framework types.
+///
+/// Also installs ECS mutation handlers for internal [`WidgetUiAction`] /
+/// [`OverlayUiAction`] so the sole queue consumer is [`dispatch_ui_actions`].
 fn register_builtin_ui_action_messages(app: &mut App) {
     use crate::{
         TitleBarAction, UiCheckboxChanged, UiColorPickerChanged, UiComboBoxChanged,
@@ -348,6 +345,18 @@ fn register_builtin_ui_action_messages(app: &mut App) {
     register_ui_action_type::<UiThemePickerChanged>(app);
     register_ui_action_type::<UiTimePickerChanged>(app);
     register_ui_action_type::<UiTreeNodeToggled>(app);
+
+    // Built-in retained interactions: mutate ECS from the single dispatcher.
+    app.world_mut()
+        .resource_mut::<UiActionRegistry>()
+        .register_handler::<WidgetUiAction, _>(|world, entity, action| {
+            apply_widget_ui_action(world, entity, action);
+        });
+    app.world_mut()
+        .resource_mut::<UiActionRegistry>()
+        .register_handler::<OverlayUiAction, _>(|world, entity, action| {
+            apply_overlay_ui_action(world, entity, action);
+        });
 }
 
 #[cfg(test)]

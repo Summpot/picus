@@ -840,29 +840,25 @@ fn close_overlay_entity(world: &mut World, overlay_entity: Entity) {
     }
 }
 
-/// Consume built-in overlay actions and mutate ECS overlay state.
-pub fn handle_overlay_actions(world: &mut World) {
-    let actions = world
-        .resource_mut::<UiEventQueue>()
-        .drain_actions::<OverlayUiAction>();
+/// Apply one built-in OverlayUiAction (dispatcher handler + tests).
+pub fn apply_overlay_ui_action(world: &mut World, source: Entity, action: &OverlayUiAction) {
+    if world.get_entity(source).is_err() {
+        return;
+    }
 
-    for event in actions {
-        if world.get_entity(event.entity).is_err() {
-            continue;
-        }
+    match action.clone() {
 
-        match event.action {
             OverlayUiAction::DismissDialog => {
-                if world.get::<UiDialog>(event.entity).is_some() {
-                    dismiss_dialog_overlay(world, event.entity);
+                if world.get::<UiDialog>(source).is_some() {
+                    dismiss_dialog_overlay(world, source);
                 }
             }
             OverlayUiAction::ToggleCombo => {
-                let Some(combo) = world.get::<UiComboBox>(event.entity).cloned() else {
-                    continue;
+                let Some(combo) = world.get::<UiComboBox>(source).cloned() else {
+                    return;
                 };
 
-                let existing_dropdowns = collect_dropdowns_for_combo(world, event.entity);
+                let existing_dropdowns = collect_dropdowns_for_combo(world, source);
                 for dropdown in existing_dropdowns {
                     if world.get_entity(dropdown).is_ok() {
                         close_dropdown(world, dropdown);
@@ -870,10 +866,10 @@ pub fn handle_overlay_actions(world: &mut World) {
                 }
 
                 if combo.is_open {
-                    if let Some(mut combo_box) = world.get_mut::<UiComboBox>(event.entity) {
+                    if let Some(mut combo_box) = world.get_mut::<UiComboBox>(source) {
                         combo_box.is_open = false;
                     }
-                    continue;
+                    return;
                 }
 
                 let placement = combo.dropdown_placement;
@@ -882,14 +878,14 @@ pub fn handle_overlay_actions(world: &mut World) {
                 let dropdown = spawn_popover_in_overlay_root(
                     world,
                     UiDropdownMenu,
-                    UiPopover::new(event.entity)
+                    UiPopover::new(source)
                         .with_placement(placement)
                         .with_auto_flip_placement(auto_flip),
                 );
 
-                spawn_dropdown_items(world, dropdown, event.entity);
+                spawn_dropdown_items(world, dropdown, source);
 
-                if let Some(mut combo_box) = world.get_mut::<UiComboBox>(event.entity) {
+                if let Some(mut combo_box) = world.get_mut::<UiComboBox>(source) {
                     combo_box.is_open = true;
                 }
             }
@@ -897,12 +893,12 @@ pub fn handle_overlay_actions(world: &mut World) {
                 tracing::info!("ComboBox Item Clicked: {:?}", action);
 
                 if world.get_entity(dropdown).is_err() {
-                    continue;
+                    return;
                 }
 
                 let Some(anchor) = world.get::<AnchoredTo>(dropdown).map(|anchored| anchored.0)
                 else {
-                    continue;
+                    return;
                 };
 
                 let mut changed_event = None;
@@ -927,19 +923,19 @@ pub fn handle_overlay_actions(world: &mut World) {
                 close_dropdown(world, dropdown);
             }
             OverlayUiAction::DismissDropdown => {
-                if world.get_entity(event.entity).is_ok()
-                    && world.get::<UiDropdownMenu>(event.entity).is_some()
+                if world.get_entity(source).is_ok()
+                    && world.get::<UiDropdownMenu>(source).is_some()
                 {
-                    close_dropdown(world, event.entity);
+                    close_dropdown(world, source);
                 }
             }
 
             OverlayUiAction::ToggleThemePicker => {
-                let Some(picker) = world.get::<UiThemePicker>(event.entity).cloned() else {
-                    continue;
+                let Some(picker) = world.get::<UiThemePicker>(source).cloned() else {
+                    return;
                 };
 
-                let existing_panels = collect_theme_picker_menus_for_picker(world, event.entity);
+                let existing_panels = collect_theme_picker_menus_for_picker(world, source);
                 for panel in existing_panels {
                     if world.get_entity(panel).is_ok() {
                         close_theme_picker_menu(world, panel);
@@ -947,37 +943,37 @@ pub fn handle_overlay_actions(world: &mut World) {
                 }
 
                 if picker.is_open {
-                    if let Some(mut theme_picker) = world.get_mut::<UiThemePicker>(event.entity) {
+                    if let Some(mut theme_picker) = world.get_mut::<UiThemePicker>(source) {
                         theme_picker.is_open = false;
                     }
-                    continue;
+                    return;
                 }
 
                 if picker.options.is_empty() {
-                    continue;
+                    return;
                 }
 
                 spawn_popover_in_overlay_root(
                     world,
                     UiThemePickerMenu {
-                        anchor: event.entity,
+                        anchor: source,
                     },
-                    UiPopover::new(event.entity)
+                    UiPopover::new(source)
                         .with_placement(picker.dropdown_placement)
                         .with_auto_flip_placement(picker.auto_flip_placement),
                 );
 
-                if let Some(mut theme_picker) = world.get_mut::<UiThemePicker>(event.entity) {
+                if let Some(mut theme_picker) = world.get_mut::<UiThemePicker>(source) {
                     theme_picker.is_open = true;
                 }
             }
 
             OverlayUiAction::SelectThemePickerItem { index } => {
                 let Some(anchor) = world
-                    .get::<UiThemePickerMenu>(event.entity)
+                    .get::<UiThemePickerMenu>(source)
                     .map(|panel| panel.anchor)
                 else {
-                    continue;
+                    return;
                 };
 
                 let mut changed_event = None;
@@ -999,8 +995,8 @@ pub fn handle_overlay_actions(world: &mut World) {
                     set_active_style_variant_by_name(world, variant.as_str());
                 }
 
-                if world.get_entity(event.entity).is_ok() {
-                    close_theme_picker_menu(world, event.entity);
+                if world.get_entity(source).is_ok() {
+                    close_theme_picker_menu(world, source);
                 }
 
                 if let Some(ev) = changed_event {
@@ -1009,19 +1005,19 @@ pub fn handle_overlay_actions(world: &mut World) {
             }
 
             OverlayUiAction::DismissThemePicker => {
-                if world.get_entity(event.entity).is_ok()
-                    && world.get::<UiThemePickerMenu>(event.entity).is_some()
+                if world.get_entity(source).is_ok()
+                    && world.get::<UiThemePickerMenu>(source).is_some()
                 {
-                    close_theme_picker_menu(world, event.entity);
+                    close_theme_picker_menu(world, source);
                 }
             }
 
             OverlayUiAction::ToggleMenuBarItem => {
-                let Some(bar_item) = world.get::<UiMenuBarItem>(event.entity).cloned() else {
-                    continue;
+                let Some(bar_item) = world.get::<UiMenuBarItem>(source).cloned() else {
+                    return;
                 };
 
-                let existing_panels = collect_menu_panels_for_item(world, event.entity);
+                let existing_panels = collect_menu_panels_for_item(world, source);
                 for panel in existing_panels {
                     if world.get_entity(panel).is_ok() {
                         close_menu_panel(world, panel);
@@ -1029,31 +1025,31 @@ pub fn handle_overlay_actions(world: &mut World) {
                 }
 
                 if bar_item.is_open {
-                    if let Some(mut item) = world.get_mut::<UiMenuBarItem>(event.entity) {
+                    if let Some(mut item) = world.get_mut::<UiMenuBarItem>(source) {
                         item.is_open = false;
                     }
-                    continue;
+                    return;
                 }
 
                 spawn_popover_in_overlay_root(
                     world,
                     UiMenuItemPanel {
-                        anchor: event.entity,
+                        anchor: source,
                     },
-                    UiPopover::new(event.entity)
+                    UiPopover::new(source)
                         .with_placement(OverlayPlacement::BottomStart)
                         .with_auto_flip_placement(true),
                 );
 
-                if let Some(mut item) = world.get_mut::<UiMenuBarItem>(event.entity) {
+                if let Some(mut item) = world.get_mut::<UiMenuBarItem>(source) {
                     item.is_open = true;
                 }
             }
 
             OverlayUiAction::SelectMenuBarItem { index } => {
-                let Some(anchor) = world.get::<UiMenuItemPanel>(event.entity).map(|p| p.anchor)
+                let Some(anchor) = world.get::<UiMenuItemPanel>(source).map(|p| p.anchor)
                 else {
-                    continue;
+                    return;
                 };
 
                 let mut selected_event = None;
@@ -1067,8 +1063,8 @@ pub fn handle_overlay_actions(world: &mut World) {
                     });
                 }
 
-                if world.get_entity(event.entity).is_ok() {
-                    close_menu_panel(world, event.entity);
+                if world.get_entity(source).is_ok() {
+                    close_menu_panel(world, source);
                 }
 
                 if let Some(ev) = selected_event {
@@ -1077,19 +1073,19 @@ pub fn handle_overlay_actions(world: &mut World) {
             }
 
             OverlayUiAction::DismissMenuBarItem => {
-                if world.get_entity(event.entity).is_ok()
-                    && world.get::<UiMenuItemPanel>(event.entity).is_some()
+                if world.get_entity(source).is_ok()
+                    && world.get::<UiMenuItemPanel>(source).is_some()
                 {
-                    close_menu_panel(world, event.entity);
+                    close_menu_panel(world, source);
                 }
             }
 
             OverlayUiAction::ToggleColorPicker => {
-                let Some(color_picker) = world.get::<UiColorPicker>(event.entity).copied() else {
-                    continue;
+                let Some(color_picker) = world.get::<UiColorPicker>(source).copied() else {
+                    return;
                 };
 
-                let existing_panels = collect_color_picker_panels_for_picker(world, event.entity);
+                let existing_panels = collect_color_picker_panels_for_picker(world, source);
                 for panel in existing_panels {
                     if world.get_entity(panel).is_ok() {
                         close_color_picker_panel(world, panel);
@@ -1097,33 +1093,33 @@ pub fn handle_overlay_actions(world: &mut World) {
                 }
 
                 if color_picker.is_open {
-                    if let Some(mut picker) = world.get_mut::<UiColorPicker>(event.entity) {
+                    if let Some(mut picker) = world.get_mut::<UiColorPicker>(source) {
                         picker.is_open = false;
                     }
-                    continue;
+                    return;
                 }
 
                 spawn_popover_in_overlay_root(
                     world,
                     UiColorPickerPanel {
-                        anchor: event.entity,
+                        anchor: source,
                     },
-                    UiPopover::new(event.entity)
+                    UiPopover::new(source)
                         .with_placement(OverlayPlacement::BottomStart)
                         .with_auto_flip_placement(true),
                 );
 
-                if let Some(mut picker) = world.get_mut::<UiColorPicker>(event.entity) {
+                if let Some(mut picker) = world.get_mut::<UiColorPicker>(source) {
                     picker.is_open = true;
                 }
             }
 
             OverlayUiAction::SelectColorSv { s, v } => {
                 let Some(anchor) = world
-                    .get::<UiColorPickerPanel>(event.entity)
+                    .get::<UiColorPickerPanel>(source)
                     .map(|p| p.anchor)
                 else {
-                    continue;
+                    return;
                 };
 
                 let mut changed_event = None;
@@ -1150,10 +1146,10 @@ pub fn handle_overlay_actions(world: &mut World) {
 
             OverlayUiAction::SelectColorHue { h } => {
                 let Some(anchor) = world
-                    .get::<UiColorPickerPanel>(event.entity)
+                    .get::<UiColorPickerPanel>(source)
                     .map(|p| p.anchor)
                 else {
-                    continue;
+                    return;
                 };
 
                 let mut changed_event = None;
@@ -1180,17 +1176,17 @@ pub fn handle_overlay_actions(world: &mut World) {
 
             OverlayUiAction::SelectColorAlpha { a } => {
                 let Some(anchor) = world
-                    .get::<UiColorPickerPanel>(event.entity)
+                    .get::<UiColorPickerPanel>(source)
                     .map(|p| p.anchor)
                 else {
-                    continue;
+                    return;
                 };
 
                 let alpha = (a.clamp(0.0, 1.0) * 255.0).round() as u8;
                 let mut changed_event = None;
                 if let Some(mut picker) = world.get_mut::<UiColorPicker>(anchor) {
                     if !picker.alpha_enabled {
-                        continue;
+                        return;
                     }
                     picker.a = alpha;
                     changed_event = Some(UiColorPickerChanged {
@@ -1209,14 +1205,14 @@ pub fn handle_overlay_actions(world: &mut World) {
 
             OverlayUiAction::SetHexColor { hex } => {
                 let Some(anchor) = world
-                    .get::<UiColorPickerPanel>(event.entity)
+                    .get::<UiColorPickerPanel>(source)
                     .map(|p| p.anchor)
                 else {
-                    continue;
+                    return;
                 };
 
                 let Some(parsed) = crate::parse_color_hex(&hex) else {
-                    continue;
+                    return;
                 };
 
                 let mut changed_event = None;
@@ -1245,10 +1241,10 @@ pub fn handle_overlay_actions(world: &mut World) {
 
             OverlayUiAction::SetColorChannel { channel, text } => {
                 let Some(anchor) = world
-                    .get::<UiColorPickerPanel>(event.entity)
+                    .get::<UiColorPickerPanel>(source)
                     .map(|p| p.anchor)
                 else {
-                    continue;
+                    return;
                 };
 
                 let mut changed_event = None;
@@ -1257,28 +1253,28 @@ pub fn handle_overlay_actions(world: &mut World) {
                     match channel {
                         ColorPickerChannel::Red => {
                             let Some(value) = crate::parse_channel_u8(&text) else {
-                                continue;
+                                return;
                             };
                             picker.r = value;
                         }
                         ColorPickerChannel::Green => {
                             let Some(value) = crate::parse_channel_u8(&text) else {
-                                continue;
+                                return;
                             };
                             picker.g = value;
                         }
                         ColorPickerChannel::Blue => {
                             let Some(value) = crate::parse_channel_u8(&text) else {
-                                continue;
+                                return;
                             };
                             picker.b = value;
                         }
                         ColorPickerChannel::Alpha => {
                             if !picker.alpha_enabled {
-                                continue;
+                                return;
                             }
                             let Some(value) = crate::parse_opacity_text(&text) else {
-                                continue;
+                                return;
                             };
                             picker.a = value;
                         }
@@ -1298,19 +1294,19 @@ pub fn handle_overlay_actions(world: &mut World) {
             }
 
             OverlayUiAction::DismissColorPicker => {
-                if world.get_entity(event.entity).is_ok()
-                    && world.get::<UiColorPickerPanel>(event.entity).is_some()
+                if world.get_entity(source).is_ok()
+                    && world.get::<UiColorPickerPanel>(source).is_some()
                 {
-                    close_color_picker_panel(world, event.entity);
+                    close_color_picker_panel(world, source);
                 }
             }
 
             OverlayUiAction::ToggleDatePicker => {
-                let Some(date_picker) = world.get::<UiDatePicker>(event.entity).copied() else {
-                    continue;
+                let Some(date_picker) = world.get::<UiDatePicker>(source).copied() else {
+                    return;
                 };
 
-                let existing_panels = collect_date_picker_panels_for_picker(world, event.entity);
+                let existing_panels = collect_date_picker_panels_for_picker(world, source);
                 for panel in existing_panels {
                     if world.get_entity(panel).is_ok() {
                         close_date_picker_panel(world, panel);
@@ -1318,31 +1314,31 @@ pub fn handle_overlay_actions(world: &mut World) {
                 }
 
                 if date_picker.is_open {
-                    if let Some(mut picker) = world.get_mut::<UiDatePicker>(event.entity) {
+                    if let Some(mut picker) = world.get_mut::<UiDatePicker>(source) {
                         picker.is_open = false;
                     }
-                    continue;
+                    return;
                 }
 
                 spawn_popover_in_overlay_root(
                     world,
                     UiDatePickerPanel {
-                        anchor: event.entity,
+                        anchor: source,
                         view_year: date_picker.year,
                         view_month: date_picker.month,
                     },
-                    UiPopover::new(event.entity)
+                    UiPopover::new(source)
                         .with_placement(OverlayPlacement::BottomStart)
                         .with_auto_flip_placement(true),
                 );
 
-                if let Some(mut picker) = world.get_mut::<UiDatePicker>(event.entity) {
+                if let Some(mut picker) = world.get_mut::<UiDatePicker>(source) {
                     picker.is_open = true;
                 }
             }
 
             OverlayUiAction::NavigateDateMonth { forward } => {
-                if let Some(mut panel) = world.get_mut::<UiDatePickerPanel>(event.entity) {
+                if let Some(mut panel) = world.get_mut::<UiDatePickerPanel>(source) {
                     if forward {
                         if panel.view_month >= 12 {
                             panel.view_month = 1;
@@ -1360,9 +1356,9 @@ pub fn handle_overlay_actions(world: &mut World) {
             }
 
             OverlayUiAction::SelectDateDay { day } => {
-                let panel_data = world.get::<UiDatePickerPanel>(event.entity).copied();
+                let panel_data = world.get::<UiDatePickerPanel>(source).copied();
                 let Some(panel) = panel_data else {
-                    continue;
+                    return;
                 };
 
                 let anchor = panel.anchor;
@@ -1382,8 +1378,8 @@ pub fn handle_overlay_actions(world: &mut World) {
                     });
                 }
 
-                if world.get_entity(event.entity).is_ok() {
-                    close_date_picker_panel(world, event.entity);
+                if world.get_entity(source).is_ok() {
+                    close_date_picker_panel(world, source);
                 }
 
                 if let Some(ev) = changed_event {
@@ -1392,20 +1388,20 @@ pub fn handle_overlay_actions(world: &mut World) {
             }
 
             OverlayUiAction::DismissDatePicker => {
-                if world.get_entity(event.entity).is_ok()
-                    && world.get::<UiDatePickerPanel>(event.entity).is_some()
+                if world.get_entity(source).is_ok()
+                    && world.get::<UiDatePickerPanel>(source).is_some()
                 {
-                    close_date_picker_panel(world, event.entity);
+                    close_date_picker_panel(world, source);
                 }
             }
 
             // --- Time picker actions ---
             OverlayUiAction::ToggleTimePicker => {
-                let Some(time_picker) = world.get::<UiTimePicker>(event.entity).copied() else {
-                    continue;
+                let Some(time_picker) = world.get::<UiTimePicker>(source).copied() else {
+                    return;
                 };
 
-                let existing = collect_time_picker_panels_for_picker(world, event.entity);
+                let existing = collect_time_picker_panels_for_picker(world, source);
                 for panel in existing {
                     if world.get_entity(panel).is_ok() {
                         close_time_picker_panel(world, panel);
@@ -1413,34 +1409,34 @@ pub fn handle_overlay_actions(world: &mut World) {
                 }
 
                 if time_picker.is_open {
-                    if let Some(mut picker) = world.get_mut::<UiTimePicker>(event.entity) {
+                    if let Some(mut picker) = world.get_mut::<UiTimePicker>(source) {
                         picker.is_open = false;
                     }
-                    continue;
+                    return;
                 }
 
                 spawn_popover_in_overlay_root(
                     world,
                     UiTimePickerPanel {
-                        anchor: event.entity,
+                        anchor: source,
                         use_24h: time_picker.use_24h,
                     },
-                    UiPopover::new(event.entity)
+                    UiPopover::new(source)
                         .with_placement(OverlayPlacement::BottomStart)
                         .with_auto_flip_placement(true),
                 );
 
-                if let Some(mut picker) = world.get_mut::<UiTimePicker>(event.entity) {
+                if let Some(mut picker) = world.get_mut::<UiTimePicker>(source) {
                     picker.is_open = true;
                 }
             }
 
             OverlayUiAction::SelectTimeHour { hour } => {
                 let Some(anchor) = world
-                    .get::<UiTimePickerPanel>(event.entity)
+                    .get::<UiTimePickerPanel>(source)
                     .map(|p| p.anchor)
                 else {
-                    continue;
+                    return;
                 };
                 if let Some(mut picker) = world.get_mut::<UiTimePicker>(anchor) {
                     picker.hour = hour;
@@ -1449,10 +1445,10 @@ pub fn handle_overlay_actions(world: &mut World) {
 
             OverlayUiAction::SelectTimeMinute { minute } => {
                 let Some(anchor) = world
-                    .get::<UiTimePickerPanel>(event.entity)
+                    .get::<UiTimePickerPanel>(source)
                     .map(|p| p.anchor)
                 else {
-                    continue;
+                    return;
                 };
                 if let Some(mut picker) = world.get_mut::<UiTimePicker>(anchor) {
                     picker.minute = minute;
@@ -1461,10 +1457,10 @@ pub fn handle_overlay_actions(world: &mut World) {
 
             OverlayUiAction::SelectTimePeriod { is_pm } => {
                 let Some(anchor) = world
-                    .get::<UiTimePickerPanel>(event.entity)
+                    .get::<UiTimePickerPanel>(source)
                     .map(|p| p.anchor)
                 else {
-                    continue;
+                    return;
                 };
                 if let Some(mut picker) = world.get_mut::<UiTimePicker>(anchor) {
                     let (h12, _) = picker.hour_12();
@@ -1478,13 +1474,13 @@ pub fn handle_overlay_actions(world: &mut World) {
             }
 
             OverlayUiAction::DismissTimePicker => {
-                let Some(panel) = world.get::<UiTimePickerPanel>(event.entity).copied() else {
-                    continue;
+                let Some(panel) = world.get::<UiTimePickerPanel>(source).copied() else {
+                    return;
                 };
                 let anchor = panel.anchor;
                 let Some(picker) = world.get::<UiTimePicker>(anchor).copied() else {
-                    close_time_picker_panel(world, event.entity);
-                    continue;
+                    close_time_picker_panel(world, source);
+                    return;
                 };
                 let changed = UiTimePickerChanged {
                     picker: anchor,
@@ -1492,30 +1488,30 @@ pub fn handle_overlay_actions(world: &mut World) {
                     minute: picker.minute,
                     second: picker.second,
                 };
-                if world.get_entity(event.entity).is_ok() {
-                    close_time_picker_panel(world, event.entity);
+                if world.get_entity(source).is_ok() {
+                    close_time_picker_panel(world, source);
                 }
                 world.resource::<UiEventQueue>().push_typed(anchor, changed);
             }
 
             // --- Expander actions ---
             OverlayUiAction::ToggleExpander => {
-                if let Some(mut expander) = world.get_mut::<UiExpander>(event.entity) {
+                if let Some(mut expander) = world.get_mut::<UiExpander>(source) {
                     expander.is_expanded = !expander.is_expanded;
                     let changed = UiExpanderChanged {
-                        expander: event.entity,
+                        expander: source,
                         is_expanded: expander.is_expanded,
                     };
                     world
                         .resource::<UiEventQueue>()
-                        .push_typed(event.entity, changed);
+                        .push_typed(source, changed);
                 }
             }
 
             // --- Context menu actions ---
             OverlayUiAction::SelectContextMenuItem { index } => {
-                let Some(ctx_menu) = world.get::<UiContextMenu>(event.entity).cloned() else {
-                    continue;
+                let Some(ctx_menu) = world.get::<UiContextMenu>(source).cloned() else {
+                    return;
                 };
                 let trigger = ctx_menu.trigger;
                 if index < ctx_menu.items.len() {
@@ -1529,29 +1525,44 @@ pub fn handle_overlay_actions(world: &mut World) {
                         .resource::<UiEventQueue>()
                         .push_typed(trigger, selected);
                 }
-                if world.get_entity(event.entity).is_ok() {
-                    close_context_menu(world, event.entity);
+                if world.get_entity(source).is_ok() {
+                    close_context_menu(world, source);
                 }
             }
 
             OverlayUiAction::DismissContextMenu => {
-                if world.get_entity(event.entity).is_ok()
-                    && world.get::<UiContextMenu>(event.entity).is_some()
+                if world.get_entity(source).is_ok()
+                    && world.get::<UiContextMenu>(source).is_some()
                 {
-                    close_context_menu(world, event.entity);
+                    close_context_menu(world, source);
                 }
             }
 
             OverlayUiAction::DismissToast => {
-                if world.get_entity(event.entity).is_ok() {
-                    despawn_entity_tree(world, event.entity);
+                if world.get_entity(source).is_ok() {
+                    despawn_entity_tree(world, source);
                 }
             }
         }
-    }
 
+    // Keep overlay stack consistent after mutations (idempotent).
     sync_overlay_stack_lifecycle(world);
 }
+
+/// Drain remaining typed OverlayUiAction entries (test/compat helper).
+///
+/// Production scheduling uses the dispatcher registry; prefer
+/// crate::events::dispatch_ui_actions.
+pub fn handle_overlay_actions(world: &mut World) {
+    let actions = world
+        .resource_mut::<UiEventQueue>()
+        .drain_actions::<OverlayUiAction>();
+
+    for event in actions {
+        apply_overlay_ui_action(world, event.entity, &event.action);
+    }
+}
+
 
 #[derive(Debug, Clone, Copy)]
 struct EntityHitBox {
@@ -4178,7 +4189,8 @@ mod tests {
     #[test]
     fn handle_global_overlay_clicks_outside_dialog_emits_same_optional_close_hook() {
         let mut app = App::new();
-        app.add_plugins(PicusPlugin);
+        app.add_plugins(PicusPlugin)
+            .add_ui_action::<DialogCloseTestAction>();
 
         let mut window = Window::default();
         window.resolution.set(800.0, 600.0);
@@ -4200,12 +4212,13 @@ mod tests {
 
         assert!(app.world().get_entity(dialog).is_err());
 
-        let events = app
-            .world_mut()
-            .resource_mut::<UiEventQueue>()
-            .drain_actions::<DialogCloseTestAction>();
+        let messages = app
+            .world()
+            .resource::<bevy_ecs::message::Messages<crate::UiAction<DialogCloseTestAction>>>();
+        let mut cursor = messages.get_cursor();
+        let events: Vec<_> = cursor.read(messages).cloned().collect();
         assert_eq!(events.len(), 1);
-        assert_eq!(events[0].entity, target);
+        assert_eq!(events[0].source, target);
         assert_eq!(events[0].action, DialogCloseTestAction::Closed);
     }
 

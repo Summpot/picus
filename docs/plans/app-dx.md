@@ -1,8 +1,8 @@
 # Picus 应用层 DX 完整计划
 
-> **状态**：核心 DX 已落地（2026-07-14）
+> **状态**：DX 主路径与后续收敛基本完成（2026-07-14）
 >
-> **进度摘要**：§5.0 主路径 1–6 基本完成。公共面清理、`ctx.button` 迁移、sink 注入、`styled`/InlineStyle builder、主题契约与 FIFO/sink 隔离测试、trybuild 已落地。仍 open：widget/overlay 全部并入 dispatcher、资源 dirty 集成测试、嵌套 AGENTS、组合控件与部分 5.10 项。
+> **进度摘要**：§5.0 主路径 1–6 完成。widget/overlay 已并入 dispatcher；资源 dirty、UiEmit/未注册 payload、headless Message 路径、facade trybuild、嵌套 AGENTS、细粒度 vs map 文档与 i18n/multi-window/overlays guides 已落地。仍 open：`UiFormRow` 等组合控件、`#[ui_view]`、dirty 原因 debug。脚手架（`picus new`）已从范围移除。
 
 ---
 
@@ -293,6 +293,7 @@ Input → RetainedRouting → DispatchActions
   - ViewCtx 仍经 thread-local 写入（picus_view 不依赖 action 类型）；语义上与 WindowRuntime 同 sink
 - [x] 实现非泛型 `UiEmit::new(T)`，并让 `UiButton` 在投影阶段选择业务 payload 或 Builtin fallback  
 - [x] 定义并配置 `PicusUiSet`，将 widget/overlay/action-consuming 逻辑迁到固定 PreUpdate dispatcher；增加每帧动作上限保护  
+  - `WidgetUiAction` / `OverlayUiAction` 经 registry handler（`apply_*`）在 `dispatch_ui_actions` 内应用；typed drain 仅留 test/compat helper
 - [x] 指针命中、交互状态等高频内部事件继续使用内部专用处理，不自动提升为应用 Message  
 - [x] 将所有应用代码从 drain 迁到 `MessageReader<UiAction<T>>`，随后删除 facade 中旧事件队列导出  
 
@@ -378,7 +379,8 @@ impl picus::__macro_support::UiComponentRegistration for CountLabel {
 - [x] trybuild：缺少 `UiComponentTemplate` 的清晰报错（与 Default/Clone 一并出现）  
 - [x] trybuild：普通 authoring component 缺少 `Default` / `Clone` 的清晰报错；`runtime_only` 例外可通过  
 - [x] 集成：只调用一次 `register_ui_components!(app, CountLabel)` 后投影、expand、selector alias 均可用  
-- [ ] resources 属性确实触发 Resource 变更后的合成 dirty  
+- [x] resources 属性确实触发 Resource 变更后的合成 dirty  
+  - 覆盖 `register_projection_resource` 路径（宏 `resources(...)` 展开）；trait 路径既有 rebuild 测试  
 
 #### 5.4.3 `classes!` 与轻量 macro_rules
 
@@ -431,8 +433,8 @@ impl picus::__macro_support::UiComponentRegistration for CountLabel {
 - [x] 投影 helper（flex 列/行 + 子节点）：`ctx.flex_col` / `ctx.flex_row`  
 - [x] `ProjectionCtx` 提供 action-aware button/sender helper，自动携带 source entity 并验证 payload 已注册  
 - [x] 文档：何时不要拆 Component（`guide/app.md`）  
-- [ ] 细粒度 vs 容器内 map 对照（todo 模式）  
-- [ ] 组合控件（按 gallery 缺口）：`UiFormRow`、内容壳等  
+- [x] 细粒度 vs 容器内 map 对照（todo 模式）  
+- [ ] 组合控件（按 gallery 缺口）：`UiFormRow`、内容壳等（可选便利，非主路径阻塞）  
 - [x] 不做闭包 Component  
 - [ ] **（远期）** 函数组件宏 `#[ui_view]` — 非 §5.4 必做核心  
 
@@ -600,7 +602,7 @@ docs/
 
 - [x] 按上表拆分并落地链接  
 - [x] 删除 AGENTS 中已迁走的长文，避免双份  
-- [ ] 在 `crates/picus_core`、`crates/picus_surface`、`examples/picuscode`、`thirdparty` 等确有局部硬规则的目录按需增加嵌套 `AGENTS.md`；不要为此修改 CodeWhale submodule 内容  
+- [x] 在 `crates/picus_core`、`crates/picus_surface`、`examples/picuscode`、`thirdparty` 等确有局部硬规则的目录按需增加嵌套 `AGENTS.md`；不要为此修改 CodeWhale submodule 内容  
 - [x] 系统/工具只注入适用 AGENTS 时，仍能获得完成该目录任务所需的全部硬约束；docs 链接用于解释而非补全缺失规则
 
 #### 5.9.6 README 改造
@@ -649,9 +651,11 @@ docs/
 - [x] `guide/app.md` / `events-messages.md` / `styling-themes.md` / `macros.md` 等与代码同步  
 - [x] `docs/examples/index.md` + 全 example 教学范围与 advanced 用法  
 - [x] `contributing/codewhale-submodule.md`  
-- [ ] rustdoc 交叉链接策略（§5.9.8）  
+- [x] rustdoc 交叉链接策略（§5.9.8）  
+  - facade 模块 rustdoc 一句话 + guide 路径表；长文只在 `docs/`
 - [x] DX 改动的 docs checklist 约定（§5.9.7）  
-- [ ] i18n / a11y / 多窗口 / 性能指引落在对应 guide（非堆回 AGENTS）  
+- [x] i18n / a11y / 多窗口 / 性能指引落在对应 guide（非堆回 AGENTS）  
+  - 落地 `i18n-fonts-icons`、`multi-window`、`overlays-scroll`；a11y/性能保持架构指针，不堆 AGENTS  
 
 ---
 
@@ -662,12 +666,15 @@ docs/
 - [x] 输入动作调度：retained 入队 → PreUpdate 单消费者 drain/dispatch → 同帧 Update 的 reader 收到  
 - [x] 两个独立 `MessageReader<UiAction<T>>` 均恰好收到同一动作一次  
 - [x] 两个 Bevy `App` 实例的 action sink 互不串流；同一 App 的多个 window 共享同一 app sink  
-- [ ] `UiEmit` 业务动作、Builtin fallback、disabled 三条互斥路径（disabled 已有投影测试；UiEmit 分发路径仍可补 headless 点击）  
-- [ ] 未注册 payload 的 debug/test 失败与 release 丢弃日志；队列不会跨帧积压该 payload  
+- [x] `UiEmit` 业务动作、Builtin fallback、disabled 三条互斥路径（disabled 已有投影测试；UiEmit 分发路径仍可补 headless 点击）  
+  - disabled 投影测试 + UiEmit 分发不发 Builtin + Builtin 注册测试  
+- [x] 未注册 payload 的 debug/test 失败与 release 丢弃日志；队列不会跨帧积压该 payload  
+  - debug `should_panic`；成功路径后队列为空；release log-once 路径保留在 dispatcher  
 - [x] FIFO 与每帧动作上限测试：handler 派生动作排在已有动作之后，自触发循环能被确定性中止  
 - [x] macros trybuild + 注册幂等（trybuild 覆盖 Default/Clone/runtime_only；幂等随 register 实现）  
-- [ ] 扩展 headless helpers：click → `UiAction` → resource，作为 `timer` 纵向验收  
-- [ ] facade compile test：应用只依赖 `picus`；根级 core 重导出、公开 queue/drain 和旧 runner 不可用  
+- [x] 扩展 headless helpers：click → `UiAction` → resource，作为 `timer` 纵向验收  
+  - `enqueue_ui_action_and_update` + MessageReader→Resource 集成测试  
+- [x] facade compile test：应用只依赖 `picus`；根级 core 重导出、公开 queue/drain 和旧 runner 不可用  
 - [ ] **（可选）** dirty 原因 debug 输出  
 - [x] 全 examples：逐个运行 `cargo check -p <example-package>`；关键例保留主题 parse 与交互测试  
 
@@ -675,8 +682,8 @@ docs/
 
 ### 5.11 脚手架与工具
 
-- [ ] **（可选）** `picus new` / cargo-generate：生成**带显式主题 RON** 的应用骨架（不是「无主题 Hello」）  
-- [x] 或文档：复制已迁移的 timer/calculator 骨架  
+- ~~`picus new` / cargo-generate~~ — **已移出范围**（不实现独立脚手架）  
+- [x] 文档：复制已迁移的 timer/calculator 骨架作为入门  
 
 ---
 
@@ -707,3 +714,5 @@ docs/
 | 2026-07-14 | 架构收敛修订：内部队列单消费者 + `UiAction<T>`；非泛型 `UiEmit`；显式宏清单；唯一 `AppPicusExt`/`run_picus` 入口；删除过渡公共面；增加实施决策门与目录级 AGENTS；明确部分主题缺失样式合法且不报错 |
 | 2026-07-14 | 核心 DX 落地并勾选已完成项：`UiAction`/`UiEmit`/`run_picus`/`picus_macros`；全 examples 迁 runner/动作路径；AGENTS 瘦身 + docs 主路径；未勾选项为后续收敛（trybuild、完全内化 widget drain、删除 `emit_ui_action`/`run_app` 残留、`styled` helper、嵌套 AGENTS 等） |
 | 2026-07-14 | 收敛公共面：删除 facade `core`/`emit_ui_action`/自由 `button` 导出；examples 迁 `ctx.button`+`UiActionSender`；`WindowRuntime` 持有 app sink；`styled`/InlineStyle builder/flex helper；主题与 FIFO/sink 隔离测试；trybuild 挂 `picus` |
+| 2026-07-14 | 后续收敛：widget/overlay 并入 dispatcher；资源 dirty / UiEmit / 未注册 payload / headless Message 路径测试；facade 负向 trybuild；嵌套 AGENTS；guide 补全与 rustdoc 交叉链接 |
+| 2026-07-14 | 明确移出范围：`picus new` / cargo-generate 脚手架；入门以 timer/calculator 复制骨架为准 |

@@ -93,6 +93,22 @@ pub fn set_window_cursor_position(app: &mut App, window_entity: Entity, position
     window.set_cursor_position(Some(position));
 }
 
+/// Enqueue a typed UI action as retained widgets would, then run one full frame.
+///
+/// Vertical acceptance helper for `click → UiAction → resource` style tests
+/// without requiring pointer hit-testing. Prefer this when the business path
+/// (sender / dispatcher / MessageReader) is under test rather than Masonry hits.
+pub fn enqueue_ui_action_and_update<T: Clone + Send + Sync + 'static>(
+    app: &mut App,
+    source: Entity,
+    action: T,
+) {
+    app.world()
+        .resource::<crate::UiActionSender<T>>()
+        .send(source, action);
+    app.update();
+}
+
 pub fn send_primary_click(app: &mut App, window_entity: Entity, position: Vec2) {
     {
         let world = app.world_mut();

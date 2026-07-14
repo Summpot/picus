@@ -2091,6 +2091,64 @@ mod tests {
         assert_eq!(idle_rebuild_count, changed_rebuild_count);
     }
 
+    /// Same contract as `#[ui_component(resources(T))]` / macro support:
+    /// `register_projection_resource` must dirty synthesis on resource change.
+    #[test]
+    fn register_projection_resource_path_rebuilds_on_change() {
+        #[derive(Component, Default, Clone)]
+        struct MacroStyleLabel;
+
+        impl UiComponentTemplate for MacroStyleLabel {
+            fn project(_component: &Self, ctx: ProjectionCtx<'_>) -> UiView {
+                Arc::new(label(
+                    ctx.world.resource::<ProjectionTestResource>().text.clone(),
+                ))
+            }
+            // Intentionally no register_projection_dependencies — resource
+            // tracking comes only from AppPicusExt::register_projection_resource.
+        }
+
+        let mut app = App::new();
+        app.add_plugins(PicusPlugin)
+            .insert_resource(ProjectionTestResource {
+                text: "before".to_string(),
+            })
+            .register_ui_component::<MacroStyleLabel>()
+            .register_projection_resource::<ProjectionTestResource>();
+
+        let mut window = Window {
+            visible: false,
+            ..Default::default()
+        };
+        window.resolution.set(480.0, 320.0);
+        app.world_mut().spawn((window, PrimaryWindow));
+        app.world_mut().spawn((UiRoot, MacroStyleLabel));
+
+        app.update();
+        let initial = app
+            .world()
+            .non_send::<crate::MasonryRuntime>()
+            .primary()
+            .expect("primary")
+            .rebuild_count_for_tests();
+
+        app.world_mut()
+            .resource_mut::<ProjectionTestResource>()
+            .text = "after".to_string();
+        app.update();
+        let after = app
+            .world()
+            .non_send::<crate::MasonryRuntime>()
+            .primary()
+            .expect("primary")
+            .rebuild_count_for_tests();
+        assert_eq!(
+            after,
+            initial + 1,
+            "register_projection_resource (macro resources attr path) must dirty synthesis"
+        );
+    }
+
     #[test]
     fn navigation_item_interaction_state_rebuilds_hover_once_then_returns_to_idle() {
         let mut app = App::new();

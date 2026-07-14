@@ -24,8 +24,8 @@ use crate::{
 
 /// Internal action enum for non-overlay widget interactions.
 ///
-/// These actions are emitted by built-in widget projectors and consumed by
-/// [`handle_widget_actions`] each frame.
+/// These actions are emitted by built-in widget projectors and applied by the
+/// PreUpdate dispatcher (`apply_widget_ui_action`).
 #[derive(Debug, Clone, PartialEq)]
 pub enum WidgetUiAction {
     /// Select a specific item in a radio group.
@@ -328,21 +328,16 @@ pub fn sync_scroll_view_layout_geometry(
     }
 }
 
-/// Consume [`WidgetUiAction`] entries from [`UiEventQueue`] and apply the
-/// corresponding state mutations.
+/// Apply one built-in [`WidgetUiAction`] (dispatcher handler + tests).
 ///
-/// After mutating each component the system re-emits the appropriate
-/// high-level changed event so application code can react to it.
-pub fn handle_widget_actions(world: &mut World) {
-    let actions = world
-        .resource_mut::<UiEventQueue>()
-        .drain_actions::<WidgetUiAction>();
-
-    for event in actions {
-        match event.action {
+/// After mutating component state this re-emits high-level Changed payloads
+/// onto the internal queue so the same-frame dispatcher can convert them to
+/// application [`crate::UiAction`] messages when registered.
+pub fn apply_widget_ui_action(world: &mut World, _source: Entity, action: &WidgetUiAction) {
+    match action.clone() {
             WidgetUiAction::SelectRadioItem { group, index } => {
                 if world.get_entity(group).is_err() {
-                    continue;
+                    return;
                 }
 
                 let changed = if let Some(mut radio_group) = world.get_mut::<UiRadioGroup>(group) {
@@ -362,7 +357,7 @@ pub fn handle_widget_actions(world: &mut World) {
 
             WidgetUiAction::SelectTab { bar, index } => {
                 if world.get_entity(bar).is_err() {
-                    continue;
+                    return;
                 }
 
                 let changed = if let Some(mut tab_bar) = world.get_mut::<UiTabBar>(bar) {
@@ -379,7 +374,7 @@ pub fn handle_widget_actions(world: &mut World) {
 
             WidgetUiAction::SelectNavigationItem { nav, index } => {
                 if world.get_entity(nav).is_err() {
-                    continue;
+                    return;
                 }
 
                 let changed = if let Some(mut nav_view) = world.get_mut::<UiNavigationView>(nav) {
@@ -414,7 +409,7 @@ pub fn handle_widget_actions(world: &mut World) {
                 selects_on_invoked,
             } => {
                 if world.get_entity(nav).is_err() {
-                    continue;
+                    return;
                 }
 
                 world.resource::<UiEventQueue>().push_typed(
@@ -541,7 +536,7 @@ pub fn handle_widget_actions(world: &mut World) {
 
             WidgetUiAction::ToggleNavigationItemExpand { nav, item } => {
                 if world.get_entity(nav).is_err() || world.get_entity(item).is_err() {
-                    continue;
+                    return;
                 }
 
                 let path = crate::components::navigation_view::navigation_item_path(world, item);
@@ -549,10 +544,10 @@ pub fn handle_widget_actions(world: &mut World) {
                     .get::<crate::UiNavigationItem>(item)
                     .map(|i| i.region);
                 let Some(path) = path else {
-                    continue;
+                    return;
                 };
                 let Some(region) = region else {
-                    continue;
+                    return;
                 };
 
                 let changed = if let Some(mut nav_view) = world.get_mut::<UiNavigationView>(nav) {
@@ -560,7 +555,7 @@ pub fn handle_widget_actions(world: &mut World) {
                         NavigationItemRegion::Menu => &mut nav_view.items,
                         NavigationItemRegion::Footer => &mut nav_view.footer_items,
                         NavigationItemRegion::Settings => {
-                            continue;
+                            return;
                         }
                     };
                     if let Some(node) =
@@ -590,7 +585,7 @@ pub fn handle_widget_actions(world: &mut World) {
 
             WidgetUiAction::ToggleNavigationItemFlyout { nav, item } => {
                 if world.get_entity(nav).is_err() || world.get_entity(item).is_err() {
-                    continue;
+                    return;
                 }
                 if let Some(mut nav_view) = world.get_mut::<UiNavigationView>(nav) {
                     if nav_view.open_flyout_item == Some(item) {
@@ -603,7 +598,7 @@ pub fn handle_widget_actions(world: &mut World) {
 
             WidgetUiAction::ToggleNavigationPane { nav } => {
                 if world.get_entity(nav).is_err() {
-                    continue;
+                    return;
                 }
 
                 let changed = if let Some(mut nav_view) = world.get_mut::<UiNavigationView>(nav) {
@@ -625,7 +620,7 @@ pub fn handle_widget_actions(world: &mut World) {
 
             WidgetUiAction::CloseNavigationPane { nav } => {
                 if world.get_entity(nav).is_err() {
-                    continue;
+                    return;
                 }
                 let changed = if let Some(mut nav_view) = world.get_mut::<UiNavigationView>(nav) {
                     if nav_view.is_pane_open {
@@ -649,7 +644,7 @@ pub fn handle_widget_actions(world: &mut World) {
 
             WidgetUiAction::NavigationBack { nav } => {
                 if world.get_entity(nav).is_err() {
-                    continue;
+                    return;
                 }
                 let enabled = world
                     .get::<UiNavigationView>(nav)
@@ -663,7 +658,7 @@ pub fn handle_widget_actions(world: &mut World) {
 
             WidgetUiAction::ToggleTreeNode { node } => {
                 if world.get_entity(node).is_err() {
-                    continue;
+                    return;
                 }
 
                 let toggled = world
@@ -682,7 +677,7 @@ pub fn handle_widget_actions(world: &mut World) {
 
             WidgetUiAction::ToggleCheckbox { checkbox } => {
                 if world.get_entity(checkbox).is_err() {
-                    continue;
+                    return;
                 }
 
                 let changed =
@@ -715,7 +710,7 @@ pub fn handle_widget_actions(world: &mut World) {
 
             WidgetUiAction::SetCheckbox { checkbox, checked } => {
                 if world.get_entity(checkbox).is_err() {
-                    continue;
+                    return;
                 }
 
                 let changed =
@@ -745,7 +740,7 @@ pub fn handle_widget_actions(world: &mut World) {
 
             WidgetUiAction::StepSlider { slider, delta } => {
                 if world.get_entity(slider).is_err() {
-                    continue;
+                    return;
                 }
 
                 if let Some(mut slider_state) = world.get_mut::<UiSlider>(slider) {
@@ -770,7 +765,7 @@ pub fn handle_widget_actions(world: &mut World) {
 
             WidgetUiAction::RatingChanged { rating, value } => {
                 if world.get_entity(rating).is_err() {
-                    continue;
+                    return;
                 }
 
                 if let Some(mut rating_state) = world.get_mut::<UiRating>(rating) {
@@ -784,7 +779,7 @@ pub fn handle_widget_actions(world: &mut World) {
 
             WidgetUiAction::StepNumericUpDown { numeric, delta } => {
                 if world.get_entity(numeric).is_err() {
-                    continue;
+                    return;
                 }
 
                 if let Some(mut numeric_state) = world.get_mut::<UiNumericUpDown>(numeric)
@@ -808,7 +803,7 @@ pub fn handle_widget_actions(world: &mut World) {
 
             WidgetUiAction::SetSliderValue { slider, value } => {
                 if world.get_entity(slider).is_err() {
-                    continue;
+                    return;
                 }
 
                 if let Some(mut slider_state) = world.get_mut::<UiSlider>(slider) {
@@ -828,7 +823,7 @@ pub fn handle_widget_actions(world: &mut World) {
 
             WidgetUiAction::ToggleSwitch { switch } => {
                 if world.get_entity(switch).is_err() {
-                    continue;
+                    return;
                 }
 
                 let changed = if let Some(mut switch_state) = world.get_mut::<UiSwitch>(switch) {
@@ -847,7 +842,7 @@ pub fn handle_widget_actions(world: &mut World) {
 
             WidgetUiAction::SetTextInput { input, value } => {
                 if world.get_entity(input).is_err() {
-                    continue;
+                    return;
                 }
 
                 let changed = if let Some(mut text_input) = world.get_mut::<UiTextInput>(input) {
@@ -870,7 +865,7 @@ pub fn handle_widget_actions(world: &mut World) {
 
             WidgetUiAction::SetSearch { search, value } => {
                 if world.get_entity(search).is_err() {
-                    continue;
+                    return;
                 }
 
                 let changed = if let Some(mut search_state) = world.get_mut::<UiSearch>(search) {
@@ -896,13 +891,13 @@ pub fn handle_widget_actions(world: &mut World) {
                 display_value,
             } => {
                 if world.get_entity(input).is_err() {
-                    continue;
+                    return;
                 }
 
                 let changed =
                     if let Some(mut password_input) = world.get_mut::<UiPasswordInput>(input) {
                         if password_input.read_only {
-                            continue;
+                            return;
                         }
                         let next = reconcile_password_value(
                             &password_input.value,
@@ -929,13 +924,13 @@ pub fn handle_widget_actions(world: &mut World) {
 
             WidgetUiAction::SetMultilineTextInput { input, value } => {
                 if world.get_entity(input).is_err() {
-                    continue;
+                    return;
                 }
 
                 let changed =
                     if let Some(mut text_input) = world.get_mut::<UiMultilineTextInput>(input) {
                         if text_input.read_only {
-                            continue;
+                            return;
                         }
                         let next = text_input.clamped_value(value);
                         if text_input.value == next {
@@ -957,12 +952,12 @@ pub fn handle_widget_actions(world: &mut World) {
 
             WidgetUiAction::SelectListItem { list_view, index } => {
                 if world.get_entity(list_view).is_err() {
-                    continue;
+                    return;
                 }
 
                 let changed = if let Some(mut list) = world.get_mut::<UiListView>(list_view) {
                     if index >= list.items.len() {
-                        continue;
+                        return;
                     }
                     match list.selection_mode {
                         UiListSelectionMode::None => None,
@@ -1007,12 +1002,12 @@ pub fn handle_widget_actions(world: &mut World) {
 
             WidgetUiAction::SelectDataTableRow { table, row } => {
                 if world.get_entity(table).is_err() {
-                    continue;
+                    return;
                 }
 
                 let changed = if let Some(mut data_table) = world.get_mut::<UiDataTable>(table) {
                     if row >= data_table.rows.len() {
-                        continue;
+                        return;
                     }
                     match data_table.selection_mode {
                         UiListSelectionMode::None => None,
@@ -1059,7 +1054,7 @@ pub fn handle_widget_actions(world: &mut World) {
 
             WidgetUiAction::SortDataTableColumn { table, column } => {
                 if world.get_entity(table).is_err() {
-                    continue;
+                    return;
                 }
 
                 let changed = if let Some(mut data_table) = world.get_mut::<UiDataTable>(table) {
@@ -1081,11 +1076,11 @@ pub fn handle_widget_actions(world: &mut World) {
                 delta_pixels,
             } => {
                 if world.get_entity(thumb).is_err() {
-                    continue;
+                    return;
                 }
 
                 let Some(scroll_entity) = find_ancestor_scroll_view(world, thumb) else {
-                    continue;
+                    return;
                 };
 
                 let changed =
@@ -1120,6 +1115,20 @@ pub fn handle_widget_actions(world: &mut World) {
                 }
             }
         }
+
+}
+
+/// Drain remaining typed WidgetUiAction entries (test/compat helper).
+///
+/// Production scheduling uses the dispatcher registry; prefer
+/// crate::events::dispatch_ui_actions.
+pub fn handle_widget_actions(world: &mut World) {
+    let actions = world
+        .resource_mut::<UiEventQueue>()
+        .drain_actions::<WidgetUiAction>();
+
+    for event in actions {
+        apply_widget_ui_action(world, event.entity, &event.action);
     }
 }
 
