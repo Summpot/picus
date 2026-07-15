@@ -27,7 +27,7 @@ repository `AGENTS.md` files (root and nested where needed).
 | [contributing/codewhale-submodule.md](contributing/codewhale-submodule.md) | CodeWhale fork sync |
 | [reference/public-modules.md](reference/public-modules.md) | Public facade modules and advanced boundary |
 | [reference/style-tokens.md](reference/style-tokens.md) | Theme, token, and missing-rule contract |
-| [plans/app-dx.md](plans/app-dx.md) | Application DX plan (landed 2026-07-14) |
+| [plans/frame-pipeline.md](plans/frame-pipeline.md) | Frame pipeline decoupling: anim clock / layers / present freshness |
 
 **Rustdoc strategy**: crate/module docs on `picus` are one-liners plus a pointer to
 the matching guide file above. Long tutorials and architecture narrative stay in

@@ -30,3 +30,10 @@ precedence over a stylesheet backdrop.
 See [multi-window](../guide/multi-window.md), [i18n and fonts](../guide/i18n-fonts-icons.md),
 and [styling and themes](../guide/styling-themes.md) for application-facing
 configuration.
+
+### Frame pipeline evolution
+
+The long-term direction is to decouple **anim clock**, **per-layer encode**, and
+**latest-frame present** so continuous widgets (e.g. Spinner) do not force a
+full-window present pump that desyncs from DWM window motion. Implementation
+plan: [plans/frame-pipeline.md](../plans/frame-pipeline.md).

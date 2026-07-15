@@ -131,7 +131,6 @@ See [`docs/guide/styling-themes.md`](docs/guide/styling-themes.md).
 | Public modules | [`docs/reference/public-modules.md`](docs/reference/public-modules.md) |
 | Style tokens | [`docs/reference/style-tokens.md`](docs/reference/style-tokens.md) |
 | Examples | [`docs/examples/index.md`](docs/examples/index.md) |
-| DX plan | [`docs/plans/app-dx.md`](docs/plans/app-dx.md) |
 | Nested rules | `crates/picus_core/AGENTS.md`, `crates/picus_surface/AGENTS.md`, `examples/picuscode/AGENTS.md`, `thirdparty/AGENTS.md` |
 
 ## 7. Editing this file
