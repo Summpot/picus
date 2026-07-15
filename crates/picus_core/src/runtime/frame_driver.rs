@@ -34,8 +34,8 @@ pub(crate) enum DirtyReason {
 }
 
 impl DirtyReason {
-    /// Hard rule (G5 / P1.4): these must **never** be skipped by the
-    /// transitional anim-only present throttle.
+    /// Hard rule (G5 / P1.4): these must **never** be skipped by any
+    /// anim-only present throttle (including diagnostic `PICUS_ANIM_PRESENT_HZ`).
     #[inline]
     pub(crate) const fn is_unthrottled_present(self) -> bool {
         matches!(
@@ -132,7 +132,7 @@ pub(crate) struct FrameDecision {
     pub anim_tick_only: bool,
     /// Any work was considered (not a pure idle skip).
     pub enter_work: bool,
-    /// Present was skipped solely by the transitional anim throttle.
+    /// Present was skipped solely by the optional anim present throttle.
     pub throttled_anim_present: bool,
 }
 
@@ -252,34 +252,31 @@ impl FrameStepResult {
     }
 }
 
-/// Transitional default minimum interval between animation-only presents (~30 Hz).
-///
-/// # Transitional policy (frame-pipeline Phase 0/1)
-///
-/// Widgets like Spinner request a paint every anim tick. Presenting that at full
-/// display rate while the window is moved by DWM causes visible ghosting because
-/// frames queue behind the compositor. This ~30 Hz pure-anim present throttle is
-/// a **temporary** drag-ghosting mitigation — **not** the product end-state.
-///
-/// - Default remains ~30 Hz so product behavior is unchanged until layered anim
-///   encode + PresentPolicy gates pass (see `docs/plans/frame-pipeline.md` G10 / P2e).
-/// - Override with `PICUS_ANIM_PRESENT_HZ` for baseline/debug only:
-///   - unset → transitional ~30 Hz (`from_millis(33)`)
-///   - `0` / `off` / `none` / `false` → disable throttle (full anim present rate)
-///   - positive number → present at most that many anim-only frames per second
-/// - Content / input / resize / first-paint / retry redraws are **never** throttled
-///   ([`DirtyReason::is_unthrottled_present`]).
-///
-/// TODO(frame-pipeline): remove default throttle after anim-layer isolation
-/// lands; keep env override as optional diagnostic if useful.
+/// ~30 Hz min interval (`from_millis(33)`) when a diagnostic cap is requested
+/// via `PICUS_ANIM_PRESENT_HZ=30`. **Not** the product default — unset env means
+/// no anim present throttle (see [`parse_anim_present_min_interval`]).
 pub(crate) const DEFAULT_ANIM_PRESENT_MIN_INTERVAL: Duration = Duration::from_millis(33);
 
 /// Parse `PICUS_ANIM_PRESENT_HZ` (or absence) into a min present interval.
 ///
-/// Returns `None` when throttling is disabled (`0` / `off` / `none` / `false`).
+/// # Product path (G10 / P2e)
+///
+/// Unset or empty → **no throttle** (`None`). Content / input / resize /
+/// first-paint / retry redraws are **never** throttled regardless
+/// ([`DirtyReason::is_unthrottled_present`]).
+///
+/// # Explicit diagnostic override
+///
+/// - unset / empty → unlimited product path (no anim present throttle)
+/// - `0` / `off` / `none` / `false` → no throttle (same as unset)
+/// - positive number → present at most that many **anim-driven** frames per second
+/// - invalid value → warn and treat as no throttle (product default)
+///
+/// When a positive Hz is set, the throttle applies only to anim-driven presents
+/// (existing G5 matrix: Resize / Input / FirstPaint / Retry never blocked).
 pub(crate) fn parse_anim_present_min_interval(raw: Option<&str>) -> Option<Duration> {
     let Some(raw) = raw.map(str::trim).filter(|s| !s.is_empty()) else {
-        return Some(DEFAULT_ANIM_PRESENT_MIN_INTERVAL);
+        return None;
     };
     if raw == "0"
         || raw.eq_ignore_ascii_case("off")
@@ -293,16 +290,17 @@ pub(crate) fn parse_anim_present_min_interval(raw: Option<&str>) -> Option<Durat
         _ => {
             tracing::warn!(
                 value = %raw,
-                "invalid PICUS_ANIM_PRESENT_HZ; using transitional ~30Hz default"
+                "invalid PICUS_ANIM_PRESENT_HZ; leaving anim present unthrottled"
             );
-            Some(DEFAULT_ANIM_PRESENT_MIN_INTERVAL)
+            None
         }
     }
 }
 
 /// Resolve the animation-only present throttle interval.
 ///
-/// Returns `None` when throttling is disabled (`PICUS_ANIM_PRESENT_HZ=0` etc.).
+/// Returns `None` on the product path (env unset) and when the override disables
+/// throttling (`PICUS_ANIM_PRESENT_HZ=0` / `off` / `none` / `false`).
 pub(crate) fn anim_present_min_interval() -> Option<Duration> {
     use std::sync::OnceLock;
     static INTERVAL: OnceLock<Option<Duration>> = OnceLock::new();
@@ -311,7 +309,7 @@ pub(crate) fn anim_present_min_interval() -> Option<Duration> {
     })
 }
 
-/// Per-window frame scheduler (decision + transitional anim present throttle).
+/// Per-window frame scheduler (decision + optional anim present throttle).
 ///
 /// Execution (Masonry anim tick, Vello encode, surface present) stays on
 /// [`super::WindowRuntime`]; this type owns **what** to do and throttle state.
@@ -363,10 +361,10 @@ impl FrameDriver {
     /// `ResizeMetrics`, `InputOrRebuild`, `FirstPaint`, and `RetrySurface` are
     /// never blocked by the anim present throttle.
     ///
-    /// The transitional throttle only applies to **anim-driven** content
-    /// ([`DirtyReason::AnimPaint`] / anim clock + rewrite without unthrottled
-    /// reasons). Pure layout/theme/compositor dirt is not delayed by the
-    /// anim interval.
+    /// When `min_interval` is `Some`, the optional throttle only applies to
+    /// **anim-driven** content ([`DirtyReason::AnimPaint`] / anim clock +
+    /// rewrite without unthrottled reasons). Pure layout/theme/compositor dirt
+    /// is not delayed by the anim interval. Product path passes `None`.
     pub(crate) fn decide_present(
         &self,
         dirty: &DirtyBudget,
@@ -408,13 +406,14 @@ impl FrameDriver {
         decision
     }
 
-    /// Whether the transitional pure-anim present throttle may skip this frame.
+    /// Whether the optional pure-anim present throttle may skip this frame.
     ///
     /// Matches Phase 0 `anim_driven_present = should_tick && !incoming_redraw &&
     /// !first_paint`: any non-G5 content present that co-occurs with the anim
     /// clock (including **LayoutRewrite + AnimTick** without Input/Resize/etc.)
-    /// may be delayed. Pure `LayoutRewrite` without anim is never throttled.
-    /// G5 reasons and ThemeOrFont / CompositorPlan always present immediately.
+    /// may be delayed when a diagnostic interval is set. Pure `LayoutRewrite`
+    /// without anim is never throttled. G5 reasons and ThemeOrFont /
+    /// CompositorPlan always present immediately.
     fn should_apply_anim_present_throttle(dirty: &DirtyBudget) -> bool {
         if dirty.requires_unthrottled_present() {
             return false;
@@ -614,19 +613,11 @@ mod tests {
     }
 
     #[test]
-    fn anim_present_hz_default_is_transitional_30hz() {
-        assert_eq!(
-            parse_anim_present_min_interval(None),
-            Some(DEFAULT_ANIM_PRESENT_MIN_INTERVAL)
-        );
-        assert_eq!(
-            parse_anim_present_min_interval(Some("")),
-            Some(DEFAULT_ANIM_PRESENT_MIN_INTERVAL)
-        );
-        assert_eq!(
-            parse_anim_present_min_interval(Some("   ")),
-            Some(DEFAULT_ANIM_PRESENT_MIN_INTERVAL)
-        );
+    fn anim_present_hz_unset_is_unlimited() {
+        // G10: product path has no transitional throttle when env is unset.
+        assert_eq!(parse_anim_present_min_interval(None), None);
+        assert_eq!(parse_anim_present_min_interval(Some("")), None);
+        assert_eq!(parse_anim_present_min_interval(Some("   ")), None);
     }
 
     #[test]
@@ -643,18 +634,16 @@ mod tests {
         assert!((interval.as_secs_f64() - (1.0 / 60.0)).abs() < 1e-9);
         let interval = parse_anim_present_min_interval(Some("10")).expect("10 Hz enabled");
         assert!((interval.as_secs_f64() - 0.1).abs() < 1e-9);
+        // Diagnostic ~30 Hz opt-in (named constant is the historical 33 ms approx).
+        let interval = parse_anim_present_min_interval(Some("30")).expect("30 Hz enabled");
+        assert!((interval.as_secs_f64() - (1.0 / 30.0)).abs() < 1e-9);
+        assert!((interval.as_secs_f64() - DEFAULT_ANIM_PRESENT_MIN_INTERVAL.as_secs_f64()).abs() < 0.002);
     }
 
     #[test]
-    fn anim_present_hz_invalid_falls_back_to_default() {
-        assert_eq!(
-            parse_anim_present_min_interval(Some("not-a-number")),
-            Some(DEFAULT_ANIM_PRESENT_MIN_INTERVAL)
-        );
-        assert_eq!(
-            parse_anim_present_min_interval(Some("-5")),
-            Some(DEFAULT_ANIM_PRESENT_MIN_INTERVAL)
-        );
+    fn anim_present_hz_invalid_falls_back_to_unlimited() {
+        assert_eq!(parse_anim_present_min_interval(Some("not-a-number")), None);
+        assert_eq!(parse_anim_present_min_interval(Some("-5")), None);
     }
 
     #[test]
@@ -682,9 +671,9 @@ mod tests {
 
     #[test]
     fn layout_rewrite_plus_anim_tick_may_be_throttled() {
-        // Explicit Phase-0-compatible behavior: non-G5 content co-occurring with
+        // When a diagnostic interval is set: non-G5 content co-occurring with
         // the anim clock is treated as anim-driven present and may skip under
-        // the transitional interval (not a G5 violation).
+        // the interval (not a G5 violation). Product path passes None.
         let mut dirty = DirtyBudget::new();
         dirty.insert(DirtyReason::LayoutRewrite);
         dirty.insert(DirtyReason::AnimTick);
@@ -695,6 +684,12 @@ mod tests {
         assert!(
             decision.throttled_anim_present && !decision.do_present,
             "LayoutRewrite+AnimTick under throttle pressure may skip: {decision:?}"
+        );
+        // Unset / unlimited product path never throttles the same dirty set.
+        let unlimited = driver.decide_present(&dirty, None, t0);
+        assert!(
+            unlimited.do_present && !unlimited.throttled_anim_present,
+            "product path (None interval) must present: {unlimited:?}"
         );
     }
 

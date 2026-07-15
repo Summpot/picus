@@ -205,7 +205,7 @@ pub struct WindowRuntime {
     /// Base CachedScene may be stale (rewrite completed during anim / geom move).
     /// Sticky until a **full-path** present succeeds — not anim-throttlable (Issue 10).
     base_invalidated: bool,
-    /// Per-window frame scheduler (decision table + transitional anim throttle).
+    /// Per-window frame scheduler (decision table + optional anim present throttle).
     frame_driver: FrameDriver,
     /// Painter-order compositor plan + anim host (P2b infrastructure).
     layer_registry: LayerRegistry,
@@ -964,7 +964,7 @@ impl WindowRuntime {
         self.redraw_demand_anim_clock_only().any()
     }
 
-    /// After skipping encode (pure AnimTick or transitional anim throttle):
+    /// After skipping encode (pure AnimTick or optional anim present throttle):
     /// restore content stickies, but **drop residual post-tick AnimPaint**
     /// `needs_redraw` so the next frame is not G5-classified as `InputOrRebuild`
     /// (Issue 11). Keep `needs_anim_frame` when throttled so the anim clock continues.
@@ -976,7 +976,8 @@ impl WindowRuntime {
     ) {
         self.restore_sticky_snapshot(snap);
         // Deferred AnimPaint is re-derived on the next AnimFrame; leaving
-        // needs_redraw armed would map to InputOrRebuild and bypass ~30Hz throttle.
+        // needs_redraw armed would map to InputOrRebuild and bypass any
+        // diagnostic anim present throttle.
         if anim_raised_redraw && !snap.needs_redraw {
             self.needs_redraw = false;
         }

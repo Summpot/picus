@@ -31,7 +31,7 @@ Fill one block per machine / OS build used for a baseline run.
 | Profile | `debug` / `release` |
 | Present mode observed | Mailbox / FifoRelaxed / Fifo / other (from runtime logs) |
 | `PICUS_FRAME_TIMING` | `1` |
-| `PICUS_ANIM_PRESENT_HZ` | unset (default ~30) / `0` · `off` · `none` · `false` (disable) / positive Hz |
+| `PICUS_ANIM_PRESENT_HZ` | unset = unlimited product path / `0` · `off` · `none` · `false` (no throttle) / positive Hz (diagnostic cap) |
 | PresentMon version | _required_ |
 | Notes | power plan, background load, multi-monitor, etc. |
 
@@ -102,11 +102,13 @@ Minimum fields to extract:
 ```text
 set PICUS_FRAME_TIMING=1
 set RUST_LOG=picus_core::perf=info
-# Default product path (transitional ~30 Hz anim-only present):
+# Default product path (G10): no anim present throttle:
 #   leave PICUS_ANIM_PRESENT_HZ unset
-# Unthrottled anim present (baseline / debug only):
+# Explicit no-throttle tokens (same as unset):
 #   set PICUS_ANIM_PRESENT_HZ=0
 #   (also accepted: off / none / false)
+# Diagnostic cap only (opt-in; anim-driven presents only, G5 still unthrottled):
+#   set PICUS_ANIM_PRESENT_HZ=30
 cargo run -p gallery --release
 ```
 
@@ -154,8 +156,8 @@ Report **median / p95 / p99** of the chosen latency metric (name the column).
 | Profile | Res | Scenario | presents / 30 s (3 runs) | Notes |
 |---------|-----|----------|--------------------------|-------|
 | release | 1080p | S1 Button idle | _ | Expect ~0 without OS invalidation (G6 target) |
-| release | 1080p | S2 Spinner still | _ | With default throttle ≈ 30 Hz class |
-| release | 1080p | S2 + `PICUS_ANIM_PRESENT_HZ=0` | _ | Unthrottled comparison only |
+| release | 1080p | S2 Spinner still | _ | Product path (unset) — unlimited; fill PresentMon when run |
+| release | 1080p | S2 + `PICUS_ANIM_PRESENT_HZ=30` | _ | Diagnostic cap comparison only |
 
 ### 3.4 CPU phase averages (`PICUS_FRAME_TIMING`, ms)
 
@@ -181,7 +183,7 @@ phases (from the plan; refine when first real numbers exist):
 | G3 | Spinner still: design phases visible; indeterminate bar ≈ `0.9 × min(60, refresh_hz)` without permanent global throttle | PresentMon + content version | Pending architecture |
 | G4 | Spinner drag: displayed-frame latency p95 ≤ 2 refresh periods; ≥30% better than P0 baseline; default path not permanent fps cut | PresentMon ×3 debug/release | Needs filled §3 as P0 baseline |
 | G6 | Button idle present count = 0 in 30 s sample | Counter | Pending |
-| G10 | Remove default 30 Hz anim throttle | Code review after G2–G4 | Blocked on P2e |
+| G10 | Remove default 30 Hz anim throttle | Code review | **Done (P2e):** unset = unlimited; override opt-in |
 
 **P0 baseline freeze**: once §3 is first filled for a named commit, later PRs
 compare against that row set (or a clearly marked newer baseline revision).
@@ -196,6 +198,7 @@ compare against that row set (or a clearly marked newer baseline revision).
 | 2026-07-16 | Phase 0 review fixes | Document present-path vs anim_tick denominators; full `PICUS_ANIM_PRESENT_HZ` disable set |
 | 2026-07-16 | Phase 2a layer gate | §6 anim target strategy + size-gate assumptions (no new PresentMon numbers yet) |
 | 2026-07-16 | Phase 2a review fixes | §6.3 explicit: assumptions ≠ G2 acceptance; G2 is P2b |
+| 2026-07-16 | Phase 2e / G10 | Default anim present throttle removed; `PICUS_ANIM_PRESENT_HZ` diagnostic opt-in only. Spinner + ProgressBar G2 unit contracts + PresentPolicy FIFO/Mailbox tests exist; PresentMon G3/G4 numbers remain placeholders |
 
 ---
 
@@ -244,8 +247,9 @@ measured counters / PresentMon.
    FullWindowTransparent fails §6.2 on real hardware.
 4. **Mailbox** present remains required for G4; target strategy does not replace
    present-mode policy.
-5. Transitional **~30 Hz anim present throttle** stays default until G2–G4 pass
-   after host+composite (G10).
+5. **G10 done:** product path has **no** default anim present throttle. Optional
+   `PICUS_ANIM_PRESENT_HZ` positive-Hz cap is diagnostic only (G5 still never
+   blocked). Full PresentMon G3/G4 remain separate measurement work.
 
 ### 6.4 Comparison snapshot (qualitative)
 

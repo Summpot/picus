@@ -5,8 +5,9 @@ use tracing_subscriber::{EnvFilter, fmt};
 // Keep hot-path crates at `info` by default — `picus_core=debug` logs every
 // projection rebuild and dominates debug FPS. Use `RUST_LOG=picus_core=debug`
 // when diagnosing dirty reasons; `PICUS_FRAME_TIMING=1` for per-window phase
-// timings; `PICUS_ANIM_PRESENT_HZ` overrides the transitional anim-only present
-// throttle (unset ≈ 30 Hz; `0` / `off` / `none` / `false` disables — baseline/debug only).
+// timings; `PICUS_ANIM_PRESENT_HZ` is an **opt-in diagnostic** anim-only present
+// cap (unset = unlimited product path; `0` / `off` / `none` / `false` = no
+// throttle; positive Hz caps anim-driven presents only).
 const DEFAULT_LOG_FILTER: &str = "info,wgpu_core=warn,wgpu_hal=warn,wgpu_hal::vulkan=error,bevy_render=warn,bevy_app=warn,picus_widget=info,xilem_core=info,picus_view=info,picus_view::masonry_root=info,picus_core=info,picus_core::perf=info";
 
 static LOGGING_INITIALIZED: OnceLock<()> = OnceLock::new();

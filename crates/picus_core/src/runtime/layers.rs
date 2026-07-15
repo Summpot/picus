@@ -40,10 +40,13 @@
 //!   **every logical tick** (not Spinner's 12-step discrete gate) so the segment
 //!   stays smooth; G2 still holds because only Anim encodes.
 //!
-//! ## Not yet (do not overclaim)
+//! ## Delivered vs not yet
 //!
-//! - Removing transitional ~30 Hz anim present throttle (G10 / P2e)
-//! - Full PresentMon G4 protocol run (documented; not required here)
+//! - **G10:** product path has no default anim present throttle; `PICUS_ANIM_PRESENT_HZ`
+//!   is diagnostic opt-in only (positive Hz caps anim-driven presents).
+//! - **G2 unit contracts:** Spinner + indeterminate ProgressBar host paths in-tree.
+//! - **Not yet:** full PresentMon G3/G4 protocol numbers (baseline tables may still
+//!   be placeholders — do not invent fake numbers).
 //!
 //! See `docs/architecture/runtime.md` and `docs/plans/frame-pipeline.md`.
 

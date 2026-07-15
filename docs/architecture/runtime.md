@@ -62,13 +62,15 @@ successful present**.
 widgets (e.g. Spinner) may still full-window encode this phase; scheduling
 semantics are correct so interaction/resize redraws are not blocked.
 
-A **transitional** pure-animation present throttle (~30 Hz default; override
-`PICUS_ANIM_PRESENT_HZ` with a positive Hz, or `0` / `off` / `none` / `false` to
-disable) reduces DWM drag ghosting. That throttle is **not** the end state; it is
-removed only after layered anim encode gates pass (G10). Anim tick and present
-are **not** inseparably tied: pure `AnimTick` may skip encode/present while
-keeping the event loop awake. Non-G5 content co-occurring with the anim clock
-(e.g. `LayoutRewrite` + `AnimTick`) may also be delayed by the interval.
+**Anim present throttle (G10 / P2e):** the product path has **no** default anim
+present interval. Unset `PICUS_ANIM_PRESENT_HZ` means unlimited anim-driven
+presents. The env var remains an **explicit diagnostic override**: positive Hz
+caps anim-only presents; `0` / `off` / `none` / `false` also mean no throttle.
+Content / input / resize / first-paint / retry (G5) are **never** blocked by any
+throttle. Anim tick and present are **not** inseparably tied: pure `AnimTick`
+may skip encode/present while keeping the event loop awake. When a diagnostic
+interval is set, non-G5 content co-occurring with the anim clock (e.g.
+`LayoutRewrite` + `AnimTick`) may be delayed by that interval.
 
 **PresentPolicy (G7):** surface creation negotiates an explicit capability —
 `MailboxLatest` (GPU/compositor may replace queued frames) or
@@ -190,8 +192,9 @@ layer redraw. If a future pin gains
 narrow the host; composite does not wait on that.
 
 **Failure fallback:** single-`CachedScene` plans still use the Phase 1 full-window
-encode path; transitional anim present throttle remains until G2 vertical slices
-pass (P2c+). Never claim VisualLayerPlan classification as isolation.
+encode path. Never claim VisualLayerPlan classification as isolation. Default
+product path no longer applies a ~30 Hz anim present throttle (G10); use
+`PICUS_ANIM_PRESENT_HZ` only for diagnosis.
 
 #### Ownership / lifecycle (P2b infrastructure)
 
@@ -291,14 +294,18 @@ Product path for continuous isolation (no gallery/entity hardcode):
 Anim widgets under a clipped portal/scroll may paint outside the ancestor clip
 on the FullWindowTransparent anim target until clip plumbing lands.
 
+**G10 / P2e (code path):** default anim present throttle removed; product path is
+unlimited; `PICUS_ANIM_PRESENT_HZ` is diagnostic opt-in only. Unit/integration
+**G2** contracts for Spinner + indeterminate ProgressBar passed on this stack;
+FIFO/Mailbox `PresentPolicy` unit tests exist.
+
 **Not yet (do not overclaim):**
 
-- Removing transitional ~30 Hz anim present throttle (G10 / P2e)
-- Full PresentMon/ETW G4 drag protocol run (documented in
-  [perf/frame-pipeline-baseline.md](../perf/frame-pipeline-baseline.md); not
-  required for this vertical slice)
-- Claiming product G2/G3/G4 complete without PresentMon data — layer-contract
-  unit tests cover Spinner + indeterminate ProgressBar host paths
+- Full PresentMon/ETW G3/G4 numbers (tables in
+  [perf/frame-pipeline-baseline.md](../perf/frame-pipeline-baseline.md) may still
+  be placeholders — do not invent fake latency/present counts)
+- Claiming product G3/G4 complete without PresentMon data — layer-contract unit
+  tests cover Spinner + indeterminate ProgressBar host paths (G2 class)
 
 #### Anim target choice (size gate input)
 
