@@ -1,6 +1,6 @@
 # Picus 帧管线解耦完整计划
 
-> **状态**：进行中 — P0/P1/P1b/P2a–P2e 已交付；**Spinner + indeterminate ProgressBar G2 层合同已交付**；**G10 默认 anim present throttle 已移除**  
+> **状态**：进行中 — P0–P3 已交付（含 P1b）；**Spinner + indeterminate ProgressBar G2**；**G10 默认 throttle 已移除**；**PaintIsolation 公共 API 已交付**  
 > **范围**：动画时钟 / 内容脏区与层 encode / present 新鲜度 / 与 Bevy·DWM 边界  
 > **动机**：消除「动画帧率 vs 拖窗流畅度」假权衡；根因是架构耦合，不是单点旋钮。
 
@@ -293,19 +293,19 @@ contract」；代码：`picus_core::runtime::layers`；目标尺寸决策：
 
 ---
 
-### Phase 3 — 控件声明 API（PaintIsolation）
+### Phase 3 — 控件声明 API（PaintIsolation）— **已交付（本 PR）**
 
 **目标**：高频动画**必须**声明隔离；默认控件走 base。
 
-| 工作项 | 细节 |
-|--------|------|
-| P3.1 | `PaintIsolation::{Base, AnimLayer}`（名称可定）放在 widget 或 core 公共合适位置（facade 谨慎 re-export） |
-| P3.2 | `UiSpinner` / indeterminate bar 默认 `AnimLayer` |
-| P3.3 | 投影侧读取 isolation，分配 layer id |
-| P3.4 | 文档：`docs/guide` 或 architecture：何时必须用 AnimLayer  
-| P3.5 | AGENTS：一条硬规则——「持续 60Hz 视觉动画不得默认脏整窗 base present 路径」（措辞精炼） |
+| 工作项 | 细节 | 状态 |
+|--------|------|------|
+| P3.1 | `PaintIsolation::{Inline, AnimEntry}` 在 `picus_widget`（painter slot，非全局顶层；facade 不进 prelude） | **已交付** |
+| P3.2 | `Spinner` / indeterminate `ProgressBar` 默认 `AnimEntry`；determinate `Inline` | **已交付** |
+| P3.3 | Host `register_external_widgets_from_visual` 按 isolation 提升 External→Anim，稳定 layer id；clip/order/layout 仍走既有 invalidation | **已交付** |
+| P3.4 | 文档：[`docs/guide/paint-isolation.md`](../guide/paint-isolation.md) + runtime 交叉引用 | **已交付** |
+| P3.5 | AGENTS 硬规则：持续 ~60Hz 视觉动画不得默认脏整窗 base present 路径 | **已交付** |
 
-**验收**：新控件有明确约定；gallery 无 hardcode 特例（hardcode 从 P2 删掉）。  
+**验收**：新控件有明确约定；gallery 无 hardcode 特例；Spinner/ProgressBar 走公共 isolation（host 场景绘制仍 type-dispatch）。  
 **建议 PR**：`PR3-paint-isolation-api`
 
 ---
@@ -481,7 +481,7 @@ PR6-docs-cleanup
 | P2c | **Spinner 垂直切片**（External isolation、host scene、12-step phase gate、selective anim encode / G2 层合同单测）；G3/G4 实测仍属后续 |
 | P2d | **indeterminate ProgressBar 动画**（phase∈[0,1) 1.2s、segment 几何、Some↔None 生命周期、仅 indeterminate External、host segment paint、G2 层合同单测） |
 | P2e | **G10 去默认 anim present throttle**：unset = unlimited product path；`PICUS_ANIM_PRESENT_HZ` 正 Hz 为 diagnostic opt-in；`0`/`off`/`none`/`false` = 不节流；G5 仍永不被挡。Spinner + ProgressBar G2 单测已过；PresentPolicy FIFO/Mailbox 单测存在；PresentMon G3/G4 数字仍可为占位 |
-| P3 | 未开始 |
+| P3 | **完成**（`PaintIsolation::{Inline, AnimEntry}`；Spinner/indeterminate bar 默认 AnimEntry；host isolation 提升；guide + AGENTS 硬规则） |
 | P4 | 可选·未开始 |
 | P5 | 可选·未开始 |
 | P6 | 未开始 |

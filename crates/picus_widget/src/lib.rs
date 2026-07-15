@@ -21,6 +21,7 @@
 
 pub mod layers;
 pub mod masonry_core;
+pub mod paint_isolation;
 pub mod properties;
 pub mod theme;
 pub mod widgets;
@@ -30,6 +31,7 @@ pub use accesskit;
 pub use masonry_core::imaging;
 pub use masonry_core::palette;
 pub use masonry_core::{app, core, dpi, kurbo, layout, parley, peniko, ui_events, util};
+pub use paint_isolation::PaintIsolation;
 pub use parley::{Alignment as TextAlign, AlignmentOptions as TextAlignOptions};
 
 /// Panic in debug and `tracing::error` in release mode.
@@ -60,7 +62,7 @@ pub mod retained {
     pub use super::imaging;
     pub use super::palette;
     pub use super::{
-        TextAlign, TextAlignOptions, app, core, dpi, kurbo, layers, layout, parley, peniko,
-        properties, theme, ui_events, util, widgets,
+        PaintIsolation, TextAlign, TextAlignOptions, app, core, dpi, kurbo, layers, layout,
+        paint_isolation, parley, peniko, properties, theme, ui_events, util, widgets,
     };
 }

@@ -23,6 +23,7 @@ repository `AGENTS.md` files (root and nested where needed).
 | [guide/overlays-scroll.md](guide/overlays-scroll.md) | Overlay hit path, scroll wheel routing |
 | [guide/i18n-fonts-icons.md](guide/i18n-fonts-icons.md) | Localization, fonts, icons |
 | [guide/multi-window.md](guide/multi-window.md) | Multi-window runtime and sinks |
+| [guide/paint-isolation.md](guide/paint-isolation.md) | `PaintIsolation::{Inline, AnimEntry}` for continuous anim |
 | [examples/index.md](examples/index.md) | What each example teaches |
 | [contributing/codewhale-submodule.md](contributing/codewhale-submodule.md) | CodeWhale fork sync |
 | [reference/public-modules.md](reference/public-modules.md) | Public facade modules and advanced boundary |

@@ -1,5 +1,5 @@
 //! Masonry layer contract (P2a) + ordered compositor (P2b) + Spinner (P2c) +
-//! indeterminate ProgressBar (P2d) anim entries.
+//! indeterminate ProgressBar (P2d) anim entries + public [`PaintIsolation`] (P3).
 //!
 //! ## Phase 2a gate (closed)
 //!
@@ -22,23 +22,20 @@
 //! - Resize/DPI bumps [`LayerRegistry::metrics_generation`]; all entry targets
 //!   rebuild atomically — never mix old-size textures with a new plan.
 //!
-//! ## Phase 2c (Spinner vertical slice)
+//! ## Phase 2c / 2d (Spinner + indeterminate ProgressBar)
 //!
-//! - [`Spinner`] sets [`PaintLayerMode::External`] every paint (no gallery/entity
-//!   hardcode); host auto-registers External widget ids from the visual plan.
-//! - Host builds window-space [`Scene`] for dirty anim entries; cached segments
-//!   exclude spinner pixels. Steady anim ticks skip full-tree `redraw` and do
-//!   not reassemble/encode base (G2 progress).
-//! - Spinner 12-step visual phase gates host version / paint request.
+//! Widgets declare [`PaintIsolation`] (P3 public API). [`PaintIsolation::AnimEntry`]
+//! applies as Masonry External every paint; host promotion follows isolation
+//! (not gallery/entity hardcode). Host scene painters remain type-dispatched
+//! (Spinner arms / ProgressBar segment). G2 selective anim path unchanged.
 //!
-//! ## Phase 2d (indeterminate ProgressBar)
+//! ## Phase 3 ([`PaintIsolation`])
 //!
-//! - Indeterminate [`ProgressBar`] (`progress == None`) sets External every paint;
-//!   determinate stays inline cached. Host paints the 30% track segment via
-//!   [`ProgressBar::paint_indeterminate_segment`] using content-space `border_box()`
-//!   (insets preserved). Continuous phase ∈ [0,1) over 1.2s bumps host version on
-//!   **every logical tick** (not Spinner's 12-step discrete gate) so the segment
-//!   stays smooth; G2 still holds because only Anim encodes.
+//! - Public enum: [`PaintIsolation::{Inline, AnimEntry}`] in `picus_widget`
+//!   (painter slot, not global top layer).
+//! - Spinner / indeterminate ProgressBar default `AnimEntry`; determinate bar `Inline`.
+//! - `register_external_widgets_from_visual` promotes External → Anim when live
+//!   widget reports `AnimEntry` (stable [`AnimLayerId`] / compositor [`LayerId`]).
 //!
 //! ## Delivered vs not yet
 //!
@@ -48,7 +45,8 @@
 //! - **Not yet:** full PresentMon G3/G4 protocol numbers (baseline tables may still
 //!   be placeholders — do not invent fake numbers).
 //!
-//! See `docs/architecture/runtime.md` and `docs/plans/frame-pipeline.md`.
+//! See `docs/guide/paint-isolation.md`, `docs/architecture/runtime.md`, and
+//! `docs/plans/frame-pipeline.md`.
 
 use std::collections::HashMap;
 
@@ -59,6 +57,7 @@ use crate::masonry_core::{
     kurbo::{Affine, Rect, Size},
     peniko::color::{AlphaColor, Srgb},
 };
+use picus_widget::PaintIsolation;
 use picus_widget::properties::{BarColor, BorderWidth, ContentColor, CornerRadius};
 use picus_widget::widgets::{ProgressBar, Spinner};
 
@@ -1241,13 +1240,15 @@ impl LayerRegistry {
                 .any(|e| !matches!(e.kind, CompositorEntryKind::CachedScene))
     }
 
-    /// Bind External painter slots that have a host painter
-    /// (P2c: Spinner; P2d: indeterminate ProgressBar).
+    /// Bind External painter slots whose live widgets declare
+    /// [`PaintIsolation::AnimEntry`] (Spinner; indeterminate ProgressBar).
     ///
     /// Unbound External widgets stay [`CompositorEntryKind::External`] (transparent
     /// placeholder) — they are **not** promoted to Anim with an empty host scene.
-    /// No gallery/entity hardcode: promotion is type-based (widget downcast).
-    /// Host entries for widgets that left External / became determinate are pruned.
+    /// No gallery/entity hardcode: promotion is **isolation-driven** via
+    /// [`widget_paint_isolation`]. Host entries for widgets that left External /
+    /// became determinate (`Inline`) are pruned. Allocates a stable
+    /// [`AnimLayerId`] per widget; compositor [`LayerId`] follows plan identity.
     pub(crate) fn register_external_widgets_from_visual(
         &mut self,
         visual: &VisualLayerPlan,
@@ -1259,13 +1260,13 @@ impl LayerRegistry {
             if !matches!(layer.kind, VisualLayerKind::External { .. }) {
                 continue;
             }
-            if widget_has_anim_host_painter(render_root, layer.widget_id) {
+            if widget_paint_isolation(render_root, layer.widget_id).promotes_to_anim_host() {
                 self.host.register_external_slot(layer.widget_id);
                 live_host.insert(layer.widget_id);
             }
         }
-        // Prune host slots no longer External with a host painter (e.g. ProgressBar
-        // switched to determinate, or widget removed from External set).
+        // Prune host slots no longer External with AnimEntry isolation (e.g. ProgressBar
+        // switched to determinate Inline, or widget removed from External set).
         let stale: Vec<WidgetId> = self
             .host
             .widget_ids()
@@ -1397,18 +1398,23 @@ impl LayerRegistry {
     }
 }
 
-/// True when the widget type has a host anim painter for the current mode.
-fn widget_has_anim_host_painter(render_root: &RenderRoot, widget_id: WidgetId) -> bool {
+/// Resolve public [`PaintIsolation`] for a live widget (host promotion gate).
+///
+/// Known anim-capable widgets report their isolation; unknown widgets default
+/// to [`PaintIsolation::Inline`] so bare External placeholders are not promoted
+/// to empty Anim entries. Host **scene paint** still type-dispatches (Spinner /
+/// ProgressBar painters) — isolation only decides External → Anim promotion.
+fn widget_paint_isolation(render_root: &RenderRoot, widget_id: WidgetId) -> PaintIsolation {
     let Some(wref) = render_root.get_widget(widget_id) else {
-        return false;
+        return PaintIsolation::Inline;
     };
-    if wref.downcast::<Spinner>().is_some() {
-        return true;
+    if let Some(spinner) = wref.downcast::<Spinner>() {
+        return spinner.inner().paint_isolation();
     }
     if let Some(bar) = wref.downcast::<ProgressBar>() {
-        return bar.inner().is_indeterminate();
+        return bar.inner().paint_isolation();
     }
-    false
+    PaintIsolation::Inline
 }
 
 /// Downcast + host scene sync for one bound widget (Spinner / ProgressBar).
@@ -1444,10 +1450,10 @@ fn sync_one_anim_widget(
     }
 
     if let Some(bar) = wref.downcast::<ProgressBar>() {
-        if !bar.inner().is_indeterminate() {
-            // Determinate: drop host binding. Signal geometry_changed so selective
-            // encode cannot keep an empty Anim entry — force full plan rebuild
-            // (defense-in-depth if progress flipped without content dirt).
+        if !bar.inner().paint_isolation().promotes_to_anim_host() {
+            // Determinate / Inline: drop host binding. Signal geometry_changed so
+            // selective encode cannot keep an empty Anim entry — force full plan
+            // rebuild (defense-in-depth if progress flipped without content dirt).
             let _ = bar;
             let _ = wref;
             let _ = registry.host_mut().remove_widget(widget_id);
@@ -2342,9 +2348,28 @@ mod tests {
     }
 
     #[test]
+    fn paint_isolation_defaults_for_spinner_and_progress_bar() {
+        assert_eq!(
+            Spinner::new().paint_isolation(),
+            PaintIsolation::AnimEntry,
+            "Spinner always AnimEntry"
+        );
+        assert_eq!(
+            ProgressBar::new(None).paint_isolation(),
+            PaintIsolation::AnimEntry,
+            "indeterminate ProgressBar AnimEntry"
+        );
+        assert_eq!(
+            ProgressBar::new(Some(0.5)).paint_isolation(),
+            PaintIsolation::Inline,
+            "determinate ProgressBar Inline"
+        );
+    }
+
+    #[test]
     fn spinner_external_isolation_promotes_to_anim_entry() {
         // Plan/isolation contract (not a pixel scan of CachedScene blobs):
-        // Spinner External slot + Spinner-typed host registration → Anim entry.
+        // Spinner PaintIsolation::AnimEntry → External slot → host Anim entry.
         let spinner = NewWidget::new(Spinner::new());
         let root_widget = NewWidget::new(
             Flex::row()
@@ -2392,7 +2417,7 @@ mod tests {
 
     #[test]
     fn non_spinner_external_is_not_promoted_to_anim() {
-        // ModeBox External has no host painter — stays External, not empty Anim.
+        // ModeBox External has PaintIsolation::Inline (unknown) — stays External, not empty Anim.
         let root_widget = NewWidget::new(
             Flex::row()
                 .with_fixed(NewWidget::new(ModeBox::new(

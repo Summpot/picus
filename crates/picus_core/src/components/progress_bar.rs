@@ -3,6 +3,16 @@ use bevy_ecs::prelude::*;
 use crate::{ProjectionCtx, UiView, components::UiComponentTemplate};
 
 /// A determinate or indeterminate progress bar.
+///
+/// - **Indeterminate** (`progress == None`): retained bar uses
+///   [`PaintIsolation::AnimEntry`] (anim host slot).
+/// - **Determinate** (`Some`): [`PaintIsolation::Inline`] into the base scene;
+///   no permanent anim tick.
+///
+/// See `docs/guide/paint-isolation.md`.
+///
+/// [`PaintIsolation::AnimEntry`]: picus_widget::PaintIsolation::AnimEntry
+/// [`PaintIsolation::Inline`]: picus_widget::PaintIsolation::Inline
 #[derive(Component, Debug, Clone, Copy, Default, PartialEq)]
 pub struct UiProgressBar {
     pub progress: Option<f64>,

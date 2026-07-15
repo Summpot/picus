@@ -6,12 +6,13 @@ use tracing::{Span, trace_span};
 
 use crate::core::{
     AccessCtx, ArcStr, ChildrenIds, LayoutCtx, MeasureCtx, NewWidget, NoAction, PaintCtx,
-    PaintLayerMode, PrePaintProps, PropertiesMut, PropertiesRef, Property, PropertySet, RegisterCtx,
-    Update, UpdateCtx, Widget, WidgetId, WidgetMut, WidgetPod, paint_background, paint_box_shadow,
+    PrePaintProps, PropertiesMut, PropertiesRef, Property, PropertySet, RegisterCtx, Update,
+    UpdateCtx, Widget, WidgetId, WidgetMut, WidgetPod, paint_background, paint_box_shadow,
 };
 use crate::imaging::Painter;
 use crate::kurbo::{Axis, Rect, Size};
 use crate::layout::{LayoutSize, LenReq, Length, SizeDef};
+use crate::paint_isolation::PaintIsolation;
 use crate::peniko::color::{AlphaColor, Srgb};
 use crate::peniko::{Color, Gradient};
 use crate::properties::{
@@ -35,16 +36,13 @@ const INDETERMINATE_TRAVEL: f64 = 1.3;
 
 /// A progress bar.
 ///
-/// # Anim isolation (frame pipeline P2d)
+/// # Paint isolation
 ///
-/// When progress is [`None`] (indeterminate), every paint requests
-/// [`PaintLayerMode::External`] so Masonry reserves a painter-order placeholder
-/// and does **not** fold the moving segment into cached base scene segments.
-/// Picus [`AnimLayerHost`] fills the slot via [`Self::paint_indeterminate_segment`].
-/// Mode is not sticky — it must be set each paint.
-///
-/// Determinate mode (`Some`) paints inline into the cached scene and does **not**
-/// schedule a permanent anim clock.
+/// - **Indeterminate** (`progress == None`): [`PaintIsolation::AnimEntry`] — every paint
+///   reserves an External painter-order placeholder; Picus anim host fills the slot via
+///   [`Self::paint_indeterminate_segment`]. Mode is not sticky — applied each paint.
+/// - **Determinate** (`Some`): [`PaintIsolation::Inline`] into the cached scene; no permanent
+///   anim clock.
 ///
 #[doc = concat!(
     "![25% progress bar](",
@@ -98,6 +96,18 @@ impl ProgressBar {
     #[inline]
     pub fn is_indeterminate(&self) -> bool {
         self.progress.is_none()
+    }
+
+    /// Paint isolation for the current mode.
+    ///
+    /// Indeterminate → [`PaintIsolation::AnimEntry`]; determinate → [`PaintIsolation::Inline`].
+    #[inline]
+    pub fn paint_isolation(&self) -> PaintIsolation {
+        if self.is_indeterminate() {
+            PaintIsolation::AnimEntry
+        } else {
+            PaintIsolation::Inline
+        }
     }
 
     /// Current progress value (`None` = indeterminate).
@@ -417,12 +427,12 @@ impl Widget for ProgressBar {
         let border_width = *props.get::<BorderWidth>(cache);
         let corner_radius = *props.get::<CornerRadius>(cache);
 
-        if self.progress.is_none() {
-            // Anim isolation: External painter slot every paint (mode resets each pass).
+        if self.paint_isolation() == PaintIsolation::AnimEntry {
+            // Public isolation: AnimEntry → External painter slot every paint (mode not sticky).
             // Masonry does not append External paint into VisualLayerPlan scene segments;
-            // Picus `AnimLayerHost` is authoritative via `paint_indeterminate_segment`.
+            // Picus anim host is authoritative via `paint_indeterminate_segment`.
             // Skip local segment strokes here to avoid dual sources of truth.
-            ctx.set_paint_layer_mode(PaintLayerMode::External);
+            self.paint_isolation().apply(ctx);
             // Full paint path ack (selective path acks via host after successful present).
             self.ack_indeterminate_phase(self.indeterminate_phase);
             return;

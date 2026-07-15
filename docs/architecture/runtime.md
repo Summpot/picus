@@ -218,14 +218,14 @@ flowchart TB
 ```
 
 ```text
-# Current P2b + P2c contract
+# Current P2b + P2c + P3 contract
 
 rebuild_from_visual_plan(plan)  → CompositorEntry[] in Masonry painter order
-register_external_widgets_from_visual → AnimLayerId only for Spinner-typed External
+register_external_widgets_from_visual → AnimLayerId when PaintIsolation::AnimEntry
 needs_encode                    → structure_dirty || encoded_version != content_version
 non-anim content dirt           → mark_non_anim_content_dirty bumps CachedScene/Overlay
                                   (InputOrRebuild/Theme/Layout/…; pure AnimPaint does not)
-Spinner paint                   → PaintLayerMode::External every paint; host scene via paint_arms
+Spinner paint                   → PaintIsolation::AnimEntry.apply → External; host paint_arms
 phase gate                      → 12-step visual phase only → request_paint / host version
 pure AnimPaint (G2)             → skip full redraw; sync host scenes; encode Anim only
 encode                          → only needs_encode entries; others reuse texture
@@ -238,22 +238,27 @@ alpha / Mica                    → layer targets straight-alpha; when present n
                                   final replace) so semi-transparent upper layers are correct
 ```
 
-#### Spinner + indeterminate ProgressBar anim entries (P2c / P2d / G2 progress)
+#### PaintIsolation (P3) + Spinner / indeterminate ProgressBar (P2c / P2d / G2)
+
+Public contract: [`docs/guide/paint-isolation.md`](../guide/paint-isolation.md).
+`PaintIsolation::{Inline, AnimEntry}` is a **painter slot** (not a global top layer).
 
 Product path for continuous isolation (no gallery/entity hardcode):
 
-1. **Widget paint** sets `PaintLayerMode::External` every paint when isolation
-   applies (mode is not sticky):
-   - **`Spinner`:** always External.
-   - **`ProgressBar`:** External **only while** `progress == None`
-     (indeterminate). Determinate (`Some`) paints inline into the cached scene
+1. **Widget paint** applies `PaintIsolation` every paint (mode is not sticky):
+   - **`Spinner`:** always `PaintIsolation::AnimEntry` → External.
+   - **`ProgressBar`:** `AnimEntry` **only while** `progress == None`
+     (indeterminate). Determinate (`Some`) is `Inline` into the cached scene
      and does **not** keep a permanent anim tick.
 2. **`LayerRegistry::register_external_widgets_from_visual`** promotes External
-   slots to Anim **only when a host painter exists** (type downcast:
-   `Spinner`, or indeterminate `ProgressBar`). Other External stays
+   slots to Anim when the live widget reports
+   `PaintIsolation::AnimEntry` (resolved via known types that implement
+   `paint_isolation()`). Other External stays
    `CompositorEntryKind::External` (transparent placeholder) — never an empty
    Anim with silent missing content. Host slots for widgets that leave External
-   (e.g. ProgressBar `None→Some`) are pruned.
+   (e.g. ProgressBar `None→Some` → `Inline`) are pruned. Stable
+   `AnimLayerId` / compositor `LayerId` follow existing plan identity rules;
+   ancestor clip/order/layout changes still set `structure_dirty`.
 3. **Host scenes** (FullWindowTransparent target):
    - Spinner: `AnimLayerHost::sync_spinner_scene` via `Spinner::paint_arms`;
      version / dirty advance only when the **12-step visual phase** changes

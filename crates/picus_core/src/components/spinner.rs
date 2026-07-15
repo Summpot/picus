@@ -3,6 +3,12 @@ use bevy_ecs::prelude::*;
 use crate::{ProjectionCtx, UiView, components::UiComponentTemplate};
 
 /// An animated loading spinner (indefinite progress indicator).
+///
+/// Projects to a retained spinner with [`PaintIsolation::AnimEntry`] so continuous
+/// motion does not dirty the full-window base present path. See
+/// `docs/guide/paint-isolation.md`.
+///
+/// [`PaintIsolation::AnimEntry`]: picus_widget::PaintIsolation::AnimEntry
 #[derive(Component, Debug, Clone, PartialEq, Eq)]
 pub struct UiSpinner {
     /// Optional label shown next to the spinner.

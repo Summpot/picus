@@ -86,6 +86,9 @@ See [`docs/guide/styling-themes.md`](docs/guide/styling-themes.md).
 - Click injection sends move before down/up; resize uses logical dimensions.
 - Paint/present errors are captured; only successful `present()` marks painted.
 - Font registration broadcasts to all windows and replays on attach.
+- Continuous ~60Hz visual animation must not default to dirtying the full-window
+  base present path — use `PaintIsolation::AnimEntry` (painter slot, not global
+  top layer). See [`docs/guide/paint-isolation.md`](docs/guide/paint-isolation.md).
 
 ### Overlays / scroll
 
@@ -121,6 +124,7 @@ See [`docs/guide/styling-themes.md`](docs/guide/styling-themes.md).
 | Overlays / scroll | [`docs/guide/overlays-scroll.md`](docs/guide/overlays-scroll.md) |
 | i18n / fonts | [`docs/guide/i18n-fonts-icons.md`](docs/guide/i18n-fonts-icons.md) |
 | Multi-window | [`docs/guide/multi-window.md`](docs/guide/multi-window.md) |
+| Paint isolation | [`docs/guide/paint-isolation.md`](docs/guide/paint-isolation.md) |
 | Architecture | [`docs/architecture/overview.md`](docs/architecture/overview.md) |
 | Runtime | [`docs/architecture/runtime.md`](docs/architecture/runtime.md) |
 | Input / IME / hit testing | [`docs/architecture/input-ime-hit.md`](docs/architecture/input-ime-hit.md) |

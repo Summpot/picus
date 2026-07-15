@@ -6,12 +6,13 @@ use accesskit::{Node, Role};
 use tracing::{Span, trace_span};
 
 use crate::core::{
-    AccessCtx, ChildrenIds, LayoutCtx, MeasureCtx, NoAction, PaintCtx, PaintLayerMode,
-    PropertiesMut, PropertiesRef, RegisterCtx, Update, UpdateCtx, UsesProperty, Widget, WidgetId,
+    AccessCtx, ChildrenIds, LayoutCtx, MeasureCtx, NoAction, PaintCtx, PropertiesMut, PropertiesRef,
+    RegisterCtx, Update, UpdateCtx, UsesProperty, Widget, WidgetId,
 };
 use crate::imaging::Painter;
 use crate::kurbo::{Axis, Cap, Line, Point, Size, Stroke, Vec2};
 use crate::layout::{LenReq, Length};
+use crate::paint_isolation::PaintIsolation;
 use crate::peniko::color::{AlphaColor, Srgb};
 use crate::properties::ContentColor;
 use crate::theme;
@@ -20,11 +21,12 @@ use crate::theme;
 ///
 /// You can customize the look of this spinner with the [`ContentColor`] property.
 ///
-/// # Anim isolation (frame pipeline P2c)
+/// # Paint isolation
 ///
-/// Every paint requests [`PaintLayerMode::External`] so Masonry reserves a painter-order
-/// placeholder and **does not** fold spinner pixels into cached base scene segments.
-/// Picus [`AnimLayerHost`] fills the slot. Mode is not sticky — it must be set each paint.
+/// Default isolation is [`PaintIsolation::AnimEntry`]: every paint reserves an External
+/// painter-order placeholder so spinner pixels are **not** folded into cached base
+/// scene segments. Picus anim host fills the slot. Mode is not sticky — applied each paint
+/// via [`PaintIsolation::apply`].
 ///
 /// The anim clock may tick at display rate, but paint / host version bumps only when the
 /// discrete **12-step visual phase** changes (see [`Self::visual_phase`]).
@@ -97,6 +99,14 @@ impl Spinner {
     #[inline]
     pub fn ack_visual_phase(&self, phase: u8) {
         self.last_paint_phase.set(Some(phase));
+    }
+
+    /// Paint isolation for this spinner (always [`PaintIsolation::AnimEntry`]).
+    ///
+    /// Continuous spinner animation must not dirty the full-window base present path.
+    #[inline]
+    pub const fn paint_isolation(&self) -> PaintIsolation {
+        PaintIsolation::AnimEntry
     }
 
     /// Record spinner arms into `painter` in **content-box local** coordinates.
@@ -200,11 +210,11 @@ impl Widget for Spinner {
         _props: &PropertiesRef<'_>,
         _painter: &mut Painter<'_>,
     ) {
-        // Anim isolation: External painter slot every paint (mode resets to Inline each pass).
+        // Public isolation: AnimEntry → External painter slot every paint (mode not sticky).
         // Masonry does not append External paint into VisualLayerPlan scene segments;
-        // Picus `AnimLayerHost` is authoritative via `Spinner::paint_arms`. Skip local
+        // Picus anim host is authoritative via `Spinner::paint_arms`. Skip local
         // strokes here to avoid wasted work and dual sources of truth.
-        ctx.set_paint_layer_mode(PaintLayerMode::External);
+        self.paint_isolation().apply(ctx);
         // Full paint path ack (selective path acks via `ack_visual_phase` after host sync).
         self.ack_visual_phase(Self::visual_phase(self.t));
     }
