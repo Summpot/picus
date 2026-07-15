@@ -5,8 +5,11 @@
 //! with an explicit decision table so animation clock, rewrite/encode, and
 //! present can be scheduled independently.
 //!
-//! Full-window encode remains acceptable in Phase 1; layered anim textures are
-//! Phase 2. See `docs/plans/frame-pipeline.md` Phase 1.
+//! Host execution is [`super::WindowRuntime::step_frame`]: `decide_entry` →
+//! optional anim tick → `decide_present` → encode when needed. Content present
+//! still couples rewrite+encode+present; pure-anim selective encode lives on
+//! the host (layered Anim entries). See `docs/architecture/runtime.md` and
+//! `docs/plans/frame-pipeline.md`.
 
 use std::time::{Duration, Instant};
 
@@ -27,7 +30,7 @@ pub(crate) enum DirtyReason {
     },
     /// Advance the anim clock only; pixels may be unchanged.
     AnimTick,
-    /// Painter-order / clip / transform plan change (reserved; Phase 2).
+    /// Painter-order / clip / transform plan change (live budget reason).
     CompositorPlan,
     ThemeOrFont,
     RetrySurface,

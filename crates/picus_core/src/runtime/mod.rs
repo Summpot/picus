@@ -1,13 +1,13 @@
 //! Per-window retained Masonry runtime and paint scheduling.
 //!
-//! [`frame_driver`] owns dirty-reason aggregation, the present decision table
-//! (Phase 1), and structured [`RedrawDemand`] wake flags (Phase 1b). Execution
-//! (anim tick, encode, present) remains on [`WindowRuntime`]; Bevy still receives
-//! a single `RequestRedraw` when demand is non-empty.
+//! [rame_driver] owns dirty-reason aggregation, the present decision table,
+//! and structured [RedrawDemand] wake flags (Phase 1b). Execution (anim tick,
+//! encode, present) remains on [WindowRuntime::step_frame]; Bevy still receives
+//! a single RequestRedraw when demand is non-empty.
 //!
-//! [`layers`] holds the Phase 2a Masonry layer-contract gate, [`AnimLayerHost`],
-//! and the P2b painter-order [`LayerRegistry`] / [`CompositorPlan`] used by
-//! ordered multi-texture composite.
+//! [`layers`] holds the Masonry layer-contract gate, [`AnimLayerHost`], and the
+//! painter-order [`LayerRegistry`] / [`CompositorPlan`] used by ordered
+//! multi-texture composite.
 
 pub(crate) mod frame_driver;
 pub(crate) mod layers;
@@ -207,7 +207,7 @@ pub struct WindowRuntime {
     base_invalidated: bool,
     /// Per-window frame scheduler (decision table + optional anim present throttle).
     frame_driver: FrameDriver,
-    /// Painter-order compositor plan + anim host (P2b infrastructure).
+    /// Painter-order compositor plan + anim host.
     layer_registry: LayerRegistry,
     viewport_width: f64,
     viewport_height: f64,
@@ -1036,10 +1036,11 @@ impl WindowRuntime {
     /// Frame scheduling spine: [`FrameDriver::decide_entry`] /
     /// [`FrameDriver::decide_present`] decide; this method executes.
     ///
-    /// Phase 1 execution split is **anim-tick vs encode/present** (full-window
-    /// rewrite+encode+present stay coupled when content present is required).
-    /// `FrameDecision::{do_rewrite,do_encode,do_present}` record intent; the
-    /// host only branches on `do_anim_tick` and `do_encode` until Phase 2 layers.
+    /// Order: `decide_entry` → optional `AnimFrame` → `decide_present` on
+    /// post-tick dirty → encode when `do_encode`. Content present still couples
+    /// rewrite+encode+present (redraw → rebuild `CompositorPlan` → encode).
+    /// Pure-anim selective path (G2) syncs Anim hosts and encodes dirty Anim
+    /// entries without full-tree base reassembly when safe.
     ///
     /// Called from [`paint_masonry_ui`] as `window_runtime.step_frame(delta)`.
     fn step_frame(&mut self, delta: std::time::Duration) -> FrameStepResult {
@@ -1446,7 +1447,7 @@ impl WindowRuntime {
 
         let decision = FrameDecision {
             do_anim_tick: entry.do_anim_tick,
-            // Phase 1: rewrite+encode+present remain coupled when we enter this path.
+            // Content path: rewrite+encode+present remain coupled on this branch.
             do_rewrite: present_decision.do_rewrite,
             do_encode: present_decision.do_encode,
             do_present: painted,
@@ -2609,7 +2610,7 @@ pub fn paint_masonry_ui(
         let Some(window_runtime) = runtime.window_mut(window_entity) else {
             continue;
         };
-        // FrameDriver decision+execution spine (Phase 1).
+        // FrameDriver decision + host execution spine.
         let result = window_runtime.step_frame(time.delta());
         redraw_demand.merge(result.redraw_demand);
         // Skip pure idle (Skipped reason with no work) from frame_id accounting.
