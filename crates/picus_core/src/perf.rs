@@ -47,6 +47,7 @@ pub struct FrameTiming {
     paint_redraw_ns: u128,
     paint_present_ns: u128,
     synth_nodes_sum: u64,
+    synth_cache_hits_sum: u64,
     /// Bitmask of paint reasons observed this window (see [`PaintReason`]).
     paint_reasons: u32,
     /// Compact labels of dirty synthesis reasons seen this window.
@@ -84,6 +85,17 @@ impl FrameTiming {
         node_count: usize,
         reason_labels: &[&'static str],
     ) {
+        self.record_synthesis_with_cache(duration, dirty, node_count, 0, reason_labels);
+    }
+
+    pub fn record_synthesis_with_cache(
+        &mut self,
+        duration: Duration,
+        dirty: bool,
+        node_count: usize,
+        cache_hits: usize,
+        reason_labels: &[&'static str],
+    ) {
         if !frame_timing_enabled() {
             return;
         }
@@ -91,6 +103,7 @@ impl FrameTiming {
         if dirty {
             self.synth_dirty_frames += 1;
             self.synth_nodes_sum += node_count as u64;
+            self.synth_cache_hits_sum += cache_hits as u64;
             for label in reason_labels {
                 if !self.synth_reason_labels.contains(label) {
                     self.synth_reason_labels.push(*label);
@@ -147,6 +160,11 @@ impl FrameTiming {
         } else {
             self.synth_nodes_sum as f64 / f64::from(self.synth_dirty_frames)
         };
+        let avg_cache_hits = if self.synth_dirty_frames == 0 {
+            0.0
+        } else {
+            self.synth_cache_hits_sum as f64 / f64::from(self.synth_dirty_frames)
+        };
         let reasons = format_paint_reasons(self.paint_reasons);
         let synth_reasons = if self.synth_reason_labels.is_empty() {
             "none".to_string()
@@ -165,6 +183,7 @@ impl FrameTiming {
             redraw_ms = format_args!("{redraw_ms:.3}"),
             present_ms = format_args!("{present_ms:.3}"),
             avg_synth_nodes = format_args!("{avg_nodes:.0}"),
+            avg_cache_hits = format_args!("{avg_cache_hits:.0}"),
             paint_reasons = %reasons,
             synth_reasons = %synth_reasons,
             "picus frame timing"

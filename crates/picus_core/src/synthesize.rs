@@ -3,7 +3,10 @@ use std::{
     sync::Arc,
 };
 
-use bevy_ecs::{hierarchy::Children, prelude::*};
+use bevy_ecs::{
+    hierarchy::{ChildOf, Children},
+    prelude::*,
+};
 use bevy_window::PrimaryWindow;
 use picus_view::view::{FlexExt as _, flex_col, label};
 
@@ -37,6 +40,9 @@ pub struct SynthesizedUiViews {
     pub(crate) entities_by_window: HashMap<Entity, HashSet<Entity>>,
     pub(crate) entity_windows: HashMap<Entity, Entity>,
     pub(crate) stats_by_window: HashMap<Entity, UiSynthesisStats>,
+    /// Per-entity projected views reused across frames when the entity (and no
+    /// descendant) is clean. Cleared on full invalidation.
+    pub(crate) entity_view_cache: HashMap<Entity, UiView>,
     pub(crate) generation: u64,
 }
 
@@ -50,6 +56,7 @@ impl SynthesizedUiViews {
         if let Some(entities) = self.entities_by_window.remove(&window) {
             for entity in entities {
                 self.entity_windows.remove(&entity);
+                self.entity_view_cache.remove(&entity);
             }
         }
     }
@@ -60,6 +67,8 @@ impl SynthesizedUiViews {
 pub struct UiSynthesisStats {
     pub root_count: usize,
     pub node_count: usize,
+    /// Nodes that reused a cached projected view (skipped projector work).
+    pub cache_hits: usize,
     pub cycle_count: usize,
     pub missing_entity_count: usize,
     pub unhandled_count: usize,
@@ -106,6 +115,7 @@ impl UiSynthesisStats {
     fn add_assign(&mut self, rhs: &Self) {
         self.root_count += rhs.root_count;
         self.node_count += rhs.node_count;
+        self.cache_hits += rhs.cache_hits;
         self.cycle_count += rhs.cycle_count;
         self.missing_entity_count += rhs.missing_entity_count;
         self.unhandled_count += rhs.unhandled_count;
@@ -234,6 +244,20 @@ fn synthesize_roots_with_stats_and_entities(
     registry: &UiProjectorRegistry,
     roots: impl IntoIterator<Item = Entity>,
 ) -> (Vec<UiView>, UiSynthesisStats, HashSet<Entity>) {
+    synthesize_roots_with_cache(world, registry, roots, None, None)
+}
+
+/// Incremental synthesis: reuse cached views for entities outside `recompute`.
+///
+/// `recompute == None` means project every node (full pass). When `Some`, only
+/// entities in the set are re-projected; others reuse `cache` entries.
+fn synthesize_roots_with_cache(
+    world: &World,
+    registry: &UiProjectorRegistry,
+    roots: impl IntoIterator<Item = Entity>,
+    cache: Option<&mut HashMap<Entity, UiView>>,
+    recompute: Option<&HashSet<Entity>>,
+) -> (Vec<UiView>, UiSynthesisStats, HashSet<Entity>) {
     let roots = roots.into_iter().collect::<Vec<_>>();
     let mut output = Vec::with_capacity(roots.len());
     let mut stats = UiSynthesisStats {
@@ -242,6 +266,10 @@ fn synthesize_roots_with_stats_and_entities(
     };
     let mut entities = HashSet::new();
     let mut visiting = Vec::new();
+    // Own an empty map when no external cache is provided so the walk can still
+    // write/read through a uniform `&mut HashMap` without branching at every node.
+    let mut local_cache = HashMap::new();
+    let cache = cache.unwrap_or(&mut local_cache);
 
     for root in roots {
         output.push(synthesize_entity(
@@ -251,6 +279,8 @@ fn synthesize_roots_with_stats_and_entities(
             &mut visiting,
             &mut stats,
             &mut entities,
+            cache,
+            recompute,
         ));
     }
 
@@ -272,6 +302,7 @@ pub fn synthesize_world(world: &mut World, registry: &UiProjectorRegistry) -> Ve
     synthesize_roots(world, registry, roots)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn synthesize_entity(
     world: &World,
     registry: &UiProjectorRegistry,
@@ -279,6 +310,8 @@ fn synthesize_entity(
     visiting: &mut Vec<Entity>,
     stats: &mut UiSynthesisStats,
     entities: &mut HashSet<Entity>,
+    cache: &mut HashMap<Entity, UiView>,
+    recompute: Option<&HashSet<Entity>>,
 ) -> UiView {
     entities.insert(entity);
 
@@ -313,7 +346,20 @@ fn synthesize_entity(
         visiting,
         stats,
         entities,
+        cache,
+        recompute,
     );
+
+    let must_reproject = recompute.is_none_or(|set| set.contains(&entity));
+    if !must_reproject
+        && let Some(cached) = cache.get(&entity)
+    {
+        stats.node_count += 1;
+        stats.cache_hits += 1;
+        let popped = visiting.pop();
+        debug_assert_eq!(popped, Some(entity));
+        return cached.clone();
+    }
 
     let node_id = entity.to_bits();
 
@@ -330,6 +376,7 @@ fn synthesize_entity(
     };
 
     let view: UiView = Arc::new(entity_scope(entity, base_view));
+    cache.insert(entity, view.clone());
 
     stats.node_count += 1;
 
@@ -344,6 +391,7 @@ fn synthesize_entity(
 /// - nested items under collapsed [`UiNavigationItem`] parents
 ///
 /// Placeholders preserve `ctx.children` index alignment with ECS `Children`.
+#[allow(clippy::too_many_arguments)]
 fn synthesize_child_views(
     world: &World,
     registry: &UiProjectorRegistry,
@@ -352,6 +400,8 @@ fn synthesize_child_views(
     visiting: &mut Vec<Entity>,
     stats: &mut UiSynthesisStats,
     entities: &mut HashSet<Entity>,
+    cache: &mut HashMap<Entity, UiView>,
+    recompute: Option<&HashSet<Entity>>,
 ) -> Vec<UiView> {
     let selected_content = world
         .get::<UiNavigationView>(parent)
@@ -380,14 +430,42 @@ fn synthesize_child_views(
             // Keep a slot so projector child indices match ECS Children order.
             entities.insert(child);
             stats.node_count += 1;
+            cache.remove(&child);
             children.push(Arc::new(label("")) as UiView);
         } else {
             children.push(synthesize_entity(
-                world, registry, child, visiting, stats, entities,
+                world,
+                registry,
+                child,
+                visiting,
+                stats,
+                entities,
+                cache,
+                recompute,
             ));
         }
     }
     children
+}
+
+/// Expand dirty seed entities to include all ancestors so parent projectors
+/// recompose with updated child views.
+fn collect_recompute_set(world: &World, seeds: impl IntoIterator<Item = Entity>) -> HashSet<Entity> {
+    let mut set = HashSet::new();
+    for entity in seeds {
+        let mut current = Some(entity);
+        while let Some(entity) = current {
+            if !set.insert(entity) {
+                break;
+            }
+            current = world.get::<ChildOf>(entity).map(|child_of| child_of.parent());
+        }
+    }
+    set
+}
+
+fn is_full_invalidation_reason(reason: &UiDirtyReason) -> bool {
+    !matches!(reason, UiDirtyReason::DirtyEntity { .. })
 }
 
 fn navigation_item_is_collapsed_parent(world: &World, entity: Entity) -> bool {
@@ -577,12 +655,22 @@ pub fn synthesize_ui(world: &mut World) {
     }
 
     let reason_labels = dirty_reason_labels(&reasons);
+    let force_full = reasons.iter().any(is_full_invalidation_reason);
+    let dirty_entity_seeds: Vec<Entity> = reasons
+        .iter()
+        .filter_map(|reason| match reason {
+            UiDirtyReason::DirtyEntity { entity } => Some(*entity),
+            _ => None,
+        })
+        .collect();
+
     {
         let mut windows_sorted: Vec<_> = dirty_windows.iter().copied().collect();
         windows_sorted.sort_by_key(|e| e.to_bits());
         tracing::debug!(
             ?reasons,
             dirty_windows = ?windows_sorted,
+            force_full,
             "projection synthesis rebuild"
         );
         if let Some(mut debug) = world.get_resource_mut::<UiProjectionDirtyDebug>() {
@@ -590,6 +678,22 @@ pub fn synthesize_ui(world: &mut World) {
             debug.last_dirty_windows = windows_sorted;
         }
     }
+
+    // Incremental path: only re-project dirty entities + ancestors; siblings and
+    // unrelated subtrees reuse cached views (critical for hover/scroll latency).
+    let recompute_set = if force_full {
+        None
+    } else {
+        Some(collect_recompute_set(world, dirty_entity_seeds))
+    };
+
+    let mut view_cache = {
+        let mut views = world.resource_mut::<SynthesizedUiViews>();
+        if force_full {
+            views.entity_view_cache.clear();
+        }
+        std::mem::take(&mut views.entity_view_cache)
+    };
 
     let dirty_windows = dirty_windows.into_iter().collect::<Vec<_>>();
     let mut updates = Vec::with_capacity(dirty_windows.len());
@@ -600,7 +704,13 @@ pub fn synthesize_ui(world: &mut World) {
             .unwrap_or_default();
         let (synthesized, window_stats, window_entities) =
             world.resource_scope(|world, registry: Mut<UiProjectorRegistry>| {
-                synthesize_roots_with_stats_and_entities(world, &registry, roots)
+                synthesize_roots_with_cache(
+                    world,
+                    &registry,
+                    roots,
+                    Some(&mut view_cache),
+                    recompute_set.as_ref(),
+                )
             });
         updates.push((
             *window_entity,
@@ -624,6 +734,7 @@ pub fn synthesize_ui(world: &mut World) {
             views.remove_window(window);
         }
 
+        let mut live_entities = HashSet::new();
         for (window, view, window_stats, window_entities) in updates {
             views.windows.insert(window, view);
             views
@@ -639,9 +750,14 @@ pub fn synthesize_ui(world: &mut World) {
             for entity in &window_entities {
                 views.entity_windows.insert(*entity, window);
             }
+            live_entities.extend(window_entities.iter().copied());
             views.entities_by_window.insert(window, window_entities);
             views.dirty_windows.insert(window);
         }
+
+        // Drop cache entries for entities that left the tree.
+        view_cache.retain(|entity, _| live_entities.contains(entity));
+        views.entity_view_cache = view_cache;
 
         for window_stats in views.stats_by_window.values() {
             stats.add_assign(window_stats);
@@ -650,15 +766,23 @@ pub fn synthesize_ui(world: &mut World) {
     }
 
     let node_count = stats.node_count;
+    let cache_hits = stats.cache_hits;
     *world.resource_mut::<UiSynthesisStats>() = stats;
     if let Some(mut timing) = world.get_resource_mut::<FrameTiming>() {
-        timing.record_synthesis(phase.elapsed(), true, node_count, &reason_labels);
+        timing.record_synthesis_with_cache(
+            phase.elapsed(),
+            true,
+            node_count,
+            cache_hits,
+            &reason_labels,
+        );
     }
     if frame_timing_enabled() {
         tracing::debug!(
             target: "picus_core::perf",
             elapsed_ms = phase.elapsed().as_secs_f64() * 1000.0,
             node_count,
+            cache_hits,
             "projection synthesis completed"
         );
     }
@@ -760,6 +884,56 @@ mod tests {
         assert_eq!(roots.len(), 1);
         assert_eq!(stats.unhandled_count, 0);
         assert_eq!(stats.missing_entity_count, 0);
+    }
+
+    #[test]
+    fn incremental_synthesis_reuses_cached_siblings() {
+        use crate::{InteractionState, UiFlexColumn, UiLabel};
+
+        let mut world = World::new();
+        world.insert_resource(crate::StyleSheet::default());
+        let mut registry = UiProjectorRegistry::default();
+        register_builtin_projectors(&mut registry);
+
+        let root = world.spawn((UiRoot, UiFlexColumn)).id();
+        let a = world
+            .spawn((UiLabel::new("a"), InteractionState::default(), ChildOf(root)))
+            .id();
+        let b = world
+            .spawn((UiLabel::new("b"), InteractionState::default(), ChildOf(root)))
+            .id();
+
+        let mut cache = HashMap::new();
+        let (views1, stats1, entities1) = synthesize_roots_with_cache(
+            &world,
+            &registry,
+            [root],
+            Some(&mut cache),
+            None,
+        );
+        assert_eq!(views1.len(), 1);
+        assert!(entities1.contains(&a) && entities1.contains(&b));
+        assert_eq!(stats1.cache_hits, 0);
+        assert!(cache.len() >= 3);
+
+        // Only `a` needs recompute (+ ancestors). Sibling `b` should hit cache.
+        let recompute = collect_recompute_set(&world, [a]);
+        assert!(recompute.contains(&a));
+        assert!(recompute.contains(&root));
+        assert!(!recompute.contains(&b));
+
+        let (_views2, stats2, _) = synthesize_roots_with_cache(
+            &world,
+            &registry,
+            [root],
+            Some(&mut cache),
+            Some(&recompute),
+        );
+        assert!(
+            stats2.cache_hits >= 1,
+            "expected sibling cache hit, got cache_hits={}",
+            stats2.cache_hits
+        );
     }
 
     #[test]
