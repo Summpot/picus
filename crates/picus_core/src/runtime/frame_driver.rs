@@ -113,14 +113,92 @@ pub(crate) struct FrameDecision {
     pub throttled_anim_present: bool,
 }
 
-/// Outcome of [`FrameDriver::step`] after host execution.
+/// Bevy wake demand split by timeline (Phase 1b redraw semantics).
+///
+/// Picus still wakes the Bevy event loop with a single
+/// [`bevy_window::RequestRedraw`] when [`Self::any`] is true — Bevy reactive
+/// mode has no public "run only Last/paint" path. These flags make **why** we
+/// wake explicit and testable:
+///
+/// - [`Self::need_anim_tick`]: timeline B (advance anim clock; may skip encode)
+/// - [`Self::need_content_present`]: timeline C/D (encode/present or content
+///   stickies that must not die — resize/retry/input/theme)
+///
+/// # Tradeoff (P1b.2)
+///
+/// Anim-only demand still runs a full Bevy schedule (`PreUpdate`…`Last`). Avoiding
+/// that empty system-table spin would require a custom winit integration or a
+/// paint-only runner; out of scope for Phase 1b. Measurable win today is correct
+/// **classification** (Failed does not force content loops; throttle stays anim).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) struct RedrawDemand {
+    /// Need another Bevy frame for the anim clock (Masonry `needs_anim` / sticky).
+    pub need_anim_tick: bool,
+    /// Need another Bevy frame for content encode/present or unfulfilled content stickies.
+    pub need_content_present: bool,
+}
+
+impl RedrawDemand {
+    #[inline]
+    pub(crate) const fn none() -> Self {
+        Self {
+            need_anim_tick: false,
+            need_content_present: false,
+        }
+    }
+
+    #[inline]
+    pub(crate) const fn anim_tick_only() -> Self {
+        Self {
+            need_anim_tick: true,
+            need_content_present: false,
+        }
+    }
+
+    #[inline]
+    pub(crate) const fn content_present_only() -> Self {
+        Self {
+            need_anim_tick: false,
+            need_content_present: true,
+        }
+    }
+
+    #[inline]
+    pub(crate) const fn both() -> Self {
+        Self {
+            need_anim_tick: true,
+            need_content_present: true,
+        }
+    }
+
+    /// True when Bevy should receive `RequestRedraw`.
+    #[inline]
+    pub(crate) const fn any(self) -> bool {
+        self.need_anim_tick || self.need_content_present
+    }
+
+    /// Pure anim scheduling — no content present demand.
+    #[inline]
+    pub(crate) const fn is_anim_only(self) -> bool {
+        self.need_anim_tick && !self.need_content_present
+    }
+
+    #[inline]
+    pub(crate) fn merge(&mut self, other: Self) {
+        self.need_anim_tick |= other.need_anim_tick;
+        self.need_content_present |= other.need_content_present;
+    }
+}
+
+/// Outcome of host frame execution after [`FrameDriver`] decisions.
 ///
 /// Mirrors the former `PaintFrameResult` so `paint_masonry_ui` / perf wiring
 /// stay stable.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct FrameStepResult {
     pub painted: bool,
-    pub wants_redraw: bool,
+    /// Structured Bevy wake demand (Phase 1b); replaces a bare `wants_redraw` bool.
+    pub redraw_demand: RedrawDemand,
     pub anim_tick_only: bool,
     pub paint_reasons: u32,
     pub phases: crate::perf::PaintPhaseTimings,
@@ -131,12 +209,18 @@ impl FrameStepResult {
     pub(crate) fn skipped() -> Self {
         Self {
             painted: false,
-            wants_redraw: false,
+            redraw_demand: RedrawDemand::none(),
             anim_tick_only: false,
             paint_reasons: crate::perf::PaintReason::Skipped as u32,
             phases: crate::perf::PaintPhaseTimings::default(),
             decision: FrameDecision::default(),
         }
+    }
+
+    /// Convenience: any structured demand (writes `RequestRedraw` when true).
+    #[inline]
+    pub(crate) const fn wants_redraw(&self) -> bool {
+        self.redraw_demand.any()
     }
 }
 
@@ -543,5 +627,28 @@ mod tests {
             decision.throttled_anim_present && !decision.do_present,
             "LayoutRewrite+AnimTick under throttle pressure may skip: {decision:?}"
         );
+    }
+
+    #[test]
+    fn redraw_demand_any_and_merge() {
+        assert!(!RedrawDemand::none().any());
+        assert!(RedrawDemand::anim_tick_only().any());
+        assert!(RedrawDemand::anim_tick_only().is_anim_only());
+        assert!(!RedrawDemand::content_present_only().is_anim_only());
+        assert!(!RedrawDemand::both().is_anim_only());
+
+        let mut d = RedrawDemand::anim_tick_only();
+        d.merge(RedrawDemand::content_present_only());
+        assert_eq!(d, RedrawDemand::both());
+    }
+
+    #[test]
+    fn pure_anim_tick_dirty_needs_anim_not_content() {
+        // DirtyBudget classification that feeds decide_present — redraw demand
+        // on the host mirrors this: AnimTick alone is anim-only.
+        let mut dirty = DirtyBudget::new();
+        dirty.insert(DirtyReason::AnimTick);
+        assert!(dirty.needs_anim_tick());
+        assert!(!dirty.needs_content_present());
     }
 }

@@ -1,7 +1,9 @@
 //! Per-window retained Masonry runtime and paint scheduling.
 //!
-//! [`frame_driver`] owns dirty-reason aggregation and the present decision table
-//! (Phase 1). Execution (anim tick, encode, present) remains on [`WindowRuntime`].
+//! [`frame_driver`] owns dirty-reason aggregation, the present decision table
+//! (Phase 1), and structured [`RedrawDemand`] wake flags (Phase 1b). Execution
+//! (anim tick, encode, present) remains on [`WindowRuntime`]; Bevy still receives
+//! a single `RequestRedraw` when demand is non-empty.
 
 pub(crate) mod frame_driver;
 
@@ -12,7 +14,7 @@ use std::{
 };
 
 use self::frame_driver::{
-    DirtyBudget, DirtyReason, FrameDecision, FrameDriver, FrameStepResult,
+    DirtyBudget, DirtyReason, FrameDecision, FrameDriver, FrameStepResult, RedrawDemand,
     anim_present_min_interval,
 };
 
@@ -889,20 +891,41 @@ impl WindowRuntime {
         }
     }
 
-    fn wants_redraw_after_work(&self) -> bool {
-        self.needs_redraw
-            || self.needs_anim_frame
+    /// Structured Bevy wake demand after work (Phase 1b).
+    ///
+    /// Splits anim-clock scheduling from content encode/present so callers can
+    /// measure and document why `RequestRedraw` is written. Both still collapse
+    /// to one Bevy `RequestRedraw` (reactive mode has no paint-only schedule).
+    fn redraw_demand_after_work(&self) -> RedrawDemand {
+        let need_anim_tick = self.needs_anim_frame || self.render_root.needs_anim();
+        let need_content_present = self.needs_redraw
             || self.resize_dirty
             || self.retry_dirty
             || self.theme_or_font_dirty
-            || self.render_root.needs_anim()
-            || self.render_root.needs_rewrite_passes()
+            || self.render_root.needs_rewrite_passes();
+        RedrawDemand {
+            need_anim_tick,
+            need_content_present,
+        }
     }
 
     /// Independent anim clock only — used after permanent present failure so
     /// retained content stickies do not spin a Bevy redraw loop (Issue 12).
+    fn redraw_demand_anim_clock_only(&self) -> RedrawDemand {
+        RedrawDemand {
+            need_anim_tick: self.needs_anim_frame || self.render_root.needs_anim(),
+            need_content_present: false,
+        }
+    }
+
+    #[inline]
+    fn wants_redraw_after_work(&self) -> bool {
+        self.redraw_demand_after_work().any()
+    }
+
+    #[inline]
     fn wants_redraw_anim_clock_only(&self) -> bool {
-        self.needs_anim_frame || self.render_root.needs_anim()
+        self.redraw_demand_anim_clock_only().any()
     }
 
     /// After skipping encode (pure AnimTick or transitional anim throttle):
@@ -928,18 +951,20 @@ impl WindowRuntime {
 
     /// Apply sticky / redraw policy after a present attempt.
     ///
-    /// Returns whether Bevy should `RequestRedraw`.
+    /// Returns structured [`RedrawDemand`] (Phase 1b) — Bevy still receives a
+    /// single `RequestRedraw` when [`RedrawDemand::any`] is true.
     /// - [`RenderFrameResult::Presented`]: clear fulfilled stickies.
-    /// - [`RenderFrameResult::Retry`]: restore stickies + force redraw (transient).
+    /// - [`RenderFrameResult::Retry`]: restore stickies + force content present
+    ///   (transient surface; G5 unthrottled).
     /// - [`RenderFrameResult::Failed`]: restore stickies for a later external wake
-    ///   but **do not** force an immediate redraw loop (Phase 0 / surface contract).
+    ///   but **do not** force content present / permanent redraw loop (Issue 12).
     fn finish_present_attempt(
         &mut self,
         result: RenderFrameResult,
         snap: StickySnapshot,
         anim_driven_present: bool,
         now: std::time::Instant,
-    ) -> bool {
+    ) -> RedrawDemand {
         match result {
             RenderFrameResult::Presented => {
                 self.has_painted_once = true;
@@ -948,19 +973,20 @@ impl WindowRuntime {
                 if anim_driven_present {
                     self.frame_driver.note_anim_present(now);
                 }
-                self.wants_redraw_after_work()
+                self.redraw_demand_after_work()
             }
             RenderFrameResult::Retry => {
                 self.restore_sticky_snapshot(snap);
                 self.needs_redraw = true;
                 self.retry_dirty = true;
-                true
+                // Retry is content-path: need present again; anim may also be live.
+                self.redraw_demand_after_work()
             }
             RenderFrameResult::Failed => {
                 // Retain content stickies for bookkeeping / later external wake
-                // (input, resize). Do not set needs_redraw or spin RequestRedraw.
+                // (input, resize). Do not set needs_redraw or spin content RequestRedraw.
                 self.restore_sticky_snapshot(snap);
-                self.wants_redraw_anim_clock_only()
+                self.redraw_demand_anim_clock_only()
             }
         }
     }
@@ -1063,10 +1089,14 @@ impl WindowRuntime {
                 anim_raised_redraw,
                 present_decision.throttled_anim_present,
             );
+            // Throttled AnimPaint is still anim scheduling (timeline B), not content.
+            let mut redraw_demand = self.redraw_demand_after_work();
+            if present_decision.throttled_anim_present {
+                redraw_demand.need_anim_tick = true;
+            }
             return FrameStepResult {
                 painted: false,
-                wants_redraw: self.wants_redraw_after_work()
-                    || present_decision.throttled_anim_present,
+                redraw_demand,
                 anim_tick_only: true,
                 paint_reasons,
                 phases,
@@ -1086,9 +1116,10 @@ impl WindowRuntime {
             self.restore_sticky_snapshot(snap);
             self.needs_redraw = true;
             self.retry_dirty = true;
+            // Missing surface: content present is required (G5 path).
             return FrameStepResult {
                 painted: false,
-                wants_redraw: true,
+                redraw_demand: self.redraw_demand_after_work(),
                 anim_tick_only: false,
                 paint_reasons,
                 phases,
@@ -1115,7 +1146,7 @@ impl WindowRuntime {
             self.retry_dirty = true;
             return FrameStepResult {
                 painted: false,
-                wants_redraw: self.wants_redraw_after_work(),
+                redraw_demand: self.redraw_demand_after_work(),
                 anim_tick_only: false,
                 paint_reasons,
                 phases,
@@ -1151,7 +1182,7 @@ impl WindowRuntime {
                 || post_dirty
                     .iter()
                     .any(|r| matches!(r, DirtyReason::AnimPaint { .. })));
-        let wants_redraw =
+        let redraw_demand =
             self.finish_present_attempt(render_result, snap, anim_driven_present, now);
         self.drain_redraw_signals();
 
@@ -1168,7 +1199,7 @@ impl WindowRuntime {
 
         FrameStepResult {
             painted,
-            wants_redraw,
+            redraw_demand,
             anim_tick_only: false,
             paint_reasons,
             phases,
@@ -2060,6 +2091,14 @@ pub fn route_masonry_view_messages(runtime: Option<NonSendMut<MasonryRuntime>>) 
 
 /// Last-stage paint pass: submit each window's Masonry scene through Vello and
 /// present to the corresponding Bevy window.
+///
+/// # Bevy wake (Phase 1b)
+///
+/// Each window returns a structured [`RedrawDemand`] (need anim tick vs need
+/// content present). Demands are OR-merged across windows; a single
+/// [`RequestRedraw`] is written when any demand is set. Bevy's reactive
+/// `WinitSettings` still runs a full schedule on that wake — see
+/// `docs/architecture/runtime.md` (redraw semantics).
 pub fn paint_masonry_ui(
     runtime: Option<NonSendMut<MasonryRuntime>>,
     active_window_query: Query<&Window, Without<ClosingWindow>>,
@@ -2074,7 +2113,7 @@ pub fn paint_masonry_ui(
     let _span = tracing::trace_span!(target: "picus_core::perf", "paint_masonry_ui").entered();
 
     let window_entities: Vec<Entity> = runtime.window_entities().collect();
-    let mut wants_redraw = false;
+    let mut redraw_demand = RedrawDemand::none();
 
     for window_entity in window_entities {
         let Ok(bevy_window) = active_window_query.get(window_entity) else {
@@ -2116,7 +2155,7 @@ pub fn paint_masonry_ui(
         };
         // FrameDriver decision+execution spine (Phase 1).
         let result = window_runtime.step_frame(time.delta());
-        wants_redraw |= result.wants_redraw;
+        redraw_demand.merge(result.redraw_demand);
         // Skip pure idle (Skipped reason with no work) from frame_id accounting.
         let entered_work = result.paint_reasons & crate::perf::PaintReason::Skipped as u32 == 0;
         if entered_work {
@@ -2133,7 +2172,14 @@ pub fn paint_masonry_ui(
         }
     }
 
-    if wants_redraw {
+    // Write RequestRedraw only when ContentPresent or AnimTick scheduling needs it.
+    if redraw_demand.any() {
+        tracing::trace!(
+            target: "picus_core::perf",
+            need_anim_tick = redraw_demand.need_anim_tick,
+            need_content_present = redraw_demand.need_content_present,
+            "paint_masonry_ui RequestRedraw"
+        );
         redraw_requests.write(RequestRedraw);
     }
 }
@@ -3200,7 +3246,7 @@ mod tests {
     #[test]
     fn step_frame_missing_surface_restores_sticky_dirt() {
         // Paint-path wiring: without a surface, step_frame must not drop
-        // resize/retry stickies and must keep wants_redraw (Issues 1–2 / 6).
+        // resize/retry stickies and must keep content present demand (Issues 1–2 / 6).
         let mut runtime = MasonryRuntime {
             windows: HashMap::new(),
             primary_window: None,
@@ -3217,7 +3263,12 @@ mod tests {
 
         let result = window.step_frame(std::time::Duration::from_millis(16));
         assert!(!result.painted, "no surface ⇒ cannot paint");
-        assert!(result.wants_redraw, "must request another frame");
+        assert!(result.wants_redraw(), "must request another frame");
+        assert!(
+            result.redraw_demand.need_content_present,
+            "missing surface is content present demand: {:?}",
+            result.redraw_demand
+        );
         assert!(
             window.resize_dirty,
             "resize_dirty must survive missing-surface early return"
@@ -3319,7 +3370,7 @@ mod tests {
         window.needs_anim_frame = false;
         let snap = window.take_sticky_snapshot();
 
-        let wants = window.finish_present_attempt(
+        let demand = window.finish_present_attempt(
             RenderFrameResult::Failed,
             snap,
             /*anim_driven_present=*/ false,
@@ -3337,34 +3388,152 @@ mod tests {
             window.resize_dirty,
             "content stickies retained for a later external wake"
         );
-        // wants_redraw only from independent anim clock, not content stickies.
+        // Redraw demand only from independent anim clock, not content stickies.
         assert_eq!(
-            wants,
-            window.wants_redraw_anim_clock_only(),
-            "Failed wants_redraw must ignore content stickies"
+            demand,
+            window.redraw_demand_anim_clock_only(),
+            "Failed redraw demand must ignore content stickies"
+        );
+        assert!(
+            !demand.need_content_present,
+            "Failed must not set need_content_present"
         );
         // Even with resize_dirty held, after_work would be true — Failed must not
         // use that path when the anim clock is quiet.
         if !window.wants_redraw_anim_clock_only() {
             assert!(
-                !wants && window.wants_redraw_after_work(),
+                !demand.any() && window.wants_redraw_after_work(),
                 "content stickies alone must not drive Failed wants_redraw"
             );
         }
 
-        // Retry still forces redraw + retry sticky.
+        // Retry still forces content present + retry sticky.
         window.needs_redraw = false;
         window.retry_dirty = false;
         window.resize_dirty = true;
         let snap = window.take_sticky_snapshot();
-        let wants = window.finish_present_attempt(
+        let demand = window.finish_present_attempt(
             RenderFrameResult::Retry,
             snap,
             false,
             std::time::Instant::now(),
         );
-        assert!(wants, "Retry must request another frame");
+        assert!(demand.any(), "Retry must request another frame");
+        assert!(
+            demand.need_content_present,
+            "Retry is content present demand: {demand:?}"
+        );
         assert!(window.retry_dirty);
         assert!(window.needs_redraw);
+    }
+
+    #[test]
+    fn redraw_demand_classifies_anim_vs_content() {
+        // P1b.1: NeedAnimTick vs NeedContentPresent as structured flags.
+        // Note: `render_root.needs_anim()` may already be true on a fresh window;
+        // classify relative to stickies, not absolute silence.
+        let mut runtime = MasonryRuntime {
+            windows: HashMap::new(),
+            primary_window: None,
+            event_loop_proxy: Arc::new(Mutex::new(None)),
+            action_sink: InternalUiActionSink::default(),
+        };
+        let entity = Entity::from_bits(103);
+        let window = runtime.ensure_window(entity, true);
+        window.has_painted_once = true;
+        window.needs_redraw = false;
+        window.needs_anim_frame = false;
+        window.resize_dirty = false;
+        window.retry_dirty = false;
+        window.theme_or_font_dirty = false;
+
+        // No content stickies ⇒ never content present.
+        let baseline = window.redraw_demand_after_work();
+        assert!(
+            !baseline.need_content_present,
+            "no content stickies: {baseline:?}"
+        );
+
+        // Anim sticky forces anim demand (content still clear).
+        window.needs_anim_frame = true;
+        let anim = window.redraw_demand_after_work();
+        assert!(anim.need_anim_tick, "anim sticky: {anim:?}");
+        assert!(!anim.need_content_present, "anim sticky is not content: {anim:?}");
+        assert!(anim.is_anim_only());
+
+        // Content alone (resize is G5 content present). Clear anim sticky;
+        // root may still report needs_anim — content flag is what we assert.
+        window.needs_anim_frame = false;
+        window.resize_dirty = true;
+        let content = window.redraw_demand_after_work();
+        assert!(
+            content.need_content_present,
+            "resize must set need_content_present: {content:?}"
+        );
+
+        // Both stickies.
+        window.needs_anim_frame = true;
+        let both = window.redraw_demand_after_work();
+        assert!(both.need_anim_tick && both.need_content_present, "{both:?}");
+
+        // Failed path ignores content stickies even when resize is armed.
+        window.needs_anim_frame = false;
+        let failed_demand = window.redraw_demand_anim_clock_only();
+        assert!(
+            !failed_demand.need_content_present,
+            "Failed path must not demand content: {failed_demand:?}"
+        );
+        assert_eq!(
+            failed_demand.need_anim_tick,
+            window.render_root.needs_anim(),
+            "Failed anim demand follows root/sticky anim only"
+        );
+        assert!(
+            window.redraw_demand_after_work().need_content_present,
+            "after_work still sees resize"
+        );
+    }
+
+    #[test]
+    fn throttled_anim_encode_skip_is_anim_only_demand() {
+        // P1b: after finish_encode_skip (pure AnimTick / throttled AnimPaint),
+        // redraw demand is anim-only — never content present (Issue 11 + P1b.1).
+        // Drive the host helper directly so pending Masonry redraw signals from
+        // construction cannot promote InputOrRebuild the way a full step_frame
+        // without a surface would.
+        let mut runtime = MasonryRuntime {
+            windows: HashMap::new(),
+            primary_window: None,
+            event_loop_proxy: Arc::new(Mutex::new(None)),
+            action_sink: InternalUiActionSink::default(),
+        };
+        let entity = Entity::from_bits(104);
+        let window = runtime.ensure_window(entity, true);
+        window.has_painted_once = true;
+        window.needs_redraw = false;
+        window.needs_anim_frame = false;
+        window.resize_dirty = false;
+        window.retry_dirty = false;
+        window.theme_or_font_dirty = false;
+        let snap = window.take_sticky_snapshot();
+        assert!(!snap.needs_redraw);
+
+        // Residual AnimPaint + throttle skip cleanup (same as encode-skip path).
+        window.needs_redraw = true;
+        window.finish_encode_skip(snap, /*anim_raised_redraw=*/ true, /*throttled=*/ true);
+
+        assert!(!window.needs_redraw, "residual AnimPaint cleared");
+        assert!(window.needs_anim_frame, "throttle keeps anim scheduled");
+
+        let demand = window.redraw_demand_after_work();
+        assert!(
+            demand.need_anim_tick,
+            "anim clock must stay scheduled: {demand:?}"
+        );
+        assert!(
+            !demand.need_content_present,
+            "throttled anim must not demand content present: {demand:?}"
+        );
+        assert!(demand.is_anim_only(), "{demand:?}");
     }
 }

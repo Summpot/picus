@@ -1,6 +1,6 @@
 # Picus 帧管线解耦完整计划
 
-> **状态**：进行中 — Phase 0 已交付；**Phase 1（FrameDriver + PresentPolicy）已交付**  
+> **状态**：进行中 — Phase 0 / Phase 1 已交付；**Phase 1b（Bevy redraw 语义）已交付**  
 > **范围**：动画时钟 / 内容脏区与层 encode / present 新鲜度 / 与 Bevy·DWM 边界  
 > **动机**：消除「动画帧率 vs 拖窗流畅度」假权衡；根因是架构耦合，不是单点旋钮。
 
@@ -143,7 +143,7 @@ swapchain 的帧无法由 Picus 撤回。运行时必须记录实际模式和生
 
 - Bevy 仍是应用调度器；**不**把「每次 Update 醒来」等同「全窗 UI 帧」。  
 - `RequestRedraw` 语义收敛为：有 **ContentPresent** 或 **AnimTick 需要调度** 时再写。  
-- 可选后续：`NeedAnimTick` / `NeedContentPresent` 分消息（Phase 1b）。
+- Phase 1b：内部 `RedrawDemand { need_anim_tick, need_content_present }` 分类；仍合并为单条 Bevy `RequestRedraw`（无 paint-only schedule）。
 
 ---
 
@@ -207,13 +207,13 @@ swapchain 的帧无法由 Picus 撤回。运行时必须记录实际模式和生
 
 ### Phase 1b — Bevy 唤醒语义（可选但推荐紧随 P1）
 
-| 工作项 | 细节 |
-|--------|------|
-| P1b.1 | 区分「需要 anim 调度」与「需要内容 present」的 redraw 请求 |
-| P1b.2 | 无 ContentPresent 且仅 AnimTick 时，避免无意义的整表 Bevy 系统空转放大（在可测前提下） |
-| P1b.3 | 文档：与 `WinitSettings` reactive 模式的关系 |
+| 工作项 | 细节 | 状态 |
+|--------|------|------|
+| P1b.1 | 区分「需要 anim 调度」与「需要内容 present」：内部 `RedrawDemand`（`need_anim_tick` / `need_content_present`）；`paint_masonry_ui` 仅在 `any()` 时写 `RequestRedraw` | **已交付** |
+| P1b.2 | 无 ContentPresent 且仅 AnimTick 时避免整表 Bevy 空转 — **不可行于本 PR**（Bevy reactive 无 paint-only 路径）；文档化权衡；分类可测（Failed 不抬 content、throttle 保持 anim-only） | **已交付（文档+分类）** |
+| P1b.3 | 文档：与 `WinitSettings` reactive 模式的关系 → `docs/architecture/runtime.md` | **已交付** |
 
-**建议 PR**：`PR1b-redraw-semantics`（可与 P1 合并若小）
+**建议 PR**：`PR1b-redraw-semantics`
 
 ---
 
@@ -451,8 +451,8 @@ PR6-docs-cleanup
 | 阶段 | 状态 |
 |------|------|
 | P0 | **完成**（度量骨架 + 文档 + 过渡节流策略与 override；基线表待实测填写） |
-| P1 | 未开始 |
-| P1b | 未开始 |
+| P1 | **完成**（FrameDriver + PresentPolicy + 决策表 / G5） |
+| P1b | **完成**（`RedrawDemand` 分类 + reactive 文档；无 paint-only Bevy 捷径） |
 | P2 | 未开始 |
 | P3 | 未开始 |
 | P4 | 可选·未开始 |
