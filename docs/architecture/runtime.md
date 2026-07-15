@@ -215,13 +215,16 @@ flowchart TB
 ```
 
 ```text
-# Current P2b contract
+# Current P2b + P2c contract
 
 rebuild_from_visual_plan(plan)  → CompositorEntry[] in Masonry painter order
-register_external_slot(widget)  → AnimLayerId; External→Anim when bound
+register_external_widgets_from_visual → bind External WidgetIds as AnimLayerId
 needs_encode                    → structure_dirty || encoded_version != content_version
 non-anim content dirt           → mark_non_anim_content_dirty bumps CachedScene/Overlay
                                   (InputOrRebuild/Theme/Layout/…; pure AnimPaint does not)
+Spinner paint                   → PaintLayerMode::External every paint; host scene via paint_arms
+phase gate                      → 12-step visual phase only → request_paint / host version
+pure AnimPaint (G2)             → skip full redraw; sync host scenes; encode Anim only
 encode                          → only needs_encode entries; others reuse texture
 present success                 → mark_encoded + clear host dirty (sticky)
 present fail/retry              → retain dirty (no permanent spin beyond Phase 1 rules)
@@ -232,30 +235,57 @@ alpha / Mica                    → layer targets straight-alpha; when present n
                                   final replace) so semi-transparent upper layers are correct
 ```
 
+#### Spinner anim entry (P2c / G2 progress)
+
+Product path for continuous spinner isolation (no gallery/entity hardcode):
+
+1. **`Spinner` paint** sets `PaintLayerMode::External` every paint (mode is not
+   sticky). Masonry reserves a painter-order placeholder; spinner pixels are
+   **not** folded into cached base scene segments.
+2. **`LayerRegistry::register_external_widgets_from_visual`** binds every
+   External `WidgetId` to an `AnimLayerId` (any External widget; Spinner is the
+   specialized paint path).
+3. **Host scenes:** `AnimLayerHost::sync_spinner_scene` builds a window-space
+   `Scene` via `Spinner::paint_arms` (FullWindowTransparent target). Content
+   version / dirty advance only when the **12-step visual phase** changes (or
+   geometry/first build).
+4. **Steady anim ticks (G2):** when dirty is only `AnimTick`/`AnimPaint`, the
+   window has already painted once, and the plan has Anim entries,
+   `step_frame` **skips** full-tree `redraw()` and base reassembly. Only host
+   anim scenes rebuild; encode dirties Anim entries only (`encode_base` stays
+   clean / 0 on that path). Phase-unchanged ticks still skip encode/present
+   entirely (Spinner does not `request_paint_only`).
+5. **Content / resize / first paint** still full-redraw; bound External widgets
+   are re-`request_paint_only` so External mode sticks for the paint pass.
+
 **Not yet (do not overclaim):**
 
-- Spinner / indeterminate ProgressBar product anim content (P2c/P2d)
-- Skipping base rewrite on pure anim ticks (G2 still open)
-- Widgets auto-calling `set_paint_layer_mode(External)` every paint
+- Indeterminate ProgressBar anim entry (P2d)
+- Removing transitional ~30 Hz anim present throttle (G10 / P2e)
+- Full PresentMon/ETW G4 drag protocol run (documented in
+  [perf/frame-pipeline-baseline.md](../perf/frame-pipeline-baseline.md); not
+  required for this vertical slice)
+- Claiming G2 complete for every anim widget — only Spinner host path is wired
 
 #### Anim target choice (size gate input)
 
 | Strategy | Encode shape | First composite? |
 |----------|--------------|------------------|
-| **Full-window transparent** anim target; only anim widgets paint | Full-window clear of anim RT; sparse scene | **Yes** (selected) |
+| **Full-window transparent** anim target; only anim widgets paint | Full-window clear of anim RT; sparse scene | **Yes** (selected; Spinner P2c) |
 | Widget-bounds / atlas | Smaller encode; more bookkeeping | Deferred (P4 / if G3·G4 fail) |
 
 Rationale and budget assumptions:
 [perf/frame-pipeline-baseline.md](../perf/frame-pipeline-baseline.md) §6.
 
-#### Timing (P2.5)
+#### Timing (P2.5 + P2c)
 
 `PICUS_FRAME_TIMING=1` continues to report per-window `frame_id` with
 `scene_build_base_ms` / `scene_build_anim_ms` / `encode_base_ms` /
 `encode_anim_ms` / `composite_ms`. Ordered path attributes non-anim entry
 encodes to `encode_base` and `OrderedEntryKind::Anim` to `encode_anim`.
-`scene_build_anim_ms` stays 0 until host scene builders land (P2c). These remain
-**CPU submit-path** times.
+On pure-anim Spinner frames, `scene_build_base_ms` is 0 and
+`scene_build_anim_ms` measures host scene sync; `encode_base` should stay 0
+when only Anim entries `needs_encode`. These remain **CPU submit-path** times.
 
 ### Frame pipeline evolution
 

@@ -5,18 +5,28 @@ use accesskit::{Node, Role};
 use tracing::{Span, trace_span};
 
 use crate::core::{
-    AccessCtx, ChildrenIds, LayoutCtx, MeasureCtx, NoAction, PaintCtx, PropertiesMut,
-    PropertiesRef, RegisterCtx, Update, UpdateCtx, UsesProperty, Widget, WidgetId,
+    AccessCtx, ChildrenIds, LayoutCtx, MeasureCtx, NoAction, PaintCtx, PaintLayerMode,
+    PropertiesMut, PropertiesRef, RegisterCtx, Update, UpdateCtx, UsesProperty, Widget, WidgetId,
 };
 use crate::imaging::Painter;
 use crate::kurbo::{Axis, Cap, Line, Point, Size, Stroke, Vec2};
 use crate::layout::{LenReq, Length};
+use crate::peniko::color::{AlphaColor, Srgb};
 use crate::properties::ContentColor;
 use crate::theme;
 
 /// An animated spinner widget for showing a loading state.
 ///
 /// You can customize the look of this spinner with the [`ContentColor`] property.
+///
+/// # Anim isolation (frame pipeline P2c)
+///
+/// Every paint requests [`PaintLayerMode::External`] so Masonry reserves a painter-order
+/// placeholder and **does not** fold spinner pixels into cached base scene segments.
+/// Picus [`AnimLayerHost`] fills the slot. Mode is not sticky — it must be set each paint.
+///
+/// The anim clock may tick at display rate, but paint / host version bumps only when the
+/// discrete **12-step visual phase** changes (see [`Self::visual_phase`]).
 ///
 #[doc = concat!(
     "![Spinner frame](",
@@ -25,20 +35,81 @@ use crate::theme;
 )]
 pub struct Spinner {
     t: f64,
+    /// Last phase that called [`UpdateCtx::request_paint_only`] (host version gate).
+    last_paint_phase: Option<u8>,
 }
 
 // --- MARK: DEFAULT
 impl Default for Spinner {
     fn default() -> Self {
-        Self { t: 0.0 }
+        Self {
+            t: 0.0,
+            last_paint_phase: None,
+        }
     }
 }
 
 // --- MARK: BUILDERS
 impl Spinner {
+    /// Number of discrete visual phases in one full rotation (`t` ∈ [0, 1)).
+    pub const PHASE_COUNT: u8 = 12;
+
     /// Creates a spinner widget
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Normalized anim time in `[0, 1)`.
+    #[inline]
+    pub fn t(&self) -> f64 {
+        self.t
+    }
+
+    /// Discrete visual phase in `0..PHASE_COUNT` for the current `t`.
+    ///
+    /// Matches the step used by arm fade calculation in [`Self::paint_arms`].
+    #[inline]
+    pub fn visual_phase(t: f64) -> u8 {
+        let phase = (t * f64::from(Self::PHASE_COUNT)).floor() as i64;
+        phase.rem_euclid(i64::from(Self::PHASE_COUNT)) as u8
+    }
+
+    /// Current discrete visual phase.
+    #[inline]
+    pub fn phase(&self) -> u8 {
+        Self::visual_phase(self.t)
+    }
+
+    /// Record spinner arms into `painter` in **content-box local** coordinates.
+    ///
+    /// Used by the widget paint path and by Picus `AnimLayerHost` for selective
+    /// anim-entry encode without a full-tree Masonry redraw.
+    pub fn paint_arms(
+        painter: &mut Painter<'_>,
+        size: Size,
+        t: f64,
+        color: AlphaColor<Srgb>,
+    ) {
+        let center = Point::new(size.width / 2.0, size.height / 2.0);
+        let scale_factor = size.width.min(size.height) / 40.0;
+
+        for step in 1..=12 {
+            let step = f64::from(step);
+            let fade_t = (t * 12.0 + 1.0).trunc();
+            let fade = ((fade_t + step).rem_euclid(12.0) / 12.0) + 1.0 / 12.0;
+            let angle = Vec2::from_angle((step / 12.0) * -2.0 * PI);
+            let ambit_start = center + (10.0 * scale_factor * angle);
+            let ambit_end = center + (20.0 * scale_factor * angle);
+            let color = color.multiply_alpha(fade as f32);
+
+            painter
+                .stroke(
+                    Line::new(ambit_start, ambit_end),
+                    &Stroke::new(3.0 * scale_factor).with_caps(Cap::Square),
+                    color,
+                )
+                .draw();
+        }
     }
 }
 
@@ -58,8 +129,14 @@ impl Widget for Spinner {
         if self.t >= 1.0 {
             self.t = self.t.rem_euclid(1.0);
         }
+        // Keep the anim clock scheduled at display rate (60–120Hz OK).
         ctx.request_anim_frame();
-        ctx.request_paint_only();
+        // Paint / host version only when the 12-step visual phase advances.
+        let phase = Self::visual_phase(self.t);
+        if self.last_paint_phase != Some(phase) {
+            self.last_paint_phase = Some(phase);
+            ctx.request_paint_only();
+        }
     }
 
     fn register_children(&mut self, _ctx: &mut RegisterCtx<'_>) {}
@@ -103,31 +180,18 @@ impl Widget for Spinner {
         props: &PropertiesRef<'_>,
         painter: &mut Painter<'_>,
     ) {
+        // Anim isolation: External painter slot every paint (mode resets to Inline each pass).
+        // Pixels recorded here stay out of cached base segments; AnimLayerHost fills the slot.
+        ctx.set_paint_layer_mode(PaintLayerMode::External);
+
         let cache = ctx.property_cache();
         let color = props.get::<ContentColor>(cache);
-
-        let t = self.t;
-        let size = ctx.content_box().size();
-        let center = Point::new(size.width / 2.0, size.height / 2.0);
-        let scale_factor = size.width.min(size.height) / 40.0;
-
-        for step in 1..=12 {
-            let step = f64::from(step);
-            let fade_t = (t * 12.0 + 1.0).trunc();
-            let fade = ((fade_t + step).rem_euclid(12.0) / 12.0) + 1.0 / 12.0;
-            let angle = Vec2::from_angle((step / 12.0) * -2.0 * PI);
-            let ambit_start = center + (10.0 * scale_factor * angle);
-            let ambit_end = center + (20.0 * scale_factor * angle);
-            let color = color.color.multiply_alpha(fade as f32);
-
-            painter
-                .stroke(
-                    Line::new(ambit_start, ambit_end),
-                    &Stroke::new(3.0 * scale_factor).with_caps(Cap::Square),
-                    color,
-                )
-                .draw();
-        }
+        Self::paint_arms(
+            painter,
+            ctx.content_box().size(),
+            self.t,
+            color.color,
+        );
     }
 
     fn accessibility_role(&self) -> Role {

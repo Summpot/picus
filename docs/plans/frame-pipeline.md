@@ -1,6 +1,6 @@
 # Picus 帧管线解耦完整计划
 
-> **状态**：进行中 — Phase 0 / Phase 1 已交付；**Phase 1b（Bevy redraw 语义）已交付**  
+> **状态**：进行中 — P0/P1/P1b/P2a/P2b 已交付；**P2c Spinner anim entry 垂直切片已交付（G2 层合同）**  
 > **范围**：动画时钟 / 内容脏区与层 encode / present 新鲜度 / 与 Bevy·DWM 边界  
 > **动机**：消除「动画帧率 vs 拖窗流畅度」假权衡；根因是架构耦合，不是单点旋钮。
 
@@ -256,20 +256,20 @@ contract」；代码：`picus_core::runtime::layers`；目标尺寸决策：
 | P2.4 | Timing：`encode_base_ms` / `encode_anim_ms` / `composite_ms` |
 | P2.5 | Resize：所有层随 metrics 重建；FirstPaint 全层 |
 
-#### 2.2 垂直切片：UiSpinner
+#### 2.2 垂直切片：UiSpinner — **P2c 已交付（G2 层合同 + 单测）**
 
-| 工作项 | 细节 |
-|--------|------|
-| P2.6 | 投影/widget 路径标记 Spinner 为 Anim isolation（见 Phase 3 API，可先 hardcode） |
-| P2.7 | Spinner 绘制只进入 anim 层 scene；base 不含 spinner 像素（或 base 留空位） |
-| P2.8 | Spinner tick → 只 `anim_dirty`；base 不 rewrite encode（layout 未变时） |
-| P2.9 | gallery Spinner 页 + 拖窗人工验收（G2–G4） |
+| 工作项 | 细节 | 状态 |
+|--------|------|------|
+| P2.6 / P2.7 | `Spinner` 每 paint `PaintLayerMode::External`（局部实现，无 gallery/entity 特判）；External 自动 `register_external_slot` → Anim entry | **已交付** |
+| P2.8 | Spinner 像素只在 host window-space scene；cached segments 不含 spinner；painter order 前后景不变 | **已交付** |
+| P2.9 | 12-step visual phase 门控 `request_paint_only` / host version；相位未变 tick 不 encode/present；稳态 selective path 免全树 `redraw`、免 base reassemble/encode | **已交付** |
+| P2.10 | 层合同测试证明 pure anim → 仅 Anim `needs_encode`；G4 PresentMon 协议见 baseline 文档（本 PR 不强制实测） | **部分**（G2 单测；G3/G4 数据待） |
 
 #### 2.3 扩展
 
 | 工作项 | 细节 |
 |--------|------|
-| P2.10 | Indeterminate `UiProgressBar` 迁 anim 层 |
+| P2.10+ | Indeterminate `UiProgressBar` 迁 anim 层（下一 PR） |
 | P2.11 | （可选）光标闪烁：评估 TextArea 是否适合 anim 层或保持 paint_only 低频 |
 
 **验收**：G2、G3、G4、G10（默认不再需要 30Hz 全局 throttle）。  
@@ -472,8 +472,9 @@ PR6-docs-cleanup
 | P1 | **完成**（FrameDriver + PresentPolicy + 决策表 / G5） |
 | P1b | **完成**（`RedrawDemand` 分类 + reactive 文档；无 paint-only Bevy 捷径） |
 | P2a | **完成**（Masonry 层契约硬门禁 + `AnimLayerHost` scaffold + 目标策略文档） |
-| P2b | **完成基础设施**（`CompositorEntryKind` + 稳定 `LayerId`、painter-order plan、dirty/version、`render_ordered_frame` 多 texture composite、resize metrics generation、timing 分桶）；**未**做 Spinner 垂直切片（P2c） |
-| P2c+ | 未开始（Spinner anim entry / ProgressBar / 去 throttle） |
+| P2b | **完成基础设施**（`CompositorEntryKind` + 稳定 `LayerId`、painter-order plan、dirty/version、`render_ordered_frame` 多 texture composite、resize metrics generation、timing 分桶） |
+| P2c | **Spinner 垂直切片**（External isolation、host scene、12-step phase gate、selective anim encode / G2 层合同单测）；G3/G4 实测与 ProgressBar / 去 throttle 仍属后续 |
+| P2d+ | ProgressBar / 去默认 anim throttle 未开始 |
 | P3 | 未开始 |
 | P4 | 可选·未开始 |
 | P5 | 可选·未开始 |

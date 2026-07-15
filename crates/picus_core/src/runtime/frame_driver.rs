@@ -101,6 +101,24 @@ impl DirtyBudget {
             .iter()
             .any(|r| !matches!(r, DirtyReason::AnimTick))
     }
+
+    /// Pure anim present: only [`DirtyReason::AnimTick`] / [`DirtyReason::AnimPaint`].
+    ///
+    /// Eligible for selective anim encode (skip base rewrite/reassembly) when the
+    /// window already has a stable ordered plan with anim entries (P2c / G2).
+    pub(crate) fn is_selective_anim_encode(&self) -> bool {
+        !self.is_empty()
+            && self.reasons.iter().all(|r| {
+                matches!(
+                    r,
+                    DirtyReason::AnimTick | DirtyReason::AnimPaint { .. }
+                )
+            })
+            && self
+                .reasons
+                .iter()
+                .any(|r| matches!(r, DirtyReason::AnimPaint { .. }))
+    }
 }
 
 /// Separated work flags for one frame (P1.3 decision table).
@@ -511,6 +529,24 @@ mod tests {
         assert!(decision.throttled_anim_present);
         assert!(!decision.do_present);
         assert!(decision.anim_tick_only);
+    }
+
+    #[test]
+    fn selective_anim_encode_budget_detects_pure_anim_paint() {
+        let mut dirty = DirtyBudget::new();
+        dirty.insert(DirtyReason::AnimTick);
+        dirty.insert(DirtyReason::AnimPaint { layer: 1 });
+        assert!(dirty.is_selective_anim_encode());
+
+        dirty.insert(DirtyReason::InputOrRebuild);
+        assert!(!dirty.is_selective_anim_encode());
+
+        let mut tick_only = DirtyBudget::new();
+        tick_only.insert(DirtyReason::AnimTick);
+        assert!(
+            !tick_only.is_selective_anim_encode(),
+            "AnimTick alone is not content present"
+        );
     }
 
     #[test]
