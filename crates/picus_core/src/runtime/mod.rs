@@ -899,6 +899,72 @@ impl WindowRuntime {
             || self.render_root.needs_rewrite_passes()
     }
 
+    /// Independent anim clock only — used after permanent present failure so
+    /// retained content stickies do not spin a Bevy redraw loop (Issue 12).
+    fn wants_redraw_anim_clock_only(&self) -> bool {
+        self.needs_anim_frame || self.render_root.needs_anim()
+    }
+
+    /// After skipping encode (pure AnimTick or transitional anim throttle):
+    /// restore content stickies, but **drop residual post-tick AnimPaint**
+    /// `needs_redraw` so the next frame is not G5-classified as `InputOrRebuild`
+    /// (Issue 11). Keep `needs_anim_frame` when throttled so the anim clock continues.
+    fn finish_encode_skip(
+        &mut self,
+        snap: StickySnapshot,
+        anim_raised_redraw: bool,
+        throttled: bool,
+    ) {
+        self.restore_sticky_snapshot(snap);
+        // Deferred AnimPaint is re-derived on the next AnimFrame; leaving
+        // needs_redraw armed would map to InputOrRebuild and bypass ~30Hz throttle.
+        if anim_raised_redraw && !snap.needs_redraw {
+            self.needs_redraw = false;
+        }
+        if throttled {
+            self.needs_anim_frame = true;
+        }
+    }
+
+    /// Apply sticky / redraw policy after a present attempt.
+    ///
+    /// Returns whether Bevy should `RequestRedraw`.
+    /// - [`RenderFrameResult::Presented`]: clear fulfilled stickies.
+    /// - [`RenderFrameResult::Retry`]: restore stickies + force redraw (transient).
+    /// - [`RenderFrameResult::Failed`]: restore stickies for a later external wake
+    ///   but **do not** force an immediate redraw loop (Phase 0 / surface contract).
+    fn finish_present_attempt(
+        &mut self,
+        result: RenderFrameResult,
+        snap: StickySnapshot,
+        anim_driven_present: bool,
+        now: std::time::Instant,
+    ) -> bool {
+        match result {
+            RenderFrameResult::Presented => {
+                self.has_painted_once = true;
+                self.clear_sticky_snapshot(snap);
+                self.needs_redraw = false;
+                if anim_driven_present {
+                    self.frame_driver.note_anim_present(now);
+                }
+                self.wants_redraw_after_work()
+            }
+            RenderFrameResult::Retry => {
+                self.restore_sticky_snapshot(snap);
+                self.needs_redraw = true;
+                self.retry_dirty = true;
+                true
+            }
+            RenderFrameResult::Failed => {
+                // Retain content stickies for bookkeeping / later external wake
+                // (input, resize). Do not set needs_redraw or spin RequestRedraw.
+                self.restore_sticky_snapshot(snap);
+                self.wants_redraw_anim_clock_only()
+            }
+        }
+    }
+
     /// Frame scheduling spine: [`FrameDriver::decide_entry`] /
     /// [`FrameDriver::decide_present`] decide; this method executes.
     ///
@@ -990,13 +1056,13 @@ impl WindowRuntime {
 
         if !present_decision.do_encode {
             paint_reasons |= crate::perf::PaintReason::AnimTickNoPresent as u32;
-            // Defense-in-depth: restore content stickies even though G5 reasons
-            // should always force encode (Issue 1).
-            self.restore_sticky_snapshot(snap);
-            if present_decision.throttled_anim_present {
-                // Keep the anim clock scheduled; skip expensive encode/present.
-                self.needs_anim_frame = true;
-            }
+            // Restore G5 stickies (defense-in-depth) but clear residual AnimPaint
+            // redraw so the next frame stays anim-throttlable (Issues 1 + 11).
+            self.finish_encode_skip(
+                snap,
+                anim_raised_redraw,
+                present_decision.throttled_anim_present,
+            );
             return FrameStepResult {
                 painted: false,
                 wants_redraw: self.wants_redraw_after_work()
@@ -1080,31 +1146,13 @@ impl WindowRuntime {
         phases.composite = surface_timings.composite;
         phases.present_submit = surface_timings.present_submit;
         let painted = matches!(render_result, RenderFrameResult::Presented);
-        if painted {
-            self.has_painted_once = true;
-            self.clear_sticky_snapshot(snap);
-            // Clear post-tick anim paint request fulfilled by this present.
-            self.needs_redraw = false;
-            // Record anim-driven present for transitional throttle bookkeeping.
-            if !had_unthrottled
-                && (entry.do_anim_tick
-                    || post_dirty
-                        .iter()
-                        .any(|r| matches!(r, DirtyReason::AnimPaint { .. })))
-            {
-                self.frame_driver.note_anim_present(now);
-            }
-        } else {
-            // Retry / Failed: retain all content stickies that motivated the attempt.
-            self.restore_sticky_snapshot(snap);
-            self.needs_redraw = true;
-            if matches!(render_result, RenderFrameResult::Retry) {
-                self.retry_dirty = true;
-            } else {
-                // Failed: still request another frame for content dirt.
-                self.retry_dirty |= snap.retry_dirty;
-            }
-        }
+        let anim_driven_present = !had_unthrottled
+            && (entry.do_anim_tick
+                || post_dirty
+                    .iter()
+                    .any(|r| matches!(r, DirtyReason::AnimPaint { .. })));
+        let wants_redraw =
+            self.finish_present_attempt(render_result, snap, anim_driven_present, now);
         self.drain_redraw_signals();
 
         let decision = FrameDecision {
@@ -1120,7 +1168,7 @@ impl WindowRuntime {
 
         FrameStepResult {
             painted,
-            wants_redraw: self.wants_redraw_after_work(),
+            wants_redraw,
             anim_tick_only: false,
             paint_reasons,
             phases,
@@ -3187,5 +3235,136 @@ mod tests {
             result.decision.do_encode || !result.anim_tick_only,
             "content dirt must not be treated as pure anim skip: {result:?}"
         );
+    }
+
+    #[test]
+    fn throttled_anim_paint_does_not_leave_input_or_rebuild() {
+        // Issue 11: residual post-tick AnimPaint must not reclassify as G5
+        // InputOrRebuild on the next collect_dirty_budget.
+        let mut runtime = MasonryRuntime {
+            windows: HashMap::new(),
+            primary_window: None,
+            event_loop_proxy: Arc::new(Mutex::new(None)),
+            action_sink: InternalUiActionSink::default(),
+        };
+        let entity = Entity::from_bits(101);
+        let window = runtime.ensure_window(entity, true);
+        window.has_painted_once = true;
+        window.needs_redraw = false;
+        window.needs_anim_frame = false;
+        window.resize_dirty = false;
+        window.retry_dirty = false;
+        let snap = window.take_sticky_snapshot();
+        assert!(!snap.needs_redraw);
+
+        // Simulate residual redraw from AnimFrame + throttle skip cleanup.
+        window.needs_redraw = true;
+        window.finish_encode_skip(snap, /*anim_raised_redraw=*/ true, /*throttled=*/ true);
+
+        assert!(
+            !window.needs_redraw,
+            "throttled AnimPaint must clear needs_redraw"
+        );
+        assert!(
+            window.needs_anim_frame,
+            "anim clock must stay scheduled under throttle"
+        );
+
+        let dirty = window.collect_dirty_budget();
+        assert!(
+            !dirty.has(frame_driver::DirtyReason::InputOrRebuild),
+            "next frame must not G5-promote residual AnimPaint: {dirty:?}"
+        );
+        assert!(
+            dirty.has(frame_driver::DirtyReason::AnimTick),
+            "anim tick should remain scheduled: {dirty:?}"
+        );
+
+        // Second decide_present under interval pressure stays throttled for AnimPaint.
+        let mut post = DirtyBudget::new();
+        post.insert(DirtyReason::AnimTick);
+        post.insert(DirtyReason::AnimPaint { layer: 0 });
+        window
+            .frame_driver
+            .note_anim_present(std::time::Instant::now());
+        let decision = window.frame_driver.decide_present(
+            &post,
+            Some(std::time::Duration::from_millis(33)),
+            std::time::Instant::now(),
+        );
+        assert!(
+            decision.throttled_anim_present && !decision.do_present,
+            "AnimPaint-only must remain throttleable: {decision:?}"
+        );
+    }
+
+    #[test]
+    fn failed_present_does_not_force_redraw_loop() {
+        // Issue 12: Failed retains stickies but must not force needs_redraw /
+        // permanent RequestRedraw the way Retry does (Phase 0 / surface contract).
+        let mut runtime = MasonryRuntime {
+            windows: HashMap::new(),
+            primary_window: None,
+            event_loop_proxy: Arc::new(Mutex::new(None)),
+            action_sink: InternalUiActionSink::default(),
+        };
+        let entity = Entity::from_bits(102);
+        let window = runtime.ensure_window(entity, true);
+        window.has_painted_once = true;
+        // Content dirt without pre-tick needs_redraw — old bug still forced
+        // needs_redraw = true on Failed and spun forever.
+        window.needs_redraw = false;
+        window.resize_dirty = true;
+        window.retry_dirty = false;
+        window.needs_anim_frame = false;
+        let snap = window.take_sticky_snapshot();
+
+        let wants = window.finish_present_attempt(
+            RenderFrameResult::Failed,
+            snap,
+            /*anim_driven_present=*/ false,
+            std::time::Instant::now(),
+        );
+        assert!(
+            !window.needs_redraw,
+            "Failed must not force needs_redraw (Phase 0 contract)"
+        );
+        assert!(
+            !window.retry_dirty,
+            "Failed must not promote retry_dirty"
+        );
+        assert!(
+            window.resize_dirty,
+            "content stickies retained for a later external wake"
+        );
+        // wants_redraw only from independent anim clock, not content stickies.
+        assert_eq!(
+            wants,
+            window.wants_redraw_anim_clock_only(),
+            "Failed wants_redraw must ignore content stickies"
+        );
+        // Even with resize_dirty held, after_work would be true — Failed must not
+        // use that path when the anim clock is quiet.
+        if !window.wants_redraw_anim_clock_only() {
+            assert!(
+                !wants && window.wants_redraw_after_work(),
+                "content stickies alone must not drive Failed wants_redraw"
+            );
+        }
+
+        // Retry still forces redraw + retry sticky.
+        window.needs_redraw = false;
+        window.retry_dirty = false;
+        window.resize_dirty = true;
+        let snap = window.take_sticky_snapshot();
+        let wants = window.finish_present_attempt(
+            RenderFrameResult::Retry,
+            snap,
+            false,
+            std::time::Instant::now(),
+        );
+        assert!(wants, "Retry must request another frame");
+        assert!(window.retry_dirty);
+        assert!(window.needs_redraw);
     }
 }
