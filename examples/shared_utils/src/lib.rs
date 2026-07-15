@@ -2,7 +2,10 @@ use std::sync::OnceLock;
 
 use tracing_subscriber::{EnvFilter, fmt};
 
-const DEFAULT_LOG_FILTER: &str = "info,wgpu_core=warn,wgpu_hal=warn,wgpu_hal::vulkan=error,bevy_render=warn,bevy_app=warn,picus_widget=info,xilem_core=info,picus_view=info,picus_view::masonry_root=info,picus_core=debug";
+// Keep hot-path crates at `info` by default — `picus_core=debug` logs every
+// projection rebuild and dominates debug FPS. Use `RUST_LOG=picus_core=debug`
+// when diagnosing dirty reasons; `PICUS_FRAME_TIMING=1` for phase timings.
+const DEFAULT_LOG_FILTER: &str = "info,wgpu_core=warn,wgpu_hal=warn,wgpu_hal::vulkan=error,bevy_render=warn,bevy_app=warn,picus_widget=info,xilem_core=info,picus_view=info,picus_view::masonry_root=info,picus_core=info,picus_core::perf=info";
 
 static LOGGING_INITIALIZED: OnceLock<()> = OnceLock::new();
 

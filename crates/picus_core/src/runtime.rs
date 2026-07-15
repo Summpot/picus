@@ -125,6 +125,9 @@ enum RedrawSignal {
 struct PaintFrameResult {
     painted: bool,
     wants_redraw: bool,
+    paint_reasons: u32,
+    redraw_duration: std::time::Duration,
+    present_duration: std::time::Duration,
 }
 
 #[cfg(test)]
@@ -778,36 +781,95 @@ impl WindowRuntime {
     fn paint_frame(&mut self, delta: std::time::Duration) -> PaintFrameResult {
         self.drain_redraw_signals();
 
-        let should_paint = !self.has_painted_once
-            || self.needs_redraw
-            || self.needs_anim_frame
-            || self.render_root.needs_anim()
-            || self.render_root.needs_rewrite_passes();
-        if !should_paint {
+        let first_paint = !self.has_painted_once;
+        let incoming_redraw = self.needs_redraw;
+        let needs_anim_frame = self.needs_anim_frame;
+        let render_root_needs_anim = self.render_root.needs_anim();
+        let needs_rewrite = self.render_root.needs_rewrite_passes();
+
+        let should_tick_animation = needs_anim_frame || render_root_needs_anim;
+        // Enter the paint path for content changes, rewrite work, or animation
+        // ticks. Animation alone must not force a full Vello present every frame
+        // (cursor blink / fade timers re-request anim far more often than pixels
+        // change).
+        let should_enter =
+            first_paint || incoming_redraw || should_tick_animation || needs_rewrite;
+        if !should_enter {
             return PaintFrameResult {
                 painted: false,
                 wants_redraw: false,
+                paint_reasons: crate::perf::PaintReason::Skipped as u32,
+                redraw_duration: std::time::Duration::ZERO,
+                present_duration: std::time::Duration::ZERO,
             };
         }
 
-        let should_tick_animation = self.needs_anim_frame || self.render_root.needs_anim();
+        let mut paint_reasons = 0u32;
+        if first_paint {
+            paint_reasons |= crate::perf::PaintReason::FirstPaint as u32;
+        }
+        if incoming_redraw {
+            paint_reasons |= crate::perf::PaintReason::NeedsRedraw as u32;
+        }
+        if needs_anim_frame {
+            paint_reasons |= crate::perf::PaintReason::NeedsAnimFrame as u32;
+        }
+        if render_root_needs_anim {
+            paint_reasons |= crate::perf::PaintReason::RenderRootNeedsAnim as u32;
+        }
+        if needs_rewrite {
+            paint_reasons |= crate::perf::PaintReason::NeedsRewritePasses as u32;
+        }
+
         self.needs_redraw = false;
         self.needs_anim_frame = false;
 
+        let redraw_started = std::time::Instant::now();
         if should_tick_animation {
+            // AnimFrame already runs rewrite passes and may emit RequestRedraw
+            // only when a widget actually dirtied paint (e.g. cursor blink flip).
             let _ = self
                 .render_root
                 .handle_window_event(WindowEvent::AnimFrame(delta));
+            self.drain_redraw_signals();
         }
+
+        // Present only when pixels may have changed. Pure anim ticks keep the
+        // event loop alive via wants_redraw without rebuilding/submitting a scene.
+        // Re-check rewrite *after* AnimFrame — the pre-tick flag is often stale.
+        let paint_needed = first_paint
+            || incoming_redraw
+            || self.needs_redraw
+            || self.render_root.needs_rewrite_passes();
+        if !paint_needed {
+            paint_reasons |= crate::perf::PaintReason::AnimTickNoPresent as u32;
+            return PaintFrameResult {
+                painted: false,
+                wants_redraw: self.needs_redraw
+                    || self.needs_anim_frame
+                    || self.render_root.needs_anim()
+                    || self.render_root.needs_rewrite_passes(),
+                paint_reasons,
+                redraw_duration: redraw_started.elapsed(),
+                present_duration: std::time::Duration::ZERO,
+            };
+        }
+
+        // Consume the redraw flag we are about to fulfill.
+        self.needs_redraw = false;
 
         let logical_size = self.render_root.size();
         let (visual_layers, _tree_update) = self.render_root.redraw();
+        let redraw_duration = redraw_started.elapsed();
 
         let Some(surface) = self.window_surface.as_mut() else {
             self.needs_redraw = true;
             return PaintFrameResult {
                 painted: false,
                 wants_redraw: true,
+                paint_reasons,
+                redraw_duration,
+                present_duration: std::time::Duration::ZERO,
             };
         };
 
@@ -828,6 +890,9 @@ impl WindowRuntime {
                 painted: false,
                 wants_redraw: self.render_root.needs_anim()
                     || self.render_root.needs_rewrite_passes(),
+                paint_reasons,
+                redraw_duration,
+                present_duration: std::time::Duration::ZERO,
             };
         };
         let VisualLayerKind::Scene(root_scene) = &root_layer.kind else {
@@ -847,7 +912,9 @@ impl WindowRuntime {
             &overlays,
         );
 
+        let present_started = std::time::Instant::now();
         let render_result = surface.render_frame(&mut self.renderer, frame);
+        let present_duration = present_started.elapsed();
         let painted = matches!(render_result, RenderFrameResult::Presented);
         if painted {
             self.has_painted_once = true;
@@ -862,6 +929,9 @@ impl WindowRuntime {
                 || self.needs_anim_frame
                 || self.render_root.needs_anim()
                 || self.render_root.needs_rewrite_passes(),
+            paint_reasons,
+            redraw_duration,
+            present_duration,
         }
     }
 
@@ -1674,6 +1744,9 @@ pub fn rebuild_masonry_runtime(world: &mut World) {
         return;
     }
 
+    let phase = crate::perf::PhaseTimer::start();
+    let _span = tracing::trace_span!(target: "picus_core::perf", "rebuild_masonry_runtime").entered();
+
     let window_views: Vec<(Entity, UiView)> = world
         .get_resource_mut::<SynthesizedUiViews>()
         .map(|mut views| {
@@ -1692,6 +1765,9 @@ pub fn rebuild_masonry_runtime(world: &mut World) {
         .unwrap_or_default();
 
     if window_views.is_empty() {
+        if let Some(mut timing) = world.get_resource_mut::<crate::perf::FrameTiming>() {
+            timing.record_rebuild(phase.elapsed());
+        }
         return;
     }
 
@@ -1703,6 +1779,11 @@ pub fn rebuild_masonry_runtime(world: &mut World) {
         };
         window_runtime.install_action_sink();
         window_runtime.rebuild_root_view(window_view);
+    }
+
+    drop(runtime);
+    if let Some(mut timing) = world.get_resource_mut::<crate::perf::FrameTiming>() {
+        timing.record_rebuild(phase.elapsed());
     }
 }
 
@@ -1731,13 +1812,21 @@ pub fn paint_masonry_ui(
     active_window_query: Query<&Window, Without<ClosingWindow>>,
     time: Res<Time>,
     mut redraw_requests: MessageWriter<RequestRedraw>,
+    mut frame_timing: ResMut<crate::perf::FrameTiming>,
 ) {
     let Some(mut runtime) = runtime else {
         return;
     };
 
+    let paint_phase = crate::perf::PhaseTimer::start();
+    let _span = tracing::trace_span!(target: "picus_core::perf", "paint_masonry_ui").entered();
+
     let window_entities: Vec<Entity> = runtime.window_entities().collect();
     let mut wants_redraw = false;
+    let mut any_painted = false;
+    let mut paint_reasons = 0u32;
+    let mut redraw_duration = std::time::Duration::ZERO;
+    let mut present_duration = std::time::Duration::ZERO;
 
     for window_entity in window_entities {
         let Ok(bevy_window) = active_window_query.get(window_entity) else {
@@ -1779,10 +1868,22 @@ pub fn paint_masonry_ui(
         };
         let result = window_runtime.paint_frame(time.delta());
         wants_redraw |= result.wants_redraw;
+        any_painted |= result.painted;
+        paint_reasons |= result.paint_reasons;
+        redraw_duration += result.redraw_duration;
+        present_duration += result.present_duration;
         if result.painted {
             tracing::trace!("painted Masonry frame for window {:?}", window_entity);
         }
     }
+
+    frame_timing.record_paint(
+        paint_phase.elapsed(),
+        redraw_duration,
+        present_duration,
+        any_painted,
+        paint_reasons,
+    );
 
     if wants_redraw {
         redraw_requests.write(RequestRedraw);

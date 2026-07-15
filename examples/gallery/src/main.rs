@@ -105,15 +105,22 @@ fn setup_gallery(mut commands: Commands) {
 fn build_gallery_nav_items() -> Vec<NavigationViewItem> {
     GalleryPage::CATEGORIES
         .iter()
-        .map(|category| {
+        .enumerate()
+        .map(|(category_index, category)| {
             let children = GalleryPage::ALL
                 [category.first_page_index..category.first_page_index + category.page_count]
                 .iter()
                 .map(|page| NavigationViewItem::new(page.label()).with_icon(page.icon()))
                 .collect::<Vec<_>>();
-            NavigationViewItem::new(category.label)
-                .with_children(children)
-                .expanded()
+            // Expand only the category that owns the default selection. Fully
+            // expanding every category mounted ~40 nav leaves into the retained
+            // tree on every frame.
+            let item = NavigationViewItem::new(category.label).with_children(children);
+            if category_index == 0 {
+                item.expanded()
+            } else {
+                item
+            }
         })
         .collect()
 }
@@ -475,13 +482,20 @@ mod tests {
         assert_eq!(items.len(), GalleryPage::CATEGORIES.len());
         let leaf_count: usize = items.iter().map(|item| item.leaf_count()).sum();
         assert_eq!(leaf_count, GalleryPage::ALL.len());
-        for (item, category) in items.iter().zip(GalleryPage::CATEGORIES.iter()) {
+        for (index, (item, category)) in items.iter().zip(GalleryPage::CATEGORIES.iter()).enumerate()
+        {
             assert_eq!(item.label, category.label);
             assert!(
                 !item.is_leaf(),
                 "category parents must have MenuItems children"
             );
-            assert!(item.is_expanded, "gallery categories start expanded");
+            // Only the category owning the default selection starts expanded so
+            // the retained sidebar does not mount every control leaf at once.
+            assert_eq!(
+                item.is_expanded,
+                index == 0,
+                "only the first gallery category should start expanded"
+            );
             assert_eq!(item.children.len(), category.page_count);
             assert!(
                 item.children.iter().all(|child| child.is_leaf()),

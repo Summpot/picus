@@ -59,6 +59,7 @@ use crate::{
         sync_active_style_variant, sync_style_targets, sync_stylesheet_asset_events,
         sync_ui_interaction_markers,
     },
+    perf::FrameTiming,
     synthesize::{
         SynthesizedUiViews, UiProjectionDirtyDebug, UiProjectionInvalidation, UiSynthesisStats,
         register_projection_invalidation_dependencies, sync_focus_state, synthesize_ui,
@@ -157,6 +158,7 @@ impl Plugin for PicusPlugin {
             .init_resource::<DragState>()
             .init_resource::<ValidationRegistry>()
             .init_resource::<StreamingMarkdownParseCache>()
+            .init_resource::<FrameTiming>()
             .init_non_send::<MasonryRuntime>()
             .add_message::<CursorMoved>()
             .add_message::<CursorLeft>()

@@ -197,3 +197,50 @@ unexpected_cfgs = { level = "warn", check-cfg = ['cfg(docsrs_dep)'] }
 unsafe_code = "deny"
 unsafe_op_in_unsafe_fn = "warn"
 unused_qualifications = "warn"
+
+# Debug UI runtime is dominated by unoptimized deps (vello/wgpu/bevy/parley/…).
+# Build third-party crates optimized while keeping workspace members at the
+# default opt-level=0 for fast local edit-compile cycles.
+[profile.dev.package."*"]
+opt-level = 2
+
+# App / framework logic: keep unoptimized for fast edit-compile.
+[profile.dev.package.picus]
+opt-level = 0
+[profile.dev.package.picus_core]
+opt-level = 0
+[profile.dev.package.picus_macros]
+opt-level = 0
+[profile.dev.package.picus_surface]
+opt-level = 0
+[profile.dev.package.picus_theme_test]
+opt-level = 0
+[profile.dev.package.shared_utils]
+opt-level = 0
+[profile.dev.package.example_gallery]
+opt-level = 0
+[profile.dev.package.example_timer]
+opt-level = 0
+[profile.dev.package.example_calculator]
+opt-level = 0
+[profile.dev.package.example_todo_list]
+opt-level = 0
+[profile.dev.package.example_game_2048]
+opt-level = 0
+[profile.dev.package.example_chess_game]
+opt-level = 0
+[profile.dev.package.example_async_downloader]
+opt-level = 0
+[profile.dev.package.example_overlay_hit_routing]
+opt-level = 0
+[profile.dev.package.example_picuscode]
+opt-level = 0
+
+# Hot retained-UI path: optimize even in dev (these crates change less often
+# than app/core code and dominate layout/paint CPU).
+[profile.dev.package.picus_widget]
+opt-level = 2
+[profile.dev.package.picus_view]
+opt-level = 2
+[profile.dev.package.picus_imaging]
+opt-level = 2

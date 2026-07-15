@@ -2619,10 +2619,16 @@ fn to_current_component(colors: TargetColorStyle) -> CurrentColorStyle {
 }
 
 fn ensure_current(world: &mut World, entity: Entity, current: CurrentColorStyle) {
-    if let Some(mut current_component) = world.get_mut::<CurrentColorStyle>(entity) {
-        *current_component = current;
-    } else {
-        world.entity_mut(entity).insert(current);
+    match world.get::<CurrentColorStyle>(entity) {
+        Some(existing) if *existing == current => {}
+        Some(_) => {
+            *world
+                .get_mut::<CurrentColorStyle>(entity)
+                .expect("just checked") = current;
+        }
+        None => {
+            world.entity_mut(entity).insert(current);
+        }
     }
 }
 
@@ -2847,33 +2853,40 @@ pub fn sync_style_targets(world: &mut World) {
     for (entity, resolved) in snapshots {
         match resolved {
             Some(resolved) => {
-                if let Some(mut computed) = world.get_mut::<ComputedStyle>(entity) {
-                    computed.layout = resolved.layout;
-                    computed.colors = resolved.colors.clone();
-                    computed.text = resolved.text;
-                    computed.font_family = resolved.font_family.clone();
-                    computed.box_shadow = resolved.box_shadow;
-                    computed.transition = resolved.transition;
-                } else {
-                    world.entity_mut(entity).insert(ComputedStyle {
-                        layout: resolved.layout,
-                        colors: resolved.colors.clone(),
-                        text: resolved.text,
-                        font_family: resolved.font_family.clone(),
-                        box_shadow: resolved.box_shadow,
-                        transition: resolved.transition,
-                    });
+                // Only write when values change — `get_mut` alone marks the
+                // component Changed and would force a full projection rebuild.
+                let next_computed = ComputedStyle {
+                    layout: resolved.layout,
+                    colors: resolved.colors.clone(),
+                    text: resolved.text,
+                    font_family: resolved.font_family.clone(),
+                    box_shadow: resolved.box_shadow,
+                    transition: resolved.transition,
+                };
+                match world.get::<ComputedStyle>(entity) {
+                    Some(current) if *current == next_computed => {}
+                    Some(_) => {
+                        *world.get_mut::<ComputedStyle>(entity).expect("just checked") =
+                            next_computed;
+                    }
+                    None => {
+                        world.entity_mut(entity).insert(next_computed);
+                    }
                 }
 
                 let target = to_target_component(&resolved);
                 match resolved.transition {
                     Some(transition) => {
-                        if let Some(mut target_component) =
-                            world.get_mut::<TargetColorStyle>(entity)
-                        {
-                            *target_component = target;
-                        } else {
-                            world.entity_mut(entity).insert(target);
+                        match world.get::<TargetColorStyle>(entity) {
+                            Some(current) if *current == target => {}
+                            Some(_) => {
+                                *world
+                                    .get_mut::<TargetColorStyle>(entity)
+                                    .expect("just checked") = target;
+                            }
+                            None => {
+                                world.entity_mut(entity).insert(target);
+                            }
                         }
 
                         if world.get::<CurrentColorStyle>(entity).is_none() {

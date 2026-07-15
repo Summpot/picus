@@ -8,11 +8,13 @@ use bevy_window::PrimaryWindow;
 use picus_view::view::{FlexExt as _, flex_col, label};
 
 use crate::{
+    components::navigation_view::{UiNavigationItem, UiNavigationView},
     ecs::{
         AnchoredTo, LocalizeText, OverlayAnchorRect, OverlayComputedPosition, OverlayConfig,
         OverlayStack, OverlayState, TypographyPreset, UiOverlayRoot, UiRoot, UiWindow,
     },
     i18n::AppI18n,
+    perf::{FrameTiming, PhaseTimer, frame_timing_enabled},
     projection::{UiProjectorRegistry, UiView},
     resize::{AppBreakpoints, WindowSize},
     retained_bridge::entity_scope,
@@ -299,10 +301,19 @@ fn synthesize_entity(
         .map(|children| children.iter().collect::<Vec<_>>())
         .unwrap_or_default();
 
-    let children = child_entities
-        .into_iter()
-        .map(|child| synthesize_entity(world, registry, child, visiting, stats, entities))
-        .collect::<Vec<_>>();
+    // NavigationView content children map 1:1 to selectable leaves, but only the
+    // selected leaf is mounted into the retained tree. Deep-synthesize that
+    // content page and emit cheap placeholders for the rest so
+    // `ctx.children` stays aligned with ECS `Children` order.
+    let children = synthesize_child_views(
+        world,
+        registry,
+        entity,
+        &child_entities,
+        visiting,
+        stats,
+        entities,
+    );
 
     let node_id = entity.to_bits();
 
@@ -326,6 +337,70 @@ fn synthesize_entity(
     debug_assert_eq!(popped, Some(entity));
 
     view
+}
+
+/// Synthesize direct children, optionally eliding:
+/// - unselected [`UiNavigationView`] content pages
+/// - nested items under collapsed [`UiNavigationItem`] parents
+///
+/// Placeholders preserve `ctx.children` index alignment with ECS `Children`.
+fn synthesize_child_views(
+    world: &World,
+    registry: &UiProjectorRegistry,
+    parent: Entity,
+    child_entities: &[Entity],
+    visiting: &mut Vec<Entity>,
+    stats: &mut UiSynthesisStats,
+    entities: &mut HashSet<Entity>,
+) -> Vec<UiView> {
+    let selected_content = world
+        .get::<UiNavigationView>(parent)
+        .map(|nav| nav.selected);
+    let skip_collapsed_nav_children = navigation_item_is_collapsed_parent(world, parent);
+
+    let mut content_index = 0usize;
+    let mut children = Vec::with_capacity(child_entities.len());
+    for &child in child_entities {
+        let is_nav_item = world.get::<UiNavigationItem>(child).is_some();
+        let skip_unselected_content = if let Some(selected) = selected_content {
+            if is_nav_item {
+                false
+            } else {
+                let index = content_index;
+                content_index += 1;
+                index != selected
+            }
+        } else {
+            false
+        };
+        let skip_deep = skip_unselected_content
+            || (skip_collapsed_nav_children && is_nav_item);
+
+        if skip_deep {
+            // Keep a slot so projector child indices match ECS Children order.
+            entities.insert(child);
+            stats.node_count += 1;
+            children.push(Arc::new(label("")) as UiView);
+        } else {
+            children.push(synthesize_entity(
+                world, registry, child, visiting, stats, entities,
+            ));
+        }
+    }
+    children
+}
+
+fn navigation_item_is_collapsed_parent(world: &World, entity: Entity) -> bool {
+    use crate::components::navigation_view::navigation_item_for_entity;
+
+    let Some(item) = world.get::<UiNavigationItem>(entity) else {
+        return false;
+    };
+    let Some(nav) = world.get::<UiNavigationView>(item.nav) else {
+        return false;
+    };
+    navigation_item_for_entity(nav, world, entity)
+        .is_some_and(|nav_item| nav_item.is_parent() && !nav_item.is_expanded)
 }
 
 /// Sync focused widget from each window's Masonry runtime back to ECS
@@ -384,6 +459,12 @@ pub fn synthesize_ui(world: &mut World) {
     }
 
     world.init_resource::<UiProjectionDirtyDebug>();
+    world.init_resource::<FrameTiming>();
+    if let Some(mut timing) = world.get_resource_mut::<FrameTiming>() {
+        timing.begin_frame();
+    }
+    let phase = PhaseTimer::start();
+    let _span = tracing::trace_span!(target: "picus_core::perf", "synthesize_ui").entered();
 
     let mut roots_by_window = gather_ui_roots_by_window(world);
     if let Some(runtime) = world.get_non_send::<MasonryRuntime>() {
@@ -489,9 +570,13 @@ pub fn synthesize_ui(world: &mut World) {
             debug.last_reasons.clear();
             debug.last_dirty_windows.clear();
         }
+        if let Some(mut timing) = world.get_resource_mut::<FrameTiming>() {
+            timing.record_synthesis(phase.elapsed(), false, 0, &[]);
+        }
         return;
     }
 
+    let reason_labels = dirty_reason_labels(&reasons);
     {
         let mut windows_sorted: Vec<_> = dirty_windows.iter().copied().collect();
         windows_sorted.sort_by_key(|e| e.to_bits());
@@ -541,7 +626,8 @@ pub fn synthesize_ui(world: &mut World) {
 
         for (window, view, window_stats, window_entities) in updates {
             views.windows.insert(window, view);
-            views.roots_by_window
+            views
+                .roots_by_window
                 .insert(window, roots_by_window.remove(&window).unwrap_or_default());
             views.stats_by_window.insert(window, window_stats);
 
@@ -563,7 +649,40 @@ pub fn synthesize_ui(world: &mut World) {
         views.generation = views.generation.saturating_add(1);
     }
 
+    let node_count = stats.node_count;
     *world.resource_mut::<UiSynthesisStats>() = stats;
+    if let Some(mut timing) = world.get_resource_mut::<FrameTiming>() {
+        timing.record_synthesis(phase.elapsed(), true, node_count, &reason_labels);
+    }
+    if frame_timing_enabled() {
+        tracing::debug!(
+            target: "picus_core::perf",
+            elapsed_ms = phase.elapsed().as_secs_f64() * 1000.0,
+            node_count,
+            "projection synthesis completed"
+        );
+    }
+}
+
+fn dirty_reason_labels(reasons: &[UiDirtyReason]) -> Vec<&'static str> {
+    let mut labels = Vec::new();
+    for reason in reasons {
+        let label = match reason {
+            UiDirtyReason::FirstGeneration => "first_gen",
+            UiDirtyReason::ExplicitInvalidationAll => "invalidate_all",
+            UiDirtyReason::BuiltInProjectionResource => "builtin_res",
+            UiDirtyReason::TrackedProjectionResource => "tracked_res",
+            UiDirtyReason::UntrackedProjectors => "untracked",
+            UiDirtyReason::RootSetChanged { .. } => "root_set",
+            UiDirtyReason::ExplicitInvalidationWindow { .. } => "invalidate_win",
+            UiDirtyReason::ExplicitInvalidationRoot { .. } => "invalidate_root",
+            UiDirtyReason::DirtyEntity { .. } => "dirty_entity",
+        };
+        if !labels.contains(&label) {
+            labels.push(label);
+        }
+    }
+    labels
 }
 
 fn projection_resources_changed(world: &mut World) -> bool {
@@ -641,6 +760,47 @@ mod tests {
         assert_eq!(roots.len(), 1);
         assert_eq!(stats.unhandled_count, 0);
         assert_eq!(stats.missing_entity_count, 0);
+    }
+
+    #[test]
+    fn navigation_view_skips_deep_synthesis_for_unselected_content() {
+        use crate::{
+            NavigationViewItem, UiComponentTemplate, UiFlexColumn, UiLabel, UiNavigationView,
+        };
+
+        let mut world = World::new();
+        world.insert_resource(crate::StyleSheet::default());
+        let mut registry = UiProjectorRegistry::default();
+        register_builtin_projectors(&mut registry);
+
+        let nav = world
+            .spawn((
+                UiRoot,
+                UiNavigationView::new([
+                    NavigationViewItem::new("One"),
+                    NavigationViewItem::new("Two"),
+                ])
+                .with_selected(0),
+            ))
+            .id();
+        let page0 = world.spawn((UiFlexColumn, ChildOf(nav))).id();
+        world.spawn((UiLabel::new("visible page"), ChildOf(page0)));
+        let page1 = world.spawn((UiFlexColumn, ChildOf(nav))).id();
+        // Many nodes that must not be visited while page1 is unselected.
+        for i in 0..50 {
+            world.spawn((UiLabel::new(format!("hidden {i}")), ChildOf(page1)));
+        }
+
+        // Expand templates so UiNavigationItem children exist.
+        <UiNavigationView as UiComponentTemplate>::expand(&mut world, nav);
+
+        let (_roots, stats) = synthesize_roots_with_stats(&world, &registry, [nav]);
+        // Full walk of page1 alone would add 50+ nodes; skipping keeps counts low.
+        assert!(
+            stats.node_count < 40,
+            "unselected content should not be fully synthesized (node_count={})",
+            stats.node_count
+        );
     }
 
     #[test]
