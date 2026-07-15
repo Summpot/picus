@@ -177,8 +177,8 @@ swapchain 的帧无法由 Picus 撤回。运行时必须记录实际模式和生
 | P0.4 | 可重复基线协议：1920×1080 与 3840×2160、固定拖窗轨迹、10s warm-up + 30s 采样、debug/release 各 ×3；Windows 上 PresentMon/ETW **必跑** | **已交付**（协议文档） |
 | P0.5 | 版本化 `docs/perf/frame-pipeline-baseline.md`（环境、CSV/ETL 摘要占位、median/p95/p99、验收阈值） | **已交付**（模板；实测数字待首轮填写） |
 
-**验收**：G1 度量骨架；协议可由另一台 Windows 开发机复跑；**P0 合并后默认产品行为与当前版本一致**（仍默认 ~30Hz 纯动画 present 节流）。  
-**风险**：过早关掉默认 30Hz → 拖影回潮；须等 P2e，不把节流当终局。
+**验收**：G1 度量骨架；协议可由另一台 Windows 开发机复跑；**P0 合并后**产品行为曾与当时版本一致（仍默认 ~30Hz 纯动画 present 节流；**P0 当时；P2e 已改为 unset=不节流**）。  
+**风险**：过早关掉默认 30Hz → 拖影回潮；P2e 已在分层 G2 合同后去掉默认节流，Mailbox 仍为 present 策略。
 
 **建议 PR**：`PR0-metrics-docs-throttle-policy`
 
@@ -241,7 +241,7 @@ contract」；代码：`picus_core::runtime::layers`；目标尺寸决策：
 | 选型 | **`AnimLayerHost` scaffold**（P2a 未挂到 `WindowRuntime`）；P2b 再接 External 槽 + 脏集 |
 | Anim target | **`FullWindowTransparent`** 首版；atlas 若 G3/G4 encode 预算失败再启 |
 | 上游策略 | 并行跟踪 LayerId / sticky isolation / self-contained clip / selective redraw；**不阻塞** P2b |
-| 失败回退 | 保持 P1 全窗 encode + 过渡 30Hz anim throttle |
+| 失败回退 | P1 全窗 encode；可选 `PICUS_ANIM_PRESENT_HZ` diagnostic cap（产品路径默认不节流） |
 | 禁止 | 把 post-hoc `VisualLayerPlan` 分类说成 “per-layer scene build” |
 
 **未做（故意）**：多 texture composite、Spinner 真拆层 encode、`step_frame` 挂 host、纯 anim 免 base rewrite——属 P2b。Host `register_*` **不**设置 paint mode；控件须每 paint `set_paint_layer_mode(External)`。
@@ -284,12 +284,12 @@ contract」；代码：`picus_core::runtime::layers`；目标尺寸决策：
 
 **验收说明**：G10 代码审查项完成。G2 层合同（Spinner + ProgressBar）与 PresentPolicy FIFO/Mailbox 单测已在树内；**不**将 G3/G4 PresentMon 数字写成已验收。
 
-**建议 PR 栈**（历史）：
+**建议 PR 栈**（历史命名；工作项 ID 以 §12 进度表为准）：
 
 1. `PR2a-layer-surfaces-composite`  
-2. `PR2b-spinner-anim-layer`  
-3. `PR2c-progress-indeterminate`  
-4. `PR2d-remove-default-anim-throttle` → **本 PR（P2e / G10）**
+2. `PR2b` / Spinner anim entry（计划工作项 **P2c**）  
+3. `PR2c` / indeterminate ProgressBar（计划工作项 **P2d**）  
+4. `PR2d-remove-default-anim-throttle`（分支历史名）→ 计划工作项 **P2e / G10**（本 PR）
 
 ---
 
@@ -369,12 +369,12 @@ PR1-frame-driver ──► PR1b-redraw-semantics（可选）
 PR2a-layer-surfaces-composite
     │
     ▼
-PR2b-spinner-anim-layer
+PR2b-spinner-anim-layer          (plan work item P2c)
     │
-    ├──────────────► PR2c-progress-indeterminate
+    ├──────────────► PR2c-progress-indeterminate  (plan work item P2d)
     │
     ▼
-PR2d-remove-default-anim-throttle
+PR2d-remove-default-anim-throttle  (branch/historical name; plan work item P2e / G10)
     │
     ▼
 PR3-paint-isolation-api

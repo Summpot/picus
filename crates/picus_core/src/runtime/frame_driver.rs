@@ -252,10 +252,12 @@ impl FrameStepResult {
     }
 }
 
-/// ~30 Hz min interval (`from_millis(33)`) when a diagnostic cap is requested
-/// via `PICUS_ANIM_PRESENT_HZ=30`. **Not** the product default — unset env means
+/// Historical ~30 Hz min interval (`from_millis(33)`) for diagnostic comparison
+/// with `PICUS_ANIM_PRESENT_HZ=30`. **Not** the product default — unset env means
 /// no anim present throttle (see [`parse_anim_present_min_interval`]).
-pub(crate) const DEFAULT_ANIM_PRESENT_MIN_INTERVAL: Duration = Duration::from_millis(33);
+///
+/// Note: exact `1/30` s is ~33.333 ms; this constant is the legacy 33 ms approx.
+pub(crate) const HISTORIC_ANIM_PRESENT_MIN_INTERVAL_30HZ: Duration = Duration::from_millis(33);
 
 /// Parse `PICUS_ANIM_PRESENT_HZ` (or absence) into a min present interval.
 ///
@@ -637,7 +639,10 @@ mod tests {
         // Diagnostic ~30 Hz opt-in (named constant is the historical 33 ms approx).
         let interval = parse_anim_present_min_interval(Some("30")).expect("30 Hz enabled");
         assert!((interval.as_secs_f64() - (1.0 / 30.0)).abs() < 1e-9);
-        assert!((interval.as_secs_f64() - DEFAULT_ANIM_PRESENT_MIN_INTERVAL.as_secs_f64()).abs() < 0.002);
+        assert!(
+            (interval.as_secs_f64() - HISTORIC_ANIM_PRESENT_MIN_INTERVAL_30HZ.as_secs_f64()).abs()
+                < 0.002
+        );
     }
 
     #[test]
