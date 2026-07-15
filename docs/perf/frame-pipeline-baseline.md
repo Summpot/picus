@@ -195,6 +195,7 @@ compare against that row set (or a clearly marked newer baseline revision).
 | 2026-07-16 | Phase 0 PR | Created protocol + empty result tables |
 | 2026-07-16 | Phase 0 review fixes | Document present-path vs anim_tick denominators; full `PICUS_ANIM_PRESENT_HZ` disable set |
 | 2026-07-16 | Phase 2a layer gate | §6 anim target strategy + size-gate assumptions (no new PresentMon numbers yet) |
+| 2026-07-16 | Phase 2a review fixes | §6.3 explicit: assumptions ≠ G2 acceptance; G2 is P2b |
 
 ---
 
@@ -227,11 +228,14 @@ target geometry.
 
 ### 6.3 Assumptions (until measured)
 
-These are **planning assumptions**, not acceptance claims. Fill §3 when P2b exists.
+These are **planning assumptions**, **not** acceptance claims and **not** “G2
+satisfied” today. G2 (`encode_base` → 0 on pure anim; host-only anim encode) is a
+**P2b** acceptance target. Fill §3 when P2b exists and re-state claims only with
+measured counters / PresentMon.
 
 1. **Full-window transparent anim RT cost** is dominated by Vello encode of a *sparse*
    anim scene plus a full-size clear/composite, not by re-recording the entire base
-   UI tree (base encode_count → 0 on pure anim ticks — G2).
+   UI tree (**target:** base encode_count → 0 on pure anim ticks — G2 after P2b).
 2. At **1080p**, full-window anim encode is expected to clear the 25% refresh budget
    for a single Spinner-class scene; at **4K** the clear+composite term grows with
    pixel count and is the first risk for switching to atlas.

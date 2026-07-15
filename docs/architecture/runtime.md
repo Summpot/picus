@@ -158,8 +158,13 @@ truth for the inventory and selected interface:
 
 | # | Question | Result |
 |---|----------|--------|
-| 1 | Can `PaintLayerMode` / `VisualLayerPlan` yield **self-contained, independently renderable** painter-order entries under ancestor clip/scroll, transform, ZStack, overlay? | **No for product isolation.** `IsolatedScene` and `External` can **split** painter order on a pass where the widget re-paints; `paint_layer_mode` **resets to Inline** each pass and is only re-set during paint, so clean widgets **drop isolation** on the next full redraw. Transforms bake into scene/local space; `External { bounds }` reserves a host slot. Ancestor **clip/effect is not packaged** on the layer (no clip-chain descriptor). No persistent compositor `LayerId` (upstream still has a FIXME). Flatten helpers (`root_layer` / `overlay_layers`) **skip** External. |
-| 2 | Can an anim tick emit **only the changed anim entry** without full-tree `RenderRoot::redraw()` and without reassembling base scene? | **No.** Only full `redraw()` → paint pass. Per-widget `scene_cache` may skip re-recording clean widgets, but the plan is always **reassembled** as a full-pass snapshot. |
+| 1 | Can `PaintLayerMode` / `VisualLayerPlan` yield **self-contained, independently renderable** painter-order entries under ancestor clip/scroll, transform, ZStack, overlay? | **No for product isolation.** Empirical FAIL on: (a) **sticky isolation** — mode resets to Inline each pass; clean widgets drop IsolatedScene/**External** on next redraw; (b) **missing clip package** — `VisualLayer` is only `kind` / `transform` / `widget_id` (External adds `bounds`); no ancestor clip-chain field; (c) flatten helpers **skip** External. **Not separately spiked:** scroll portals, ZStack front/back, Masonry overlay `layer_root_ids` stack — FAIL still stands without those spikes because isolation is non-sticky and layers lack clip metadata. Transforms bake into scene/local space when a split *does* occur. No persistent compositor `LayerId` (checklist; upstream FIXME). |
+| 2 | Can an anim tick emit **only the changed anim entry** without full-tree `RenderRoot::redraw()` and without reassembling base scene? | **No.** Public path is only full `redraw()` → paint pass. Consecutive redraws always reassemble a full plan. Per-widget `scene_cache` may skip re-recording clean widgets; that is not selective layer rebuild. |
+
+**Evidence classes** (see `MasonryLayerCapabilities` / `CapabilityEvidence`): sticky
+isolation, External slot/skip/collapse, clip type-shape, and full-redraw reassembly are
+**empirical spikes**. `persistent_layer_id: false` is an **inventory checklist** bit
+(re-audit on pin bump).
 
 **Forbidden reading:** classifying a post-hoc `VisualLayerPlan` as “per-layer scene
 build” is incorrect. The plan is a full-pass painter-order snapshot; selective work
@@ -169,13 +174,15 @@ must be owned by Picus dirty sets, not by slicing the plan after the fact.
 
 **Picus `AnimLayerHost`** (not “wait for upstream only”):
 
-- **Masonry:** layout, hit-test, painter-order **`PaintLayerMode::External`** placeholders.
+- **Masonry:** layout, hit-test, painter-order **`PaintLayerMode::External`** placeholders
+  (widget must call `set_paint_layer_mode(External)` **every paint** — mode is not sticky;
+  host registration alone does not set mode).
 - **Picus host:** independent anim entry state (`AnimLayerId`, bounds, transform, version, dirty); P2b builds anim scenes/textures only for dirty entries.
 - **Composite (P2b, not this PR):** exact painter-order composite of base segment(s) + host anim textures + overlays.
 
 **Upstream revision strategy (parallel, non-blocking):** track/contribute persistent
-`LayerId`, self-contained clip/effect on isolated layers, and selective layer redraw.
-If a future pin gains
+`LayerId`, sticky isolation, self-contained clip/effect on isolated layers, and selective
+layer redraw. If a future pin gains
 `MasonryLayerCapabilities::supports_upstream_only_anim_isolation()`, Picus may
 narrow the host; P2b does not wait on that.
 
@@ -185,12 +192,19 @@ isolation.
 
 #### Ownership / lifecycle
 
+**P2a status:** `AnimLayerHost` is a free-standing scaffold in
+`picus_core::runtime::layers`. It is **not** a `WindowRuntime` field and is **not**
+used by `step_frame` / paint. Current product path remains full-window encode with
+`AnimPaint { layer: 0 }`.
+
+**Planned ownership (P2b target)** — diagram below is aspirational:
+
 ```mermaid
 flowchart TB
-  subgraph window["WindowRuntime"]
+  subgraph window["WindowRuntime (planned P2b)"]
     RR["RenderRoot / Masonry<br/>layout · hit-test · External slots"]
     Host["AnimLayerHost (Picus)<br/>AnimLayerId · dirty · version"]
-    Surf["LayerSurfaces (P2b)<br/>base + anim textures"]
+    Surf["LayerSurfaces<br/>base + anim textures"]
   end
   RR -->|"painter-order External placeholder"| Host
   Host -->|"dirty anim entries only"| Surf
@@ -199,11 +213,15 @@ flowchart TB
 ```
 
 ```text
-register(widget)  → AnimLayerId + External paint mode on widget path
-layout/compose    → update bounds/transform; CompositorPlan if plan changes
-AnimFrame tick    → host.mark_anim_paint(id); base rewrite avoided when only anim
-encode (P2b)      → dirty host entries only; base only if base_dirty
-unmount           → host.remove_widget; External slot drops on next plan
+# P2b target contract (not current behavior)
+
+register_external_slot(widget_id)  → AnimLayerId in host maps only
+  (widget path must set_paint_layer_mode(External) every paint — not sticky)
+layout/compose                     → update bounds/transform; CompositorPlan if plan changes
+AnimFrame tick                     → host.mark_anim_paint(id)
+                                     [target] skip base rewrite when only anim dirty
+encode                             → [target] dirty host entries only; base if base_dirty
+unmount                            → host.remove_widget; External slot drops on next plan
 ```
 
 #### Anim target choice (size gate input)

@@ -236,15 +236,15 @@ contract」；代码：`picus_core::runtime::layers`；目标尺寸决策：
 
 | 门禁项 | 结论 |
 |--------|------|
-| 自包含可独立 encode 的 painter-order entry（clip/scroll/transform/ZStack/overlay） | **上游不足**：`IsolatedScene`/`External` 可在 re-paint 时拆分 plan，但 mode 每 pass 重置且 clean widget 会丢 isolation；**无** ancestor clip/effect 打包、**无** 持久 `LayerId` |
-| anim tick 只发变更 entry、免全树 `redraw`/base 重装 | **上游不足**：仅有全量 `RenderRoot::redraw`；`scene_cache` 跳过重录 ≠ 按层 rebuild |
-| 选型 | **`AnimLayerHost`**（Masonry layout/hit + External 槽；Picus 脏集/版本/scene） |
+| 自包含可独立 encode 的 painter-order entry（clip/scroll/transform/ZStack/overlay） | **上游不足（实证）**：sticky isolation 失败（mode 每 pass 重置；External/Isolated 二次 redraw 塌缩）；`VisualLayer` 无 clip 字段；flatten 跳过 External。**未单独 spike**：scroll / ZStack / Masonry overlay stack（决策仍 FAIL）。`LayerId` 为清单位。 |
+| anim tick 只发变更 entry、免全树 `redraw`/base 重装 | **上游不足（实证）**：仅有全量 `RenderRoot::redraw` 重装 plan；`scene_cache` ≠ 按层 rebuild |
+| 选型 | **`AnimLayerHost` scaffold**（P2a 未挂到 `WindowRuntime`）；P2b 再接 External 槽 + 脏集 |
 | Anim target | **`FullWindowTransparent`** 首版；atlas 若 G3/G4 encode 预算失败再启 |
-| 上游策略 | 并行跟踪 LayerId / self-contained clip / selective redraw；**不阻塞** P2b |
+| 上游策略 | 并行跟踪 LayerId / sticky isolation / self-contained clip / selective redraw；**不阻塞** P2b |
 | 失败回退 | 保持 P1 全窗 encode + 过渡 30Hz anim throttle |
 | 禁止 | 把 post-hoc `VisualLayerPlan` 分类说成 “per-layer scene build” |
 
-**未做（故意）**：多 texture composite、Spinner 真拆层 encode——属 P2b。
+**未做（故意）**：多 texture composite、Spinner 真拆层 encode、`step_frame` 挂 host、纯 anim 免 base rewrite——属 P2b。Host `register_*` **不**设置 paint mode；控件须每 paint `set_paint_layer_mode(External)`。
 
 #### 2.1 基础设施
 

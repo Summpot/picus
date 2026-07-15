@@ -1,7 +1,8 @@
 //! Phase 2a hard gate: Masonry layer contract + anim target spike.
 //!
 //! This module records the **boundary decision** for layered anim encode before
-//! multi-texture composite (P2b). It is **not** a full compositor.
+//! multi-texture composite (P2b). It is **not** a full compositor and is
+//! **not** wired into [`super::WindowRuntime`] / `step_frame` yet.
 //!
 //! ## Gate questions (must be answered before P2b)
 //!
@@ -15,8 +16,8 @@
 //!
 //! | Question | Result |
 //! |----------|--------|
-//! | Self-contained independent entries | **Fail** — isolation can split the plan on a paint pass, but mode resets to Inline when the widget is not re-painted; ancestor clip/effect is not packaged; no persistent `LayerId`; hosts flatten via `root_layer`/`overlay_layers` |
-//! | Selective anim entry without full redraw | **Fail** — only full `redraw()` → `run_paint_pass`; per-widget `scene_cache` skips re-record but still walks/reassembles the whole plan |
+//! | Self-contained independent entries | **Fail** on sticky isolation + missing clip package (type-level on `VisualLayer`) + External host skip. Scroll / ZStack / Masonry overlay-stack were **not** separately spiked; FAIL still holds because isolation is non-sticky and layers lack clip-chain metadata. |
+//! | Selective anim entry without full redraw | **Fail** — public scene path is only full `redraw()` → `run_paint_pass`; plan always reassembly. Host dirty set is the *planned* selective unit (P2b), not current paint. |
 //!
 //! ## Selected path
 //!
@@ -32,6 +33,15 @@
 //! **Forbidden reading:** classifying a post-hoc `VisualLayerPlan` as
 //! “per-layer scene build” is incorrect — the plan is a full-pass snapshot.
 //!
+//! ## Not yet (P2b — do not read scaffold as live wiring)
+//!
+//! - Field on `WindowRuntime` / use from `step_frame`
+//! - `DirtyReason::AnimPaint { layer }` populated from [`AnimLayerId::raw`]
+//! - Widget path calling `set_paint_layer_mode(External)` every paint (mode is
+//!   **not sticky**; host `register_*` does **not** set paint mode)
+//! - Scene / texture storage or multi-texture composite
+//! - Skipping base rewrite on pure anim ticks (still full-window encode today)
+//!
 //! See `docs/architecture/runtime.md` (Masonry layer contract) and
 //! `docs/plans/frame-pipeline.md` Phase 2a.
 
@@ -46,11 +56,34 @@ use crate::masonry_core::{
 // Gate inventory (what pinned xilem actually offers)
 // ---------------------------------------------------------------------------
 
+/// How a [`MasonryLayerCapabilities`] bit is backed for pin-bump honesty.
+///
+/// Empirical spikes fail when upstream behavior changes; inventory checklist
+/// bits are human-maintained against the pin and must be re-audited on bump.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum CapabilityEvidence {
+    /// Enforced by RenderRoot / type-shape tests in this module.
+    EmpiricalSpike,
+    /// Checklist vs public API / struct shape; update when bumping xilem.
+    InventoryChecklist,
+}
+
 /// Capabilities of the pinned Masonry/xilem paint boundary (Phase 2a inventory).
 ///
 /// Values are fixed for the git pin in workspace `Cargo.toml` (`xilem` rev
 /// `4b1922c9728f7b86642b6759c6608f32e0badec2`). Re-run the module tests when
 /// bumping the pin.
+///
+/// | Field | Evidence |
+/// |-------|----------|
+/// | `paint_layer_mode_api` | Empirical (ModeBox spikes) |
+/// | `visual_layer_plan` | Empirical (`redraw` returns plan) |
+/// | `external_placeholders` | Empirical (External kind + collapse) |
+/// | `flatten_compatibility_helpers` | Empirical (`overlay_layers` skip) |
+/// | `sticky_paint_layer_mode` | Empirical (second redraw collapses) |
+/// | `self_contained_ancestor_clip` | Empirical type-shape (`VisualLayer` fields) + clip spike |
+/// | `selective_layer_redraw` | Empirical (only full `redraw` path after AnimFrame) |
+/// | `persistent_layer_id` | Inventory checklist (no public LayerId type; upstream FIXME) |
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct MasonryLayerCapabilities {
     /// `PaintLayerMode::{Inline, IsolatedScene, External}` exists and is set per paint.
@@ -83,6 +116,14 @@ impl MasonryLayerCapabilities {
         selective_layer_redraw: false,
         flatten_compatibility_helpers: true,
     };
+
+    /// Evidence class for each gate bit (documentation + pin-bump audit aid).
+    pub(crate) fn evidence(field: &'static str) -> CapabilityEvidence {
+        match field {
+            "persistent_layer_id" => CapabilityEvidence::InventoryChecklist,
+            _ => CapabilityEvidence::EmpiricalSpike,
+        }
+    }
 
     /// True when Masonry alone can satisfy G2-style anim isolation without a Picus host.
     pub(crate) const fn supports_upstream_only_anim_isolation(self) -> bool {
@@ -142,7 +183,6 @@ pub(crate) struct AnimLayerId(u32);
 
 impl AnimLayerId {
     #[inline]
-    #[allow(dead_code)] // Used by P2b dirty routing (`AnimPaint { layer }`).
     pub(crate) const fn raw(self) -> u32 {
         self.0
     }
@@ -150,11 +190,13 @@ impl AnimLayerId {
 
 /// How a host entry maps into Masonry painter order.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[allow(dead_code)] // `Unbound` covers pre-layout registration in P2b.
 pub(crate) enum AnimSlotBinding {
-    /// Widget paints with [`PaintLayerMode::External`]; host fills the slot.
+    /// Widget should paint with [`PaintLayerMode::External`]; host fills the slot.
+    ///
+    /// Registering here does **not** call `set_paint_layer_mode` — the widget
+    /// (or its projector) must request External **every paint** (mode is not sticky).
     ExternalPlaceholder { widget_id: WidgetId },
-    /// No Masonry placeholder yet (registration before first paint / layout).
+    /// No Masonry placeholder yet (pre-layout / pre-widget registration).
     Unbound,
 }
 
@@ -178,25 +220,35 @@ pub(crate) struct AnimLayerEntry {
 
 /// Picus-side registry for isolated anim draw state.
 ///
-/// # Ownership / lifecycle (P2a contract)
+/// # Status (P2a)
+///
+/// Free-standing **scaffold**. Not a field on `WindowRuntime`, not consulted by
+/// `step_frame` / paint. Product paint remains full-window encode with
+/// `DirtyReason::AnimPaint { layer: 0 }`.
+///
+/// # Planned ownership / lifecycle (**P2b target**, not current)
 ///
 /// ```text
-/// WindowRuntime
+/// WindowRuntime  (planned)
 ///   ├── RenderRoot (Masonry)     layout / hit-test / External placeholders
 ///   ├── AnimLayerHost (Picus)    anim entry state + dirty/version
-///   └── (P2b) LayerSurfaces      base + anim textures, exact-order composite
+///   └── LayerSurfaces            base + anim textures, exact-order composite
 ///
-/// register(widget) ──► AnimLayerId + External paint mode on widget path
-/// layout/compose    ──► update bounds/transform; CompositorPlan if plan changes
-/// AnimFrame tick    ──► host marks entry dirty; NO base rewrite (target)
-/// encode            ──► only dirty host entries (P2b); base only if base_dirty
-/// remove/unmount    ──► drop entry; External slot disappears on next plan
+/// register_external_slot(widget_id)  → AnimLayerId in host maps only
+///   (widget must still set_paint_layer_mode(External) every paint)
+/// layout/compose                     → update bounds/transform; CompositorPlan if plan changes
+/// AnimFrame tick                     → host.mark_anim_paint(id)
+///                                      [target] skip base rewrite when only anim dirty
+/// encode                             → [target] dirty host entries only; base if base_dirty
+/// remove/unmount                     → drop entry; External slot drops on next plan
 /// ```
 ///
 /// # TODO(P2b)
+/// - Attach host as `WindowRuntime` field; drive from `step_frame`
 /// - Wire Spinner / indeterminate ProgressBar paint into host scenes
-/// - Drive `DirtyReason::AnimPaint { layer }` from `AnimLayerId`
+/// - Populate `DirtyReason::AnimPaint { layer: id.raw() }` from dirty host entries
 /// - Realize External slots in `PreparedFrame` / multi-texture composite
+/// - Avoid base rewrite/encode on pure anim ticks (G2)
 #[derive(Debug, Default)]
 pub(crate) struct AnimLayerHost {
     next_id: u32,
@@ -220,13 +272,21 @@ impl AnimLayerHost {
         self.target
     }
 
+    fn alloc_id(&mut self) -> AnimLayerId {
+        let id = AnimLayerId(self.next_id);
+        self.next_id = self.next_id.saturating_add(1);
+        id
+    }
+
     /// Register (or return existing) anim entry for a Masonry widget id.
+    ///
+    /// Does **not** set `PaintLayerMode::External` on the widget — callers must
+    /// ensure the widget requests External every paint (mode is not sticky).
     pub(crate) fn register_external_slot(&mut self, widget_id: WidgetId) -> AnimLayerId {
         if let Some(&id) = self.by_widget.get(&widget_id) {
             return id;
         }
-        let id = AnimLayerId(self.next_id);
-        self.next_id = self.next_id.saturating_add(1);
+        let id = self.alloc_id();
         self.by_widget.insert(widget_id, id);
         self.entries.insert(
             id,
@@ -242,17 +302,55 @@ impl AnimLayerHost {
         id
     }
 
+    /// Pre-layout registration before a Masonry widget id exists.
+    pub(crate) fn register_unbound(&mut self) -> AnimLayerId {
+        let id = self.alloc_id();
+        self.entries.insert(
+            id,
+            AnimLayerEntry {
+                id,
+                slot: AnimSlotBinding::Unbound,
+                bounds: Rect::ZERO,
+                transform: Affine::IDENTITY,
+                version: 0,
+                dirty: true,
+            },
+        );
+        id
+    }
+
+    /// Bind a previously unbound entry to a Masonry External placeholder widget.
+    pub(crate) fn bind_external_slot(&mut self, id: AnimLayerId, widget_id: WidgetId) -> bool {
+        let Some(entry) = self.entries.get_mut(&id) else {
+            return false;
+        };
+        if !matches!(entry.slot, AnimSlotBinding::Unbound) {
+            return false;
+        }
+        if self.by_widget.contains_key(&widget_id) {
+            return false;
+        }
+        entry.slot = AnimSlotBinding::ExternalPlaceholder { widget_id };
+        entry.dirty = true;
+        self.by_widget.insert(widget_id, id);
+        true
+    }
+
     pub(crate) fn get(&self, id: AnimLayerId) -> Option<&AnimLayerEntry> {
         self.entries.get(&id)
     }
 
-    #[allow(dead_code)] // P2b will mutate scene/texture handles on entries.
     pub(crate) fn get_mut(&mut self, id: AnimLayerId) -> Option<&mut AnimLayerEntry> {
         self.entries.get_mut(&id)
     }
 
     pub(crate) fn id_for_widget(&self, widget_id: WidgetId) -> Option<AnimLayerId> {
         self.by_widget.get(&widget_id).copied()
+    }
+
+    /// `DirtyReason::AnimPaint { layer }` values for currently dirty entries (P2b).
+    pub(crate) fn dirty_anim_paint_layers(&self) -> impl Iterator<Item = u32> + '_ {
+        self.dirty_ids().map(|id| id.raw())
     }
 
     /// Layout/compose observed new geometry — may force composite plan refresh.
@@ -307,7 +405,8 @@ impl AnimLayerHost {
         self.entries.len()
     }
 
-    /// Paint mode widgets should request so Masonry leaves an External slot.
+    /// Paint mode widgets must request **every paint** so Masonry leaves an
+    /// External slot (`paint_layer_mode` resets to Inline each pass).
     pub(crate) const fn required_paint_layer_mode() -> PaintLayerMode {
         PaintLayerMode::External
     }
@@ -504,9 +603,18 @@ mod tests {
         assert!(caps.visual_layer_plan);
         assert!(caps.external_placeholders);
         assert!(caps.flatten_compatibility_helpers);
+        // Checklist-only bit: no public LayerId type on this pin (re-audit on bump).
+        assert_eq!(
+            MasonryLayerCapabilities::evidence("persistent_layer_id"),
+            CapabilityEvidence::InventoryChecklist
+        );
         assert!(
             !caps.persistent_layer_id,
             "upstream still has FIXME for LayerId; gate must not claim otherwise"
+        );
+        assert_eq!(
+            MasonryLayerCapabilities::evidence("sticky_paint_layer_mode"),
+            CapabilityEvidence::EmpiricalSpike
         );
         assert!(
             !caps.sticky_paint_layer_mode,
@@ -528,6 +636,30 @@ mod tests {
         assert_eq!(
             AnimTargetStrategy::FIRST_COMPOSITE,
             AnimTargetStrategy::FullWindowTransparent
+        );
+    }
+
+    /// Structural inventory: `VisualLayer` exposes only kind/transform/widget_id.
+    /// No clip-chain / effect / ancestor package field for independent encode.
+    fn assert_visual_layer_has_no_clip_package(plan: &crate::masonry_core::app::VisualLayerPlan) {
+        for layer in &plan.layers {
+            // Field access inventory — if upstream adds clip metadata, this match
+            // must be extended and `self_contained_ancestor_clip` re-evaluated.
+            let _transform = layer.transform;
+            let _owner = layer.widget_id;
+            match &layer.kind {
+                VisualLayerKind::Scene(_scene) => {
+                    // Scene payload only; no sibling clip descriptor on VisualLayer.
+                }
+                VisualLayerKind::External { bounds } => {
+                    let _ = bounds;
+                    // External carries bounds only — still no ancestor clip chain.
+                }
+            }
+        }
+        assert!(
+            !MasonryLayerCapabilities::CURRENT_PIN.self_contained_ancestor_clip,
+            "VisualLayer shape has no clip package; keep capability false"
         );
     }
 
@@ -560,6 +692,7 @@ mod tests {
                 .all(|l| matches!(l.kind, VisualLayerKind::Scene(_))),
             "expected only Scene layers for IsolatedScene split"
         );
+        assert_visual_layer_has_no_clip_package(&plan);
 
         // Second redraw without re-paint: paint_layer_mode resets to Inline each
         // pass, and set_paint_layer_mode only runs when request_paint is true.
@@ -572,9 +705,13 @@ mod tests {
             plan2.layers.len(),
             plan.layers.len()
         );
-        assert!(
-            !MasonryLayerCapabilities::CURRENT_PIN.selective_layer_redraw,
-            "no public API to rebuild a single layer; only full redraw()"
+        // Full reassembly: every content paint path is still root.redraw() of the
+        // whole plan — layer count is not independently dirtyable.
+        let (plan3, _) = root.redraw();
+        assert_eq!(
+            plan3.layers.len(),
+            plan2.layers.len(),
+            "consecutive full redraws reassemble the whole plan (no selective layer dirty)"
         );
     }
 
@@ -607,6 +744,7 @@ mod tests {
             external_count, 1,
             "External mode must insert one placeholder in painter order; plan={plan:?}"
         );
+        assert_visual_layer_has_no_clip_package(&plan);
 
         // Compatibility flatten helpers intentionally skip External — host must
         // realize them. This is the AnimLayerHost integration hook for P2b.
@@ -621,13 +759,29 @@ mod tests {
             plan.root_layer()
                 .is_some_and(|l| matches!(l.kind, VisualLayerKind::Scene(_)))
         );
+
+        // Same sticky reset as IsolatedScene: without re-paint, External drops.
+        // P2b checklist: anim widgets must set_paint_layer_mode(External) every paint.
+        let (plan2, _) = root.redraw();
+        let external_after = plan2
+            .layers
+            .iter()
+            .filter(|l| matches!(l.kind, VisualLayerKind::External { .. }))
+            .count();
+        assert_eq!(
+            external_after, 0,
+            "External is not sticky without re-paint; widgets must re-request mode each paint"
+        );
     }
 
     #[test]
     fn isolated_child_under_ancestor_clip_still_splits_without_host_clip_package() {
-        // Documents failure of "self-contained under ancestor clip":
-        // Masonry will split IsolatedScene, but does not give Picus a clip-chain
-        // descriptor on the layer — host would have to re-derive clip from the tree.
+        // FAIL evidence for "self-contained under ancestor clip":
+        // - VisualLayer has no clip-chain field (type-shape via helper)
+        // - IsolatedScene can still appear under a clipping parent, but host gets
+        //   no package for independent encode under that clip
+        // Scroll / ZStack / Masonry overlay-stack are not separately spiked;
+        // non-sticky isolation + missing clip package already fail product isolation.
         let root_widget = NewWidget::new(ClipParent::new(NewWidget::new(ModeBox::new(
             PaintLayerMode::IsolatedScene,
             Color::from_rgb8(0, 255, 0),
@@ -638,16 +792,20 @@ mod tests {
             !plan.layers.is_empty(),
             "paint must produce at least one layer under clip+isolated"
         );
-        // Capability flag is the authoritative gate bit for clip packaging.
+        assert_visual_layer_has_no_clip_package(&plan);
+        // At least one scene layer exists; none of them carry clip metadata.
         assert!(
-            !MasonryLayerCapabilities::CURRENT_PIN.self_contained_ancestor_clip,
-            "must not claim ancestor clip is packaged on isolated layers"
+            plan.layers
+                .iter()
+                .any(|l| matches!(l.kind, VisualLayerKind::Scene(_))),
+            "expected scene content under clip parent"
         );
     }
 
     #[test]
     fn anim_frame_plus_paint_still_requires_full_redraw_api() {
-        // Spinner-like path: AnimFrame then full redraw. No selective entry API.
+        // Spinner-like path: AnimFrame then full redraw. Public surface is only
+        // RenderRoot::redraw → full paint pass (no selective layer rebuild API).
         let spinner = NewWidget::new(Spinner::new());
         let root_widget = NewWidget::new(
             SizedBox::new(spinner)
@@ -659,15 +817,22 @@ mod tests {
         let _ = root.handle_window_event(WindowEvent::AnimFrame(std::time::Duration::from_millis(
             16,
         )));
-        // Spinner arms anim + paint_only; host still has only full-plan redraw.
         let (plan, _) = root.redraw();
         assert!(
             plan.root_layer().is_some(),
             "AnimFrame does not emit a partial plan; redraw still builds full VisualLayerPlan"
         );
+        // Second full redraw also returns a complete plan (reassembly, not
+        // "only changed anim entry"). If a selective API existed as the primary
+        // path, product code would not need consecutive full-plan redraws.
+        let (plan2, _) = root.redraw();
+        assert!(
+            plan2.root_layer().is_some(),
+            "second redraw still returns full plan; no public selective-entry rebuild"
+        );
         assert!(
             !MasonryLayerCapabilities::CURRENT_PIN.selective_layer_redraw,
-            "gate: no selective layer redraw on current pin"
+            "gate inventory: selective_layer_redraw remains false on this pin"
         );
     }
 
@@ -685,6 +850,17 @@ mod tests {
             PaintLayerMode::External
         );
 
+        // Pre-layout unbound → bind path (uses Unbound).
+        let unbound = host.register_unbound();
+        assert!(matches!(
+            host.get(unbound).map(|e| e.slot),
+            Some(AnimSlotBinding::Unbound)
+        ));
+        let w_bind =
+            NewWidget::new(ModeBox::new(PaintLayerMode::External, Color::TRANSPARENT)).id();
+        assert!(host.bind_external_slot(unbound, w_bind));
+        assert_eq!(host.id_for_widget(w_bind), Some(unbound));
+
         // WidgetId::next is crate-private in Masonry; allocate ids via NewWidget.
         let w1 = NewWidget::new(ModeBox::new(PaintLayerMode::External, Color::TRANSPARENT)).id();
         let w2 = NewWidget::new(ModeBox::new(PaintLayerMode::External, Color::TRANSPARENT)).id();
@@ -692,17 +868,22 @@ mod tests {
         let id2 = host.register_external_slot(w2);
         assert_ne!(id1, id2);
         assert_eq!(host.register_external_slot(w1), id1, "idempotent register");
-        assert_eq!(host.len(), 2);
+        assert_eq!(host.len(), 3);
 
-        // Simulate encode of both.
-        host.clear_dirty_after_encode(id1);
-        host.clear_dirty_after_encode(id2);
+        // Simulate encode of all.
+        for id in [unbound, id1, id2] {
+            host.clear_dirty_after_encode(id);
+        }
         assert_eq!(host.dirty_ids().count(), 0);
 
         // Only entry 2 anim-paints → only that entry dirty (P2b encode set).
         assert!(host.mark_anim_paint(id2));
         let dirty: Vec<_> = host.dirty_ids().collect();
         assert_eq!(dirty, vec![id2]);
+        assert_eq!(
+            host.dirty_anim_paint_layers().collect::<Vec<_>>(),
+            vec![id2.raw()]
+        );
         assert_eq!(host.get(id2).map(|e| e.version), Some(1));
         assert_eq!(host.get(id1).map(|e| e.version), Some(0));
         assert!(!host.get(id1).expect("id1").dirty);
@@ -714,33 +895,57 @@ mod tests {
         );
         assert!(geom_changed);
         assert!(host.get(id1).expect("id1").dirty);
+        // Exercise mut accessor used by P2b for scene/texture handles.
+        host.get_mut(id1).expect("id1 mut").version = host.get(id1).unwrap().version;
 
         let removed = host.remove_widget(w2).expect("remove w2");
         assert_eq!(removed.id, id2);
-        assert_eq!(host.len(), 1);
+        assert_eq!(host.len(), 2);
         assert!(host.id_for_widget(w2).is_none());
     }
 
     #[test]
     fn post_hoc_plan_classification_is_not_per_layer_scene_build() {
-        // Document the forbidden mis-reading: inspecting VisualLayerPlan after
-        // full redraw is a classification of a snapshot, not selective build.
-        let note = "VisualLayerPlan is a full-pass painter-order snapshot; \
-                    classifying layers post-hoc is not per-layer scene build";
-        assert!(
-            !MasonryLayerCapabilities::CURRENT_PIN.selective_layer_redraw,
-            "{note}"
+        // Forbidden mis-reading: slicing VisualLayerPlan after full redraw is
+        // classification of a snapshot, not selective build. After sticky collapse
+        // the plan no longer even retains isolation layers, while host dirty
+        // still tracks selective intent independently.
+        let root_widget = NewWidget::new(
+            Flex::row()
+                .with_fixed(NewWidget::new(ModeBox::new(
+                    PaintLayerMode::Inline,
+                    Color::from_rgb8(255, 0, 0),
+                )))
+                .with_fixed(NewWidget::new(ModeBox::new(
+                    PaintLayerMode::IsolatedScene,
+                    Color::from_rgb8(0, 0, 255),
+                ))),
         );
-        // Host dirty set is the Picus-side selective unit of work for P2b.
+        let mut root = test_root(root_widget);
+        let (plan1, _) = root.redraw();
+        assert!(plan1.layers.len() >= 2, "first pass splits isolation");
+
         let mut host = AnimLayerHost::new(AnimTargetStrategy::FIRST_COMPOSITE);
         let wid = NewWidget::new(ModeBox::new(PaintLayerMode::External, Color::TRANSPARENT)).id();
         let id = host.register_external_slot(wid);
         host.clear_dirty_after_encode(id);
         host.mark_anim_paint(id);
+        assert_eq!(host.dirty_ids().count(), 1);
+
+        let (plan2, _) = root.redraw();
+        assert!(
+            plan2.layers.len() < plan1.layers.len(),
+            "plan collapses without re-paint — cannot use plan slicing as dirty unit"
+        );
         assert_eq!(
             host.dirty_ids().count(),
             1,
-            "selective work is AnimLayerHost dirty set, not VisualLayerPlan slicing"
+            "host dirty set remains independently trackable after plan collapse"
+        );
+        assert_eq!(
+            host.dirty_anim_paint_layers().next(),
+            Some(id.raw()),
+            "P2b selective unit is AnimLayerId.raw, not VisualLayerPlan index"
         );
     }
 }
