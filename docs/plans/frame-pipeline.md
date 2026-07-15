@@ -228,6 +228,24 @@ swapchain 的帧无法由 Picus 撤回。运行时必须记录实际模式和生
 - Present：`composite(base, anim_layers…) → swapchain`（可用现有 blitter 扩展）  
 - Masonry：评估 `VisualLayerPlan` / overlay_layers 是否可映射；不够则 Picus 侧维护 `AnimLayerHost`  
 
+##### 2.0a Phase 2a hard gate（**关闭后方可 P2b**）— **已完成**
+
+权威叙述：[`docs/architecture/runtime.md`](../architecture/runtime.md)「Masonry layer
+contract」；代码：`picus_core::runtime::layers`；目标尺寸决策：
+[`docs/perf/frame-pipeline-baseline.md`](../perf/frame-pipeline-baseline.md) §6。
+
+| 门禁项 | 结论 |
+|--------|------|
+| 自包含可独立 encode 的 painter-order entry（clip/scroll/transform/ZStack/overlay） | **上游不足**：`IsolatedScene`/`External` 可在 re-paint 时拆分 plan，但 mode 每 pass 重置且 clean widget 会丢 isolation；**无** ancestor clip/effect 打包、**无** 持久 `LayerId` |
+| anim tick 只发变更 entry、免全树 `redraw`/base 重装 | **上游不足**：仅有全量 `RenderRoot::redraw`；`scene_cache` 跳过重录 ≠ 按层 rebuild |
+| 选型 | **`AnimLayerHost`**（Masonry layout/hit + External 槽；Picus 脏集/版本/scene） |
+| Anim target | **`FullWindowTransparent`** 首版；atlas 若 G3/G4 encode 预算失败再启 |
+| 上游策略 | 并行跟踪 LayerId / self-contained clip / selective redraw；**不阻塞** P2b |
+| 失败回退 | 保持 P1 全窗 encode + 过渡 30Hz anim throttle |
+| 禁止 | 把 post-hoc `VisualLayerPlan` 分类说成 “per-layer scene build” |
+
+**未做（故意）**：多 texture composite、Spinner 真拆层 encode——属 P2b。
+
 #### 2.1 基础设施
 
 | 工作项 | 细节 |
@@ -451,9 +469,16 @@ PR6-docs-cleanup
 | 阶段 | 状态 |
 |------|------|
 | P0 | **完成**（度量骨架 + 文档 + 过渡节流策略与 override；基线表待实测填写） |
+<<<<<<< HEAD
 | P1 | **完成**（FrameDriver + PresentPolicy + 决策表 / G5） |
 | P1b | **完成**（`RedrawDemand` 分类 + reactive 文档；无 paint-only Bevy 捷径） |
 | P2 | 未开始 |
+=======
+| P1 | **完成**（FrameDriver 调度 + PresentPolicy；全窗 encode 仍耦合） |
+| P1b | 部分/可后续（redraw 语义与 FrameDriver 粘性修复已叠在 P1 分支） |
+| P2a | **完成**（Masonry 层契约硬门禁 + `AnimLayerHost` scaffold + 目标策略文档） |
+| P2b+ | 未开始（多 texture composite / Spinner anim 层） |
+>>>>>>> 35bce89 (feat: close P2a Masonry layer contract gate + AnimLayerHost spike)
 | P3 | 未开始 |
 | P4 | 可选·未开始 |
 | P5 | 可选·未开始 |

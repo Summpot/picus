@@ -194,3 +194,64 @@ compare against that row set (or a clearly marked newer baseline revision).
 |------|--------|--------|
 | 2026-07-16 | Phase 0 PR | Created protocol + empty result tables |
 | 2026-07-16 | Phase 0 review fixes | Document present-path vs anim_tick denominators; full `PICUS_ANIM_PRESENT_HZ` disable set |
+| 2026-07-16 | Phase 2a layer gate | §6 anim target strategy + size-gate assumptions (no new PresentMon numbers yet) |
+
+---
+
+## 6. Anim target strategy (Phase 2a gate → P2b)
+
+Gate implementation: `picus_core::runtime::layers` (`AnimTargetStrategy`). Narrative:
+[architecture/runtime.md](../architecture/runtime.md) (Masonry layer contract).
+
+### 6.1 Choice
+
+| Field | Value |
+|-------|--------|
+| **Selected for first composite (P2b)** | **`FullWindowTransparent`** — full-window transparent anim render target; only anim widgets paint into it |
+| Deferred | `WidgetBoundsAtlas` — tight bounds / atlas (Phase 4 or if §6.2 fails) |
+| Boundary path | Picus `AnimLayerHost` + Masonry `PaintLayerMode::External` slots (not upstream-only isolation) |
+
+Plan §2.0 already recommended full-window transparent + “only draw anim widgets” for
+the first vertical slice. The Phase 2a inventory confirmed Masonry cannot yet supply
+self-contained selective layer redraw, so Picus owns anim dirty state regardless of
+target geometry.
+
+### 6.2 Size / budget criteria (plan gates)
+
+| Criterion | Intent | How we will judge |
+|-----------|--------|-------------------|
+| **encode_anim + composite p95** | ≤ **25%** of refresh period (e.g. ≤ 4.17 ms @ 60 Hz) | `PICUS_FRAME_TIMING` `encode_anim_ms` + `composite_ms` content-paint means once P2b wires counters; PresentMon for display path |
+| **4K G3** | Spinner design phases still visible at 3840×2160 | §2 protocol S2 @ 4K after P2b |
+| **Drag G4** | Displayed-frame latency p95 ≤ 2 refresh periods; ≥30% better than P0 | §3 PresentMon S3 |
+| **Multi-entry** | Multiple anim entries must **not** force full-window **base** clear each tick | Host dirty set encodes only dirty anim entries; base stays cached |
+
+### 6.3 Assumptions (until measured)
+
+These are **planning assumptions**, not acceptance claims. Fill §3 when P2b exists.
+
+1. **Full-window transparent anim RT cost** is dominated by Vello encode of a *sparse*
+   anim scene plus a full-size clear/composite, not by re-recording the entire base
+   UI tree (base encode_count → 0 on pure anim ticks — G2).
+2. At **1080p**, full-window anim encode is expected to clear the 25% refresh budget
+   for a single Spinner-class scene; at **4K** the clear+composite term grows with
+   pixel count and is the first risk for switching to atlas.
+3. **WidgetBoundsAtlas** reduces pixel work but requires reliable bounds under
+   scroll/clip/transform and more composite rect bookkeeping; deferred until
+   FullWindowTransparent fails §6.2 on real hardware.
+4. **Mailbox** present remains required for G4; target strategy does not replace
+   present-mode policy.
+5. Transitional **~30 Hz anim present throttle** stays default until G2–G4 pass
+   after host+composite (G10).
+
+### 6.4 Comparison snapshot (qualitative)
+
+| Dimension | FullWindowTransparent | WidgetBoundsAtlas |
+|-----------|----------------------|-------------------|
+| Implementation risk | Lower (matches current full-window paths) | Higher (scissor/atlas, dirty union) |
+| encode_anim vs resolution | Scales with window pixels | Scales with widget dirty union |
+| Clip/scroll correctness | Composite in window space; External slot bounds from layout | Must clip atlas samples to ancestor clip |
+| Multi Spinner | One shared anim RT or N full-window RTs (product choice in P2b) | Natural atlas packing |
+| When to prefer | Default first ship | 4K / many entries if p95 over budget |
+
+**Decision:** ship P2b with **FullWindowTransparent**; re-evaluate atlas only if
+encode_anim+composite p95 exceeds 25% refresh on the §2 matrix (especially 4K S2/S3).

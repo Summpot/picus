@@ -99,6 +99,7 @@ but still flushes process summaries on a ~1s wall clock.
 Windows baselines require PresentMon/ETW; protocol and result template:
 [perf/frame-pipeline-baseline.md](../perf/frame-pipeline-baseline.md).
 
+<<<<<<< HEAD
 ### Bevy redraw semantics (Phase 1b)
 
 After each window `step_frame`, the host returns an internal **`RedrawDemand`**
@@ -146,6 +147,75 @@ Implications:
    awake.
 
 App public API remains `run_picus`; `FrameDriver` / `RedrawDemand` stay internal.
+=======
+### Masonry layer contract (Phase 2a hard gate)
+
+Before multi-texture composite (P2b), Picus freezes the Masonry boundary. Source of
+truth for the inventory and selected interface:
+`picus_core::runtime::layers` (crate-private; not on the app facade).
+
+#### Gate questions and results (xilem rev `4b1922c`)
+
+| # | Question | Result |
+|---|----------|--------|
+| 1 | Can `PaintLayerMode` / `VisualLayerPlan` yield **self-contained, independently renderable** painter-order entries under ancestor clip/scroll, transform, ZStack, overlay? | **No for product isolation.** `IsolatedScene` and `External` can **split** painter order on a pass where the widget re-paints; `paint_layer_mode` **resets to Inline** each pass and is only re-set during paint, so clean widgets **drop isolation** on the next full redraw. Transforms bake into scene/local space; `External { bounds }` reserves a host slot. Ancestor **clip/effect is not packaged** on the layer (no clip-chain descriptor). No persistent compositor `LayerId` (upstream still has a FIXME). Flatten helpers (`root_layer` / `overlay_layers`) **skip** External. |
+| 2 | Can an anim tick emit **only the changed anim entry** without full-tree `RenderRoot::redraw()` and without reassembling base scene? | **No.** Only full `redraw()` → paint pass. Per-widget `scene_cache` may skip re-recording clean widgets, but the plan is always **reassembled** as a full-pass snapshot. |
+
+**Forbidden reading:** classifying a post-hoc `VisualLayerPlan` as “per-layer scene
+build” is incorrect. The plan is a full-pass painter-order snapshot; selective work
+must be owned by Picus dirty sets, not by slicing the plan after the fact.
+
+#### Selected path
+
+**Picus `AnimLayerHost`** (not “wait for upstream only”):
+
+- **Masonry:** layout, hit-test, painter-order **`PaintLayerMode::External`** placeholders.
+- **Picus host:** independent anim entry state (`AnimLayerId`, bounds, transform, version, dirty); P2b builds anim scenes/textures only for dirty entries.
+- **Composite (P2b, not this PR):** exact painter-order composite of base segment(s) + host anim textures + overlays.
+
+**Upstream revision strategy (parallel, non-blocking):** track/contribute persistent
+`LayerId`, self-contained clip/effect on isolated layers, and selective layer redraw.
+If a future pin gains
+`MasonryLayerCapabilities::supports_upstream_only_anim_isolation()`, Picus may
+narrow the host; P2b does not wait on that.
+
+**Failure fallback:** keep Phase 1 full-window encode + transitional anim present
+throttle until host+composite land; never claim VisualLayerPlan classification as
+isolation.
+
+#### Ownership / lifecycle
+
+```mermaid
+flowchart TB
+  subgraph window["WindowRuntime"]
+    RR["RenderRoot / Masonry<br/>layout · hit-test · External slots"]
+    Host["AnimLayerHost (Picus)<br/>AnimLayerId · dirty · version"]
+    Surf["LayerSurfaces (P2b)<br/>base + anim textures"]
+  end
+  RR -->|"painter-order External placeholder"| Host
+  Host -->|"dirty anim entries only"| Surf
+  RR -->|"base plan when base_dirty"| Surf
+  Surf -->|"exact-order composite"| Present["swapchain present"]
+```
+
+```text
+register(widget)  → AnimLayerId + External paint mode on widget path
+layout/compose    → update bounds/transform; CompositorPlan if plan changes
+AnimFrame tick    → host.mark_anim_paint(id); base rewrite avoided when only anim
+encode (P2b)      → dirty host entries only; base only if base_dirty
+unmount           → host.remove_widget; External slot drops on next plan
+```
+
+#### Anim target choice (size gate input)
+
+| Strategy | Encode shape | First P2b? |
+|----------|--------------|------------|
+| **Full-window transparent** anim target; only anim widgets paint | Full-window clear of anim RT; sparse scene | **Yes** (plan §2.0) |
+| Widget-bounds / atlas | Smaller encode; more bookkeeping | Deferred (P4 / if G3·G4 fail) |
+
+Rationale and budget assumptions:
+[perf/frame-pipeline-baseline.md](../perf/frame-pipeline-baseline.md) §6.
+>>>>>>> 35bce89 (feat: close P2a Masonry layer contract gate + AnimLayerHost spike)
 
 ### Frame pipeline evolution
 
