@@ -1268,6 +1268,28 @@ impl LayerRegistry {
         }
         saw_anim_dirty
     }
+
+    /// After a **successful** present, ack Spinner visual phases on live widgets.
+    ///
+    /// Selective G2 never runs Masonry `paint`; host scene build alone must not
+    /// ack (Failed would strand dirty host with no `request_paint_only` — Issue 13).
+    pub(crate) fn ack_spinner_phases_after_present(&self, render_root: &RenderRoot) {
+        for e in self.plan.entries() {
+            let (Some(anim_id), Some(widget_id)) = (e.anim_id, e.widget_id) else {
+                continue;
+            };
+            let Some(phase) = self.host.get(anim_id).and_then(|h| h.visual_phase) else {
+                continue;
+            };
+            let Some(wref) = render_root.get_widget(widget_id) else {
+                continue;
+            };
+            let Some(spinner) = wref.downcast::<Spinner>() else {
+                continue;
+            };
+            spinner.inner().ack_visual_phase(phase);
+        }
+    }
 }
 
 /// Downcast + host scene sync for one bound widget (Spinner product path).
@@ -1294,25 +1316,16 @@ fn sync_one_anim_widget(
     let _ = spinner;
     let _ = wref;
 
-    let result = registry.host_mut().sync_spinner_scene(
+    // Phase ack is deferred until successful present (Issue 13): ack-on-sync
+    // left Failed presents with unacked host dirty but no further request_paint.
+    registry.host_mut().sync_spinner_scene(
         anim_id,
         t,
         size,
         color,
         window_transform,
         window_bounds,
-    );
-
-    // Ack phase on the widget without edit_widget/rewrite (Cell + immutable ref).
-    // Selective G2 never runs Spinner::paint; host sync is the ack (Issue 12).
-    if let Some(phase) = result.visual_phase
-        && let Some(wref) = render_root.get_widget(widget_id)
-        && let Some(spinner) = wref.downcast::<Spinner>()
-    {
-        spinner.inner().ack_visual_phase(phase);
-    }
-
-    result
+    )
 }
 
 fn layer_bounds_estimate(layer: &VisualLayer, window_bounds: Rect) -> Rect {
@@ -2379,9 +2392,9 @@ mod tests {
     }
 
     #[test]
-    fn host_sync_acks_spinner_visual_phase_without_paint() {
-        // Issue 12: selective path never paints; host sync must ack phase so
-        // on_anim_frame stops re-requesting request_paint_only for that phase.
+    fn host_sync_does_not_ack_phase_until_present_helper() {
+        // Issues 12+13: selective never paints; ack only after successful present
+        // so Failed can re-request paint while host stays dirty.
         let spinner = NewWidget::new(Spinner::new());
         let spinner_id = spinner.id();
         let root_widget = NewWidget::new(
@@ -2394,42 +2407,32 @@ mod tests {
             1,
         )));
         let (plan, _) = root.redraw();
-        // After full paint path, phase may already be acked by paint.
         let mut registry = LayerRegistry::new(AnimTargetStrategy::FullWindowTransparent);
         registry.register_external_widgets_from_visual(&plan, &root);
         registry.rebuild_from_visual_plan(&plan, Rect::new(0.0, 0.0, 80.0, 40.0));
-        let _ = registry.sync_anim_entries_from_widgets(&root);
 
-        // Clear ack to simulate a phase that has not been painted yet.
-        {
-            let wref = root.get_widget(spinner_id).expect("spinner");
-            let s = wref.downcast::<Spinner>().expect("downcast");
-            // Force unacked state for current phase by setting a different phase.
-            let current = s.inner().phase();
-            s.inner()
-                .ack_visual_phase(current.wrapping_add(1) % Spinner::PHASE_COUNT);
-            // Now current phase is unacked relative to t... actually we set wrong phase.
-            // Reset: ack a sentinel then advance t via anim without paint.
-            s.inner().ack_visual_phase(255); // impossible phase so current is unacked
-        }
-        let before = root
-            .get_widget(spinner_id)
+        // Force unacked sentinel.
+        root.get_widget(spinner_id)
             .unwrap()
             .downcast::<Spinner>()
             .unwrap()
             .inner()
-            .acked_visual_phase();
-        assert_eq!(before, Some(255));
+            .ack_visual_phase(255);
 
-        // Sync without paint must ack the real phase.
         let _ = registry.sync_anim_entries_from_widgets(&root);
-        let after = root
-            .get_widget(spinner_id)
-            .unwrap()
-            .downcast::<Spinner>()
-            .unwrap()
-            .inner()
-            .acked_visual_phase();
+        assert_eq!(
+            root.get_widget(spinner_id)
+                .unwrap()
+                .downcast::<Spinner>()
+                .unwrap()
+                .inner()
+                .acked_visual_phase(),
+            Some(255),
+            "sync alone must not ack (Failed present would strand encode retry)"
+        );
+
+        // Successful-present helper acks the host visual phase.
+        registry.ack_spinner_phases_after_present(&root);
         let expected = root
             .get_widget(spinner_id)
             .unwrap()
@@ -2438,10 +2441,77 @@ mod tests {
             .inner()
             .phase();
         assert_eq!(
-            after,
+            root.get_widget(spinner_id)
+                .unwrap()
+                .downcast::<Spinner>()
+                .unwrap()
+                .inner()
+                .acked_visual_phase(),
             Some(expected),
-            "host sync must ack spinner visual phase"
+            "ack_spinner_phases_after_present must ack host phase"
         );
+    }
+
+    #[test]
+    fn failed_present_retains_host_dirty_for_encode_retry() {
+        // Issue 13: after Failed selective present, host dirty must remain so
+        // post_dirty can re-insert AnimPaint without a new request_paint_only.
+        let spinner = NewWidget::new(Spinner::new());
+        let root_widget = NewWidget::new(
+            Flex::row()
+                .with_fixed(NewWidget::new(ModeBox::new(
+                    PaintLayerMode::Inline,
+                    Color::from_rgb8(255, 0, 0),
+                )))
+                .with_fixed(
+                    NewWidget::new(
+                        SizedBox::new(spinner)
+                            .width(Length::px(40.0))
+                            .height(Length::px(40.0)),
+                    ),
+                ),
+        );
+        let mut root = test_root(root_widget);
+        let _ = root.handle_window_event(WindowEvent::AnimFrame(std::time::Duration::from_millis(
+            1,
+        )));
+        let (plan, _) = root.redraw();
+        let mut registry = LayerRegistry::new(AnimTargetStrategy::FullWindowTransparent);
+        registry.register_external_widgets_from_visual(&plan, &root);
+        registry.rebuild_from_visual_plan(&plan, Rect::new(0.0, 0.0, 80.0, 40.0));
+        assert!(
+            registry.sync_anim_entries_from_widgets(&root).any_version_bumped
+        );
+
+        // Simulate Failed present: retain dirty, do not ack phases.
+        registry.retain_dirty_after_failed_present();
+        let dirty_layers: Vec<_> = registry.host().dirty_anim_paint_layers().collect();
+        assert!(
+            !dirty_layers.is_empty(),
+            "host must stay dirty after Failed present"
+        );
+        assert!(
+            registry.only_anim_needs_encode() || registry.plan().dirty_encode_ids().count() > 0,
+            "plan Anim entries must still need encode after Failed"
+        );
+
+        // post_dirty merge contract: host dirty alone is enough for AnimPaint.
+        use crate::runtime::frame_driver::{DirtyBudget, DirtyReason};
+        let mut post = DirtyBudget::new();
+        post.insert(DirtyReason::AnimTick);
+        for layer in registry.host().dirty_anim_paint_layers() {
+            post.insert(DirtyReason::AnimPaint { layer });
+        }
+        assert!(
+            post.needs_content_present(),
+            "host dirty → AnimPaint must request encode after Failed (not pure AnimTick)"
+        );
+        assert!(post.is_selective_anim_encode() || post.has(DirtyReason::AnimPaint { layer: dirty_layers[0] }));
+
+        // Successful present clears host dirty; only then would ack run.
+        registry.clear_dirty_after_successful_present();
+        assert_eq!(registry.host().dirty_ids().count(), 0);
+        assert_eq!(registry.plan().dirty_encode_ids().count(), 0);
     }
 
     #[test]

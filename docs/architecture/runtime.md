@@ -255,9 +255,11 @@ Product path for continuous spinner isolation (no gallery/entity hardcode):
    window has already painted once, the plan has Anim entries, **no sticky
    `base_invalidated`**, **no rewrite pending**, and **no CachedScene/Overlay
    needs encode** after metrics notify, `step_frame` **skips** full-tree
-   `redraw()` and base reassembly. Host sync acks Spinner visual phase (no
-   Masonry paint). Phase-unchanged ticks skip encode/present. Metrics/size
-   changes force full path (never encode empty base with `visual=None`).
+   `redraw()` and base reassembly. Spinner phase is acked only after
+   **successful present** (host dirty is always re-merged into post_dirty so
+   Failed present still retries encode). Phase-unchanged ticks skip
+   encode/present once acked. Metrics/size changes force full path (never
+   encode empty base with `visual=None`).
 5. **Rewrite during AnimFrame:** if rewrite was pending before the tick (and
    completed) or still pending after, set sticky `base_invalidated` +
    `InputOrRebuild` (unthrottled) until a **full-path** present succeeds —

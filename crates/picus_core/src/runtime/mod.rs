@@ -1108,15 +1108,18 @@ impl WindowRuntime {
             // Pre-tick redraw / sticky base invalidation is content (unthrottled).
             post_dirty.insert(DirtyReason::InputOrRebuild);
         }
+        // Always re-merge retained host dirty into post_dirty (Issue 13).
+        // After Failed selective present, phase may already be unacked or acked;
+        // host.dirty must still force AnimPaint so encode/present is retried.
+        // (pre_dirty already includes host dirty; post_dirty is rebuilt from scratch.)
+        let mut any_host_dirty = false;
+        for layer in self.layer_registry.host().dirty_anim_paint_layers() {
+            post_dirty.insert(DirtyReason::AnimPaint { layer });
+            any_host_dirty = true;
+        }
         if anim_raised_redraw {
             // Raised during AnimFrame (e.g. Spinner phase change → request_paint_only).
-            // Prefer real host layer ids when already registered; else layer 0 sentinel.
-            let mut any_host = false;
-            for layer in self.layer_registry.host().dirty_anim_paint_layers() {
-                post_dirty.insert(DirtyReason::AnimPaint { layer });
-                any_host = true;
-            }
-            if !any_host {
+            if !any_host_dirty {
                 post_dirty.insert(DirtyReason::AnimPaint { layer: 0 });
             }
             self.needs_redraw = true;
@@ -1418,6 +1421,11 @@ impl WindowRuntime {
         if painted {
             // Sticky: clear entry/host dirty only after successful present.
             self.layer_registry.clear_dirty_after_successful_present();
+            // Ack Spinner phases only after present succeeds (Issue 13).
+            // Selective path never paints; Failed must leave phase unacked so
+            // request_paint_only continues until encode/present can retry.
+            self.layer_registry
+                .ack_spinner_phases_after_present(&self.render_root);
             // Base invalidation clears only after a full-path present (Issue 10).
             if used_full_base_path {
                 self.base_invalidated = false;
