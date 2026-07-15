@@ -167,6 +167,9 @@ pub struct WindowRuntime {
     needs_redraw: bool,
     needs_anim_frame: bool,
     has_painted_once: bool,
+    /// Last time an animation-driven frame was presented (spinner, etc.).
+    /// Used to cap pure-anim present rate and reduce DWM drag ghosting.
+    last_anim_present: Option<std::time::Instant>,
     viewport_width: f64,
     viewport_height: f64,
     window_surface: Option<ExternalWindowSurface>,
@@ -177,6 +180,15 @@ pub struct WindowRuntime {
     #[cfg(test)]
     pointer_trace: Vec<PointerTraceEvent>,
 }
+
+/// Minimum interval between animation-only presents (~30 Hz).
+///
+/// Widgets like [`Spinner`](picus_widget::widgets::Spinner) request a paint every
+/// anim tick. Presenting that at full display rate while the window is moved by
+/// DWM causes visible ghosting because frames queue behind the compositor.
+/// Throttling pure-anim presents keeps the spinner smooth enough while the
+/// swapchain stays closer to the live window position.
+const ANIM_PRESENT_MIN_INTERVAL: std::time::Duration = std::time::Duration::from_millis(33);
 
 impl WindowRuntime {
     /// Install this window's app action sink as the active thread-local target
@@ -283,6 +295,7 @@ impl WindowRuntime {
             needs_redraw: true,
             needs_anim_frame: true,
             has_painted_once: false,
+            last_anim_present: None,
             viewport_width: initial_viewport.0,
             viewport_height: initial_viewport.1,
             window_surface: None,
@@ -853,6 +866,31 @@ impl WindowRuntime {
                 redraw_duration: redraw_started.elapsed(),
                 present_duration: std::time::Duration::ZERO,
             };
+        }
+
+        // Animation-only presents (spinner paint_only, etc.): cap rate so DWM
+        // window-move composition does not display a multi-frame backlog.
+        // Content/input-driven redraws (`incoming_redraw`) stay unrestricted.
+        let anim_driven_present = should_tick_animation && !incoming_redraw && !first_paint;
+        if anim_driven_present {
+            let now = std::time::Instant::now();
+            if self
+                .last_anim_present
+                .is_some_and(|last| now.duration_since(last) < ANIM_PRESENT_MIN_INTERVAL)
+            {
+                paint_reasons |= crate::perf::PaintReason::AnimTickNoPresent as u32;
+                // Keep requesting frames so the anim clock continues; just skip
+                // the expensive Vello encode/present this tick.
+                self.needs_anim_frame = true;
+                return PaintFrameResult {
+                    painted: false,
+                    wants_redraw: true,
+                    paint_reasons,
+                    redraw_duration: redraw_started.elapsed(),
+                    present_duration: std::time::Duration::ZERO,
+                };
+            }
+            self.last_anim_present = Some(now);
         }
 
         // Consume the redraw flag we are about to fulfill.

@@ -548,6 +548,11 @@ impl RenderContext {
             alpha_mode,
             metrics.transparent,
         );
+        // Prefer low-latency present modes so continuous animation (e.g. Spinner)
+        // does not queue multiple frames behind DWM during window drag. Mailbox
+        // drops intermediate frames instead of displaying a backlog (ghosting).
+        let present_mode =
+            select_present_mode(&capabilities.present_modes, present_mode);
 
         let config = SurfaceConfiguration {
             usage: TextureUsages::RENDER_ATTACHMENT,
@@ -555,6 +560,8 @@ impl RenderContext {
             width: metrics.physical_width.max(1),
             height: metrics.physical_height.max(1),
             present_mode,
+            // Keep swapchain depth shallow so the displayed image tracks the
+            // live window position as closely as possible under DWM composition.
             desired_maximum_frame_latency: 1,
             alpha_mode,
             view_formats: vec![],
@@ -789,6 +796,40 @@ fn map_requested_alpha_mode(mode: BevyCompositeAlphaMode) -> Option<CompositeAlp
     }
 }
 
+/// Choose a swapchain present mode from device capabilities.
+///
+/// Preference order prioritizes **low latency under load**:
+/// 1. [`PresentMode::Mailbox`] — triple-buffer, drops intermediate frames (best
+///    against window-drag ghosting while continuously animating)
+/// 2. [`PresentMode::FifoRelaxed`] — allows late frames without hard queueing
+/// 3. The caller's preferred mode (typically [`PresentMode::AutoVsync`])
+/// 4. [`PresentMode::Fifo`] / [`PresentMode::AutoVsync`] as final fallbacks
+fn select_present_mode(available: &[PresentMode], preferred: PresentMode) -> PresentMode {
+    let prefer = [
+        PresentMode::Mailbox,
+        PresentMode::FifoRelaxed,
+        preferred,
+        PresentMode::AutoVsync,
+        PresentMode::Fifo,
+        PresentMode::AutoNoVsync,
+        PresentMode::Immediate,
+    ];
+    for mode in prefer {
+        if available.contains(&mode) {
+            if mode != preferred {
+                tracing::debug!(
+                    ?mode,
+                    ?preferred,
+                    available = ?available,
+                    "selected low-latency present mode"
+                );
+            }
+            return mode;
+        }
+    }
+    preferred
+}
+
 fn choose_alpha_mode(
     modes: &[CompositeAlphaMode],
     transparent: bool,
@@ -1016,6 +1057,28 @@ mod tests {
             return;
         }
         assert_eq!(backends_for_surface(), Backends::default());
+    }
+
+    #[test]
+    fn present_mode_prefers_mailbox_when_available() {
+        let modes = [
+            PresentMode::Fifo,
+            PresentMode::Mailbox,
+            PresentMode::Immediate,
+        ];
+        assert_eq!(
+            select_present_mode(&modes, PresentMode::AutoVsync),
+            PresentMode::Mailbox
+        );
+    }
+
+    #[test]
+    fn present_mode_falls_back_when_mailbox_missing() {
+        let modes = [PresentMode::Fifo, PresentMode::FifoRelaxed];
+        assert_eq!(
+            select_present_mode(&modes, PresentMode::AutoVsync),
+            PresentMode::FifoRelaxed
+        );
     }
 
     #[test]
