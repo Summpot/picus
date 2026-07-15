@@ -469,16 +469,10 @@ PR6-docs-cleanup
 | 阶段 | 状态 |
 |------|------|
 | P0 | **完成**（度量骨架 + 文档 + 过渡节流策略与 override；基线表待实测填写） |
-<<<<<<< HEAD
 | P1 | **完成**（FrameDriver + PresentPolicy + 决策表 / G5） |
 | P1b | **完成**（`RedrawDemand` 分类 + reactive 文档；无 paint-only Bevy 捷径） |
-| P2 | 未开始 |
-=======
-| P1 | **完成**（FrameDriver 调度 + PresentPolicy；全窗 encode 仍耦合） |
-| P1b | 部分/可后续（redraw 语义与 FrameDriver 粘性修复已叠在 P1 分支） |
 | P2a | **完成**（Masonry 层契约硬门禁 + `AnimLayerHost` scaffold + 目标策略文档） |
 | P2b+ | 未开始（多 texture composite / Spinner anim 层） |
->>>>>>> 35bce89 (feat: close P2a Masonry layer contract gate + AnimLayerHost spike)
 | P3 | 未开始 |
 | P4 | 可选·未开始 |
 | P5 | 可选·未开始 |

@@ -1,17 +1,12 @@
 //! Per-window retained Masonry runtime and paint scheduling.
 //!
-<<<<<<< HEAD
 //! [`frame_driver`] owns dirty-reason aggregation, the present decision table
 //! (Phase 1), and structured [`RedrawDemand`] wake flags (Phase 1b). Execution
 //! (anim tick, encode, present) remains on [`WindowRuntime`]; Bevy still receives
 //! a single `RequestRedraw` when demand is non-empty.
-=======
-//! [`frame_driver`] owns dirty-reason aggregation and the present decision table
-//! (Phase 1). Execution (anim tick, encode, present) remains on [`WindowRuntime`].
 //!
 //! [`layers`] holds the Phase 2a Masonry layer-contract gate and [`AnimLayerHost`]
 //! scaffold (not yet wired into the paint path; multi-texture composite is P2b).
->>>>>>> 35bce89 (feat: close P2a Masonry layer contract gate + AnimLayerHost spike)
 
 pub(crate) mod frame_driver;
 pub(crate) mod layers;

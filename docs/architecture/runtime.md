@@ -99,7 +99,6 @@ but still flushes process summaries on a ~1s wall clock.
 Windows baselines require PresentMon/ETW; protocol and result template:
 [perf/frame-pipeline-baseline.md](../perf/frame-pipeline-baseline.md).
 
-<<<<<<< HEAD
 ### Bevy redraw semantics (Phase 1b)
 
 After each window `step_frame`, the host returns an internal **`RedrawDemand`**
@@ -147,7 +146,7 @@ Implications:
    awake.
 
 App public API remains `run_picus`; `FrameDriver` / `RedrawDemand` stay internal.
-=======
+
 ### Masonry layer contract (Phase 2a hard gate)
 
 Before multi-texture composite (P2b), Picus freezes the Masonry boundary. Source of
@@ -233,7 +232,6 @@ unmount                            → host.remove_widget; External slot drops o
 
 Rationale and budget assumptions:
 [perf/frame-pipeline-baseline.md](../perf/frame-pipeline-baseline.md) §6.
->>>>>>> 35bce89 (feat: close P2a Masonry layer contract gate + AnimLayerHost spike)
 
 ### Frame pipeline evolution
 
