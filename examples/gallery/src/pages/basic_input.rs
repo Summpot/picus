@@ -123,13 +123,17 @@ pub fn spawn_checkbox_page(commands: &mut Commands, parent: Entity) {
         ChildOf(basic)
     });
     commands.spawn_scene(bsn! {
-        template_value(UiCheckbox::new("Indeterminate", false).indeterminate(true))
+        template_value(
+            UiCheckbox::new("Indeterminate", false)
+                .indeterminate(true)
+                .three_state(true)
+        )
         ChildOf(basic)
     });
     note(
         commands,
         basic,
-        "Clicking an indeterminate checkbox transitions it to checked.",
+        "Tri-state checkboxes cycle unchecked → checked → indeterminate → unchecked on click.",
     );
 
     let toggle_style = card(commands, g, "Toggle-style labels");

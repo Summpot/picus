@@ -682,16 +682,24 @@ pub fn apply_widget_ui_action(world: &mut World, _source: Entity, action: &Widge
 
                 let changed =
                     if let Some(mut checkbox_state) = world.get_mut::<UiCheckbox>(checkbox) {
-                        // Tri-state toggle: indeterminate → checked → unchecked → checked.
-                        // If currently indeterminate, clear indeterminate and set checked.
-                        if checkbox_state.indeterminate {
-                            checkbox_state.indeterminate = false;
-                            checkbox_state.checked = true;
-                            Some((true, false))
+                        // Binary: indeterminate → checked, else toggle checked.
+                        // Tri-state: unchecked → checked → indeterminate → unchecked.
+                        let next = if checkbox_state.three_state {
+                            if checkbox_state.indeterminate {
+                                (false, false)
+                            } else if checkbox_state.checked {
+                                (false, true)
+                            } else {
+                                (true, false)
+                            }
+                        } else if checkbox_state.indeterminate {
+                            (true, false)
                         } else {
-                            checkbox_state.checked = !checkbox_state.checked;
-                            Some((checkbox_state.checked, false))
-                        }
+                            (!checkbox_state.checked, false)
+                        };
+                        checkbox_state.checked = next.0;
+                        checkbox_state.indeterminate = next.1;
+                        Some(next)
                     } else {
                         None
                     };
@@ -1397,6 +1405,57 @@ mod tests {
         assert_eq!(changed.len(), 1);
         assert!(changed[0].action.checked);
         assert!(!changed[0].action.indeterminate);
+    }
+
+    #[test]
+    fn three_state_checkbox_cycles_through_indeterminate() {
+        let mut world = World::new();
+        world.insert_resource(UiEventQueue::default());
+
+        let checkbox = world
+            .spawn((crate::UiCheckbox::new("tri-state", false).three_state(true),))
+            .id();
+
+        let toggle = |world: &mut World, checkbox: Entity| {
+            world
+                .resource::<UiEventQueue>()
+                .push_typed(checkbox, crate::WidgetUiAction::ToggleCheckbox { checkbox });
+            crate::handle_widget_actions(world);
+        };
+
+        // unchecked → checked
+        toggle(&mut world, checkbox);
+        let state = world
+            .get::<crate::UiCheckbox>(checkbox)
+            .expect("checkbox should exist");
+        assert!(state.checked);
+        assert!(!state.indeterminate);
+
+        // checked → indeterminate
+        toggle(&mut world, checkbox);
+        let state = world
+            .get::<crate::UiCheckbox>(checkbox)
+            .expect("checkbox should exist");
+        assert!(
+            state.indeterminate,
+            "tri-state toggle from checked should enter indeterminate"
+        );
+        assert!(!state.checked);
+
+        let changed = world
+            .resource_mut::<UiEventQueue>()
+            .drain_actions::<crate::UiCheckboxChanged>();
+        assert_eq!(changed.len(), 2);
+        assert!(changed[1].action.indeterminate);
+        assert!(!changed[1].action.checked);
+
+        // indeterminate → unchecked
+        toggle(&mut world, checkbox);
+        let state = world
+            .get::<crate::UiCheckbox>(checkbox)
+            .expect("checkbox should exist");
+        assert!(!state.indeterminate);
+        assert!(!state.checked);
     }
 
     #[test]

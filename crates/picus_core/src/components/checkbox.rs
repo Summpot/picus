@@ -7,17 +7,26 @@ use crate::{
 
 /// Built-in checkbox UI component with ECS-native state.
 ///
-/// Supports a tri-state cycle via the optional `indeterminate` flag:
+/// Visual states:
 /// - `checked = false, indeterminate = false` → unchecked (☐)
 /// - `checked = true,  indeterminate = false` → checked (☑)
 /// - `indeterminate = true`                   → indeterminate (▬)
+///
+/// Click behaviour:
+/// - Binary (`three_state = false`, default): unchecked ↔ checked. An
+///   indeterminate value set programmatically clears to checked on click.
+/// - Tri-state (`three_state = true`): cycles
+///   unchecked → checked → indeterminate → unchecked on each click.
 #[derive(Component, Debug, Clone, Default, PartialEq, Eq)]
 pub struct UiCheckbox {
     pub label: String,
     pub checked: bool,
     /// When true the checkbox renders in the indeterminate state regardless of
-    /// `checked`. Clicking an indeterminate checkbox transitions to checked.
+    /// `checked`.
     pub indeterminate: bool,
+    /// When true, clicks cycle through unchecked, checked, and indeterminate.
+    /// When false (default), clicks only toggle checked/unchecked.
+    pub three_state: bool,
 }
 
 impl UiCheckbox {
@@ -27,13 +36,25 @@ impl UiCheckbox {
             label: label.into(),
             checked,
             indeterminate: false,
+            three_state: false,
         }
     }
 
     /// Mark this checkbox as indeterminate (tri-state dash appearance).
+    ///
+    /// Does not enable click-to-cycle by itself; use [`Self::three_state`] when
+    /// the control should also enter indeterminate via user clicks.
     #[must_use]
     pub fn indeterminate(mut self, indeterminate: bool) -> Self {
         self.indeterminate = indeterminate;
+        self
+    }
+
+    /// Enable the full tri-state click cycle
+    /// (unchecked → checked → indeterminate → unchecked).
+    #[must_use]
+    pub fn three_state(mut self, three_state: bool) -> Self {
+        self.three_state = three_state;
         self
     }
 }
