@@ -475,15 +475,20 @@ pub struct ExternalWindowSurface {
     layer_targets: HashMap<u64, LayerTextureTarget>,
     /// Metrics generation last applied to layer targets (P2.6).
     layer_metrics_generation: LayerMetricsGeneration,
-    /// Replace (no blend) blitter — layer0 when stacking in straight space, or
-    /// final present blit when intermediate is already premul.
+    /// Replace (no blend) into the **Rgba8Unorm intermediate** (layer0 straight path).
+    ///
+    /// Target format must match [`VELLO_TARGET_FORMAT`] / `create_targets`, **not**
+    /// the swapchain format (often `Bgra8Unorm` on Windows).
     layer_replace_blitter: TextureBlitter,
-    /// Straight → premul convert for layer0 when intermediate is held in premul space
-    /// (same factors as present premul: SrcAlpha / Zero).
+    /// Straight → premul convert into the Rgba8Unorm intermediate (layer0 when
+    /// intermediate is held in premul space; SrcAlpha / Zero).
     layer_premul_convert_blitter: TextureBlitter,
-    /// Src-over for upper layers: straight src over intermediate.
+    /// Src-over for upper layers onto the Rgba8Unorm intermediate.
     /// Safe when dest is premul (Issue 9) or when dest is opaque (a≈1).
     layer_stack_blitter: TextureBlitter,
+    /// Final replace blit from Rgba8Unorm intermediate → **swapchain** format
+    /// when intermediate is already premul (must not re-use intermediate blitters).
+    present_replace_blitter: TextureBlitter,
 }
 
 /// Result of rendering and presenting one frame to an external window surface.
@@ -595,10 +600,13 @@ impl ExternalWindowSurface {
 
         let dev_id = surface.dev_id;
         let device = &render_cx.devices[dev_id].device;
-        let layer_replace_blitter = create_layer_replace_blitter(device, surface.format);
+        // Intermediate + per-layer Vello targets are always Rgba8Unorm (Vello).
+        // Swapchain is often Bgra8Unorm on Windows — do not mix dest formats.
+        let layer_replace_blitter = create_layer_replace_blitter(device, VELLO_TARGET_FORMAT);
         let layer_premul_convert_blitter =
-            create_layer_premul_convert_blitter(device, surface.format);
-        let layer_stack_blitter = create_layer_stack_blitter(device, surface.format);
+            create_layer_premul_convert_blitter(device, VELLO_TARGET_FORMAT);
+        let layer_stack_blitter = create_layer_stack_blitter(device, VELLO_TARGET_FORMAT);
+        let present_replace_blitter = create_layer_replace_blitter(device, surface.format);
 
         Ok(Self {
             render_cx,
@@ -611,6 +619,7 @@ impl ExternalWindowSurface {
             layer_replace_blitter,
             layer_premul_convert_blitter,
             layer_stack_blitter,
+            present_replace_blitter,
         })
     }
 
@@ -1053,8 +1062,9 @@ impl ExternalWindowSurface {
                 }
             }
             if stack_premul {
-                // Intermediate already premul — replace into swapchain.
-                self.layer_replace_blitter.copy(
+                // Intermediate already premul — replace into swapchain
+                // (surface format, not intermediate Rgba8Unorm blitters).
+                self.present_replace_blitter.copy(
                     device,
                     &mut encoder,
                     &self.surface.target_view,
@@ -1393,6 +1403,14 @@ fn backend_options_for_surface(transparent: bool) -> wgpu::BackendOptions {
     backend_options
 }
 
+/// Texture format for Vello encode targets, ordered layer targets, and the
+/// intermediate composite stack.
+///
+/// Always `Rgba8Unorm` (Vello requirement). The window swapchain may be
+/// `Bgra8Unorm` on Windows — intermediate layer blitters must use this format,
+/// and only the final present blit uses `surface.format`.
+const VELLO_TARGET_FORMAT: TextureFormat = TextureFormat::Rgba8Unorm;
+
 fn create_targets(width: u32, height: u32, device: &Device) -> (Texture, TextureView) {
     let target_texture = device.create_texture(&wgpu::TextureDescriptor {
         label: Some("Picus Vello Render Target"),
@@ -1409,7 +1427,7 @@ fn create_targets(width: u32, height: u32, device: &Device) -> (Texture, Texture
         usage: TextureUsages::STORAGE_BINDING
             | TextureUsages::TEXTURE_BINDING
             | TextureUsages::RENDER_ATTACHMENT,
-        format: TextureFormat::Rgba8Unorm,
+        format: VELLO_TARGET_FORMAT,
         view_formats: &[],
     });
     let target_view = target_texture.create_view(&wgpu::TextureViewDescriptor {
@@ -1540,15 +1558,19 @@ fn create_blitter(
     }
 }
 
-/// Replace blitter (no blend) for intermediate layer0 (straight path) or final
-/// present when intermediate is already premultiplied.
+/// Replace blitter (no blend).
+///
+/// `format` is the **destination** attachment format for the blit pipeline
+/// (intermediate → use [`VELLO_TARGET_FORMAT`]; swapchain present → use
+/// `surface.format`).
 fn create_layer_replace_blitter(device: &Device, format: TextureFormat) -> TextureBlitter {
     TextureBlitter::new(device, format)
 }
 
-/// Straight-alpha → premultiplied convert (layer0 when intermediate holds premul).
+/// Straight-alpha → premultiplied convert into the intermediate.
 ///
 /// Same color factors as the present premul blitter (`SrcAlpha` / `Zero`).
+/// `format` must be [`VELLO_TARGET_FORMAT`] (intermediate dest).
 fn create_layer_premul_convert_blitter(device: &Device, format: TextureFormat) -> TextureBlitter {
     const PREMUL_CONVERT: wgpu::BlendState = wgpu::BlendState {
         alpha: wgpu::BlendComponent::REPLACE,
@@ -1567,6 +1589,7 @@ fn create_layer_premul_convert_blitter(device: &Device, format: TextureFormat) -
 ///
 /// Color: `Cs*As + Cd*(1-As)`; alpha: `As + Ad*(1-As)`.
 /// Correct when dest is **premul** (Mica stack) or dest is fully opaque.
+/// `format` must be [`VELLO_TARGET_FORMAT`] (intermediate dest).
 fn create_layer_stack_blitter(device: &Device, format: TextureFormat) -> TextureBlitter {
     const STRAIGHT_SRC_OVER: wgpu::BlendState = wgpu::BlendState {
         color: wgpu::BlendComponent {
@@ -2522,5 +2545,87 @@ mod tests {
         assert!(map.contains_key(&1));
         assert!(map.contains_key(&3));
         assert!(!map.contains_key(&2));
+    }
+
+    /// Spinner / ordered path regression: intermediate is always Rgba8Unorm while
+    /// the Windows swapchain is often Bgra8Unorm. Layer stack blitters must target
+    /// the intermediate; only the final present replace may use the surface format.
+    #[test]
+    fn ordered_composite_accepts_bgra_swapchain_dest_from_rgba_intermediate() {
+        let Some((device, queue)) = create_headless_device() else {
+            eprintln!("skipping Bgra present format test: no compatible wgpu adapter");
+            return;
+        };
+
+        let tex_usage = TextureUsages::TEXTURE_BINDING
+            | TextureUsages::COPY_DST
+            | TextureUsages::RENDER_ATTACHMENT;
+
+        // Straight-alpha layer (Vello style) in Rgba8Unorm.
+        let layer0 = create_rgba8_texture(
+            &device,
+            BLIT_TEST_WIDTH,
+            BLIT_TEST_HEIGHT,
+            tex_usage,
+            "bgra-present-layer0",
+        );
+        write_rgba8_pixels(
+            &queue,
+            &layer0,
+            BLIT_TEST_WIDTH,
+            BLIT_TEST_HEIGHT,
+            &BLIT_TEST_SOURCE,
+        );
+
+        let intermediate = create_rgba8_texture(
+            &device,
+            BLIT_TEST_WIDTH,
+            BLIT_TEST_HEIGHT,
+            TextureUsages::TEXTURE_BINDING
+                | TextureUsages::RENDER_ATTACHMENT
+                | TextureUsages::COPY_SRC
+                | TextureUsages::COPY_DST,
+            "bgra-present-mid",
+        );
+
+        // Destination matches Windows swapchain format.
+        let destination = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("bgra-present-dest"),
+            size: wgpu::Extent3d {
+                width: BLIT_TEST_WIDTH,
+                height: BLIT_TEST_HEIGHT,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: TextureFormat::Bgra8Unorm,
+            usage: TextureUsages::RENDER_ATTACHMENT
+                | TextureUsages::COPY_SRC
+                | TextureUsages::COPY_DST,
+            view_formats: &[],
+        });
+
+        // Production split: intermediate blitters = VELLO_TARGET_FORMAT,
+        // present replace = surface format (Bgra8Unorm here).
+        let premul_convert =
+            create_layer_premul_convert_blitter(&device, VELLO_TARGET_FORMAT);
+        let present_replace = create_layer_replace_blitter(&device, TextureFormat::Bgra8Unorm);
+
+        let l0_view = layer0.create_view(&wgpu::TextureViewDescriptor::default());
+        let mid_view = intermediate.create_view(&wgpu::TextureViewDescriptor::default());
+        let dest_view = destination.create_view(&wgpu::TextureViewDescriptor::default());
+
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("bgra present composite"),
+        });
+        premul_convert.copy(&device, &mut encoder, &l0_view, &mid_view);
+        present_replace.copy(&device, &mut encoder, &mid_view, &dest_view);
+        // If formats were mismatched (Rgba blitter → Bgra dest), submit panics
+        // via wgpu validation (same error as gallery Spinner page).
+        queue.submit(Some(encoder.finish()));
+        device
+            .poll(wgpu::PollType::wait_indefinitely())
+            .expect("GPU work after cross-format ordered present");
     }
 }

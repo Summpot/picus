@@ -1960,6 +1960,48 @@ mod tests {
         );
     }
 
+    /// Masonry severs the current layer when External is under an ancestor clip,
+    /// leaving PushClip without PopClip (`UnclosedClips`). Picus encode balances
+    /// stacks in `picus_imaging` so gallery (Spinner/ProgressBar under Portal) works.
+    #[test]
+    fn external_under_ancestor_clip_raw_scenes_may_be_unbalanced_but_balanceable() {
+        let root_widget = NewWidget::new(ClipParent::new(NewWidget::new(ModeBox::new(
+            PaintLayerMode::External,
+            Color::TRANSPARENT,
+        ))));
+        let mut root = test_root(root_widget);
+        // First paint applies External (mode is not sticky across clean redraws).
+        let (plan, _) = root.redraw();
+        assert!(
+            plan.layers
+                .iter()
+                .any(|l| matches!(l.kind, VisualLayerKind::External { .. })),
+            "External under clip must still reserve a placeholder; plan={plan:?}"
+        );
+
+        let mut raw_invalid = false;
+        for layer in &plan.layers {
+            if let VisualLayerKind::Scene(scene) = &layer.kind {
+                if scene.validate().is_err() {
+                    raw_invalid = true;
+                    let balanced = picus_imaging::balance_scene_stacks(scene);
+                    assert_eq!(
+                        balanced.validate(),
+                        Ok(()),
+                        "picus_imaging must repair Masonry mid-clip layer splits"
+                    );
+                }
+            }
+        }
+        // Document the upstream bug: at least one scene is unbalanced when
+        // External finishes under ClipParent (gallery Portal + AnimEntry path).
+        assert!(
+            raw_invalid,
+            "expected at least one unbalanced scene from External under clip \
+             (if this fails, Masonry fixed layer splits — drop the balance workaround)"
+        );
+    }
+
     #[test]
     fn anim_frame_plus_paint_still_requires_full_redraw_api() {
         // Spinner-like path: AnimFrame then full redraw. Public surface is only

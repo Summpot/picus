@@ -28,9 +28,12 @@
 // END LINEBENDER LINT SET
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
-use imaging::record::{Scene, ValidateError, replay_transformed};
+use imaging::record::{Glyph, Scene, ValidateError, replay, replay_transformed};
 use imaging::render::RenderSource;
-use imaging::{PaintSink, Painter};
+use imaging::{
+    BlurredRoundedRect, ClipRef, ContextRef, FillRef, GlyphRunRef, GroupRef, PaintSink, Painter,
+    StrokeRef,
+};
 use kurbo::{Affine, Rect};
 use peniko::Color;
 
@@ -208,17 +211,210 @@ impl RenderSource for PreparedFrame<'_> {
         }
 
         let scale = Affine::scale(self.scale_factor);
-        replay_transformed(self.base, sink, scale);
+        // Balance clip/group/context stacks before replay. Masonry can emit
+        // UnclosedClips when External/IsolatedScene finishes a layer mid ancestor
+        // clip (e.g. Spinner under Portal) — Vello encode rejects those scenes.
+        let base = ensure_balanced_scene(self.base);
+        replay_transformed(base.as_ref(), sink, scale);
         for layer in self.overlays {
-            replay_transformed(layer.scene, sink, scale * layer.transform);
+            let scene = ensure_balanced_scene(layer.scene);
+            replay_transformed(scene.as_ref(), sink, scale * layer.transform);
         }
     }
 }
 
 fn validate_layers(base: &Scene, overlays: &[Layer<'_>]) -> Result<(), ValidateError> {
-    base.validate()?;
+    ensure_balanced_scene(base).validate()?;
     for layer in overlays {
-        layer.scene.validate()?;
+        ensure_balanced_scene(layer.scene).validate()?;
     }
     Ok(())
+}
+
+/// Borrow `scene` when already well-nested; otherwise rebuild with balanced stacks.
+///
+/// Masonry `LayerCollector::finish_current_layer` severs the current scene when a
+/// widget requests [`PaintLayerMode::External`] / `IsolatedScene`. If an ancestor
+/// had pushed a clip (Portal, Label clip, etc.) the finished scene still has open
+/// `PushClip` commands (`ValidateError::UnclosedClips`). Sibling content after the
+/// split may get a matching `PopClip` without a push (`UnbalancedPopClip`).
+///
+/// Picus cannot fix Masonry's collector without a dependency patch; balancing here
+/// keeps encode valid. Ancestor clipping across External slots remains a known
+/// host isolation limitation (see `AncestorClip` / paint-isolation docs).
+fn ensure_balanced_scene(scene: &Scene) -> std::borrow::Cow<'_, Scene> {
+    if scene.validate().is_ok() {
+        std::borrow::Cow::Borrowed(scene)
+    } else {
+        std::borrow::Cow::Owned(balance_scene_stacks(scene))
+    }
+}
+
+/// Rebuild `scene` so clip / group / context stacks are well-nested.
+///
+/// - Excess `Pop*` commands (no matching push) are dropped.
+/// - Unclosed stacks are closed at the end of the stream.
+#[must_use]
+pub fn balance_scene_stacks(scene: &Scene) -> Scene {
+    let mut sink = StackBalancingSink::new();
+    replay(scene, &mut sink);
+    sink.finish()
+}
+
+/// [`PaintSink`] that records into a [`Scene`] while enforcing stack nesting.
+struct StackBalancingSink {
+    scene: Scene,
+    clip_depth: u32,
+    group_depth: u32,
+    context_depth: u32,
+}
+
+impl StackBalancingSink {
+    fn new() -> Self {
+        Self {
+            scene: Scene::new(),
+            clip_depth: 0,
+            group_depth: 0,
+            context_depth: 0,
+        }
+    }
+
+    fn finish(mut self) -> Scene {
+        while self.context_depth > 0 {
+            self.scene.pop_context();
+            self.context_depth -= 1;
+        }
+        while self.group_depth > 0 {
+            self.scene.pop_group();
+            self.group_depth -= 1;
+        }
+        while self.clip_depth > 0 {
+            self.scene.pop_clip();
+            self.clip_depth -= 1;
+        }
+        self.scene
+    }
+}
+
+impl PaintSink for StackBalancingSink {
+    fn push_context(&mut self, context: ContextRef<'_>) {
+        PaintSink::push_context(&mut self.scene, context);
+        self.context_depth = self.context_depth.saturating_add(1);
+    }
+
+    fn pop_context(&mut self) {
+        if self.context_depth == 0 {
+            return;
+        }
+        PaintSink::pop_context(&mut self.scene);
+        self.context_depth -= 1;
+    }
+
+    fn push_clip(&mut self, clip: ClipRef<'_>) {
+        PaintSink::push_clip(&mut self.scene, clip);
+        self.clip_depth = self.clip_depth.saturating_add(1);
+    }
+
+    fn pop_clip(&mut self) {
+        if self.clip_depth == 0 {
+            return;
+        }
+        PaintSink::pop_clip(&mut self.scene);
+        self.clip_depth -= 1;
+    }
+
+    fn push_group(&mut self, group: GroupRef<'_>) {
+        PaintSink::push_group(&mut self.scene, group);
+        self.group_depth = self.group_depth.saturating_add(1);
+    }
+
+    fn pop_group(&mut self) {
+        if self.group_depth == 0 {
+            return;
+        }
+        PaintSink::pop_group(&mut self.scene);
+        self.group_depth -= 1;
+    }
+
+    fn fill(&mut self, draw: FillRef<'_>) {
+        PaintSink::fill(&mut self.scene, draw);
+    }
+
+    fn stroke(&mut self, draw: StrokeRef<'_>) {
+        PaintSink::stroke(&mut self.scene, draw);
+    }
+
+    fn glyph_run(&mut self, draw: GlyphRunRef<'_>, glyphs: &mut dyn Iterator<Item = Glyph>) {
+        PaintSink::glyph_run(&mut self.scene, draw, glyphs);
+    }
+
+    fn blurred_rounded_rect(&mut self, draw: BlurredRoundedRect) {
+        PaintSink::blurred_rounded_rect(&mut self.scene, draw);
+    }
+}
+
+#[cfg(test)]
+mod balance_tests {
+    use imaging::record::{Clip, Geometry};
+    use peniko::Fill;
+
+    use super::*;
+
+    fn fill_clip(rect: Rect) -> Clip {
+        Clip::Fill {
+            transform: Affine::IDENTITY,
+            shape: Geometry::Rect(rect),
+            fill_rule: Fill::NonZero,
+        }
+    }
+
+    #[test]
+    fn balance_closes_unclosed_clips() {
+        let mut scene = Scene::new();
+        scene.push_clip(fill_clip(Rect::new(0.0, 0.0, 10.0, 10.0)));
+        assert!(matches!(
+            scene.validate(),
+            Err(ValidateError::UnclosedClips { .. })
+        ));
+
+        let balanced = balance_scene_stacks(&scene);
+        assert_eq!(balanced.validate(), Ok(()));
+    }
+
+    #[test]
+    fn balance_drops_excess_pop_clips() {
+        let mut scene = Scene::new();
+        scene.pop_clip();
+        assert!(matches!(
+            scene.validate(),
+            Err(ValidateError::UnbalancedPopClip { .. })
+        ));
+
+        let balanced = balance_scene_stacks(&scene);
+        assert_eq!(balanced.validate(), Ok(()));
+        assert!(balanced.is_empty());
+    }
+
+    #[test]
+    fn balance_preserves_nested_clips() {
+        let mut scene = Scene::new();
+        scene.push_clip(fill_clip(Rect::new(0.0, 0.0, 20.0, 20.0)));
+        scene.push_clip(fill_clip(Rect::new(1.0, 1.0, 5.0, 5.0)));
+        scene.pop_clip();
+        scene.pop_clip();
+        assert_eq!(scene.validate(), Ok(()));
+
+        let balanced = balance_scene_stacks(&scene);
+        assert_eq!(balanced.validate(), Ok(()));
+        assert_eq!(balanced.commands().len(), scene.commands().len());
+    }
+
+    #[test]
+    fn ensure_balanced_borrows_valid_scene() {
+        let scene = Scene::new();
+        match ensure_balanced_scene(&scene) {
+            std::borrow::Cow::Borrowed(_) => {}
+            std::borrow::Cow::Owned(_) => panic!("valid empty scene should be borrowed"),
+        }
+    }
 }
