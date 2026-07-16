@@ -23,7 +23,7 @@ use self::frame_driver::{
     anim_present_min_interval,
 };
 use self::layers::{
-    CompositorEntryKind, LayerRegistry, VisualRun, coalesce_visual_runs,
+    AnimTargetStrategy, CompositorEntryKind, LayerRegistry, VisualRun, coalesce_visual_runs,
 };
 
 use crate::masonry_core::{
@@ -35,6 +35,7 @@ use crate::masonry_core::{
         keyboard::{Key, KeyState, Modifiers, NamedKey},
     },
     dpi::{PhysicalPosition, PhysicalSize},
+    kurbo::Rect,
     layout::UnitPoint,
     peniko::Color,
     properties::Dimensions,
@@ -62,7 +63,7 @@ use bevy_winit::{EventLoopProxy, EventLoopProxyWrapper, WinitUserEvent};
 use picus_imaging::{Layer as ImagingLayer, PreparedFrame, texture_render::Renderer};
 use picus_surface::{
     ExistingWindowMetrics, ExternalWindowSurface, LayerMetricsGeneration, OrderedEntryKind,
-    OrderedLayerEncode, PresentPolicy, RenderFrameResult,
+    OrderedLayerEncode, OrderedLayerTarget, PresentPolicy, RenderFrameResult,
 };
 use picus_view::{
     ViewCtx,
@@ -1033,6 +1034,20 @@ impl WindowRuntime {
         }
     }
 
+    /// Drain signals emitted while building the frame before applying the
+    /// present result. A successful present fulfills paint requests raised by
+    /// that frame; retry/failure keeps them sticky through result handling.
+    fn settle_present_attempt(
+        &mut self,
+        result: RenderFrameResult,
+        snap: StickySnapshot,
+        anim_driven_present: bool,
+        now: std::time::Instant,
+    ) -> RedrawDemand {
+        self.drain_redraw_signals();
+        self.finish_present_attempt(result, snap, anim_driven_present, now)
+    }
+
     /// Frame scheduling spine: [`FrameDriver::decide_entry`] /
     /// [`FrameDriver::decide_present`] decide; this method executes.
     ///
@@ -1270,7 +1285,6 @@ impl WindowRuntime {
                     .register_external_widgets_from_visual(&visual_layers, &self.render_root);
                 self.layer_registry
                     .rebuild_from_visual_plan(&visual_layers, window_bounds);
-                self.layer_registry.mark_non_anim_content_dirty();
                 let _ = self
                     .layer_registry
                     .sync_anim_entries_from_widgets(&self.render_root);
@@ -1331,24 +1345,6 @@ impl WindowRuntime {
                 .rebuild_from_visual_plan(&visual_layers, window_bounds);
             if self.layer_registry.plan_changed() {
                 post_dirty.insert(DirtyReason::CompositorPlan);
-            }
-
-            // Issue 2: ordinary content dirt must bump CachedScene/Overlay versions.
-            // Pure AnimPaint alone leaves base clean for G2 selective encode.
-            let non_anim_content_dirt = post_dirty.iter().any(|r| {
-                matches!(
-                    r,
-                    DirtyReason::FirstPaint
-                        | DirtyReason::InputOrRebuild
-                        | DirtyReason::LayoutRewrite
-                        | DirtyReason::ResizeMetrics
-                        | DirtyReason::ThemeOrFont
-                        | DirtyReason::RetrySurface
-                        | DirtyReason::CompositorPlan
-                )
-            });
-            if non_anim_content_dirt {
-                self.layer_registry.mark_non_anim_content_dirty();
             }
 
             let anim_started = std::time::Instant::now();
@@ -1441,9 +1437,14 @@ impl WindowRuntime {
                 || post_dirty
                     .iter()
                     .any(|r| matches!(r, DirtyReason::AnimPaint { .. })));
+        // `request_paint_only()` calls made while preparing a full redraw emit
+        // Masonry RequestRedraw signals. Drain them before settling the present:
+        // a successful present has already fulfilled those paint requests, while
+        // a Retry/Failed result must retain them for a later attempt. Draining
+        // after `finish_present_attempt` would re-arm `needs_redraw` and turn every
+        // following anim frame into InputOrRebuild.
         let redraw_demand =
-            self.finish_present_attempt(render_result, snap, anim_driven_present, now);
-        self.drain_redraw_signals();
+            self.settle_present_attempt(render_result, snap, anim_driven_present, now);
 
         let decision = FrameDecision {
             do_anim_tick: entry.do_anim_tick,
@@ -1555,9 +1556,7 @@ fn encode_ordered_composite(
     use crate::masonry_core::imaging::record::Scene;
 
     // Same run coalescing as LayerRegistry::rebuild_from_visual_plan (Issue 3).
-    let runs = visual_layers
-        .map(coalesce_visual_runs)
-        .unwrap_or_default();
+    let runs = visual_layers.map(coalesce_visual_runs).unwrap_or_default();
     if let Some(visual) = visual_layers {
         debug_assert!(
             visual_runs_match_plan_len(runs.len(), registry.plan().len()),
@@ -1573,6 +1572,7 @@ fn encode_ordered_composite(
         id: u64,
         kind: CompositorEntryKind,
         needs_encode: bool,
+        bounds: Rect,
     }
     let metas: Vec<EntryMeta> = registry
         .plan()
@@ -1582,6 +1582,27 @@ fn encode_ordered_composite(
             id: e.id.raw(),
             kind: e.kind,
             needs_encode: e.needs_encode(),
+            bounds: e.bounds,
+        })
+        .collect();
+
+    let (physical_w, physical_h) = surface.physical_size();
+    let target_strategy = registry.host().target_strategy();
+    let targets: Vec<OrderedLayerTarget> = metas
+        .iter()
+        .enumerate()
+        .map(|(index, meta)| {
+            if index == 0
+                || !matches!(
+                    meta.kind,
+                    CompositorEntryKind::Anim | CompositorEntryKind::External
+                )
+                || target_strategy == AnimTargetStrategy::FullWindowTransparent
+            {
+                OrderedLayerTarget::full(physical_w, physical_h)
+            } else {
+                ordered_target_for_bounds(meta.bounds, physical_w, physical_h, scale)
+            }
         })
         .collect();
 
@@ -1611,14 +1632,20 @@ fn encode_ordered_composite(
             CompositorEntryKind::Anim | CompositorEntryKind::External => {
                 overlay_storage.push(Vec::new());
                 let scene = anim_scenes[i].unwrap_or(&empty_scene);
-                prepared.push(Some(PreparedFrame::new(
-                    frame_w,
-                    frame_h,
-                    scale,
-                    Color::TRANSPARENT,
-                    scene,
-                    &[],
-                )));
+                let target = targets[i];
+                let logical_w = (f64::from(target.width) / scale.max(f64::EPSILON))
+                    .ceil()
+                    .max(1.0) as u32;
+                let logical_h = (f64::from(target.height) / scale.max(f64::EPSILON))
+                    .ceil()
+                    .max(1.0) as u32;
+                prepared.push(Some(
+                    PreparedFrame::new(logical_w, logical_h, scale, Color::TRANSPARENT, scene, &[])
+                        .with_window_origin(
+                            f64::from(target.x) / scale.max(f64::EPSILON),
+                            f64::from(target.y) / scale.max(f64::EPSILON),
+                        ),
+                ));
             }
             CompositorEntryKind::CachedScene | CompositorEntryKind::Overlay => {
                 let mut overlays = Vec::new();
@@ -1666,7 +1693,10 @@ fn encode_ordered_composite(
             tracing::error!(
                 "CachedScene/Overlay needs_encode without visual plan; refusing empty base encode"
             );
-            return (RenderFrameResult::Failed, picus_surface::RenderFrameTimings::default());
+            return (
+                RenderFrameResult::Failed,
+                picus_surface::RenderFrameTimings::default(),
+            );
         };
         match runs.get(i) {
             Some(VisualRun::Scenes(indices)) if !indices.is_empty() => {
@@ -1682,14 +1712,17 @@ fn encode_ordered_composite(
                     ));
                     continue;
                 };
-                prepared[i] = Some(PreparedFrame::new(
-                    frame_w,
-                    frame_h,
-                    scale,
-                    bg,
-                    base_scene,
-                    &overlay_storage[i],
-                ));
+                prepared[i] = Some(
+                    PreparedFrame::new(
+                        frame_w,
+                        frame_h,
+                        scale,
+                        bg,
+                        base_scene,
+                        &overlay_storage[i],
+                    )
+                    .with_base_transform(base_layer.transform),
+                );
             }
             _ => {
                 prepared[i] = Some(PreparedFrame::new(
@@ -1707,7 +1740,8 @@ fn encode_ordered_composite(
     let ordered: Vec<OrderedLayerEncode<'_>> = metas
         .iter()
         .zip(prepared.iter())
-        .map(|(meta, frame)| OrderedLayerEncode {
+        .enumerate()
+        .map(|(index, (meta, frame))| OrderedLayerEncode {
             layer_id: meta.id,
             kind: match meta.kind {
                 CompositorEntryKind::Anim => OrderedEntryKind::Anim,
@@ -1716,11 +1750,34 @@ fn encode_ordered_composite(
                     OrderedEntryKind::Cached
                 }
             },
+            target: targets[index],
             frame: *frame,
         })
         .collect();
 
     surface.render_ordered_frame(renderer, &ordered)
+}
+
+fn ordered_target_for_bounds(
+    bounds: Rect,
+    physical_w: u32,
+    physical_h: u32,
+    scale: f64,
+) -> OrderedLayerTarget {
+    const PAD_PX: f64 = 2.0;
+    let scale = scale.max(f64::EPSILON);
+    let max_x = f64::from(physical_w.max(1));
+    let max_y = f64::from(physical_h.max(1));
+    let x0 = (bounds.x0 * scale - PAD_PX).floor().clamp(0.0, max_x - 1.0);
+    let y0 = (bounds.y0 * scale - PAD_PX).floor().clamp(0.0, max_y - 1.0);
+    let x1 = (bounds.x1 * scale + PAD_PX).ceil().clamp(x0 + 1.0, max_x);
+    let y1 = (bounds.y1 * scale + PAD_PX).ceil().clamp(y0 + 1.0, max_y);
+    OrderedLayerTarget {
+        x: x0 as u32,
+        y: y0 as u32,
+        width: (x1 - x0).max(1.0) as u32,
+        height: (y1 - y0).max(1.0) as u32,
+    }
 }
 
 fn focus_fallback_widget(render_root: &RenderRoot) -> Option<WidgetId> {
@@ -2698,6 +2755,37 @@ mod tests {
 
             Arc::new(fork(Arc::new(label("task")) as UiView, Some(heartbeat)))
         }
+    }
+
+    #[test]
+    fn ordered_target_converts_logical_bounds_to_padded_physical_pixels() {
+        assert_eq!(
+            ordered_target_for_bounds(Rect::new(10.0, 20.0, 30.0, 40.0), 100, 100, 2.0),
+            OrderedLayerTarget {
+                x: 18,
+                y: 38,
+                width: 44,
+                height: 44,
+            }
+        );
+        assert_eq!(
+            ordered_target_for_bounds(Rect::new(-10.0, -5.0, 1.0, 2.0), 100, 100, 2.0),
+            OrderedLayerTarget {
+                x: 0,
+                y: 0,
+                width: 4,
+                height: 6,
+            }
+        );
+        assert_eq!(
+            ordered_target_for_bounds(Rect::new(49.0, 49.0, 60.0, 60.0), 100, 100, 2.0),
+            OrderedLayerTarget {
+                x: 96,
+                y: 96,
+                width: 4,
+                height: 4,
+            }
+        );
     }
 
     #[test]
@@ -3727,7 +3815,9 @@ mod tests {
         window.resize_dirty = true;
         window.retry_dirty = true;
         window.needs_redraw = true;
-        window.frame_driver.note_anim_present(std::time::Instant::now());
+        window
+            .frame_driver
+            .note_anim_present(std::time::Instant::now());
 
         let result = window.step_frame(std::time::Duration::from_millis(16));
         assert!(!result.painted, "no surface ⇒ cannot paint");
@@ -3778,7 +3868,9 @@ mod tests {
 
         // Simulate residual redraw from AnimFrame + throttle skip cleanup.
         window.needs_redraw = true;
-        window.finish_encode_skip(snap, /*anim_raised_redraw=*/ true, /*throttled=*/ true);
+        window.finish_encode_skip(
+            snap, /*anim_raised_redraw=*/ true, /*throttled=*/ true,
+        );
 
         assert!(
             !window.needs_redraw,
@@ -3848,10 +3940,7 @@ mod tests {
             !window.needs_redraw,
             "Failed must not force needs_redraw (Phase 0 contract)"
         );
-        assert!(
-            !window.retry_dirty,
-            "Failed must not promote retry_dirty"
-        );
+        assert!(!window.retry_dirty, "Failed must not promote retry_dirty");
         assert!(
             window.resize_dirty,
             "content stickies retained for a later external wake"
@@ -3896,6 +3985,41 @@ mod tests {
     }
 
     #[test]
+    fn successful_present_consumes_redraw_signal_raised_while_building_frame() {
+        let mut runtime = MasonryRuntime {
+            windows: HashMap::new(),
+            primary_window: None,
+            event_loop_proxy: Arc::new(Mutex::new(None)),
+            action_sink: InternalUiActionSink::default(),
+        };
+        let entity = Entity::from_bits(105);
+        let window = runtime.ensure_window(entity, true);
+        window.drain_redraw_signals();
+        window.needs_redraw = true;
+        let snap = window.take_sticky_snapshot();
+
+        let root = window.root_widget_id;
+        window.render_root.edit_widget(root, |mut widget| {
+            widget.ctx.request_paint_only();
+        });
+
+        let demand = window.settle_present_attempt(
+            RenderFrameResult::Presented,
+            snap,
+            false,
+            std::time::Instant::now(),
+        );
+        assert!(
+            !window.needs_redraw,
+            "paint request fulfilled by this present must not schedule a full redraw"
+        );
+        assert!(
+            !demand.need_content_present,
+            "fulfilled in-frame paint signal must not become next-frame content dirt"
+        );
+    }
+
+    #[test]
     fn redraw_demand_classifies_anim_vs_content() {
         // P1b.1: NeedAnimTick vs NeedContentPresent as structured flags.
         // Note: `render_root.needs_anim()` may already be true on a fresh window;
@@ -3926,7 +4050,10 @@ mod tests {
         window.needs_anim_frame = true;
         let anim = window.redraw_demand_after_work();
         assert!(anim.need_anim_tick, "anim sticky: {anim:?}");
-        assert!(!anim.need_content_present, "anim sticky is not content: {anim:?}");
+        assert!(
+            !anim.need_content_present,
+            "anim sticky is not content: {anim:?}"
+        );
         assert!(anim.is_anim_only());
 
         // Content alone (resize is G5 content present). Clear anim sticky;
@@ -4069,7 +4196,9 @@ mod tests {
 
         // Residual AnimPaint + throttle skip cleanup (same as encode-skip path).
         window.needs_redraw = true;
-        window.finish_encode_skip(snap, /*anim_raised_redraw=*/ true, /*throttled=*/ true);
+        window.finish_encode_skip(
+            snap, /*anim_raised_redraw=*/ true, /*throttled=*/ true,
+        );
 
         assert!(!window.needs_redraw, "residual AnimPaint cleared");
         assert!(window.needs_anim_frame, "throttle keeps anim scheduled");

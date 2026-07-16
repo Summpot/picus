@@ -455,6 +455,8 @@ impl<T> LatestReadyQueue<T> {
 struct LayerTextureTarget {
     texture: Texture,
     view: TextureView,
+    x: u32,
+    y: u32,
     width: u32,
     height: u32,
     generation: LayerMetricsGeneration,
@@ -486,6 +488,17 @@ pub struct ExternalWindowSurface {
     /// Src-over for upper layers onto the Rgba8Unorm intermediate.
     /// Safe when dest is premul (Issue 9) or when dest is opaque (a≈1).
     layer_stack_blitter: TextureBlitter,
+    /// Region equivalent of `layer_replace_blitter`, used to rebuild only the
+    /// animation-dirty portion of the persistent intermediate.
+    region_layer_replace_blitter: RegionTextureBlitter,
+    /// Region equivalent of `layer_premul_convert_blitter`.
+    region_layer_premul_convert_blitter: RegionTextureBlitter,
+    /// Src-over blitter that places a tight layer texture into a destination
+    /// viewport, optionally clipped to a smaller dirty rectangle.
+    region_layer_stack_blitter: RegionTextureBlitter,
+    /// Whether `surface.target_view` contains a complete ordered composite for
+    /// the current metrics generation and layer target geometry.
+    ordered_intermediate_valid: bool,
     /// Final replace blit from Rgba8Unorm intermediate → **swapchain** format
     /// when intermediate is already premul (must not re-use intermediate blitters).
     present_replace_blitter: TextureBlitter,
@@ -546,9 +559,72 @@ pub struct OrderedLayerEncode<'a> {
     /// Stable compositor layer id (`LayerId::raw` from picus_core).
     pub layer_id: u64,
     pub kind: OrderedEntryKind,
+    /// Physical-pixel rectangle occupied by this layer target in the window.
+    pub target: OrderedLayerTarget,
     /// When `Some`, encode this prepared frame into the layer target.
     /// When `None`, composite reuses the last successful encode for `layer_id`.
     pub frame: Option<PreparedFrame<'a>>,
+}
+
+/// Physical-pixel placement and size of one ordered layer texture.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct OrderedLayerTarget {
+    pub x: u32,
+    pub y: u32,
+    pub width: u32,
+    pub height: u32,
+}
+
+impl OrderedLayerTarget {
+    #[must_use]
+    pub const fn full(width: u32, height: u32) -> Self {
+        Self {
+            x: 0,
+            y: 0,
+            width,
+            height,
+        }
+    }
+
+    #[must_use]
+    fn intersection(self, other: Self) -> Option<Self> {
+        let x0 = self.x.max(other.x);
+        let y0 = self.y.max(other.y);
+        let x1 = self
+            .x
+            .saturating_add(self.width)
+            .min(other.x.saturating_add(other.width));
+        let y1 = self
+            .y
+            .saturating_add(self.height)
+            .min(other.y.saturating_add(other.height));
+        (x1 > x0 && y1 > y0).then_some(Self {
+            x: x0,
+            y: y0,
+            width: x1 - x0,
+            height: y1 - y0,
+        })
+    }
+
+    #[must_use]
+    fn union(self, other: Self) -> Self {
+        let x0 = self.x.min(other.x);
+        let y0 = self.y.min(other.y);
+        let x1 = self
+            .x
+            .saturating_add(self.width)
+            .max(other.x.saturating_add(other.width));
+        let y1 = self
+            .y
+            .saturating_add(self.height)
+            .max(other.y.saturating_add(other.height));
+        Self {
+            x: x0,
+            y: y0,
+            width: x1 - x0,
+            height: y1 - y0,
+        }
+    }
 }
 
 /// Metrics generation token for atomic layer-target rebuild (P2.6).
@@ -606,6 +682,12 @@ impl ExternalWindowSurface {
         let layer_premul_convert_blitter =
             create_layer_premul_convert_blitter(device, VELLO_TARGET_FORMAT);
         let layer_stack_blitter = create_layer_stack_blitter(device, VELLO_TARGET_FORMAT);
+        let region_layer_replace_blitter =
+            RegionTextureBlitter::new(device, VELLO_TARGET_FORMAT, None);
+        let region_layer_premul_convert_blitter =
+            RegionTextureBlitter::new(device, VELLO_TARGET_FORMAT, Some(PREMUL_CONVERT));
+        let region_layer_stack_blitter =
+            RegionTextureBlitter::new(device, VELLO_TARGET_FORMAT, Some(STRAIGHT_SRC_OVER));
         let present_replace_blitter = create_layer_replace_blitter(device, surface.format);
 
         Ok(Self {
@@ -619,6 +701,10 @@ impl ExternalWindowSurface {
             layer_replace_blitter,
             layer_premul_convert_blitter,
             layer_stack_blitter,
+            region_layer_replace_blitter,
+            region_layer_premul_convert_blitter,
+            region_layer_stack_blitter,
+            ordered_intermediate_valid: false,
             present_replace_blitter,
         })
     }
@@ -695,12 +781,17 @@ impl ExternalWindowSurface {
     /// Drop every intermediate layer texture (resize / plan metrics change).
     pub fn drop_all_layer_targets(&mut self) {
         self.layer_targets.clear();
+        self.ordered_intermediate_valid = false;
     }
 
     /// Drop intermediate textures whose `layer_id` is no longer in the plan (Issue 5).
     pub fn retain_layer_targets(&mut self, live_ids: &[u64]) {
+        let old_len = self.layer_targets.len();
         self.layer_targets
             .retain(|id, _| live_ids.iter().any(|live| live == id));
+        if self.layer_targets.len() != old_len {
+            self.ordered_intermediate_valid = false;
+        }
     }
 
     /// Number of intermediate layer textures currently allocated (tests/diagnostics).
@@ -721,11 +812,13 @@ impl ExternalWindowSurface {
         self.layer_metrics_generation
     }
 
-    fn ensure_layer_target(&mut self, layer_id: u64) -> Result<(), ()> {
-        let width = self.surface.config.width.max(1);
-        let height = self.surface.config.height.max(1);
+    fn ensure_layer_target(&mut self, layer_id: u64, target: OrderedLayerTarget) -> Result<(), ()> {
+        let width = target.width.max(1);
+        let height = target.height.max(1);
         let metrics_gen = self.layer_metrics_generation;
         if let Some(existing) = self.layer_targets.get(&layer_id)
+            && existing.x == target.x
+            && existing.y == target.y
             && existing.width == width
             && existing.height == height
             && existing.generation == metrics_gen
@@ -734,11 +827,14 @@ impl ExternalWindowSurface {
         }
         let device = &self.render_cx.devices[self.surface.dev_id].device;
         let (texture, view) = create_targets(width, height, device);
+        self.ordered_intermediate_valid = false;
         self.layer_targets.insert(
             layer_id,
             LayerTextureTarget {
                 texture,
                 view,
+                x: target.x,
+                y: target.y,
                 width,
                 height,
                 generation: metrics_gen,
@@ -904,15 +1000,30 @@ impl ExternalWindowSurface {
         // Ensure / validate layer targets before encode (avoids borrow conflicts).
         for entry in entries {
             if entry.frame.is_some() {
-                if self.ensure_layer_target(entry.layer_id).is_err() {
+                if self
+                    .ensure_layer_target(entry.layer_id, entry.target)
+                    .is_err()
+                {
                     return (RenderFrameResult::Failed, timings);
                 }
-            } else if !self.layer_targets.contains_key(&entry.layer_id) {
-                tracing::error!(
-                    layer_id = entry.layer_id,
-                    "ordered encode skip requested but no cached layer texture"
-                );
-                return (RenderFrameResult::Failed, timings);
+            } else {
+                let target_matches =
+                    self.layer_targets
+                        .get(&entry.layer_id)
+                        .is_some_and(|target| {
+                            target.x == entry.target.x
+                                && target.y == entry.target.y
+                                && target.width == entry.target.width.max(1)
+                                && target.height == entry.target.height.max(1)
+                        });
+                if !target_matches {
+                    tracing::error!(
+                        layer_id = entry.layer_id,
+                        ?entry.target,
+                        "ordered encode skip requested without a matching cached layer texture"
+                    );
+                    return (RenderFrameResult::Failed, timings);
+                }
             }
         }
 
@@ -1006,6 +1117,22 @@ impl ExternalWindowSurface {
         // Otherwise intermediate stays straight-alpha; final uses surface.blitter
         // (replace on opaque paths).
         let stack_premul = self.ordered_stack_holds_premul();
+        // The intermediate persists across presents. When only animation
+        // textures changed, rebuild their covered pixels in painter order and
+        // leave the rest of the already-composited window untouched.
+        let partial_dirty = if self.ordered_intermediate_valid
+            && !entries
+                .iter()
+                .any(|entry| entry.kind != OrderedEntryKind::Anim && entry.frame.is_some())
+        {
+            entries
+                .iter()
+                .filter(|entry| entry.kind == OrderedEntryKind::Anim && entry.frame.is_some())
+                .map(|entry| entry.target)
+                .reduce(OrderedLayerTarget::union)
+        } else {
+            None
+        };
         let composite_started = std::time::Instant::now();
         let device = &self.render_cx.devices[dev_id].device;
         let queue = &self.render_cx.devices[dev_id].queue;
@@ -1034,6 +1161,35 @@ impl ExternalWindowSurface {
                     .layer_targets
                     .get(&entry.layer_id)
                     .expect("layer target required for composite");
+                let placement = OrderedLayerTarget {
+                    x: src.x,
+                    y: src.y,
+                    width: src.width,
+                    height: src.height,
+                };
+                if let Some(dirty) = partial_dirty {
+                    let Some(scissor) = placement.intersection(dirty) else {
+                        continue;
+                    };
+                    let blitter = if i == 0 {
+                        if stack_premul {
+                            &self.region_layer_premul_convert_blitter
+                        } else {
+                            &self.region_layer_replace_blitter
+                        }
+                    } else {
+                        &self.region_layer_stack_blitter
+                    };
+                    blitter.copy(
+                        device,
+                        &mut encoder,
+                        &src.view,
+                        &self.surface.target_view,
+                        placement,
+                        scissor,
+                    );
+                    continue;
+                }
                 if i == 0 {
                     if stack_premul {
                         // Straight → premul into intermediate.
@@ -1051,13 +1207,26 @@ impl ExternalWindowSurface {
                             &self.surface.target_view,
                         );
                     }
-                } else {
+                } else if src.x == 0
+                    && src.y == 0
+                    && src.width == self.surface.config.width
+                    && src.height == self.surface.config.height
+                {
                     // Upper layers: straight src over intermediate (premul or opaque dest).
                     self.layer_stack_blitter.copy(
                         device,
                         &mut encoder,
                         &src.view,
                         &self.surface.target_view,
+                    );
+                } else {
+                    self.region_layer_stack_blitter.copy(
+                        device,
+                        &mut encoder,
+                        &src.view,
+                        &self.surface.target_view,
+                        placement,
+                        placement,
                     );
                 }
             }
@@ -1087,6 +1256,7 @@ impl ExternalWindowSurface {
             timings.composite = composite_started.elapsed();
             return (RenderFrameResult::Retry, timings);
         }
+        self.ordered_intermediate_valid = true;
         timings.composite = composite_started.elapsed();
 
         let present_started = std::time::Instant::now();
@@ -1411,6 +1581,162 @@ fn backend_options_for_surface(transparent: bool) -> wgpu::BackendOptions {
 /// and only the final present blit uses `surface.format`.
 const VELLO_TARGET_FORMAT: TextureFormat = TextureFormat::Rgba8Unorm;
 
+const STRAIGHT_SRC_OVER: wgpu::BlendState = wgpu::BlendState {
+    color: wgpu::BlendComponent {
+        src_factor: wgpu::BlendFactor::SrcAlpha,
+        dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
+        operation: wgpu::BlendOperation::Add,
+    },
+    alpha: wgpu::BlendComponent {
+        src_factor: wgpu::BlendFactor::One,
+        dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
+        operation: wgpu::BlendOperation::Add,
+    },
+};
+
+const PREMUL_CONVERT: wgpu::BlendState = wgpu::BlendState {
+    alpha: wgpu::BlendComponent::REPLACE,
+    color: wgpu::BlendComponent {
+        src_factor: wgpu::BlendFactor::SrcAlpha,
+        dst_factor: wgpu::BlendFactor::Zero,
+        operation: wgpu::BlendOperation::Add,
+    },
+};
+
+struct RegionTextureBlitter {
+    pipeline: wgpu::RenderPipeline,
+    bind_group_layout: wgpu::BindGroupLayout,
+    sampler: wgpu::Sampler,
+}
+
+impl RegionTextureBlitter {
+    fn new(device: &Device, format: TextureFormat, blend_state: Option<wgpu::BlendState>) -> Self {
+        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("Picus Region Blitter Sampler"),
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            address_mode_w: wgpu::AddressMode::ClampToEdge,
+            mag_filter: wgpu::FilterMode::Nearest,
+            ..Default::default()
+        });
+        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("Picus Region Blitter Bind Group Layout"),
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: false },
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::NonFiltering),
+                    count: None,
+                },
+            ],
+        });
+        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("Picus Region Blitter Pipeline Layout"),
+            bind_group_layouts: &[&bind_group_layout],
+            immediate_size: 0,
+        });
+        let shader = device.create_shader_module(wgpu::include_wgsl!("region_blit.wgsl"));
+        let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("Picus Region Blitter Pipeline"),
+            layout: Some(&pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: Some("vs_main"),
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+                buffers: &[],
+            },
+            primitive: wgpu::PrimitiveState::default(),
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState::default(),
+            fragment: Some(wgpu::FragmentState {
+                module: &shader,
+                entry_point: Some("fs_main"),
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format,
+                    blend: blend_state,
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+            }),
+            multiview_mask: None,
+            cache: None,
+        });
+        Self {
+            pipeline,
+            bind_group_layout,
+            sampler,
+        }
+    }
+
+    fn copy(
+        &self,
+        device: &Device,
+        encoder: &mut wgpu::CommandEncoder,
+        source: &TextureView,
+        target: &TextureView,
+        viewport: OrderedLayerTarget,
+        scissor: OrderedLayerTarget,
+    ) {
+        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Picus Region Blitter Bind Group"),
+            layout: &self.bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(source),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&self.sampler),
+                },
+            ],
+        });
+        let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("Picus Region Blitter Pass"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: target,
+                depth_slice: None,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Load,
+                    store: wgpu::StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
+            multiview_mask: None,
+        });
+        pass.set_pipeline(&self.pipeline);
+        pass.set_bind_group(0, &bind_group, &[]);
+        pass.set_viewport(
+            viewport.x as f32,
+            viewport.y as f32,
+            viewport.width.max(1) as f32,
+            viewport.height.max(1) as f32,
+            0.0,
+            1.0,
+        );
+        pass.set_scissor_rect(
+            scissor.x,
+            scissor.y,
+            scissor.width.max(1),
+            scissor.height.max(1),
+        );
+        pass.draw(0..3, 0..1);
+    }
+}
+
 fn create_targets(width: u32, height: u32, device: &Device) -> (Texture, TextureView) {
     let target_texture = device.create_texture(&wgpu::TextureDescriptor {
         label: Some("Picus Vello Render Target"),
@@ -1539,19 +1865,10 @@ fn create_blitter(
     alpha_mode: CompositeAlphaMode,
     transparent: bool,
 ) -> TextureBlitter {
-    const PREMUL_BLEND_STATE: wgpu::BlendState = wgpu::BlendState {
-        alpha: wgpu::BlendComponent::REPLACE,
-        color: wgpu::BlendComponent {
-            src_factor: wgpu::BlendFactor::SrcAlpha,
-            dst_factor: wgpu::BlendFactor::Zero,
-            operation: wgpu::BlendOperation::Add,
-        },
-    };
-
     let needs_premultiplied_blit = needs_premultiplied_blit(alpha_mode, transparent);
     if needs_premultiplied_blit {
         TextureBlitterBuilder::new(device, format)
-            .blend_state(PREMUL_BLEND_STATE)
+            .blend_state(PREMUL_CONVERT)
             .build()
     } else {
         TextureBlitter::new(device, format)
@@ -1572,14 +1889,6 @@ fn create_layer_replace_blitter(device: &Device, format: TextureFormat) -> Textu
 /// Same color factors as the present premul blitter (`SrcAlpha` / `Zero`).
 /// `format` must be [`VELLO_TARGET_FORMAT`] (intermediate dest).
 fn create_layer_premul_convert_blitter(device: &Device, format: TextureFormat) -> TextureBlitter {
-    const PREMUL_CONVERT: wgpu::BlendState = wgpu::BlendState {
-        alpha: wgpu::BlendComponent::REPLACE,
-        color: wgpu::BlendComponent {
-            src_factor: wgpu::BlendFactor::SrcAlpha,
-            dst_factor: wgpu::BlendFactor::Zero,
-            operation: wgpu::BlendOperation::Add,
-        },
-    };
     TextureBlitterBuilder::new(device, format)
         .blend_state(PREMUL_CONVERT)
         .build()
@@ -1591,18 +1900,6 @@ fn create_layer_premul_convert_blitter(device: &Device, format: TextureFormat) -
 /// Correct when dest is **premul** (Mica stack) or dest is fully opaque.
 /// `format` must be [`VELLO_TARGET_FORMAT`] (intermediate dest).
 fn create_layer_stack_blitter(device: &Device, format: TextureFormat) -> TextureBlitter {
-    const STRAIGHT_SRC_OVER: wgpu::BlendState = wgpu::BlendState {
-        color: wgpu::BlendComponent {
-            src_factor: wgpu::BlendFactor::SrcAlpha,
-            dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
-            operation: wgpu::BlendOperation::Add,
-        },
-        alpha: wgpu::BlendComponent {
-            src_factor: wgpu::BlendFactor::One,
-            dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
-            operation: wgpu::BlendOperation::Add,
-        },
-    };
     TextureBlitterBuilder::new(device, format)
         .blend_state(STRAIGHT_SRC_OVER)
         .build()
@@ -2369,7 +2666,8 @@ mod tests {
         );
 
         let replace = create_layer_replace_blitter(&device, TextureFormat::Rgba8Unorm);
-        let premul_convert = create_layer_premul_convert_blitter(&device, TextureFormat::Rgba8Unorm);
+        let premul_convert =
+            create_layer_premul_convert_blitter(&device, TextureFormat::Rgba8Unorm);
         let stack = create_layer_stack_blitter(&device, TextureFormat::Rgba8Unorm);
 
         let l0_view = layer0.create_view(&wgpu::TextureViewDescriptor::default());
@@ -2418,6 +2716,127 @@ mod tests {
             pixel_at(&pixels, 1, 1),
             "ordered quarter-blue must be single-premul not double",
         );
+    }
+
+    #[test]
+    fn region_blitter_only_updates_requested_destination_rect() {
+        let Some((device, queue)) = create_headless_device() else {
+            eprintln!("skipping region blitter GPU test: no compatible wgpu adapter");
+            return;
+        };
+        const DEST_W: u32 = 4;
+        const DEST_H: u32 = 4;
+        let source = create_rgba8_texture(
+            &device,
+            2,
+            2,
+            TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
+            "region-source",
+        );
+        write_rgba8_pixels(&queue, &source, 2, 2, &[[0, 255, 0, 255]; 4]);
+        let destination = create_rgba8_texture(
+            &device,
+            DEST_W,
+            DEST_H,
+            TextureUsages::RENDER_ATTACHMENT | TextureUsages::COPY_DST | TextureUsages::COPY_SRC,
+            "region-destination",
+        );
+        write_rgba8_pixels(
+            &queue,
+            &destination,
+            DEST_W,
+            DEST_H,
+            &[[255, 0, 0, 255]; (DEST_W * DEST_H) as usize],
+        );
+
+        let blitter =
+            RegionTextureBlitter::new(&device, TextureFormat::Rgba8Unorm, Some(STRAIGHT_SRC_OVER));
+        let source_view = source.create_view(&wgpu::TextureViewDescriptor::default());
+        let destination_view = destination.create_view(&wgpu::TextureViewDescriptor::default());
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("region blitter test"),
+        });
+        let placement = OrderedLayerTarget {
+            x: 1,
+            y: 1,
+            width: 2,
+            height: 2,
+        };
+        blitter.copy(
+            &device,
+            &mut encoder,
+            &source_view,
+            &destination_view,
+            placement,
+            placement,
+        );
+        queue.submit(Some(encoder.finish()));
+
+        let pixels = readback_rgba8_pixels(&device, &queue, &destination, DEST_W, DEST_H);
+        let at = |x: u32, y: u32| pixels[(y * DEST_W + x) as usize];
+        assert_eq!(at(0, 0), [255, 0, 0, 255]);
+        assert_eq!(at(1, 1), [0, 255, 0, 255]);
+        assert_eq!(at(2, 2), [0, 255, 0, 255]);
+        assert_eq!(at(3, 3), [255, 0, 0, 255]);
+    }
+
+    #[test]
+    fn region_blitter_scissor_preserves_full_window_source_coordinates() {
+        let Some((device, queue)) = create_headless_device() else {
+            eprintln!("skipping scissored region GPU test: no compatible wgpu adapter");
+            return;
+        };
+        const WIDTH: u32 = 4;
+        const HEIGHT: u32 = 4;
+        let source_pixels = std::array::from_fn::<_, 16, _>(|index| {
+            let x = (index as u32) % WIDTH;
+            let y = (index as u32) / WIDTH;
+            [(x * 40) as u8, (y * 40) as u8, 0, 255]
+        });
+        let source = create_rgba8_texture(
+            &device,
+            WIDTH,
+            HEIGHT,
+            TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
+            "scissored-region-source",
+        );
+        write_rgba8_pixels(&queue, &source, WIDTH, HEIGHT, &source_pixels);
+        let destination = create_rgba8_texture(
+            &device,
+            WIDTH,
+            HEIGHT,
+            TextureUsages::RENDER_ATTACHMENT | TextureUsages::COPY_DST | TextureUsages::COPY_SRC,
+            "scissored-region-destination",
+        );
+        write_rgba8_pixels(&queue, &destination, WIDTH, HEIGHT, &[[255, 0, 0, 255]; 16]);
+
+        let blitter = RegionTextureBlitter::new(&device, TextureFormat::Rgba8Unorm, None);
+        let source_view = source.create_view(&wgpu::TextureViewDescriptor::default());
+        let destination_view = destination.create_view(&wgpu::TextureViewDescriptor::default());
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("scissored region blitter test"),
+        });
+        blitter.copy(
+            &device,
+            &mut encoder,
+            &source_view,
+            &destination_view,
+            OrderedLayerTarget::full(WIDTH, HEIGHT),
+            OrderedLayerTarget {
+                x: 1,
+                y: 1,
+                width: 2,
+                height: 2,
+            },
+        );
+        queue.submit(Some(encoder.finish()));
+
+        let pixels = readback_rgba8_pixels(&device, &queue, &destination, WIDTH, HEIGHT);
+        let at = |x: u32, y: u32| pixels[(y * WIDTH + x) as usize];
+        assert_eq!(at(0, 0), [255, 0, 0, 255]);
+        assert_eq!(at(1, 1), source_pixels[5]);
+        assert_eq!(at(2, 2), source_pixels[10]);
+        assert_eq!(at(3, 3), [255, 0, 0, 255]);
     }
 
     /// Issue 9: semi-transparent **upper** layer over opaque base must not be
@@ -2487,7 +2906,8 @@ mod tests {
         );
 
         let replace = create_layer_replace_blitter(&device, TextureFormat::Rgba8Unorm);
-        let premul_convert = create_layer_premul_convert_blitter(&device, TextureFormat::Rgba8Unorm);
+        let premul_convert =
+            create_layer_premul_convert_blitter(&device, TextureFormat::Rgba8Unorm);
         let stack = create_layer_stack_blitter(&device, TextureFormat::Rgba8Unorm);
 
         let l0_view = layer0.create_view(&wgpu::TextureViewDescriptor::default());
@@ -2608,8 +3028,7 @@ mod tests {
 
         // Production split: intermediate blitters = VELLO_TARGET_FORMAT,
         // present replace = surface format (Bgra8Unorm here).
-        let premul_convert =
-            create_layer_premul_convert_blitter(&device, VELLO_TARGET_FORMAT);
+        let premul_convert = create_layer_premul_convert_blitter(&device, VELLO_TARGET_FORMAT);
         let present_replace = create_layer_replace_blitter(&device, TextureFormat::Bgra8Unorm);
 
         let l0_view = layer0.create_view(&wgpu::TextureViewDescriptor::default());

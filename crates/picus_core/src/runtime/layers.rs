@@ -6,7 +6,7 @@
 //! Masonry alone cannot provide sticky isolation, self-contained ancestor clip,
 //! or selective layer redraw on the pinned xilem rev. Selected path:
 //! **Picus [`AnimLayerHost`]** + External painter slots +
-//! [`AnimTargetStrategy::FullWindowTransparent`] for first composite.
+//! [`AnimTargetStrategy::WidgetBoundsTexture`] for the product composite.
 //!
 //! ## Phase 2b (this module + `picus_surface`)
 //!
@@ -174,18 +174,18 @@ impl LayerBoundaryDecision {
 pub(crate) enum AnimTargetStrategy {
     /// Full-window transparent texture; only anim widgets paint into it.
     ///
-    /// **Selected for first composite (P2b):** simpler transform/clip bookkeeping;
-    /// encode cost is full-window but anim scene is sparse. Meets plan §2.0
-    /// recommendation; atlas deferred if G3/G4 encode budget fails.
-    #[default]
+    /// Compatibility/debug strategy that retains the original full-window target.
     FullWindowTransparent,
-    /// Tight widget bounds / atlas sub-rects (Phase 4 / late P2 if needed).
-    WidgetBoundsAtlas,
+    /// Tight per-widget target placed back into painter order by the surface
+    /// region compositor. Atlas packing can be added later without changing the
+    /// host/window-space contract.
+    #[default]
+    WidgetBoundsTexture,
 }
 
 impl AnimTargetStrategy {
-    /// First product path for P2b.
-    pub(crate) const FIRST_COMPOSITE: Self = Self::FullWindowTransparent;
+    /// Default product path after G2 product-path validation.
+    pub(crate) const FIRST_COMPOSITE: Self = Self::WidgetBoundsTexture;
 }
 
 // ---------------------------------------------------------------------------
@@ -219,7 +219,7 @@ pub(crate) enum AnimSlotBinding {
 ///
 /// GPU textures are **not** stored here — `picus_surface` holds intermediate
 /// targets keyed by compositor [`LayerId`]. This type tracks ownership, dirty,
-/// and the host-built [`Scene`] (window space) for FullWindowTransparent encode.
+/// and the host-built [`Scene`] in window space for either target strategy.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct AnimLayerEntry {
     pub id: AnimLayerId,
@@ -232,7 +232,7 @@ pub(crate) struct AnimLayerEntry {
     pub version: u64,
     /// Encode needed for this entry.
     pub dirty: bool,
-    /// Host-built scene in **window space** (FullWindowTransparent anim target).
+    /// Host-built scene in **window space**; target cropping is applied later.
     pub scene: Scene,
     /// Last discrete visual phase baked into `scene` (Spinner: 0..12).
     pub visual_phase: Option<u8>,
@@ -832,6 +832,12 @@ pub(crate) enum VisualRun {
     External(usize),
 }
 
+#[derive(Debug, Clone, PartialEq)]
+struct CachedSceneLayer {
+    scene: Scene,
+    transform: Affine,
+}
+
 /// Split a Masonry visual plan into painter-order runs (Issue 3: single source).
 pub(crate) fn coalesce_visual_runs(visual: &VisualLayerPlan) -> Vec<VisualRun> {
     let mut runs: Vec<VisualRun> = Vec::new();
@@ -864,6 +870,10 @@ pub(crate) struct LayerRegistry {
     metrics_generation: u64,
     /// True when plan order/identity changed this rebuild.
     plan_changed: bool,
+    /// Last recorded content for each static painter-order segment. Full Masonry
+    /// redraws can then retain unchanged segment textures instead of invalidating
+    /// every CachedScene/Overlay entry for a local hover or focus change.
+    scene_snapshots: HashMap<EntryIdentity, Vec<CachedSceneLayer>>,
 }
 
 impl Default for LayerRegistry {
@@ -883,6 +893,7 @@ impl LayerRegistry {
             texture_height: 0,
             metrics_generation: 1,
             plan_changed: false,
+            scene_snapshots: HashMap::new(),
         }
     }
 
@@ -936,6 +947,44 @@ impl LayerRegistry {
         id
     }
 
+    fn update_scene_snapshot(
+        &mut self,
+        identity: EntryIdentity,
+        visual: &VisualLayerPlan,
+        indices: &[usize],
+    ) -> bool {
+        let unchanged = self.scene_snapshots.get(&identity).is_some_and(|previous| {
+            previous.len() == indices.len()
+                && previous.iter().zip(indices).all(|(cached, &index)| {
+                    let layer = &visual.layers[index];
+                    matches!(
+                        &layer.kind,
+                        VisualLayerKind::Scene(scene)
+                            if cached.scene == *scene && cached.transform == layer.transform
+                    )
+                })
+        });
+        if unchanged {
+            return false;
+        }
+
+        let snapshot = indices
+            .iter()
+            .filter_map(|&index| {
+                let layer = &visual.layers[index];
+                let VisualLayerKind::Scene(scene) = &layer.kind else {
+                    return None;
+                };
+                Some(CachedSceneLayer {
+                    scene: scene.clone(),
+                    transform: layer.transform,
+                })
+            })
+            .collect();
+        self.scene_snapshots.insert(identity, snapshot);
+        true
+    }
+
     /// Resize/DPI: bump metrics generation and invalidate all entries (P2.6).
     ///
     /// Callers must rebuild surface layer targets for the new generation before
@@ -943,10 +992,7 @@ impl LayerRegistry {
     pub(crate) fn notify_metrics_changed(&mut self, width: u32, height: u32) {
         let width = width.max(1);
         let height = height.max(1);
-        if self.texture_width == width
-            && self.texture_height == height
-            && self.texture_width > 0
-        {
+        if self.texture_width == width && self.texture_height == height && self.texture_width > 0 {
             return;
         }
         self.texture_width = width;
@@ -1000,15 +1046,20 @@ impl LayerRegistry {
         let mut next_entries: Vec<CompositorEntry> = Vec::with_capacity(runs.len());
         let mut saw_external = false;
 
-        for run in runs {
+        let mut changed_static_content = std::collections::HashSet::new();
+        for run in &runs {
             match run {
                 VisualRun::External(idx) => {
                     saw_external = true;
-                    let layer = &visual.layers[idx];
-                    let bounds = match &layer.kind {
+                    let layer = &visual.layers[*idx];
+                    let local_bounds = match &layer.kind {
                         VisualLayerKind::External { bounds } => *bounds,
                         _ => window_bounds,
                     };
+                    // Masonry exposes External bounds in layer-local coordinates.
+                    // Host entries use window-space geometry so widget sync can
+                    // compare directly with QueryCtx::bounding_box/window_transform.
+                    let bounds = layer.transform.transform_rect_bbox(local_bounds);
                     let (kind, identity, anim_id) =
                         if let Some(anim) = self.host.id_for_widget(layer.widget_id) {
                             (
@@ -1025,9 +1076,7 @@ impl LayerRegistry {
                         };
                     // Sync host geometry when bound.
                     if let Some(aid) = anim_id {
-                        let _ = self
-                            .host
-                            .update_slot_geometry(aid, bounds, layer.transform);
+                        let _ = self.host.update_slot_geometry(aid, bounds, layer.transform);
                     }
                     // Clip/effect intentionally none/opaque until P2c isolation.
                     next_entries.push(self.make_entry(
@@ -1051,19 +1100,21 @@ impl LayerRegistry {
                     //   (anim sits between base content; trailing content is not Overlay).
                     // - Without External: first Scene run = CachedScene; later Scene runs
                     //   that overlay_layers would yield = Overlay.
-                    let all_overlay = indices.iter().all(|&i| {
-                        overlay_widget_ids.contains(&visual.layers[i].widget_id)
-                    });
-                    let (kind, identity) =
-                        if !saw_external && all_overlay && cached_seg > 0 {
-                            let id = EntryIdentity::OverlaySegment(overlay_seg);
-                            overlay_seg = overlay_seg.saturating_add(1);
-                            (CompositorEntryKind::Overlay, id)
-                        } else {
-                            let id = EntryIdentity::CachedSegment(cached_seg);
-                            cached_seg = cached_seg.saturating_add(1);
-                            (CompositorEntryKind::CachedScene, id)
-                        };
+                    let all_overlay = indices
+                        .iter()
+                        .all(|&i| overlay_widget_ids.contains(&visual.layers[i].widget_id));
+                    let (kind, identity) = if !saw_external && all_overlay && cached_seg > 0 {
+                        let id = EntryIdentity::OverlaySegment(overlay_seg);
+                        overlay_seg = overlay_seg.saturating_add(1);
+                        (CompositorEntryKind::Overlay, id)
+                    } else {
+                        let id = EntryIdentity::CachedSegment(cached_seg);
+                        cached_seg = cached_seg.saturating_add(1);
+                        (CompositorEntryKind::CachedScene, id)
+                    };
+                    if self.update_scene_snapshot(identity, visual, indices) {
+                        changed_static_content.insert(identity);
+                    }
                     // Union bounds of scenes in the run (window-space estimate).
                     let mut bounds = layer_bounds_estimate(first, window_bounds);
                     for &i in indices.iter().skip(1) {
@@ -1132,6 +1183,12 @@ impl LayerRegistry {
             }
         }
 
+        for entry in &mut next_entries {
+            if changed_static_content.contains(&entry.identity) {
+                entry.bump_content();
+            }
+        }
+
         // Propagate host anim dirty → content version bump on Anim entries.
         for e in &mut next_entries {
             if let Some(anim_id) = e.anim_id
@@ -1158,6 +1215,7 @@ impl LayerRegistry {
         let live: std::collections::HashSet<EntryIdentity> =
             self.plan.entries.iter().map(|e| e.identity).collect();
         self.identity_ids.retain(|k, _| live.contains(k));
+        self.scene_snapshots.retain(|k, _| live.contains(k));
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -1195,6 +1253,7 @@ impl LayerRegistry {
     /// Call on `InputOrRebuild` / `ThemeOrFont` / `LayoutRewrite` / etc. before
     /// encode. Pure `AnimPaint` must **not** call this — anim-only ticks leave
     /// base segments clean for future G2.
+    #[cfg(test)]
     pub(crate) fn mark_non_anim_content_dirty(&mut self) {
         for e in self.plan.entries_mut() {
             if matches!(
@@ -1261,8 +1320,7 @@ impl LayerRegistry {
         visual: &VisualLayerPlan,
         render_root: &RenderRoot,
     ) {
-        let mut live_host: std::collections::HashSet<WidgetId> =
-            std::collections::HashSet::new();
+        let mut live_host: std::collections::HashSet<WidgetId> = std::collections::HashSet::new();
         for layer in &visual.layers {
             if !matches!(layer.kind, VisualLayerKind::External { .. }) {
                 continue;
@@ -1349,10 +1407,10 @@ impl LayerRegistry {
 
     /// True when any non-Anim entry needs encode (blocks pure-anim selective path).
     pub(crate) fn non_anim_needs_encode(&self) -> bool {
-        self.plan.entries().iter().any(|e| {
-            e.needs_encode()
-                && !matches!(e.kind, CompositorEntryKind::Anim)
-        })
+        self.plan
+            .entries()
+            .iter()
+            .any(|e| e.needs_encode() && !matches!(e.kind, CompositorEntryKind::Anim))
     }
 
     /// Encode-set for G2 assertion: only Anim kinds need encode (base clean).
@@ -1523,7 +1581,10 @@ mod tests {
 
     use super::*;
     use crate::masonry_core::{
-        app::{RenderRoot, RenderRootOptions, VisualLayerKind, WindowSizePolicy},
+        app::{
+            RenderRoot, RenderRootOptions, VisualLayer, VisualLayerKind, VisualLayerPlan,
+            WindowSizePolicy,
+        },
         core::{
             AccessCtx, ChildrenIds, DefaultProperties, LayoutCtx, MeasureCtx, NewWidget, NoAction,
             PaintCtx, PaintLayerMode, PropertiesRef, RegisterCtx, UpdateCtx, Widget, WidgetId,
@@ -1793,7 +1854,7 @@ mod tests {
         );
         assert_eq!(
             AnimTargetStrategy::FIRST_COMPOSITE,
-            AnimTargetStrategy::FullWindowTransparent
+            AnimTargetStrategy::WidgetBoundsTexture
         );
     }
 
@@ -2016,9 +2077,8 @@ mod tests {
         );
         let mut root = test_root(root_widget);
 
-        let _ = root.handle_window_event(WindowEvent::AnimFrame(std::time::Duration::from_millis(
-            16,
-        )));
+        let _ =
+            root.handle_window_event(WindowEvent::AnimFrame(std::time::Duration::from_millis(16)));
         let (plan, _) = root.redraw();
         assert!(
             !plan.layers.is_empty(),
@@ -2104,6 +2164,39 @@ mod tests {
         assert_eq!(removed.id, id2);
         assert_eq!(host.len(), 2);
         assert!(host.id_for_widget(w2).is_none());
+    }
+
+    #[test]
+    fn external_plan_geometry_is_normalized_to_window_space() {
+        let widget_id =
+            NewWidget::new(ModeBox::new(PaintLayerMode::External, Color::TRANSPARENT)).id();
+        let mut registry = LayerRegistry::default();
+        let anim_id = registry.host_mut().register_external_slot(widget_id);
+        let local_bounds = Rect::new(2.0, 3.0, 12.0, 13.0);
+        let transform = Affine::translate((40.0, 50.0));
+        let visual = VisualLayerPlan {
+            layers: vec![VisualLayer {
+                kind: VisualLayerKind::External {
+                    bounds: local_bounds,
+                },
+                transform,
+                widget_id,
+            }],
+        };
+
+        registry.rebuild_from_visual_plan(&visual, Rect::new(0.0, 0.0, 200.0, 200.0));
+
+        let host = registry.host().get(anim_id).expect("bound anim host");
+        assert_eq!(host.bounds, transform.transform_rect_bbox(local_bounds));
+        assert_eq!(host.transform, transform);
+        assert!(
+            !registry.host_mut().update_slot_geometry(
+                anim_id,
+                transform.transform_rect_bbox(local_bounds),
+                transform,
+            ),
+            "re-observing window-space geometry must not dirty the anim host"
+        );
     }
 
     #[test]
@@ -2251,7 +2344,73 @@ mod tests {
         let ids_before: Vec<_> = registry.plan().entries().iter().map(|e| e.id).collect();
         registry.rebuild_from_visual_plan(&plan, window_bounds);
         let ids_after: Vec<_> = registry.plan().entries().iter().map(|e| e.id).collect();
-        assert_eq!(ids_before, ids_after, "LayerId stable across identical rebuild");
+        assert_eq!(
+            ids_before, ids_after,
+            "LayerId stable across identical rebuild"
+        );
+    }
+
+    #[test]
+    fn full_redraw_only_dirties_static_segment_whose_scene_changed() {
+        fn solid_scene(color: Color) -> Scene {
+            let mut scene = Scene::new();
+            Painter::new(&mut scene).fill_rect(Rect::new(0.0, 0.0, 20.0, 20.0), color);
+            scene
+        }
+
+        let before_widget =
+            NewWidget::new(ModeBox::new(PaintLayerMode::Inline, Color::TRANSPARENT)).id();
+        let external_widget =
+            NewWidget::new(ModeBox::new(PaintLayerMode::External, Color::TRANSPARENT)).id();
+        let after_widget =
+            NewWidget::new(ModeBox::new(PaintLayerMode::Inline, Color::TRANSPARENT)).id();
+        let make_plan = |after_color| VisualLayerPlan {
+            layers: vec![
+                VisualLayer {
+                    kind: VisualLayerKind::Scene(solid_scene(Color::from_rgb8(1, 2, 3))),
+                    transform: Affine::IDENTITY,
+                    widget_id: before_widget,
+                },
+                VisualLayer {
+                    kind: VisualLayerKind::External {
+                        bounds: Rect::new(20.0, 0.0, 40.0, 20.0),
+                    },
+                    transform: Affine::IDENTITY,
+                    widget_id: external_widget,
+                },
+                VisualLayer {
+                    kind: VisualLayerKind::Scene(solid_scene(after_color)),
+                    transform: Affine::IDENTITY,
+                    widget_id: after_widget,
+                },
+            ],
+        };
+
+        let mut registry = LayerRegistry::default();
+        let bounds = Rect::new(0.0, 0.0, 100.0, 100.0);
+        registry.rebuild_from_visual_plan(&make_plan(Color::from_rgb8(4, 5, 6)), bounds);
+        registry.clear_dirty_after_successful_present();
+
+        registry.rebuild_from_visual_plan(&make_plan(Color::from_rgb8(4, 5, 6)), bounds);
+        assert_eq!(
+            registry.plan().dirty_encode_ids().count(),
+            0,
+            "identical full redraw must reuse every static segment texture"
+        );
+
+        registry.rebuild_from_visual_plan(&make_plan(Color::from_rgb8(7, 8, 9)), bounds);
+        let dirty: Vec<_> = registry
+            .plan()
+            .entries()
+            .iter()
+            .filter(|entry| entry.needs_encode())
+            .map(|entry| entry.identity)
+            .collect();
+        assert_eq!(
+            dirty,
+            vec![EntryIdentity::CachedSegment(1)],
+            "a local static change must not invalidate sibling cached segments"
+        );
     }
 
     #[test]
@@ -2312,9 +2471,10 @@ mod tests {
             .map(|e| e.kind)
             .collect();
         assert!(
-            dirty_kinds
-                .iter()
-                .all(|k| matches!(k, CompositorEntryKind::CachedScene | CompositorEntryKind::Overlay)),
+            dirty_kinds.iter().all(|k| matches!(
+                k,
+                CompositorEntryKind::CachedScene | CompositorEntryKind::Overlay
+            )),
             "only CachedScene/Overlay dirtied, got {dirty_kinds:?}"
         );
         assert!(
@@ -2329,7 +2489,10 @@ mod tests {
             .entries()
             .iter()
             .any(|e| e.kind == CompositorEntryKind::Anim && e.needs_encode());
-        assert!(!anim_dirty, "Anim must not bump from mark_non_anim_content_dirty");
+        assert!(
+            !anim_dirty,
+            "Anim must not bump from mark_non_anim_content_dirty"
+        );
     }
 
     #[test]
@@ -2387,7 +2550,10 @@ mod tests {
             "all entries dirty after metrics change"
         );
         for e in registry.plan().entries() {
-            assert!(e.encoded_version.is_none(), "FirstPaint-equivalent after resize");
+            assert!(
+                e.encoded_version.is_none(),
+                "FirstPaint-equivalent after resize"
+            );
         }
 
         // Same size is a no-op.
@@ -2508,10 +2674,7 @@ mod tests {
             .iter()
             .filter(|l| matches!(l.kind, VisualLayerKind::External { .. }))
             .count();
-        assert_eq!(
-            external_count, 0,
-            "Inline.apply is a no-op; plan={plan:?}"
-        );
+        assert_eq!(external_count, 0, "Inline.apply is a no-op; plan={plan:?}");
     }
 
     #[test]
@@ -2566,9 +2729,11 @@ mod tests {
                     PaintLayerMode::Inline,
                     Color::from_rgb8(255, 0, 0),
                 )))
-                .with_fixed(
-                    NewWidget::new(SizedBox::new(spinner).width(Length::px(40.0)).height(Length::px(40.0))),
-                )
+                .with_fixed(NewWidget::new(
+                    SizedBox::new(spinner)
+                        .width(Length::px(40.0))
+                        .height(Length::px(40.0)),
+                ))
                 .with_fixed(NewWidget::new(ModeBox::new(
                     PaintLayerMode::Inline,
                     Color::from_rgb8(0, 0, 255),
@@ -2688,9 +2853,11 @@ mod tests {
                     PaintLayerMode::Inline,
                     Color::from_rgb8(255, 0, 0),
                 )))
-                .with_fixed(
-                    NewWidget::new(SizedBox::new(spinner).width(Length::px(40.0)).height(Length::px(40.0))),
-                )
+                .with_fixed(NewWidget::new(
+                    SizedBox::new(spinner)
+                        .width(Length::px(40.0))
+                        .height(Length::px(40.0)),
+                ))
                 .with_fixed(NewWidget::new(ModeBox::new(
                     PaintLayerMode::Inline,
                     Color::from_rgb8(0, 0, 255),
@@ -2698,9 +2865,8 @@ mod tests {
         );
         let mut root = test_root(root_widget);
         // First phase paint + plan.
-        let _ = root.handle_window_event(WindowEvent::AnimFrame(std::time::Duration::from_millis(
-            1,
-        )));
+        let _ =
+            root.handle_window_event(WindowEvent::AnimFrame(std::time::Duration::from_millis(1)));
         let (plan, _) = root.redraw();
 
         let mut registry = LayerRegistry::new(AnimTargetStrategy::FullWindowTransparent);
@@ -2715,7 +2881,10 @@ mod tests {
             .plan()
             .entries()
             .iter()
-            .find_map(|e| e.anim_id.and_then(|id| registry.host().get(id).map(|h| h.version)))
+            .find_map(|e| {
+                e.anim_id
+                    .and_then(|id| registry.host().get(id).map(|h| h.version))
+            })
             .expect("host version");
         registry.clear_dirty_after_successful_present();
         assert_eq!(
@@ -2738,7 +2907,10 @@ mod tests {
             .plan()
             .entries()
             .iter()
-            .find_map(|e| e.anim_id.and_then(|id| registry.host().get(id).map(|h| h.version)))
+            .find_map(|e| {
+                e.anim_id
+                    .and_then(|id| registry.host().get(id).map(|h| h.version))
+            })
             .expect("host version after phase");
         assert!(
             version_after_phase > version_after_first,
@@ -2774,9 +2946,8 @@ mod tests {
                 .height(Length::px(40.0)),
         );
         let mut root = test_root(root_widget);
-        let _ = root.handle_window_event(WindowEvent::AnimFrame(std::time::Duration::from_millis(
-            1,
-        )));
+        let _ =
+            root.handle_window_event(WindowEvent::AnimFrame(std::time::Duration::from_millis(1)));
         let (plan, _) = root.redraw();
         let mut registry = LayerRegistry::new(AnimTargetStrategy::FullWindowTransparent);
         registry.register_external_widgets_from_visual(&plan, &root);
@@ -2834,24 +3005,23 @@ mod tests {
                     PaintLayerMode::Inline,
                     Color::from_rgb8(255, 0, 0),
                 )))
-                .with_fixed(
-                    NewWidget::new(
-                        SizedBox::new(spinner)
-                            .width(Length::px(40.0))
-                            .height(Length::px(40.0)),
-                    ),
-                ),
+                .with_fixed(NewWidget::new(
+                    SizedBox::new(spinner)
+                        .width(Length::px(40.0))
+                        .height(Length::px(40.0)),
+                )),
         );
         let mut root = test_root(root_widget);
-        let _ = root.handle_window_event(WindowEvent::AnimFrame(std::time::Duration::from_millis(
-            1,
-        )));
+        let _ =
+            root.handle_window_event(WindowEvent::AnimFrame(std::time::Duration::from_millis(1)));
         let (plan, _) = root.redraw();
         let mut registry = LayerRegistry::new(AnimTargetStrategy::FullWindowTransparent);
         registry.register_external_widgets_from_visual(&plan, &root);
         registry.rebuild_from_visual_plan(&plan, Rect::new(0.0, 0.0, 80.0, 40.0));
         assert!(
-            registry.sync_anim_entries_from_widgets(&root).any_version_bumped
+            registry
+                .sync_anim_entries_from_widgets(&root)
+                .any_version_bumped
         );
 
         // Simulate Failed present: retain dirty, do not ack phases.
@@ -2877,7 +3047,12 @@ mod tests {
             post.needs_content_present(),
             "host dirty → AnimPaint must request encode after Failed (not pure AnimTick)"
         );
-        assert!(post.is_selective_anim_encode() || post.has(DirtyReason::AnimPaint { layer: dirty_layers[0] }));
+        assert!(
+            post.is_selective_anim_encode()
+                || post.has(DirtyReason::AnimPaint {
+                    layer: dirty_layers[0]
+                })
+        );
 
         // Successful present clears host dirty; only then would ack run.
         registry.clear_dirty_after_successful_present();
@@ -2952,22 +3127,19 @@ mod tests {
                     PaintLayerMode::Inline,
                     Color::from_rgb8(255, 0, 0),
                 )))
-                .with_fixed(
-                    NewWidget::new(
-                        SizedBox::new(bar)
-                            .width(Length::px(120.0))
-                            .height(Length::px(20.0)),
-                    ),
-                )
+                .with_fixed(NewWidget::new(
+                    SizedBox::new(bar)
+                        .width(Length::px(120.0))
+                        .height(Length::px(20.0)),
+                ))
                 .with_fixed(NewWidget::new(ModeBox::new(
                     PaintLayerMode::Inline,
                     Color::from_rgb8(0, 0, 255),
                 ))),
         );
         let mut root = test_root(root_widget);
-        let _ = root.handle_window_event(WindowEvent::AnimFrame(std::time::Duration::from_millis(
-            1,
-        )));
+        let _ =
+            root.handle_window_event(WindowEvent::AnimFrame(std::time::Duration::from_millis(1)));
         let (plan, _) = root.redraw();
         let external_count = plan
             .layers
@@ -2998,13 +3170,11 @@ mod tests {
                     PaintLayerMode::Inline,
                     Color::from_rgb8(255, 0, 0),
                 )))
-                .with_fixed(
-                    NewWidget::new(
-                        SizedBox::new(bar)
-                            .width(Length::px(120.0))
-                            .height(Length::px(20.0)),
-                    ),
-                ),
+                .with_fixed(NewWidget::new(
+                    SizedBox::new(bar)
+                        .width(Length::px(120.0))
+                        .height(Length::px(20.0)),
+                )),
         );
         let mut root = test_root(root_widget);
         // Even after AnimFrame, determinate must not schedule isolation.
@@ -3098,20 +3268,12 @@ mod tests {
         let content_space = Rect::new(-10.0, -10.0, 110.0, 30.0);
         let wrong_origin = Rect::from_origin_size(Point::ORIGIN, content_space.size());
 
-        let correct_seg = ProgressBar::indeterminate_segment_rect(
-            content_space,
-            0.5,
-            &border,
-            &radius,
-        )
-        .expect("segment with content-space origin");
-        let wrong_seg = ProgressBar::indeterminate_segment_rect(
-            wrong_origin,
-            0.5,
-            &border,
-            &radius,
-        )
-        .expect("segment with ORIGIN rewrite");
+        let correct_seg =
+            ProgressBar::indeterminate_segment_rect(content_space, 0.5, &border, &radius)
+                .expect("segment with content-space origin");
+        let wrong_seg =
+            ProgressBar::indeterminate_segment_rect(wrong_origin, 0.5, &border, &radius)
+                .expect("segment with ORIGIN rewrite");
         assert!(
             (correct_seg.x0 - wrong_seg.x0).abs() > 1.0,
             "content-space origin shifts segment vs ORIGIN rewrite: {} vs {}",
@@ -3150,22 +3312,19 @@ mod tests {
                     PaintLayerMode::Inline,
                     Color::from_rgb8(255, 0, 0),
                 )))
-                .with_fixed(
-                    NewWidget::new(
-                        SizedBox::new(bar)
-                            .width(Length::px(120.0))
-                            .height(Length::px(20.0)),
-                    ),
-                )
+                .with_fixed(NewWidget::new(
+                    SizedBox::new(bar)
+                        .width(Length::px(120.0))
+                        .height(Length::px(20.0)),
+                ))
                 .with_fixed(NewWidget::new(ModeBox::new(
                     PaintLayerMode::Inline,
                     Color::from_rgb8(0, 0, 255),
                 ))),
         );
         let mut root = test_root(root_widget);
-        let _ = root.handle_window_event(WindowEvent::AnimFrame(std::time::Duration::from_millis(
-            1,
-        )));
+        let _ =
+            root.handle_window_event(WindowEvent::AnimFrame(std::time::Duration::from_millis(1)));
         let (plan, _) = root.redraw();
 
         let mut registry = LayerRegistry::new(AnimTargetStrategy::FullWindowTransparent);
@@ -3180,7 +3339,10 @@ mod tests {
             .plan()
             .entries()
             .iter()
-            .find_map(|e| e.anim_id.and_then(|id| registry.host().get(id).map(|h| h.version)))
+            .find_map(|e| {
+                e.anim_id
+                    .and_then(|id| registry.host().get(id).map(|h| h.version))
+            })
             .expect("host version");
         registry.clear_dirty_after_successful_present();
         assert_eq!(registry.plan().dirty_encode_ids().count(), 0);
@@ -3199,7 +3361,10 @@ mod tests {
             .plan()
             .entries()
             .iter()
-            .find_map(|e| e.anim_id.and_then(|id| registry.host().get(id).map(|h| h.version)))
+            .find_map(|e| {
+                e.anim_id
+                    .and_then(|id| registry.host().get(id).map(|h| h.version))
+            })
             .expect("host version after phase");
         assert!(
             version_after > version_after_first,
@@ -3258,9 +3423,8 @@ mod tests {
                 .indeterminate_elapsed();
             assert_eq!(elapsed, 0.0, "Some→None resets elapsed");
         }
-        let _ = root.handle_window_event(WindowEvent::AnimFrame(std::time::Duration::from_millis(
-            1,
-        )));
+        let _ =
+            root.handle_window_event(WindowEvent::AnimFrame(std::time::Duration::from_millis(1)));
         let (plan, _) = root.redraw();
         assert!(
             plan.layers
@@ -3280,9 +3444,8 @@ mod tests {
             ProgressBar::set_progress(&mut bar, Some(0.75));
         });
         // Drain one already-scheduled AnimFrame from the prior indeterminate mode.
-        let _ = root.handle_window_event(WindowEvent::AnimFrame(std::time::Duration::from_millis(
-            16,
-        )));
+        let _ =
+            root.handle_window_event(WindowEvent::AnimFrame(std::time::Duration::from_millis(16)));
         assert!(
             !root.needs_anim(),
             "after None→Some + one drain frame, determinate must not keep needs_anim"
@@ -3330,9 +3493,8 @@ mod tests {
                 .height(Length::px(20.0)),
         );
         let mut root = test_root(root_widget);
-        let _ = root.handle_window_event(WindowEvent::AnimFrame(std::time::Duration::from_millis(
-            1,
-        )));
+        let _ =
+            root.handle_window_event(WindowEvent::AnimFrame(std::time::Duration::from_millis(1)));
         let (plan, _) = root.redraw();
         let mut registry = LayerRegistry::new(AnimTargetStrategy::FullWindowTransparent);
         registry.register_external_widgets_from_visual(&plan, &root);
@@ -3366,9 +3528,8 @@ mod tests {
                 .height(Length::px(20.0)),
         );
         let mut root = test_root(root_widget);
-        let _ = root.handle_window_event(WindowEvent::AnimFrame(std::time::Duration::from_millis(
-            1,
-        )));
+        let _ =
+            root.handle_window_event(WindowEvent::AnimFrame(std::time::Duration::from_millis(1)));
         let (plan, _) = root.redraw();
         let mut registry = LayerRegistry::new(AnimTargetStrategy::FullWindowTransparent);
         registry.register_external_widgets_from_visual(&plan, &root);

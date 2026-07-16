@@ -1,9 +1,9 @@
 # Picus 帧管线解耦完整计划
 
-> **状态**：**完成**（必做栈 P0–P3 + P6；可选 P4/P5 未开工）  
+> **状态**：**代码修复完成，显示链路验收中**（P0–P3 + P6；P4 紧致 target/region composite 已交付，P5 未开工）
 > **范围**：动画时钟 / 内容脏区与层 encode / present 新鲜度 / 与 Bevy·DWM 边界  
 > **动机**：消除「动画帧率 vs 拖窗流畅度」假权衡；根因是架构耦合，不是单点旋钮。  
-> **诚实边界**：单元 **G2** 层合同与 G10 代码路径已交付；PresentMon **G3/G4** 数字仍可为占位（不编造）。
+> **诚实边界**：**G2 已在 gallery Spinner 产品路径实测**（稳态 `scene_build_base=0`、`encode_base=0`）；PresentMon **G3/G4** 数字仍为占位（不编造）。
 
 ---
 
@@ -231,7 +231,7 @@ swapchain 的帧无法由 Picus 撤回。运行时必须记录实际模式和生
 #### 2.0 设计冻结（P2 开工前写进 PR 描述）
 
 - Base target：现有全窗 offscreen（或 swapchain 兼容路径）  
-- Anim layer：独立 texture（尺寸策略：全窗透明 **或** spinner 包围盒 atlas——**首版推荐全窗透明 + 只画 anim widgets**，实现简单；二期再 atlas）  
+- Anim layer：默认使用 widget bounds 紧致 texture；region viewport/scissor 按 painter order 合成；全窗透明仅作内部 fallback
 - Present：`composite(base, anim_layers…) → swapchain`（可用现有 blitter 扩展）  
 - Masonry：评估 `VisualLayerPlan` / overlay_layers 是否可映射；不够则 Picus 侧维护 `AnimLayerHost`  
 
@@ -246,7 +246,7 @@ contract」；代码：`picus_core::runtime::layers`；目标尺寸决策：
 | 自包含可独立 encode 的 painter-order entry（clip/scroll/transform/ZStack/overlay） | **上游不足（实证）**：sticky isolation 失败（mode 每 pass 重置；External/Isolated 二次 redraw 塌缩）；`VisualLayer` 无 clip 字段；flatten 跳过 External。**未单独 spike**：scroll / ZStack / Masonry overlay stack（决策仍 FAIL）。`LayerId` 为清单位。 |
 | anim tick 只发变更 entry、免全树 `redraw`/base 重装 | **上游不足（实证）**：仅有全量 `RenderRoot::redraw` 重装 plan；`scene_cache` ≠ 按层 rebuild |
 | 选型 | **`AnimLayerHost` scaffold**（P2a 未挂到 `WindowRuntime`）；P2b 再接 External 槽 + 脏集 |
-| Anim target | **`FullWindowTransparent`** 首版；atlas 若 G3/G4 encode 预算失败再启 |
+| Anim target | **`WidgetBoundsTexture`**（每 widget 紧致 texture + region composite；packed atlas 后续可加）；`FullWindowTransparent` fallback |
 | 上游策略 | 并行跟踪 LayerId / sticky isolation / self-contained clip / selective redraw；**不阻塞** P2b |
 | 失败回退 | P1 全窗 encode；可选 `PICUS_ANIM_PRESENT_HZ` diagnostic cap（产品路径默认不节流） |
 | 禁止 | 把 post-hoc `VisualLayerPlan` 分类说成 “per-layer scene build” |
@@ -263,14 +263,14 @@ contract」；代码：`picus_core::runtime::layers`；目标尺寸决策：
 | P2.4 | Timing：`encode_base_ms` / `encode_anim_ms` / `composite_ms` |
 | P2.5 | Resize：所有层随 metrics 重建；FirstPaint 全层 |
 
-#### 2.2 垂直切片：UiSpinner — **P2c 已交付（G2 层合同 + 单测）**
+#### 2.2 垂直切片：UiSpinner — **P2c 已交付（G2 产品路径 + 单测）**
 
 | 工作项 | 细节 | 状态 |
 |--------|------|------|
 | P2.6 / P2.7 | `Spinner` 每 paint `PaintLayerMode::External`（局部实现，无 gallery/entity 特判）；External 自动 `register_external_slot` → Anim entry | **已交付** |
 | P2.8 | Spinner 像素只在 host window-space scene；cached segments 不含 spinner；painter order 前后景不变 | **已交付** |
 | P2.9 | 12-step visual phase 门控 `request_paint_only` / host version；相位未变 tick 不 encode/present；稳态 selective path 免全树 `redraw`、免 base reassemble/encode | **已交付** |
-| P2.10 | 层合同测试证明 pure anim → 仅 Anim `needs_encode`；G4 PresentMon 协议见 baseline 文档（本 PR 不强制实测） | **部分**（G2 单测；G3/G4 数据待） |
+| P2.10 | 层合同与 gallery timing 证明 pure anim → 仅 Anim `needs_encode`、`scene_build_base=0`、`encode_base=0`；G4 PresentMon 协议见 baseline 文档 | **部分**（G2 产品路径通过；G3/G4 数据待） |
 
 #### 2.3 扩展 — **P2d indeterminate ProgressBar 已交付（G2 层合同）**
 
@@ -289,7 +289,7 @@ contract」；代码：`picus_core::runtime::layers`；目标尺寸决策：
 | P2e.4 | 文档：`runtime.md`、`frame-pipeline-baseline.md`、本计划进度 | **已交付** |
 | P2e.5 | PresentMon G3/G4 实测数字 | **未强制**（占位表保留；不编造数字） |
 
-**验收说明**：G10 代码审查项完成。G2 层合同（Spinner + ProgressBar）与 PresentPolicy FIFO/Mailbox 单测已在树内；**不**将 G3/G4 PresentMon 数字写成已验收。
+**验收说明**：G10 代码审查项完成。Spinner G2 gallery 产品路径、Spinner/ProgressBar 层合同与 PresentPolicy FIFO/Mailbox 单测已在树内；**不**将 G3/G4 PresentMon 数字写成已验收。
 
 **建议 PR 栈**（历史命名；工作项 ID 以 §12 进度表为准）：
 
@@ -317,16 +317,16 @@ contract」；代码：`picus_core::runtime::layers`；目标尺寸决策：
 
 ---
 
-### Phase 4 — 脏矩形 / Anim atlas（可选增强）
+### Phase 4 — 紧致 Anim target / atlas（部分完成）
 
 **目标**：进一步降 anim encode 成本（全窗透明 anim 层仍可能偏贵时）。
 
-| 工作项 | 细节 |
-|--------|------|
-| P4.1 | 收集 anim widget 的 layout bounds 并集为 dirty rect |
-| P4.2 | 仅 dirty rect encode 或 atlas 子纹理  
-| P4.3 | 与 scissor/blit 路径集成  
-| P4.4 | 基准：多 Spinner / 大窗口下 `encode_anim_ms` |
+| 工作项 | 细节 | 状态 |
+|--------|------|------|
+| P4.1 | External layer-local bounds 经 transform 规范为 window-space，再转 physical target | **已交付** |
+| P4.2 | 每 Anim entry 使用紧致 texture（packed atlas 尚未做） | **已交付** |
+| P4.3 | region viewport/scissor 按 painter order 合成；纯 Anim 帧仅在变更 target 并集内重放相交层 | **已交付**（含紧致 target 与 full-source scissor 的 headless GPU 像素测试） |
+| P4.4 | 多 Spinner / 大窗口 `encode_anim_ms` 与 PresentMon 矩阵 | **部分**（本机 debug smoke；正式矩阵待） |
 
 **验收**：大窗口单 Spinner 的 encode 成本显著低于全窗。  
 **建议 PR**：`PR4-anim-dirty-rect`（可延后）
@@ -459,9 +459,9 @@ PR6-docs-cleanup
 | 里程碑 | 包含 | 对外可感知结果 |
 |--------|------|----------------|
 | M1 语义 | P0+P1 | **完成** — 帧调度可读；度量齐全 |
-| M2 分层 | P2 | **完成** — G2 层合同；默认无需动画 throttle；G3/G4 实测待填 |
+| M2 分层 | P2 | **完成** — Spinner G2 产品路径通过；默认无需动画 throttle；G3/G4 实测待填 |
 | M3 API | P3 | **完成** — `PaintIsolation` 约定稳定 |
-| M4 增强 | P4/P5 | 可选·未开始 — 大窗/重载更稳 |
+| M4 增强 | P4/P5 | **部分** — 紧致 target/region composite 已交付；packed atlas/P5 待 |
 | M5 收尾 | P6 | **完成** — 文档与清理 |
 
 ---
@@ -485,11 +485,11 @@ PR6-docs-cleanup
 | P1b | 部分/可后续（redraw 语义与 FrameDriver 粘性修复已叠在 P1 分支） |
 | P2a | **完成**（Masonry 层契约硬门禁 + `AnimLayerHost` + 目标策略文档） |
 | P2b | **完成**（`CompositorEntryKind` + 稳定 `LayerId`、painter-order plan、dirty/version、`render_ordered_frame`、resize metrics generation、timing 分桶） |
-| P2c | **完成**（Spinner External isolation、host scene、12-step phase gate、selective anim encode / **G2 层合同单测**） |
+| P2c | **完成**（Spinner External isolation、host scene、12-step phase gate、selective anim encode / **G2 产品路径实测**） |
 | P2d | **完成**（indeterminate ProgressBar anim 层 + **G2 层合同单测**） |
 | P2e | **完成 / G10**（unset = 不节流；`PICUS_ANIM_PRESENT_HZ` diagnostic opt-in；G5 永不被挡） |
 | P3 | **完成**（`PaintIsolation::{Inline, AnimEntry}`；guide + AGENTS 硬规则） |
-| P4 | 可选·未开始 |
+| P4 | **部分完成**（widget-bounds target + region composite；packed atlas/正式矩阵待） |
 | P5 | 可选·未开始 |
 | P6 | **完成**（runtime 端态叙述、README/examples 链接、过时注释清理、本计划收尾） |
 
@@ -500,14 +500,14 @@ PR6-docs-cleanup
 | 调度 | `needs_*` 大 OR → 整窗 paint | `FrameDriver` + `DirtyBudget` 分 entry/present | **G1** 代码+文档 |
 | 动画 present | 与全窗 encode/present 绑死；后有 ~30Hz 默认节流 | 默认不节流（G10）；可选 `PICUS_ANIM_PRESENT_HZ` | **G10** 代码审查 |
 | 层 | 无；每 tick 全窗 | painter-order `CompositorPlan`；Spinner/indeterminate bar → Anim entry | **G2** 单元合同 |
-| 纯 anim 成本 | `encode_base` 每 tick | 稳态 selective：免 base reassembly/encode | **G2** 单测；非 PresentMon |
+| 纯 anim 成本 | `encode_base` 每 tick | 稳态 selective：免 base reassembly/encode；Anim 用紧致 target | **G2** gallery timing + 单测；非 PresentMon |
 | 交互/resize | 可被 anim 路径挤占语义 | G5 永不被 anim throttle 挡 | **G5** 单测 |
 | Present 策略 | 隐式 | `PresentPolicy` Mailbox 优先 + FIFO fallback 显式 | **G7** 单测 |
 | 控件 API | 无公共 isolation | `PaintIsolation::{Inline, AnimEntry}` | **P3** |
 | 静止窗流畅（G3） | 靠砍 fps 或拖影 | 架构上不依赖永久 30Hz | **未填 PresentMon 数字**（表可占位） |
 | 拖窗拖影（G4） | 全窗同步 present 易滞后 | Anim 离 base；Mailbox 保新鲜度 | **未填 PresentMon 数字**（表可占位） |
 
-**结论**：必做架构与 **G2 单元合同** 完成；**G3/G4 以实测为准**，[`docs/perf/frame-pipeline-baseline.md`](../perf/frame-pipeline-baseline.md) 中数字在首轮 PresentMon 跑完前保持占位，**禁止编造**。
+**结论**：必做架构、G2 产品路径与 P4 紧致 target slice 已完成；**G3/G4 仍以 PresentMon 实测为准**，[`docs/perf/frame-pipeline-baseline.md`](../perf/frame-pipeline-baseline.md) 中显示链路数字在首轮正式采集前保持占位，**禁止编造**。
 
 ---
 

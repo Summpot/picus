@@ -35,7 +35,8 @@ configuration.
 
 The frame architecture separates four timelines so animation clock, scene build,
 and present freshness are not one OR-coupled path. Required plan phases
-(P0–P3 + docs P6) are delivered; optional P4/P5 remain open. Full plan and
+(P0–P3 + docs P6) and the P4 tight-target slice are delivered; packed atlas
+allocation and P5 remain open. Full plan and
 progress: [plans/frame-pipeline.md](../plans/frame-pipeline.md).
 
 | Timeline | Role | Trigger | Drop policy |
@@ -94,8 +95,9 @@ Window (swapchain)
 - **Discovery / promotion:** allowlisted widgets report `PaintIsolation`; only
   `AnimEntry` promotes External → Anim host. See
   [guide/paint-isolation.md](../guide/paint-isolation.md).
-- **Anim target:** full-window transparent RT; only anim widgets paint (atlas is
-  optional P4).
+- **Anim target:** tight per-widget transparent RT from window-space External
+  bounds; a viewport/scissor blitter restores exact painter order. Full-window
+  targets remain an internal fallback.
 - **Pure AnimPaint (G2):** `encode_base` stays 0 when only Anim entries need
   encode; Spinner 12-step phase gate and indeterminate ProgressBar phase advance
   drive host version/dirty.
@@ -231,7 +233,9 @@ must be owned by Picus dirty sets, not by slicing the plan after the fact.
 - **Composite (P2b+):** exact painter-order composite of
   `CompositorEntryKind::{CachedScene, Anim, Overlay, External}` via stable Picus
   `LayerId`s — **not** a fixed Base→Overlay→Anim stack. Cached segments may appear
-  both before and after an anim/external slot.
+  both before and after an anim/external slot. After a complete intermediate is
+  available, Anim-only updates replay intersecting entries only inside the union
+  of changed Anim target rectangles; the final swapchain blit is still full-window.
 
 **Upstream revision strategy (parallel, non-blocking):** track/contribute persistent
 upstream `LayerId`, sticky isolation, self-contained clip/effect on isolated layers, and selective
@@ -273,8 +277,8 @@ rebuild_from_visual_plan(plan)  → CompositorEntry[] in Masonry painter order
 register_external_widgets_from_visual → AnimLayerId when discovered isolation is AnimEntry
                                         (allowlist: Spinner / indeterminate ProgressBar)
 needs_encode                    → structure_dirty || encoded_version != content_version
-non-anim content dirt           → mark_non_anim_content_dirty bumps CachedScene/Overlay
-                                  (InputOrRebuild/Theme/Layout/…; pure AnimPaint does not)
+non-anim content redraw         → compare retained Scene+transform snapshots per static run;
+                                  bump only changed CachedScene/Overlay entries
 Spinner paint                   → PaintIsolation::AnimEntry.apply → External; host paint_arms
 phase gate                      → 12-step visual phase only → request_paint / host version
 pure AnimPaint (G2)             → skip full redraw; sync host scenes; encode Anim only
@@ -315,7 +319,7 @@ Product path for continuous isolation (no gallery/entity hardcode):
      `AnimEntry.apply` are not discovered; path forward is trait / TypeId
      host-painter registration (no inventory/linkme). See
      [guide/paint-isolation.md](../guide/paint-isolation.md).
-3. **Host scenes** (FullWindowTransparent target):
+3. **Host scenes** (window-space scene, tight widget-bounds target):
    - Spinner: `AnimLayerHost::sync_spinner_scene` via `Spinner::paint_arms`;
      version / dirty advance only when the **12-step visual phase** changes
      (or geometry/first build).
@@ -344,7 +348,9 @@ Product path for continuous isolation (no gallery/entity hardcode):
    anim throttle cannot drop base reassembly (Issue 10). Host geometry moves
    on selective sync also force full path (Issue 11 partial).
 6. **Content / resize / first paint** still full-redraw; bound External widgets
-   are re-`request_paint_only` so External mode sticks for the paint pass.
+   are re-`request_paint_only` so External mode sticks for the paint pass. Signals
+   raised while building that frame are drained before present settlement, so a
+   successful present does not re-arm the next frame as `InputOrRebuild`.
 7. **ProgressBar lifecycle (P2.13):** `Some→None` resets elapsed/phase to 0,
    invalidates, starts anim; `None→Some` stops further anim requests and
    invalidates; determinate must not retain a permanent tick. Accessibility
@@ -353,7 +359,7 @@ Product path for continuous isolation (no gallery/entity hardcode):
 **Known limitation (not G3 under scroll/clip):** host anim scenes use
 `AncestorClip::none` and do not yet re-apply ancestor clip/scroll packages.
 Anim widgets under a clipped portal/scroll may paint outside the ancestor clip
-on the FullWindowTransparent anim target until clip plumbing lands.
+inside their widget target until ancestor clip plumbing lands.
 
 **G10 / P2e (code path):** default anim present throttle removed; product path is
 unlimited; `PICUS_ANIM_PRESENT_HZ` is diagnostic opt-in only. Unit **G2**
@@ -367,14 +373,15 @@ FIFO/Mailbox `PresentPolicy` unit tests exist.
   be placeholders — do not invent fake latency/present counts)
 - Open third-party `AnimEntry` discovery (allowlist + type-dispatched host paint)
 - Ancestor clip/scroll packaging on anim host scenes (see known limitation above)
-- Optional P4 atlas / P5 async encode
+- Optional packed atlas / P5 async encode
 
 #### Anim target choice (size gate input)
 
 | Strategy | Encode shape | First composite? |
 |----------|--------------|------------------|
-| **Full-window transparent** anim target; only anim widgets paint | Full-window clear of anim RT; sparse scene | **Yes** (selected; Spinner P2c / ProgressBar P2d) |
-| Widget-bounds / atlas | Smaller encode; more bookkeeping | Deferred (P4 / if G3·G4 fail) |
+| Full-window transparent | Compatibility fallback; cost scales with window pixels | No |
+| **Widget-bounds target + dirty-region composite** | Encode and intermediate recomposite scale with anim target union; exact painter-order viewport/scissor | **Yes** |
+| Packed atlas | Fewer textures for many anim entries | Deferred |
 
 Rationale and budget assumptions:
 [perf/frame-pipeline-baseline.md](../perf/frame-pipeline-baseline.md) §6.
@@ -392,9 +399,9 @@ times.
 
 ### Frame pipeline plan status
 
-Required stack **P0–P3 + P6** is complete (FrameDriver, ordered layers,
-Spinner/ProgressBar G2, G10 unlimited product path, `PaintIsolation`, docs).
-Optional **P4** (anim dirty rect/atlas) and **P5** (async encode) are not
-started. PresentMon G3/G4 tables may still be placeholders — fill from real
-runs only. Plan and before/after summary:
+Required stack **P0–P3 + P6** and the P4 tight-target/dirty-region-composite slice are
+implemented. Spinner product-path timing now verifies `scene_build_base=0` and
+`encode_base=0` in steady state; PresentMon G3/G4 tables may still be
+placeholders and must be filled from real display-path runs only. Packed atlas
+and **P5** async encode remain open. Plan and before/after summary:
 [plans/frame-pipeline.md](../plans/frame-pipeline.md).

@@ -174,14 +174,15 @@ Record both `presented` and `anim_tick_only` counters for the sample window.
 
 ## 4. Acceptance thresholds (campaign targets)
 
-Protocol and G1 metrics skeleton are in tree. Unit G2 and G10 are architecture-done.
+Protocol and G1 metrics skeleton are in tree. Spinner product-path G2, unit G2,
+and G10 are architecture-done.
 Numeric display-path gates (G3/G4) still need PresentMon fills — refine thresholds
 when first real numbers exist:
 
 | Gate | Intent | Threshold (plan) | Status |
 |------|--------|------------------|--------|
 | G1 | Named phases + per-window `frame_id` | Metrics log + this protocol | **Done** (skeleton + protocol in tree) |
-| G2 | Pure Spinner / indeterminate bar: `encode_base` ≈ 0; anim host only | Unit contracts + timing | **Done** (unit G2; not PresentMon) |
+| G2 | Pure Spinner / indeterminate bar: `encode_base` ≈ 0; anim host only | Unit contracts + timing | **Done** (Spinner gallery product timing + unit G2; not PresentMon) |
 | G3 | Spinner still: design phases visible; indeterminate bar ≈ `0.9 × min(60, refresh_hz)` without permanent global throttle | PresentMon + content version | Architecture done; **numbers placeholder** until measured |
 | G4 | Spinner drag: displayed-frame latency p95 ≤ 2 refresh periods; ≥30% better than P0 baseline; default path not permanent fps cut | PresentMon ×3 debug/release | Architecture done; **§3 tables still empty** — do not invent numbers |
 | G6 | Button idle present count = 0 in 30 s sample | Counter | Pending measurement |
@@ -202,6 +203,7 @@ compare against that row set (or a clearly marked newer baseline revision).
 | 2026-07-16 | Phase 2a review fixes | §6.3 explicit: size-budget assumptions ≠ display-path acceptance |
 | 2026-07-16 | Phase 2e / G10 | Default anim present throttle removed; `PICUS_ANIM_PRESENT_HZ` diagnostic opt-in only. Spinner + ProgressBar G2 unit contracts + PresentPolicy FIFO/Mailbox tests exist; PresentMon G3/G4 numbers remain placeholders |
 | 2026-07-16 | Phase 6 docs | Status + gate table honesty (G2 unit done; G3/G4 placeholders); plan marked complete for P0–P3+P6 |
+| 2026-07-16 | Corrective product-path pass | Drain in-frame redraw signals before present settlement; normalize External geometry to window space; compare static Scene segments; switch default Anim targets to tight widget bounds with region composite. Gallery Spinner steady-state measured `scene_build_base=0`, `encode_base=0`; G3/G4 PresentMon still pending. |
 
 ---
 
@@ -214,14 +216,17 @@ Gate implementation: `picus_core::runtime::layers` (`AnimTargetStrategy`). Narra
 
 | Field | Value |
 |-------|--------|
-| **Selected for first composite (P2b)** | **`FullWindowTransparent`** — full-window transparent anim render target; only anim widgets paint into it |
-| Deferred | `WidgetBoundsAtlas` — tight bounds / atlas (Phase 4 or if §6.2 fails) |
+| **Selected product target** | **`WidgetBoundsTexture`** — one tight texture per Anim entry plus painter-order dirty-region composite |
+| Fallback | `FullWindowTransparent` — compatibility/debug path |
+| Deferred | Packed atlas allocation for many simultaneous Anim entries |
 | Boundary path | Picus `AnimLayerHost` + Masonry `PaintLayerMode::External` slots (not upstream-only isolation) |
 
-Plan §2.0 already recommended full-window transparent + “only draw anim widgets” for
-the first vertical slice. The Phase 2a inventory confirmed Masonry cannot yet supply
-self-contained selective layer redraw, so Picus owns anim dirty state regardless of
-target geometry.
+The first vertical slice used full-window transparent targets. Product-path review
+showed that this still multiplied pixel work at large window sizes, so the selected
+path now derives a physical target from each External slot's window-space bounds and
+composites it back into the ordered intermediate through a region viewport/scissor.
+Once a complete intermediate exists, Anim-only frames replay all intersecting
+ordered layers only inside the changed Anim target union.
 
 ### 6.2 Size / budget criteria (plan gates)
 
@@ -234,22 +239,18 @@ target geometry.
 
 ### 6.3 Assumptions (until measured)
 
-**G2 unit contracts** (pure-anim `encode_base` → 0; host-only anim encode for
-Spinner + indeterminate ProgressBar) are **delivered in code**. The bullets
-below remain **planning assumptions for display-path cost** — they are **not**
-PresentMon G3/G4 acceptance. Fill §3 only with measured counters / PresentMon;
-do not invent numbers.
+**G2 unit contracts** and Spinner gallery product timing (pure-anim
+`scene_build_base` / `encode_base` → 0) are delivered. The bullets below remain
+planning assumptions for display-path cost; they are not PresentMon G3/G4
+acceptance. Fill §3 only with measured counters / PresentMon; do not invent numbers.
 
-1. **Full-window transparent anim RT cost** is dominated by Vello encode of a *sparse*
-   anim scene plus a full-size clear/composite, not by re-recording the entire base
-   UI tree (unit G2: base encode → 0 on pure anim ticks; display-path cost still
-   measured separately).
-2. At **1080p**, full-window anim encode is expected to clear the 25% refresh budget
-   for a single Spinner-class scene; at **4K** the clear+composite term grows with
-   pixel count and is the first risk for switching to atlas (optional P4).
-3. **WidgetBoundsAtlas** reduces pixel work but requires reliable bounds under
-   scroll/clip/transform and more composite rect bookkeeping; deferred until
-   FullWindowTransparent fails §6.2 on real hardware.
+1. Tight Anim targets remove full-window clear/encode work and Anim-only intermediate
+   recomposition is scissored to the changed target union; Vello fixed overhead and
+   the final full-window intermediate-to-swapchain blit remain measurable costs.
+2. External bounds are normalized from layer-local into window space before target
+   allocation; a 2 px physical pad preserves edge antialiasing.
+3. Static full redraws compare retained Scene+transform snapshots per painter-order
+   run, so local hover changes do not bump every cached segment.
 4. **Mailbox** present remains preferred for G4; target strategy does not replace
    present-mode policy.
 5. **G10 done:** product path has **no** default anim present throttle. Optional
@@ -258,13 +259,14 @@ do not invent numbers.
 
 ### 6.4 Comparison snapshot (qualitative)
 
-| Dimension | FullWindowTransparent | WidgetBoundsAtlas |
+| Dimension | FullWindowTransparent | WidgetBoundsTexture |
 |-----------|----------------------|-------------------|
-| Implementation risk | Lower (matches current full-window paths) | Higher (scissor/atlas, dirty union) |
+| Implementation risk | Lower (compatibility fallback) | Higher (window/physical bounds + region composite) |
 | encode_anim vs resolution | Scales with window pixels | Scales with widget dirty union |
-| Clip/scroll correctness | Composite in window space; External slot bounds from layout | Must clip atlas samples to ancestor clip |
-| Multi Spinner | One shared anim RT or N full-window RTs (product choice in P2b) | Natural atlas packing |
-| When to prefer | Default first ship | 4K / many entries if p95 over budget |
+| Clip/scroll correctness | Composite in window space; External slot bounds from layout | Must package ancestor clip with host scene |
+| Multi Spinner | One shared anim RT or N full-window RTs (compatibility path) | N tight textures; recomposite their changed target union |
+| When to prefer | Debug/fallback | Product default; packed atlas remains optional |
 
-**Decision:** ship P2b with **FullWindowTransparent**; re-evaluate atlas only if
-encode_anim+composite p95 exceeds 25% refresh on the §2 matrix (especially 4K S2/S3).
+**Decision:** ship tight per-entry **WidgetBoundsTexture** targets with region
+composite. Re-evaluate packed atlas allocation only if many-entry texture count or
+encode_anim+composite p95 exceeds the §2 matrix budget.

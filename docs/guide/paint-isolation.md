@@ -103,3 +103,12 @@ When dirty is only anim paint and the plan already has Anim entries, the runtime
 can skip full-tree redraw and encode **only** anim entries (base cached segments
 stay clean). Isolation-keyed promotion after discovery is what makes that path
 possible for Spinner / indeterminate ProgressBar.
+
+Anim entries use a tight physical-pixel target derived from the External slot's
+window-space bounds. `picus_surface` composites that texture back into its exact
+painter-order viewport. If only Anim textures changed, the persistent ordered
+intermediate is rebuilt only inside the union of those target rectangles; the
+final swapchain blit remains full-window. The compatibility full-window target
+remains available internally. A full content redraw compares retained Scene
+recordings per static segment, so a sidebar hover does not invalidate unrelated
+cached segments.

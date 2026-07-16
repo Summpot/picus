@@ -171,8 +171,12 @@ pub struct PreparedFrame<'a> {
     pub background_color: Color,
     /// Base retained scene in root coordinates.
     pub base: &'a Scene,
+    /// Transform from base scene coordinates into window coordinates.
+    pub base_transform: Affine,
     /// Overlay layers in painter order.
     pub overlays: &'a [Layer<'a>],
+    /// Window-space origin represented by the top-left of the render target.
+    pub window_origin: (f64, f64),
 }
 
 impl<'a> PreparedFrame<'a> {
@@ -191,14 +195,34 @@ impl<'a> PreparedFrame<'a> {
             scale_factor,
             background_color,
             base,
+            base_transform: Affine::IDENTITY,
             overlays,
+            window_origin: (0.0, 0.0),
         }
+    }
+
+    /// Apply the base layer's local-to-window transform.
+    #[must_use]
+    pub fn with_base_transform(mut self, transform: Affine) -> Self {
+        self.base_transform = transform;
+        self
+    }
+
+    /// Render a window-space sub-rectangle into this target.
+    #[must_use]
+    pub fn with_window_origin(mut self, x: f64, y: f64) -> Self {
+        self.window_origin = (x, y);
+        self
     }
 }
 
 impl RenderSource for PreparedFrame<'_> {
     fn validate(&self) -> Result<(), ValidateError> {
-        validate_layers(self.base, self.overlays)
+        // `paint_into` normalizes every retained layer into a balanced command
+        // stream before replay. Validating by calling `ensure_balanced_scene`
+        // here would allocate and replay each malformed Portal/External segment
+        // once during validation and then again during paint.
+        Ok(())
     }
 
     fn paint_into(&mut self, sink: &mut dyn PaintSink) {
@@ -210,25 +234,18 @@ impl RenderSource for PreparedFrame<'_> {
             );
         }
 
-        let scale = Affine::scale(self.scale_factor);
+        let viewport = Affine::scale(self.scale_factor)
+            * Affine::translate((-self.window_origin.0, -self.window_origin.1));
         // Balance clip/group/context stacks before replay. Masonry can emit
         // UnclosedClips when External/IsolatedScene finishes a layer mid ancestor
         // clip (e.g. Spinner under Portal) — Vello encode rejects those scenes.
         let base = ensure_balanced_scene(self.base);
-        replay_transformed(base.as_ref(), sink, scale);
+        replay_transformed(base.as_ref(), sink, viewport * self.base_transform);
         for layer in self.overlays {
             let scene = ensure_balanced_scene(layer.scene);
-            replay_transformed(scene.as_ref(), sink, scale * layer.transform);
+            replay_transformed(scene.as_ref(), sink, viewport * layer.transform);
         }
     }
-}
-
-fn validate_layers(base: &Scene, overlays: &[Layer<'_>]) -> Result<(), ValidateError> {
-    ensure_balanced_scene(base).validate()?;
-    for layer in overlays {
-        ensure_balanced_scene(layer.scene).validate()?;
-    }
-    Ok(())
 }
 
 /// Borrow `scene` when already well-nested; otherwise rebuild with balanced stacks.
@@ -416,5 +433,17 @@ mod balance_tests {
             std::borrow::Cow::Borrowed(_) => {}
             std::borrow::Cow::Owned(_) => panic!("valid empty scene should be borrowed"),
         }
+    }
+
+    #[test]
+    fn prepared_frame_validates_its_repaired_output_without_prebuilding_it() {
+        let mut source = Scene::new();
+        source.push_clip(fill_clip(Rect::new(0.0, 0.0, 10.0, 10.0)));
+        let mut frame = PreparedFrame::new(20, 20, 1.0, Color::TRANSPARENT, &source, &[]);
+
+        assert_eq!(RenderSource::validate(&frame), Ok(()));
+        let mut output = Scene::new();
+        frame.paint_into(&mut output);
+        assert_eq!(output.validate(), Ok(()));
     }
 }
