@@ -253,6 +253,98 @@ pub enum FluentIcon {
 }
 
 impl FluentIcon {
+    /// Every variant, in declaration order. Gallery browsers and exhaustiveness
+    /// tests use this as the single source of truth for the public set size.
+    pub const ALL: [Self; 40] = [
+        Self::Accept,
+        Self::Add,
+        Self::AllApps,
+        Self::Back,
+        Self::Brightness,
+        Self::Cancel,
+        Self::Character,
+        Self::Checkmark,
+        Self::Checkbox,
+        Self::ChevronDown,
+        Self::ChevronLeft,
+        Self::ChevronRight,
+        Self::ChevronUp,
+        Self::Clock,
+        Self::Contact,
+        Self::Delete,
+        Self::DockLeft,
+        Self::Edit,
+        Self::Folder,
+        Self::Font,
+        Self::Forward,
+        Self::GlobalNavigationButton,
+        Self::Globe,
+        Self::Help,
+        Self::Info,
+        Self::List,
+        Self::Map,
+        Self::Message,
+        Self::More,
+        Self::Pictures,
+        Self::Placeholder,
+        Self::Refresh,
+        Self::Remove,
+        Self::Search,
+        Self::Send,
+        Self::Settings,
+        Self::Stop,
+        Self::Sync,
+        Self::TouchPointer,
+        Self::ViewAll,
+    ];
+
+    /// Stable display name matching the enum variant identifier.
+    #[must_use]
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::Accept => "Accept",
+            Self::Add => "Add",
+            Self::AllApps => "AllApps",
+            Self::Back => "Back",
+            Self::Brightness => "Brightness",
+            Self::Cancel => "Cancel",
+            Self::Character => "Character",
+            Self::Checkmark => "Checkmark",
+            Self::Checkbox => "Checkbox",
+            Self::ChevronDown => "ChevronDown",
+            Self::ChevronLeft => "ChevronLeft",
+            Self::ChevronRight => "ChevronRight",
+            Self::ChevronUp => "ChevronUp",
+            Self::Clock => "Clock",
+            Self::Contact => "Contact",
+            Self::Delete => "Delete",
+            Self::DockLeft => "DockLeft",
+            Self::Edit => "Edit",
+            Self::Folder => "Folder",
+            Self::Font => "Font",
+            Self::Forward => "Forward",
+            Self::GlobalNavigationButton => "GlobalNavigationButton",
+            Self::Globe => "Globe",
+            Self::Help => "Help",
+            Self::Info => "Info",
+            Self::List => "List",
+            Self::Map => "Map",
+            Self::Message => "Message",
+            Self::More => "More",
+            Self::Pictures => "Pictures",
+            Self::Placeholder => "Placeholder",
+            Self::Refresh => "Refresh",
+            Self::Remove => "Remove",
+            Self::Search => "Search",
+            Self::Send => "Send",
+            Self::Settings => "Settings",
+            Self::Stop => "Stop",
+            Self::Sync => "Sync",
+            Self::TouchPointer => "TouchPointer",
+            Self::ViewAll => "ViewAll",
+        }
+    }
+
     /// Return the Unicode codepoint for this icon.
     ///
     /// The core set follows WinUI's `Symbol` enum mapping to Segoe Fluent
@@ -359,5 +451,20 @@ mod tests {
         assert_eq!(glyph.glyph(), FluentIcon::Brightness.glyph());
         assert_ne!(glyph.glyph(), FluentIcon::Refresh.glyph());
         assert_ne!(glyph.glyph(), FluentIcon::Sync.glyph());
+    }
+
+    #[test]
+    fn fluent_icon_all_covers_every_variant_with_unique_names() {
+        assert_eq!(FluentIcon::ALL.len(), 40);
+        let mut seen = std::collections::HashSet::new();
+        for icon in FluentIcon::ALL {
+            assert!(
+                seen.insert(icon.name()),
+                "duplicate FluentIcon name: {}",
+                icon.name()
+            );
+            // Touch glyph so ALL stays wired to the match arms.
+            let _ = icon.glyph();
+        }
     }
 }

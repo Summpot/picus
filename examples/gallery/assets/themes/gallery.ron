@@ -626,394 +626,274 @@
         ),
       ),
     ),
-    // ── Design guidance: color token swatches ──────────────────────────
+    // ── Design guidance: multi-class composition ───────────────────────
+    // Base classes hold shared chrome (token-backed padding/type); thin
+    // per-token classes override only the demonstrated colors / radii / gaps.
+    (
+      selector: Class("gallery.token.swatch"),
+      setter: (
+        layout: (
+          padding: Var("space-m"),
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+        ),
+        text: (text_align: Center, size: Var("font-size-caption1")),
+      ),
+    ),
+    // Wider border so border-color demos stay visible (not the demo subject).
+    (
+      selector: Class("gallery.token.border_swatch"),
+      setter: (
+        layout: (
+          padding: Var("space-m"),
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thick"),
+        ),
+        colors: (bg: Var("surface-panel"), text: Var("text-primary")),
+        text: (text_align: Center, size: Var("font-size-caption1")),
+      ),
+    ),
     (
       selector: Class("gallery.token.surface-bg"),
-      setter: (
-        layout: (padding: 12.0, corner_radius: Var("radius-md"), border_width: Var("border-thin")),
-        colors: (bg: Var("surface-bg"), border: Var("border-default"), text: Var("text-primary")),
-        text: (text_align: Center, size: 12.0),
-      ),
+      setter: (colors: (bg: Var("surface-bg"), border: Var("border-default"), text: Var("text-primary"))),
     ),
     (
       selector: Class("gallery.token.surface-panel"),
-      setter: (
-        layout: (padding: 12.0, corner_radius: Var("radius-md"), border_width: Var("border-thin")),
-        colors: (bg: Var("surface-panel"), border: Var("border-default"), text: Var("text-primary")),
-        text: (text_align: Center, size: 12.0),
-      ),
+      setter: (colors: (bg: Var("surface-panel"), border: Var("border-default"), text: Var("text-primary"))),
     ),
     (
       selector: Class("gallery.token.surface-subtle"),
-      setter: (
-        layout: (padding: 12.0, corner_radius: Var("radius-md"), border_width: Var("border-thin")),
-        colors: (bg: Var("surface-subtle"), border: Var("border-default"), text: Var("text-primary")),
-        text: (text_align: Center, size: 12.0),
-      ),
+      setter: (colors: (bg: Var("surface-subtle"), border: Var("border-default"), text: Var("text-primary"))),
     ),
     (
       selector: Class("gallery.token.surface-card"),
-      setter: (
-        layout: (padding: 12.0, corner_radius: Var("radius-md"), border_width: Var("border-thin")),
-        colors: (bg: Var("surface-card"), border: Var("border-default"), text: Var("text-primary")),
-        text: (text_align: Center, size: 12.0),
-      ),
+      setter: (colors: (bg: Var("surface-card"), border: Var("border-default"), text: Var("text-primary"))),
     ),
     (
       selector: Class("gallery.token.surface-elevated"),
-      setter: (
-        layout: (padding: 12.0, corner_radius: Var("radius-md"), border_width: Var("border-thin")),
-        colors: (bg: Var("surface-elevated"), border: Var("border-default"), text: Var("text-primary")),
-        text: (text_align: Center, size: 12.0),
-      ),
+      setter: (colors: (bg: Var("surface-elevated"), border: Var("border-default"), text: Var("text-primary"))),
     ),
     (
       selector: Class("gallery.token.surface-accent"),
-      setter: (
-        layout: (padding: 12.0, corner_radius: Var("radius-md"), border_width: Var("border-thin")),
-        colors: (bg: Var("surface-accent"), border: Var("surface-accent"), text: Var("text-on-accent")),
-        text: (text_align: Center, size: 12.0),
-      ),
+      setter: (colors: (bg: Var("surface-accent"), border: Var("surface-accent"), text: Var("text-on-accent"))),
     ),
     (
       selector: Class("gallery.token.fill-layer-default"),
-      setter: (
-        layout: (padding: 12.0, corner_radius: Var("radius-md"), border_width: Var("border-thin")),
-        colors: (bg: Var("fill-layer-default"), border: Var("border-default"), text: Var("text-primary")),
-        text: (text_align: Center, size: 12.0),
-      ),
+      setter: (colors: (bg: Var("fill-layer-default"), border: Var("border-default"), text: Var("text-primary"))),
     ),
     (
       selector: Class("gallery.token.fill-control-default"),
-      setter: (
-        layout: (padding: 12.0, corner_radius: Var("radius-md"), border_width: Var("border-thin")),
-        colors: (bg: Var("fill-control-default"), border: Var("border-default"), text: Var("text-primary")),
-        text: (text_align: Center, size: 12.0),
-      ),
+      setter: (colors: (bg: Var("fill-control-default"), border: Var("border-default"), text: Var("text-primary"))),
     ),
     (
       selector: Class("gallery.token.text-primary"),
-      setter: (
-        layout: (padding: 12.0, corner_radius: Var("radius-md"), border_width: Var("border-thin")),
-        colors: (bg: Var("surface-panel"), border: Var("border-subtle"), text: Var("text-primary")),
-        text: (text_align: Center, size: 12.0),
-      ),
+      setter: (colors: (bg: Var("surface-panel"), border: Var("border-subtle"), text: Var("text-primary"))),
     ),
     (
       selector: Class("gallery.token.text-secondary"),
-      setter: (
-        layout: (padding: 12.0, corner_radius: Var("radius-md"), border_width: Var("border-thin")),
-        colors: (bg: Var("surface-panel"), border: Var("border-subtle"), text: Var("text-secondary")),
-        text: (text_align: Center, size: 12.0),
-      ),
+      setter: (colors: (bg: Var("surface-panel"), border: Var("border-subtle"), text: Var("text-secondary"))),
     ),
     (
       selector: Class("gallery.token.text-heading"),
       setter: (
-        layout: (padding: 12.0, corner_radius: Var("radius-md"), border_width: Var("border-thin")),
         colors: (bg: Var("surface-panel"), border: Var("border-subtle"), text: Var("text-heading")),
-        text: (text_align: Center, size: 12.0, weight: 600),
+        text: (weight: 600),
       ),
     ),
     (
       selector: Class("gallery.token.text-disabled"),
-      setter: (
-        layout: (padding: 12.0, corner_radius: Var("radius-md"), border_width: Var("border-thin")),
-        colors: (bg: Var("surface-panel"), border: Var("border-subtle"), text: Var("text-disabled")),
-        text: (text_align: Center, size: 12.0),
-      ),
+      setter: (colors: (bg: Var("surface-panel"), border: Var("border-subtle"), text: Var("text-disabled"))),
     ),
     (
       selector: Class("gallery.token.accent-primary"),
-      setter: (
-        layout: (padding: 12.0, corner_radius: Var("radius-md"), border_width: Var("border-thin")),
-        colors: (bg: Var("accent-primary"), border: Var("accent-primary"), text: Var("text-on-accent")),
-        text: (text_align: Center, size: 12.0),
-      ),
+      setter: (colors: (bg: Var("accent-primary"), border: Var("accent-primary"), text: Var("text-on-accent"))),
     ),
     (
       selector: Class("gallery.token.brand-foreground"),
-      setter: (
-        layout: (padding: 12.0, corner_radius: Var("radius-md"), border_width: Var("border-thin")),
-        colors: (bg: Var("surface-panel"), border: Var("border-subtle"), text: Var("brand-foreground")),
-        text: (text_align: Center, size: 12.0),
-      ),
+      setter: (colors: (bg: Var("surface-panel"), border: Var("border-subtle"), text: Var("brand-foreground"))),
     ),
     (
       selector: Class("gallery.token.text-link"),
-      setter: (
-        layout: (padding: 12.0, corner_radius: Var("radius-md"), border_width: Var("border-thin")),
-        colors: (bg: Var("surface-panel"), border: Var("border-subtle"), text: Var("text-link")),
-        text: (text_align: Center, size: 12.0),
-      ),
+      setter: (colors: (bg: Var("surface-panel"), border: Var("border-subtle"), text: Var("text-link"))),
     ),
     (
       selector: Class("gallery.token.text-on-accent"),
-      setter: (
-        layout: (padding: 12.0, corner_radius: Var("radius-md"), border_width: Var("border-thin")),
-        colors: (bg: Var("surface-accent"), border: Var("surface-accent"), text: Var("text-on-accent")),
-        text: (text_align: Center, size: 12.0),
-      ),
+      setter: (colors: (bg: Var("surface-accent"), border: Var("surface-accent"), text: Var("text-on-accent"))),
     ),
     (
       selector: Class("gallery.token.status-info"),
-      setter: (
-        layout: (padding: 12.0, corner_radius: Var("radius-md"), border_width: Var("border-thin")),
-        colors: (bg: Var("status-info-bg"), border: Var("status-info-border"), text: Var("status-info-fg")),
-        text: (text_align: Center, size: 12.0),
-      ),
+      setter: (colors: (bg: Var("status-info-bg"), border: Var("status-info-border"), text: Var("status-info-fg"))),
     ),
     (
       selector: Class("gallery.token.status-success"),
-      setter: (
-        layout: (padding: 12.0, corner_radius: Var("radius-md"), border_width: Var("border-thin")),
-        colors: (bg: Var("status-success-bg"), border: Var("status-success-border"), text: Var("status-success-fg")),
-        text: (text_align: Center, size: 12.0),
-      ),
+      setter: (colors: (bg: Var("status-success-bg"), border: Var("status-success-border"), text: Var("status-success-fg"))),
     ),
     (
       selector: Class("gallery.token.status-warning"),
-      setter: (
-        layout: (padding: 12.0, corner_radius: Var("radius-md"), border_width: Var("border-thin")),
-        colors: (bg: Var("status-warning-bg"), border: Var("status-warning-border"), text: Var("status-warning-fg")),
-        text: (text_align: Center, size: 12.0),
-      ),
+      setter: (colors: (bg: Var("status-warning-bg"), border: Var("status-warning-border"), text: Var("status-warning-fg"))),
     ),
     (
       selector: Class("gallery.token.status-error"),
-      setter: (
-        layout: (padding: 12.0, corner_radius: Var("radius-md"), border_width: Var("border-thin")),
-        colors: (bg: Var("status-error-bg"), border: Var("status-error-border"), text: Var("status-error-fg")),
-        text: (text_align: Center, size: 12.0),
-      ),
+      setter: (colors: (bg: Var("status-error-bg"), border: Var("status-error-border"), text: Var("status-error-fg"))),
     ),
     (
       selector: Class("gallery.token.border-default"),
-      setter: (
-        layout: (padding: 12.0, corner_radius: Var("radius-md"), border_width: 2.0),
-        colors: (bg: Var("surface-panel"), border: Var("border-default"), text: Var("text-primary")),
-        text: (text_align: Center, size: 12.0),
-      ),
+      setter: (colors: (border: Var("border-default"))),
     ),
     (
       selector: Class("gallery.token.border-muted"),
-      setter: (
-        layout: (padding: 12.0, corner_radius: Var("radius-md"), border_width: 2.0),
-        colors: (bg: Var("surface-panel"), border: Var("border-muted"), text: Var("text-primary")),
-        text: (text_align: Center, size: 12.0),
-      ),
+      setter: (colors: (border: Var("border-muted"))),
     ),
     (
       selector: Class("gallery.token.border-subtle"),
-      setter: (
-        layout: (padding: 12.0, corner_radius: Var("radius-md"), border_width: 2.0),
-        colors: (bg: Var("surface-panel"), border: Var("border-subtle"), text: Var("text-primary")),
-        text: (text_align: Center, size: 12.0),
-      ),
+      setter: (colors: (border: Var("border-subtle"))),
     ),
     (
       selector: Class("gallery.token.focus-stroke"),
+      setter: (colors: (border: Var("focus-stroke"))),
+    ),
+    // Geometry: shared chrome + per-radius / per-stroke overrides
+    (
+      selector: Class("gallery.radius.sample"),
       setter: (
-        layout: (padding: 12.0, corner_radius: Var("radius-md"), border_width: 2.0),
-        colors: (bg: Var("surface-panel"), border: Var("focus-stroke"), text: Var("text-primary")),
-        text: (text_align: Center, size: 12.0),
+        layout: (
+          padding: Var("space-xl"),
+          border_width: Var("border-thin"),
+        ),
+        colors: (bg: Var("surface-accent"), border: Var("border-default"), text: Var("text-on-accent")),
+        text: (text_align: Center, size: Var("font-size-caption1")),
       ),
     ),
-    // ── Design guidance: geometry radius / stroke ──────────────────────
     (
       selector: Class("gallery.radius.none"),
-      setter: (
-        layout: (padding: 16.0, corner_radius: Var("radius-none"), border_width: Var("border-thin")),
-        colors: (bg: Var("surface-accent"), border: Var("border-default"), text: Var("text-on-accent")),
-        text: (text_align: Center, size: 12.0),
-      ),
+      setter: (layout: (corner_radius: Var("radius-none"))),
     ),
     (
       selector: Class("gallery.radius.xs"),
-      setter: (
-        layout: (padding: 16.0, corner_radius: Var("radius-xs"), border_width: Var("border-thin")),
-        colors: (bg: Var("surface-accent"), border: Var("border-default"), text: Var("text-on-accent")),
-        text: (text_align: Center, size: 12.0),
-      ),
+      setter: (layout: (corner_radius: Var("radius-xs"))),
     ),
     (
       selector: Class("gallery.radius.sm"),
-      setter: (
-        layout: (padding: 16.0, corner_radius: Var("radius-sm"), border_width: Var("border-thin")),
-        colors: (bg: Var("surface-accent"), border: Var("border-default"), text: Var("text-on-accent")),
-        text: (text_align: Center, size: 12.0),
-      ),
+      setter: (layout: (corner_radius: Var("radius-sm"))),
     ),
     (
       selector: Class("gallery.radius.md"),
-      setter: (
-        layout: (padding: 16.0, corner_radius: Var("radius-md"), border_width: Var("border-thin")),
-        colors: (bg: Var("surface-accent"), border: Var("border-default"), text: Var("text-on-accent")),
-        text: (text_align: Center, size: 12.0),
-      ),
+      setter: (layout: (corner_radius: Var("radius-md"))),
     ),
     (
       selector: Class("gallery.radius.lg"),
-      setter: (
-        layout: (padding: 16.0, corner_radius: Var("radius-lg"), border_width: Var("border-thin")),
-        colors: (bg: Var("surface-accent"), border: Var("border-default"), text: Var("text-on-accent")),
-        text: (text_align: Center, size: 12.0),
-      ),
+      setter: (layout: (corner_radius: Var("radius-lg"))),
     ),
     (
       selector: Class("gallery.radius.xl"),
-      setter: (
-        layout: (padding: 16.0, corner_radius: Var("radius-xl"), border_width: Var("border-thin")),
-        colors: (bg: Var("surface-accent"), border: Var("border-default"), text: Var("text-on-accent")),
-        text: (text_align: Center, size: 12.0),
-      ),
+      setter: (layout: (corner_radius: Var("radius-xl"))),
     ),
     (
       selector: Class("gallery.radius.2xl"),
-      setter: (
-        layout: (padding: 16.0, corner_radius: Var("radius-2xl"), border_width: Var("border-thin")),
-        colors: (bg: Var("surface-accent"), border: Var("border-default"), text: Var("text-on-accent")),
-        text: (text_align: Center, size: 12.0),
-      ),
+      setter: (layout: (corner_radius: Var("radius-2xl"))),
     ),
     (
       selector: Class("gallery.radius.pill"),
+      setter: (layout: (corner_radius: Var("radius-pill"))),
+    ),
+    (
+      selector: Class("gallery.stroke.sample"),
       setter: (
-        layout: (padding: 16.0, corner_radius: Var("radius-pill"), border_width: Var("border-thin")),
-        colors: (bg: Var("surface-accent"), border: Var("border-default"), text: Var("text-on-accent")),
-        text: (text_align: Center, size: 12.0),
+        layout: (
+          padding: Var("space-lg"),
+          corner_radius: Var("radius-md"),
+        ),
+        colors: (bg: Var("surface-panel"), border: Var("accent-primary"), text: Var("text-primary")),
+        text: (text_align: Center, size: Var("font-size-caption1")),
       ),
     ),
     (
       selector: Class("gallery.stroke.thin"),
-      setter: (
-        layout: (padding: 14.0, corner_radius: Var("radius-md"), border_width: Var("border-thin")),
-        colors: (bg: Var("surface-panel"), border: Var("accent-primary"), text: Var("text-primary")),
-        text: (text_align: Center, size: 12.0),
-      ),
+      setter: (layout: (border_width: Var("border-thin"))),
     ),
     (
       selector: Class("gallery.stroke.thick"),
-      setter: (
-        layout: (padding: 14.0, corner_radius: Var("radius-md"), border_width: Var("border-thick")),
-        colors: (bg: Var("surface-panel"), border: Var("accent-primary"), text: Var("text-primary")),
-        text: (text_align: Center, size: 12.0),
-      ),
+      setter: (layout: (border_width: Var("border-thick"))),
     ),
     (
       selector: Class("gallery.stroke.thicker"),
-      setter: (
-        layout: (padding: 14.0, corner_radius: Var("radius-md"), border_width: Var("border-thicker")),
-        colors: (bg: Var("surface-panel"), border: Var("accent-primary"), text: Var("text-primary")),
-        text: (text_align: Center, size: 12.0),
-      ),
+      setter: (layout: (border_width: Var("border-thicker"))),
     ),
     (
       selector: Class("gallery.stroke.thickest"),
+      setter: (layout: (border_width: Var("border-thickest"))),
+    ),
+    // Spacing: shared chrome + per-step padding overrides
+    (
+      selector: Class("gallery.space.sample"),
       setter: (
-        layout: (padding: 14.0, corner_radius: Var("radius-md"), border_width: Var("border-thickest")),
-        colors: (bg: Var("surface-panel"), border: Var("accent-primary"), text: Var("text-primary")),
-        text: (text_align: Center, size: 12.0),
+        layout: (
+          corner_radius: Var("radius-sm"),
+          border_width: Var("border-thin"),
+        ),
+        colors: (bg: Var("surface-accent"), border: Var("border-default"), text: Var("text-on-accent")),
+        text: (text_align: Center, size: Var("font-size-caption1")),
       ),
     ),
-    // ── Design guidance: spacing scale ─────────────────────────────────
     (
       selector: Class("gallery.space.xxs"),
-      setter: (
-        layout: (padding: Var("space-xxs"), corner_radius: Var("radius-sm"), border_width: Var("border-thin")),
-        colors: (bg: Var("surface-accent"), border: Var("border-default"), text: Var("text-on-accent")),
-        text: (text_align: Center, size: 12.0),
-      ),
+      setter: (layout: (padding: Var("space-xxs"))),
     ),
     (
       selector: Class("gallery.space.xs"),
-      setter: (
-        layout: (padding: Var("space-xs"), corner_radius: Var("radius-sm"), border_width: Var("border-thin")),
-        colors: (bg: Var("surface-accent"), border: Var("border-default"), text: Var("text-on-accent")),
-        text: (text_align: Center, size: 12.0),
-      ),
+      setter: (layout: (padding: Var("space-xs"))),
     ),
     (
       selector: Class("gallery.space.sm"),
-      setter: (
-        layout: (padding: Var("space-sm"), corner_radius: Var("radius-sm"), border_width: Var("border-thin")),
-        colors: (bg: Var("surface-accent"), border: Var("border-default"), text: Var("text-on-accent")),
-        text: (text_align: Center, size: 12.0),
-      ),
+      setter: (layout: (padding: Var("space-sm"))),
     ),
     (
       selector: Class("gallery.space.md"),
-      setter: (
-        layout: (padding: Var("space-md"), corner_radius: Var("radius-sm"), border_width: Var("border-thin")),
-        colors: (bg: Var("surface-accent"), border: Var("border-default"), text: Var("text-on-accent")),
-        text: (text_align: Center, size: 12.0),
-      ),
+      setter: (layout: (padding: Var("space-md"))),
     ),
     (
       selector: Class("gallery.space.lg"),
-      setter: (
-        layout: (padding: Var("space-lg"), corner_radius: Var("radius-sm"), border_width: Var("border-thin")),
-        colors: (bg: Var("surface-accent"), border: Var("border-default"), text: Var("text-on-accent")),
-        text: (text_align: Center, size: 12.0),
-      ),
+      setter: (layout: (padding: Var("space-lg"))),
     ),
     (
       selector: Class("gallery.space.m"),
-      setter: (
-        layout: (padding: Var("space-m"), corner_radius: Var("radius-sm"), border_width: Var("border-thin")),
-        colors: (bg: Var("surface-accent"), border: Var("border-default"), text: Var("text-on-accent")),
-        text: (text_align: Center, size: 12.0),
-      ),
+      setter: (layout: (padding: Var("space-m"))),
     ),
     (
       selector: Class("gallery.space.xl"),
-      setter: (
-        layout: (padding: Var("space-xl"), corner_radius: Var("radius-sm"), border_width: Var("border-thin")),
-        colors: (bg: Var("surface-accent"), border: Var("border-default"), text: Var("text-on-accent")),
-        text: (text_align: Center, size: 12.0),
-      ),
+      setter: (layout: (padding: Var("space-xl"))),
     ),
     (
       selector: Class("gallery.space.xxl"),
-      setter: (
-        layout: (padding: Var("space-xxl"), corner_radius: Var("radius-sm"), border_width: Var("border-thin")),
-        colors: (bg: Var("surface-accent"), border: Var("border-default"), text: Var("text-on-accent")),
-        text: (text_align: Center, size: 12.0),
-      ),
+      setter: (layout: (padding: Var("space-xxl"))),
     ),
     (
       selector: Class("gallery.space.xxxl"),
-      setter: (
-        layout: (padding: Var("space-xxxl"), corner_radius: Var("radius-sm"), border_width: Var("border-thin")),
-        colors: (bg: Var("surface-accent"), border: Var("border-default"), text: Var("text-on-accent")),
-        text: (text_align: Center, size: 12.0),
-      ),
+      setter: (layout: (padding: Var("space-xxxl"))),
     ),
     (
       selector: Class("gallery.space.tile"),
       setter: (
-        layout: (padding: Var("space-md"), corner_radius: Var("radius-md"), border_width: Var("border-thin")),
+        layout: (
+          padding: Var("space-md"),
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+        ),
         colors: (bg: Var("surface-subtle"), border: Var("border-default"), text: Var("text-primary")),
-        text: (text_align: Center, size: 14.0, weight: 600),
+        text: (text_align: Center, size: Var("font-size-body1"), weight: 600),
       ),
     ),
     (
       selector: Class("gallery.gap.sm"),
-      setter: (
-        layout: (gap: Var("gap-sm")),
-      ),
+      setter: (layout: (gap: Var("gap-sm"))),
     ),
     (
       selector: Class("gallery.gap.md"),
-      setter: (
-        layout: (gap: Var("gap-md")),
-      ),
+      setter: (layout: (gap: Var("gap-md"))),
     ),
     (
       selector: Class("gallery.gap.lg"),
-      setter: (
-        layout: (gap: Var("gap-lg")),
-      ),
+      setter: (layout: (gap: Var("gap-lg"))),
     ),
   ],
 )

@@ -540,8 +540,9 @@ impl GalleryPage {
             Self::Card => FluentIcon::ViewAll,
             Self::BreadcrumbBar => FluentIcon::Forward,
             Self::NavigationView => FluentIcon::GlobalNavigationButton,
+            // Color design page vs ColorPicker control share Edit until a palette glyph lands.
             Self::Color => FluentIcon::Edit,
-            Self::Geometry => FluentIcon::Placeholder,
+            Self::Geometry => FluentIcon::Map,
             Self::Spacing => FluentIcon::ViewAll,
             Self::Image => FluentIcon::Pictures,
             Self::Icons => FluentIcon::AllApps,

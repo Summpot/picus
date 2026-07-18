@@ -699,9 +699,43 @@ mod tests {
     }
 
     #[test]
+    fn gallery_fluent_icon_entries_cover_all_variants() {
+        assert_eq!(
+            pages::FLUENT_ICON_ENTRIES.len(),
+            FluentIcon::ALL.len(),
+            "gallery table must list every FluentIcon::ALL variant"
+        );
+        let mut names = std::collections::HashSet::new();
+        for icon in FluentIcon::ALL {
+            let entry = pages::FLUENT_ICON_ENTRIES
+                .iter()
+                .find(|(_, i)| *i == icon)
+                .unwrap_or_else(|| panic!("missing FluentIcon::{:?} in FLUENT_ICON_ENTRIES", icon));
+            assert_eq!(entry.0, icon.name());
+            assert!(
+                names.insert(entry.0),
+                "duplicate icon name in FLUENT_ICON_ENTRIES: {}",
+                entry.0
+            );
+        }
+    }
+
+    #[test]
     fn gallery_iconography_browser_lists_fluent_icons_and_filters() {
         let mut app = build_gallery_app();
         app.update();
+
+        let shell_baseline = {
+            let rt = app.world().resource::<GalleryRuntime>().clone();
+            (
+                rt.leaf_to_page.clone(),
+                rt.search_input,
+                app.world()
+                    .get::<UiNavigationView>(rt.nav_view)
+                    .map(|nav| (nav.leaf_count(), nav.is_settings_visible, nav.items.len()))
+                    .expect("shell nav view"),
+            )
+        };
 
         let icon_search = {
             let mut query = app
@@ -721,6 +755,11 @@ mod tests {
                 .next()
                 .expect("Icons page should spawn a GalleryIconGrid")
         };
+
+        assert_ne!(
+            icon_search, shell_baseline.1,
+            "icon filter search must be distinct from shell search"
+        );
 
         let initial_children = app
             .world()
@@ -760,19 +799,73 @@ mod tests {
             "filter 'chevron' should match four FluentIcon variants"
         );
 
-        // Color / Geometry / Spacing token styles must resolve from the gallery sheet.
-        let accent =
-            picus::resolve_style_for_classes(app.world(), ["gallery.token.surface-accent"]);
-        assert!(
-            accent.colors.bg.is_some(),
-            "Color page swatches need resolved token backgrounds"
+        // Icon filter must not touch shell nav mapping / hierarchy.
+        let rt = app.world().resource::<GalleryRuntime>().clone();
+        assert_eq!(
+            rt.leaf_to_page, shell_baseline.0,
+            "icon filter must leave leaf_to_page as full identity mapping"
         );
-        let radius = picus::resolve_style_for_classes(app.world(), ["gallery.radius.md"]);
+        assert_eq!(
+            rt.leaf_to_page,
+            (0..GalleryPage::ALL.len()).collect::<Vec<_>>(),
+        );
+        let nav = app
+            .world()
+            .get::<UiNavigationView>(rt.nav_view)
+            .expect("shell nav view");
+        assert_eq!(
+            (nav.leaf_count(), nav.is_settings_visible, nav.items.len()),
+            shell_baseline.2,
+            "icon filter must not change shell nav item structure"
+        );
+        assert!(nav.is_settings_visible);
+        assert_eq!(nav.leaf_count(), GalleryPage::ALL.len() + 1);
+
+        // Shell search still filters leaves after icon traffic.
+        let shell_search = rt.search_input;
+        app.world_mut().write_message(picus::UiAction {
+            source: shell_search,
+            action: picus::UiSearchChanged {
+                search: shell_search,
+                value: "button".into(),
+            },
+        });
+        app.update();
+        let rt = app.world().resource::<GalleryRuntime>().clone();
+        assert!(
+            rt.leaf_to_page.len() >= 2,
+            "shell search for 'button' should still filter nav leaves"
+        );
+        for &page_index in &rt.leaf_to_page {
+            let label = GalleryPage::ALL[page_index].label().to_lowercase();
+            let description = GalleryPage::ALL[page_index].description().to_lowercase();
+            assert!(
+                label.contains("button") || description.contains("button"),
+                "shell-filtered leaf should mention button: {label}"
+            );
+        }
+
+        // Multi-class design token styles must resolve when base + token are combined.
+        let accent = picus::resolve_style_for_classes(
+            app.world(),
+            ["gallery.token.swatch", "gallery.token.surface-accent"],
+        );
+        assert!(
+            accent.colors.bg.is_some() && accent.layout.padding > 0.0,
+            "Color page swatches need base chrome + token background"
+        );
+        let radius = picus::resolve_style_for_classes(
+            app.world(),
+            ["gallery.radius.sample", "gallery.radius.md"],
+        );
         assert!(
             radius.layout.corner_radius > 0.0,
             "Geometry page radius samples need corner_radius tokens"
         );
-        let space = picus::resolve_style_for_classes(app.world(), ["gallery.space.md"]);
+        let space = picus::resolve_style_for_classes(
+            app.world(),
+            ["gallery.space.sample", "gallery.space.md"],
+        );
         assert!(
             space.layout.padding > 0.0,
             "Spacing page samples need padding tokens"

@@ -18,8 +18,7 @@ pub fn class(name: &str) -> StyleClass {
     StyleClass(vec![name.to_string()])
 }
 
-/// Create multiple class names for an entity.
-#[allow(dead_code)]
+/// Create multiple class names for an entity (composed stylesheet rules).
 pub fn classes(names: &[&str]) -> StyleClass {
     StyleClass(names.iter().map(|name| (*name).to_string()).collect())
 }

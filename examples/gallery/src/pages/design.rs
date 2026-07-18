@@ -1,7 +1,7 @@
 //! Media and design control pages (one component per page).
 
 use crate::helpers::{
-    card, class, generated_image, grid, info_button, note, placeholder, sample_canvas,
+    card, class, classes, generated_image, grid, info_button, note, placeholder, sample_canvas,
 };
 use crate::state::{GalleryButtonAction, GalleryIconGrid, GalleryIconSearch, GalleryLocaleCombo};
 use bevy_ecs::{hierarchy::ChildOf, prelude::*};
@@ -10,9 +10,12 @@ use picus::prelude::{
     UiFlexColumn, UiFlexRow, UiGradientStop, UiGrid, UiImage, UiLabel, UiMarkdown,
     UiMultilineTextInput, UiSearch, UiSwitch, UiThemePicker, xilem::Color,
 };
-use picus::scene::{CommandsSceneExt, WorldSceneExt, bsn, template_value};
+use picus::scene::{CommandsSceneExt, bsn, template_value};
 
-/// Full `FluentIcon` set exposed by the Picus facade (WinUI Symbol-compatible core).
+/// Gallery browser table: name + glyph for every [`FluentIcon::ALL`] entry.
+///
+/// Kept as a named table for filter UX; length/coverage is guarded by tests
+/// against `FluentIcon::ALL` so new enum variants cannot silently drop out.
 pub const FLUENT_ICON_ENTRIES: &[(&str, FluentIcon)] = &[
     ("Accept", FluentIcon::Accept),
     ("Add", FluentIcon::Add),
@@ -55,6 +58,15 @@ pub const FLUENT_ICON_ENTRIES: &[(&str, FluentIcon)] = &[
     ("TouchPointer", FluentIcon::TouchPointer),
     ("ViewAll", FluentIcon::ViewAll),
 ];
+
+/// Icons whose names contain `filter` (case-insensitive). Empty filter → full set.
+fn filtered_icon_entries(filter: &str) -> impl Iterator<Item = (&'static str, FluentIcon)> + '_ {
+    let q = filter.trim().to_lowercase();
+    FLUENT_ICON_ENTRIES
+        .iter()
+        .copied()
+        .filter(move |(name, _)| q.is_empty() || name.to_lowercase().contains(&q))
+}
 
 const MARKDOWN_SAMPLE: &str = r#"# Markdown
 
@@ -112,17 +124,25 @@ pub fn spawn_image_page(commands: &mut Commands, parent: Entity) {
     );
 }
 
+fn spawn_token_swatch(commands: &mut Commands, parent: Entity, label: &str, token_class: &str) {
+    commands.spawn_scene(bsn! {
+        template_value(UiLabel::new(label))
+        template_value(classes(&["gallery.token.swatch", token_class]))
+        ChildOf(parent)
+    });
+}
+
 pub fn spawn_color_page(commands: &mut Commands, parent: Entity) {
     note(
         commands,
         parent,
-        "WinUI Color design page → Picus theme RON tokens (fluent_theme variants) + gallery.token.* classes. Interactive picking lives on ColorPicker.",
+        "WinUI Color design page → Picus theme RON tokens (fluent_theme variants) + gallery.token.swatch + per-token color classes. Interactive picking lives on ColorPicker.",
     );
 
     let g = grid(commands, parent, 2);
 
     let surfaces = card(commands, g, "Surface / fill tokens");
-    for (label, class_name) in [
+    for (label, token_class) in [
         ("surface-bg", "gallery.token.surface-bg"),
         ("surface-panel", "gallery.token.surface-panel"),
         ("surface-subtle", "gallery.token.surface-subtle"),
@@ -132,15 +152,11 @@ pub fn spawn_color_page(commands: &mut Commands, parent: Entity) {
         ("fill-layer-default", "gallery.token.fill-layer-default"),
         ("fill-control-default", "gallery.token.fill-control-default"),
     ] {
-        commands.spawn_scene(bsn! {
-            template_value(UiLabel::new(label))
-            template_value(class(class_name))
-            ChildOf(surfaces)
-        });
+        spawn_token_swatch(commands, surfaces, label, token_class);
     }
 
     let text = card(commands, g, "Text / accent tokens");
-    for (label, class_name) in [
+    for (label, token_class) in [
         ("text-primary", "gallery.token.text-primary"),
         ("text-secondary", "gallery.token.text-secondary"),
         ("text-heading", "gallery.token.text-heading"),
@@ -150,37 +166,30 @@ pub fn spawn_color_page(commands: &mut Commands, parent: Entity) {
         ("text-link", "gallery.token.text-link"),
         ("text-on-accent", "gallery.token.text-on-accent"),
     ] {
-        commands.spawn_scene(bsn! {
-            template_value(UiLabel::new(label))
-            template_value(class(class_name))
-            ChildOf(text)
-        });
+        spawn_token_swatch(commands, text, label, token_class);
     }
 
     let status = card(commands, g, "Status tokens");
-    for (label, class_name) in [
+    for (label, token_class) in [
         ("status-info", "gallery.token.status-info"),
         ("status-success", "gallery.token.status-success"),
         ("status-warning", "gallery.token.status-warning"),
         ("status-error", "gallery.token.status-error"),
     ] {
-        commands.spawn_scene(bsn! {
-            template_value(UiLabel::new(label))
-            template_value(class(class_name))
-            ChildOf(status)
-        });
+        spawn_token_swatch(commands, status, label, token_class);
     }
 
     let borders = card(commands, g, "Border tokens");
-    for (label, class_name) in [
+    for (label, token_class) in [
         ("border-default", "gallery.token.border-default"),
         ("border-muted", "gallery.token.border-muted"),
         ("border-subtle", "gallery.token.border-subtle"),
         ("focus-stroke", "gallery.token.focus-stroke"),
     ] {
+        // Border-color demos use gallery.token.border_swatch for a thicker visible stroke.
         commands.spawn_scene(bsn! {
             template_value(UiLabel::new(label))
-            template_value(class(class_name))
+            template_value(classes(&["gallery.token.border_swatch", token_class]))
             ChildOf(borders)
         });
     }
@@ -190,39 +199,39 @@ pub fn spawn_geometry_page(commands: &mut Commands, parent: Entity) {
     note(
         commands,
         parent,
-        "WinUI Geometry → Picus layout tokens radius-* / border-* in fluent_theme RON. Vector primitives are on the Shapes page (UiCanvas).",
+        "WinUI Geometry → Picus layout tokens radius-* / border-* in fluent_theme RON (selected scale: none…2xl + pill; 3xl–5xl exist in the theme). Vector primitives are on the Shapes page (UiCanvas).",
     );
 
     let g = grid(commands, parent, 2);
 
     let radii = card(commands, g, "Corner radius tokens");
-    for (label, class_name) in [
-        ("radius-none (0)", "gallery.radius.none"),
-        ("radius-xs (2)", "gallery.radius.xs"),
-        ("radius-sm (4)", "gallery.radius.sm"),
-        ("radius-md (6)", "gallery.radius.md"),
-        ("radius-lg (8)", "gallery.radius.lg"),
-        ("radius-xl (12)", "gallery.radius.xl"),
-        ("radius-2xl (16)", "gallery.radius.2xl"),
+    for (label, token_class) in [
+        ("radius-none", "gallery.radius.none"),
+        ("radius-xs", "gallery.radius.xs"),
+        ("radius-sm", "gallery.radius.sm"),
+        ("radius-md", "gallery.radius.md"),
+        ("radius-lg", "gallery.radius.lg"),
+        ("radius-xl", "gallery.radius.xl"),
+        ("radius-2xl", "gallery.radius.2xl"),
         ("radius-pill", "gallery.radius.pill"),
     ] {
         commands.spawn_scene(bsn! {
             template_value(UiLabel::new(label))
-            template_value(class(class_name))
+            template_value(classes(&["gallery.radius.sample", token_class]))
             ChildOf(radii)
         });
     }
 
     let strokes = card(commands, g, "Stroke width tokens");
-    for (label, class_name) in [
-        ("border-thin (1)", "gallery.stroke.thin"),
-        ("border-thick (2)", "gallery.stroke.thick"),
-        ("border-thicker (3)", "gallery.stroke.thicker"),
-        ("border-thickest (4)", "gallery.stroke.thickest"),
+    for (label, token_class) in [
+        ("border-thin", "gallery.stroke.thin"),
+        ("border-thick", "gallery.stroke.thick"),
+        ("border-thicker", "gallery.stroke.thicker"),
+        ("border-thickest", "gallery.stroke.thickest"),
     ] {
         commands.spawn_scene(bsn! {
             template_value(UiLabel::new(label))
-            template_value(class(class_name))
+            template_value(classes(&["gallery.stroke.sample", token_class]))
             ChildOf(strokes)
         });
     }
@@ -244,26 +253,26 @@ pub fn spawn_spacing_page(commands: &mut Commands, parent: Entity) {
     note(
         commands,
         parent,
-        "WinUI Spacing → Picus space-* and gap-* tokens. Apply via stylesheet padding/gap or InlineStyle; gallery.space.* demos resolve Var tokens.",
+        "WinUI Spacing → Picus space-* and gap-* tokens. Apply via stylesheet padding/gap or InlineStyle; gallery.space.sample + per-step classes resolve Var tokens.",
     );
 
     let g = grid(commands, parent, 1);
 
     let scale = card(commands, g, "Spacing scale (padding demos)");
-    for (label, class_name) in [
-        ("space-xxs (2)", "gallery.space.xxs"),
-        ("space-xs (4)", "gallery.space.xs"),
-        ("space-sm (6)", "gallery.space.sm"),
-        ("space-md (8)", "gallery.space.md"),
-        ("space-lg (10)", "gallery.space.lg"),
-        ("space-m (12)", "gallery.space.m"),
-        ("space-xl (16)", "gallery.space.xl"),
-        ("space-xxl (24)", "gallery.space.xxl"),
-        ("space-xxxl (32)", "gallery.space.xxxl"),
+    for (label, token_class) in [
+        ("space-xxs", "gallery.space.xxs"),
+        ("space-xs", "gallery.space.xs"),
+        ("space-sm", "gallery.space.sm"),
+        ("space-md", "gallery.space.md"),
+        ("space-lg", "gallery.space.lg"),
+        ("space-m", "gallery.space.m"),
+        ("space-xl", "gallery.space.xl"),
+        ("space-xxl", "gallery.space.xxl"),
+        ("space-xxxl", "gallery.space.xxxl"),
     ] {
         commands.spawn_scene(bsn! {
             template_value(UiLabel::new(label))
-            template_value(class(class_name))
+            template_value(classes(&["gallery.space.sample", token_class]))
             ChildOf(scale)
         });
     }
@@ -311,7 +320,7 @@ pub fn spawn_spacing_page(commands: &mut Commands, parent: Entity) {
     for label in ["First block", "Second block", "Third block"] {
         commands.spawn_scene(bsn! {
             template_value(UiLabel::new(label))
-            template_value(class("gallery.space.md"))
+            template_value(classes(&["gallery.space.sample", "gallery.space.md"]))
             ChildOf(col)
         });
     }
@@ -338,7 +347,7 @@ pub fn spawn_icons_page(commands: &mut Commands, parent: Entity) {
     note(
         commands,
         browser,
-        "Type to filter the grid. Each cell shows FluentIcon::Name and its glyph codepoint via UiLabel + gallery.icon font stack.",
+        "Type to filter the grid. Each cell shows the glyph character and FluentIcon name via UiLabel + gallery.icon font stack.",
     );
 
     let g = commands
@@ -354,12 +363,8 @@ pub fn spawn_icons_page(commands: &mut Commands, parent: Entity) {
 
 /// Populate (or re-populate) the icon browser grid with entries matching `filter`.
 pub fn spawn_icon_grid_cells(commands: &mut Commands, grid: Entity, filter: &str) {
-    let q = filter.trim().to_lowercase();
     let mut matched = 0usize;
-    for &(name, icon) in FLUENT_ICON_ENTRIES {
-        if !q.is_empty() && !name.to_lowercase().contains(&q) {
-            continue;
-        }
+    for (name, icon) in filtered_icon_entries(filter) {
         matched += 1;
         let cell = commands
             .spawn_scene(bsn! {
@@ -389,12 +394,15 @@ pub fn spawn_icon_grid_cells(commands: &mut Commands, grid: Entity, filter: &str
 }
 
 /// Rebuild the icon grid from a search query (exclusive-system path).
+///
+/// Despawns existing cells, then reuses [`spawn_icon_grid_cells`] via the
+/// world's deferred command queue so filter + cell construction stay single-path.
 pub fn rebuild_icon_grid(world: &mut World, filter: &str) {
     let grids: Vec<Entity> = {
         let mut query = world.query_filtered::<Entity, With<GalleryIconGrid>>();
         query.iter(world).collect()
     };
-    for grid in grids {
+    for &grid in &grids {
         let children: Vec<Entity> = world
             .get::<bevy_ecs::hierarchy::Children>(grid)
             .map(|c| c.iter().collect())
@@ -402,47 +410,14 @@ pub fn rebuild_icon_grid(world: &mut World, filter: &str) {
         for child in children {
             world.entity_mut(child).despawn();
         }
-        // Spawn filtered cells via WorldSceneExt so exclusive systems can update the tree.
-        let q = filter.trim().to_lowercase();
-        let mut matched = 0usize;
-        for &(name, icon) in FLUENT_ICON_ENTRIES {
-            if !q.is_empty() && !name.to_lowercase().contains(&q) {
-                continue;
-            }
-            matched += 1;
-            let cell = world
-                .spawn_scene(bsn! {
-                    UiFlexColumn
-                    template_value(class("gallery.icon_cell"))
-                    ChildOf(grid)
-                })
-                .expect("icon cell scene should spawn")
-                .id();
-            world
-                .spawn_scene(bsn! {
-                    template_value(UiLabel::new(icon.glyph().to_string()))
-                    template_value(class("gallery.icon"))
-                    ChildOf(cell)
-                })
-                .expect("icon glyph scene should spawn");
-            world
-                .spawn_scene(bsn! {
-                    template_value(UiLabel::new(name))
-                    template_value(class("gallery.icon_label"))
-                    ChildOf(cell)
-                })
-                .expect("icon label scene should spawn");
-        }
-        if matched == 0 {
-            world
-                .spawn_scene(bsn! {
-                    template_value(UiLabel::new("No icons match this filter."))
-                    template_value(class("gallery.note"))
-                    ChildOf(grid)
-                })
-                .expect("empty-filter note should spawn");
+    }
+    {
+        let mut commands = world.commands();
+        for grid in grids {
+            spawn_icon_grid_cells(&mut commands, grid, filter);
         }
     }
+    world.flush();
 }
 
 pub fn spawn_shapes_page(commands: &mut Commands, parent: Entity) {
