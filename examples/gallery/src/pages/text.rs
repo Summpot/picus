@@ -132,7 +132,10 @@ pub fn spawn_text_block_page(commands: &mut Commands, parent: Entity) {
     let ramp = card(commands, g, "Typography classes");
     for (label, class_name) in [
         ("Display / hero sample", "gallery.typo.title"),
-        ("Body copy for paragraphs and descriptions.", "gallery.page_description"),
+        (
+            "Body copy for paragraphs and descriptions.",
+            "gallery.page_description",
+        ),
         ("Caption / secondary meta text", "gallery.note"),
     ] {
         commands.spawn_scene(bsn! {

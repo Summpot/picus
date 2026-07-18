@@ -7,8 +7,8 @@ use bevy_math::Vec2;
 use picus::prelude::{
     ToastKind, UiBadge, UiButton, UiCanvasPosition, UiCard, UiCheckbox, UiDivider, UiExpander,
     UiFlexColumn, UiFlexRow, UiFormRow, UiGrid, UiGridCell, UiGridLength, UiGroupBox, UiLabel,
-    UiListView, UiMultilineTextInput, UiResponsiveGrid, UiResponsiveRow, UiScrollView,
-    UiSplitPane, UiSwitch, UiTabBar, UiTextInput, UiVisibleResponsive,
+    UiListView, UiMultilineTextInput, UiResponsiveGrid, UiResponsiveRow, UiScrollView, UiSplitPane,
+    UiSwitch, UiTabBar, UiTextInput, UiVisibleResponsive,
 };
 use picus::scene::{CommandsSceneExt, bsn, template_value};
 

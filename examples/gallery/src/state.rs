@@ -485,7 +485,8 @@ impl GalleryPage {
             Self::Table => FluentIcon::ViewAll,
             Self::DataTable => FluentIcon::ViewAll,
             Self::MenuBar => FluentIcon::GlobalNavigationButton,
-            Self::MenuFlyout => FluentIcon::More,
+            // List distinguishes MenuFlyout from ContextMenu (More) in the sidebar.
+            Self::MenuFlyout => FluentIcon::List,
             Self::Toolbar => FluentIcon::AllApps,
             Self::TitleBar => FluentIcon::AllApps,
             Self::WindowBackdrop => FluentIcon::Brightness,

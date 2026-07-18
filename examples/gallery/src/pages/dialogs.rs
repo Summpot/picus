@@ -7,10 +7,6 @@ use picus::prelude::{
 };
 use picus::scene::{CommandsSceneExt, bsn, template_value};
 
-/// Marker: clicking this entity opens a manually-positioned popover overlay (WinUI Popup).
-#[derive(Component, Debug, Clone, Copy, Default)]
-pub struct ManualOverlayMarker;
-
 /// Marker: clicking this entity opens an anchored flyout via [`spawn_popover_in_overlay_root`].
 ///
 /// WinUI Flyout ≈ Picus [`UiPopover`] + `spawn_popover_in_overlay_root`.
@@ -19,35 +15,44 @@ pub struct AnchoredFlyoutMarker {
     pub placement: OverlayPlacement,
 }
 
+/// Marker: clicking this entity opens a WinUI Popup-style panel at an explicit
+/// window-relative `(x, y)` via [`spawn_manual_overlay_at`].
+#[derive(Component, Debug, Clone, Copy)]
+pub struct ManualOverlayMarkerAt {
+    pub x: f64,
+    pub y: f64,
+}
+
 pub fn spawn_dialog_page(commands: &mut Commands, parent: Entity) {
     let g = grid(commands, parent, 2);
 
-    let kinds = card(commands, g, "ContentDialog kinds");
+    // Sample messages only change title/body copy — UiDialog has no severity kind.
+    let samples = card(commands, g, "Sample messages");
     dialog_button(
         commands,
-        kinds,
-        "Info Dialog",
+        samples,
+        "Info sample",
         "Info",
-        "This is an informational ContentDialog-style overlay (WinUI ContentDialog → UiDialog).",
+        "Informational ContentDialog-style overlay (WinUI ContentDialog → UiDialog).",
     );
     dialog_button(
         commands,
-        kinds,
-        "Warning Dialog",
+        samples,
+        "Warning sample",
         "Warning",
-        "This is a warning dialog spawned from the Dialog page.",
+        "Warning-themed copy only — UiDialog does not yet have severity kinds like ToastKind.",
     );
     dialog_button(
         commands,
-        kinds,
-        "Error Dialog",
+        samples,
+        "Error sample",
         "Error",
-        "This is an error dialog spawned from the Dialog page.",
+        "Error-themed copy only — visual severity styling is not applied by UiDialog today.",
     );
     note(
         commands,
-        kinds,
-        "WinUI ContentDialog → Picus UiDialog (modal overlay with title, body, and a dismiss action).",
+        samples,
+        "WinUI ContentDialog → Picus UiDialog (modal overlay with title, body, and a dismiss action). Sample titles are copy-only; there is no dialog kind/severity API yet. Gallery dialogs use with_fixed_width(460.0).",
     );
 
     let actions = card(commands, g, "Dismiss labels (primary action slot)");
@@ -81,20 +86,6 @@ pub fn spawn_dialog_page(commands: &mut Commands, parent: Entity) {
         "UiDialog.dismiss_label is the close/primary button text. Structured Primary + Secondary buttons are not on the public API yet.",
     );
 
-    let sizes = card(commands, g, "Fixed size");
-    dialog_button(
-        commands,
-        sizes,
-        "Fixed-width dialog",
-        "Fixed width",
-        "Dialogs opened from this page use with_fixed_width(460.0) so the modal does not stretch full-screen.",
-    );
-    note(
-        commands,
-        sizes,
-        "Use UiDialog::with_fixed_width / with_fixed_height / with_fixed_size for ContentDialog-like layout hints.",
-    );
-
     let content = card(commands, g, "Content slot notes");
     dialog_button(
         commands,
@@ -113,7 +104,7 @@ pub fn spawn_dialog_page(commands: &mut Commands, parent: Entity) {
     note(
         commands,
         content,
-        "ContentDialog content/checkbox/command slots map to future expand work; gallery shows title+body+dismiss only.",
+        "ContentDialog content/checkbox/command slots map to future expand work; gallery shows title+body+dismiss only. Use UiDialog::with_fixed_width / with_fixed_height / with_fixed_size for layout hints.",
     );
 }
 
@@ -240,39 +231,28 @@ pub fn spawn_popover_page(commands: &mut Commands, parent: Entity) {
     );
 
     let popup = card(commands, g, "Popup (manual pixel placement)");
-    let manual_btn = commands
-        .spawn_scene(bsn! {
-            template_value(UiButton::new("Open Popup at (120, 80)"))
-            ChildOf(popup)
-        })
-        .id();
-    commands.entity(manual_btn).insert(ManualOverlayMarker);
-    let popup2 = commands
-        .spawn_scene(bsn! {
-            template_value(UiButton::new("Open Popup at (420, 160)"))
-            ChildOf(popup)
-        })
-        .id();
-    commands
-        .entity(popup2)
-        .insert(ManualOverlayMarkerAt { x: 420.0, y: 160.0 });
+    for (label, x, y) in [
+        ("Open Popup at (120, 80)", 120.0, 80.0),
+        ("Open Popup at (420, 160)", 420.0, 160.0),
+    ] {
+        let btn = commands
+            .spawn_scene(bsn! {
+                template_value(UiButton::new(label))
+                ChildOf(popup)
+            })
+            .id();
+        commands.entity(btn).insert(ManualOverlayMarkerAt { x, y });
+    }
     note(
         commands,
         popup,
-        "WinUI Popup → compose with spawn_manual_overlay_at(world, bundle, x, y) for explicit window-relative coordinates.",
+        "WinUI Popup → compose with spawn_manual_overlay_at(world, bundle, x, y) for explicit window-relative coordinates. Popup demos use a light panel (not UiDialog).",
     );
 
     let map = card(commands, g, "WinUI name map");
     note(
         commands,
         map,
-        "Flyout → UiPopover / spawn_popover_in_overlay_root. Popup → spawn_manual_overlay_at. Modal ContentDialog → UiDialog + spawn_in_overlay_root. MenuFlyout → see MenuFlyout page.",
+        "Flyout → UiPopover / spawn_popover_in_overlay_root. Popup → spawn_manual_overlay_at (light panel). Modal ContentDialog → UiDialog + spawn_in_overlay_root. MenuFlyout → see MenuFlyout page.",
     );
-}
-
-/// Alternate manual popup origin for the second Popup sample button.
-#[derive(Component, Debug, Clone, Copy)]
-pub struct ManualOverlayMarkerAt {
-    pub x: f64,
-    pub y: f64,
 }

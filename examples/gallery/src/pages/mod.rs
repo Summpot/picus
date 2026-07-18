@@ -81,4 +81,4 @@ pub fn spawn_page_content(commands: &mut Commands, parent: Entity, page: Gallery
     }
 }
 
-pub use dialogs::{AnchoredFlyoutMarker, ManualOverlayMarker, ManualOverlayMarkerAt};
+pub use dialogs::{AnchoredFlyoutMarker, ManualOverlayMarkerAt};

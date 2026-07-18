@@ -101,11 +101,6 @@ pub fn apply_gallery_actions(world: &mut World) {
             .copied()
         {
             spawn_manual_popup(world, pos.x, pos.y);
-        } else if world
-            .get::<crate::pages::ManualOverlayMarker>(event.source)
-            .is_some()
-        {
-            spawn_manual_popup(world, 120.0, 80.0);
         }
     }
 
@@ -315,19 +310,30 @@ fn spawn_anchored_flyout(world: &mut World, anchor: Entity, placement: OverlayPl
 }
 
 /// WinUI Popup: explicit pixel origin via spawn_manual_overlay_at.
+///
+/// Uses a lightweight panel (not [`UiDialog`]) so Popup demos stay distinct from
+/// ContentDialog / modal dialog chrome on the Dialog page.
 fn spawn_manual_popup(world: &mut World, x: f64, y: f64) {
-    spawn_manual_overlay_at(
+    let entity = spawn_manual_overlay_at(
         world,
-        UiDialog::new(
-            "Popup (manual overlay)",
-            format!(
-                "WinUI Popup ≈ spawn_manual_overlay_at. Positioned at ({x:.0}, {y:.0}) relative to the window top-left."
-            ),
-        )
-        .with_fixed_width(360.0),
+        (
+            StyleClass(vec!["overlay.menu.panel".to_string()]),
+            // UiPopover provides the projecting panel surface; ManualOverlayPosition
+            // (from spawn_manual_overlay_at) keeps the explicit (x, y) origin.
+            UiPopover::new(Entity::PLACEHOLDER)
+                .with_placement(OverlayPlacement::TopStart)
+                .with_auto_flip_placement(false)
+                .with_fixed_size(300.0, 96.0),
+        ),
         x,
         y,
     );
+    world.spawn((
+        UiLabel::new(format!(
+            "Popup at ({x:.0}, {y:.0})\nWinUI Popup ≈ spawn_manual_overlay_at"
+        )),
+        ChildOf(entity),
+    ));
 }
 
 fn spawn_toast(world: &mut World, message: &str, kind: ToastKind, duration: f32) {

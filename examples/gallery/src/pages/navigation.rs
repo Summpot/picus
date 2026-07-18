@@ -75,7 +75,10 @@ pub fn spawn_navigation_view_page(commands: &mut Commands, parent: Entity) {
                 .with_icon(FluentIcon::Contact)
                 .with_info_badge("!")]),
         &[
-            ("Home", "Sample home content for the embedded NavigationView."),
+            (
+                "Home",
+                "Sample home content for the embedded NavigationView.",
+            ),
             ("Documents", "Leaf page under Library → Documents."),
             ("Downloads", "Leaf page under Library → Downloads."),
             ("Inbox", "Destination with an info badge count."),
@@ -98,7 +101,10 @@ pub fn spawn_navigation_view_page(commands: &mut Commands, parent: Entity) {
             .with_settings_visible(true)
             .with_settings_label("Settings"),
         &[
-            ("Home", "Compact rail: open the pane (hamburger) to see labels."),
+            (
+                "Home",
+                "Compact rail: open the pane (hamburger) to see labels.",
+            ),
             ("Documents", "Documents leaf under Library."),
             ("Downloads", "Downloads leaf under Library."),
             ("Inbox", "Inbox with badge."),
@@ -138,7 +144,10 @@ pub fn spawn_navigation_view_page(commands: &mut Commands, parent: Entity) {
             .with_settings_visible(true)
             .with_settings_label("Settings"),
         &[
-            ("Home", "Back is enabled and visible (emits UiNavigationBackRequested)."),
+            (
+                "Home",
+                "Back is enabled and visible (emits UiNavigationBackRequested).",
+            ),
             ("Documents", "Documents leaf."),
             ("Downloads", "Downloads leaf."),
             ("Inbox", "Inbox leaf."),
@@ -157,7 +166,10 @@ pub fn spawn_navigation_view_page(commands: &mut Commands, parent: Entity) {
             .with_pane_display_mode(NavigationPaneDisplayMode::Auto)
             .with_settings_visible(true),
         &[
-            ("Home", "Auto resolves Expanded / Compact / Minimal from width."),
+            (
+                "Home",
+                "Auto resolves Expanded / Compact / Minimal from width.",
+            ),
             ("Documents", "Documents leaf."),
             ("Downloads", "Downloads leaf."),
             ("Inbox", "Inbox leaf."),
