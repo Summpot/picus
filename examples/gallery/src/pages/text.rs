@@ -1,8 +1,10 @@
 //! Text input control pages (one component per page).
 
-use crate::helpers::{card, grid, note};
+use crate::helpers::{card, class, grid, note};
 use bevy_ecs::{hierarchy::ChildOf, prelude::*};
-use picus::prelude::{UiMultilineTextInput, UiPasswordInput, UiTextInput};
+use picus::prelude::{
+    UiLabel, UiMultilineTextInput, UiPasswordInput, UiSearch, UiText, UiTextInput,
+};
 use picus::scene::{CommandsSceneExt, bsn, template_value};
 
 pub fn spawn_text_box_page(commands: &mut Commands, parent: Entity) {
@@ -80,4 +82,68 @@ pub fn spawn_multiline_text_box_page(commands: &mut Commands, parent: Entity) {
         )
         ChildOf(readonly)
     });
+}
+
+pub fn spawn_search_box_page(commands: &mut Commands, parent: Entity) {
+    let g = grid(commands, parent, 2);
+
+    let empty = card(commands, g, "Empty search box");
+    commands.spawn_scene(bsn! {
+        template_value(UiSearch::new("Search components…"))
+        ChildOf(empty)
+    });
+    note(
+        commands,
+        empty,
+        "UiSearch is the Picus counterpart of WinUI AutoSuggestBox for query entry (without a built-in suggestion list).",
+    );
+
+    let prefilled = card(commands, g, "Pre-filled query");
+    let mut search = UiSearch::new("Filter list…");
+    search.value = "Button".to_string();
+    commands.spawn_scene(bsn! {
+        template_value(search)
+        ChildOf(prefilled)
+    });
+    note(
+        commands,
+        prefilled,
+        "Value changes emit UiSearchChanged; the gallery shell also uses UiSearch for nav filtering.",
+    );
+}
+
+pub fn spawn_text_block_page(commands: &mut Commands, parent: Entity) {
+    let g = grid(commands, parent, 2);
+
+    let plain = card(commands, g, "Plain text block");
+    commands.spawn_scene(bsn! {
+        template_value(UiText::new_text(
+            "UiText is a static text element on the Fluent type ramp.",
+        ))
+        ChildOf(plain)
+    });
+    commands.spawn_scene(bsn! {
+        template_value(UiLabel::new(
+            "UiLabel remains available for lightweight captions and notes.",
+        ))
+        ChildOf(plain)
+    });
+
+    let ramp = card(commands, g, "Typography classes");
+    for (label, class_name) in [
+        ("Display / hero sample", "gallery.typo.title"),
+        ("Body copy for paragraphs and descriptions.", "gallery.page_description"),
+        ("Caption / secondary meta text", "gallery.note"),
+    ] {
+        commands.spawn_scene(bsn! {
+            template_value(UiLabel::new(label))
+            template_value(class(class_name))
+            ChildOf(ramp)
+        });
+    }
+    note(
+        commands,
+        ramp,
+        "WinUI TextBlock maps to UiText / UiLabel; see the Typography page for the full type scale.",
+    );
 }

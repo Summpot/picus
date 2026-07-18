@@ -3,10 +3,12 @@
 use crate::helpers::{card, class, grid, note, sample_canvas};
 use crate::state::GalleryButtonAction;
 use bevy_ecs::{hierarchy::ChildOf, prelude::*};
+use bevy_math::Vec2;
 use picus::prelude::{
-    ToastKind, UiBadge, UiButton, UiCanvasPosition, UiCheckbox, UiFlexColumn, UiFlexRow, UiGrid,
-    UiGridCell, UiGridLength, UiGroupBox, UiLabel, UiListView, UiMultilineTextInput,
-    UiResponsiveGrid, UiResponsiveRow, UiSplitPane, UiTabBar, UiTextInput, UiVisibleResponsive,
+    ToastKind, UiBadge, UiButton, UiCanvasPosition, UiCard, UiCheckbox, UiDivider, UiExpander,
+    UiFlexColumn, UiFlexRow, UiFormRow, UiGrid, UiGridCell, UiGridLength, UiGroupBox, UiLabel,
+    UiListView, UiMultilineTextInput, UiResponsiveGrid, UiResponsiveRow, UiScrollView,
+    UiSplitPane, UiSwitch, UiTabBar, UiTextInput, UiVisibleResponsive,
 };
 use picus::scene::{CommandsSceneExt, bsn, template_value};
 
@@ -336,5 +338,242 @@ pub fn spawn_canvas_page(commands: &mut Commands, parent: Entity) {
         commands,
         canvas_panel,
         "UiCanvasPosition anchors children against the canvas size (including right/bottom).",
+    );
+}
+
+pub fn spawn_expander_page(commands: &mut Commands, parent: Entity) {
+    let g = grid(commands, parent, 1);
+
+    let basic = card(commands, g, "Collapsed by default");
+    let exp = commands
+        .spawn_scene(bsn! {
+            template_value(UiExpander::new("More options"))
+            ChildOf(basic)
+        })
+        .id();
+    commands.spawn_scene(bsn! {
+        template_value(UiLabel::new("Hidden until the header is expanded."))
+        ChildOf(exp)
+    });
+    commands.spawn_scene(bsn! {
+        template_value(UiCheckbox::new("Enable advanced mode", false))
+        ChildOf(exp)
+    });
+    commands.spawn_scene(bsn! {
+        template_value(UiSwitch::new(false).with_label("Verbose logging"))
+        ChildOf(exp)
+    });
+
+    let open = card(commands, g, "Pre-expanded");
+    let exp_open = commands
+        .spawn_scene(bsn! {
+            template_value(UiExpander::new("Details (open)").with_expanded())
+            ChildOf(open)
+        })
+        .id();
+    commands.spawn_scene(bsn! {
+        template_value(UiLabel::new(
+            "UiExpander toggles child visibility and emits UiExpanderChanged.",
+        ))
+        ChildOf(exp_open)
+    });
+    commands.spawn_scene(bsn! {
+        template_value(UiTextInput::new("Notes inside expander"))
+        ChildOf(exp_open)
+    });
+    note(
+        commands,
+        open,
+        "Maps to WinUI Expander; header stays visible while body content collapses.",
+    );
+}
+
+pub fn spawn_divider_page(commands: &mut Commands, parent: Entity) {
+    let g = grid(commands, parent, 2);
+
+    let horizontal = card(commands, g, "Horizontal divider");
+    commands.spawn_scene(bsn! {
+        template_value(UiLabel::new("Section A"))
+        ChildOf(horizontal)
+    });
+    commands.spawn_scene(bsn! {
+        template_value(UiDivider::horizontal())
+        ChildOf(horizontal)
+    });
+    commands.spawn_scene(bsn! {
+        template_value(UiLabel::new("Section B"))
+        ChildOf(horizontal)
+    });
+    note(
+        commands,
+        horizontal,
+        "UiDivider is the Picus rule control (closest WinUI analog: Border separators / AppBarSeparator).",
+    );
+
+    let vertical = card(commands, g, "Vertical divider in a row");
+    let row = commands
+        .spawn_scene(bsn! {
+            UiFlexRow
+            ChildOf(vertical)
+        })
+        .id();
+    commands.spawn_scene(bsn! {
+        template_value(UiLabel::new("Left"))
+        ChildOf(row)
+    });
+    commands.spawn_scene(bsn! {
+        template_value(UiDivider::vertical())
+        ChildOf(row)
+    });
+    commands.spawn_scene(bsn! {
+        template_value(UiLabel::new("Right"))
+        ChildOf(row)
+    });
+}
+
+pub fn spawn_scroll_view_page(commands: &mut Commands, parent: Entity) {
+    let g = grid(commands, parent, 1);
+
+    let vertical = card(commands, g, "Vertical scroll");
+    let scroll = commands
+        .spawn_scene(bsn! {
+            template_value(
+                UiScrollView::new(Vec2::new(420.0, 180.0), Vec2::new(400.0, 640.0))
+                    .with_vertical_scrollbar(true)
+                    .with_horizontal_scrollbar(false)
+            )
+            template_value(class("gallery.content_scroll"))
+            ChildOf(vertical)
+        })
+        .id();
+    for i in 1..=16 {
+        commands.spawn_scene(bsn! {
+            template_value(UiLabel::new(format!("Scrollable row {i}")))
+            ChildOf(scroll)
+        });
+    }
+    note(
+        commands,
+        vertical,
+        "UiScrollView stores viewport/content extents and scroll offset (WinUI ScrollView / ScrollViewer).",
+    );
+
+    let both = card(commands, g, "Both axes");
+    let scroll_xy = commands
+        .spawn_scene(bsn! {
+            template_value(
+                UiScrollView::new(Vec2::new(360.0, 140.0), Vec2::new(720.0, 320.0))
+                    .with_vertical_scrollbar(true)
+                    .with_horizontal_scrollbar(true)
+            )
+            template_value(class("gallery.content_scroll"))
+            ChildOf(both)
+        })
+        .id();
+    commands.spawn_scene(bsn! {
+        template_value(UiLabel::new(
+            "Wide content that exceeds the viewport on both axes — pan with wheel or scrollbars.",
+        ))
+        ChildOf(scroll_xy)
+    });
+    for i in 1..=6 {
+        commands.spawn_scene(bsn! {
+            template_value(UiLabel::new(format!(
+                "Row {i}: Lorem ipsum dolor sit amet, consectetur adipiscing elit — extra width sample."
+            )))
+            ChildOf(scroll_xy)
+        });
+    }
+}
+
+pub fn spawn_form_row_page(commands: &mut Commands, parent: Entity) {
+    let g = grid(commands, parent, 1);
+
+    let form = card(commands, g, "Labeled fields");
+    let name = commands
+        .spawn_scene(bsn! {
+            template_value(UiFormRow::new("Display name").with_label_width(120.0))
+            ChildOf(form)
+        })
+        .id();
+    commands.spawn_scene(bsn! {
+        template_value(UiTextInput::new("").with_placeholder("Ada Lovelace"))
+        ChildOf(name)
+    });
+
+    let email = commands
+        .spawn_scene(bsn! {
+            template_value(UiFormRow::new("Email").with_label_width(120.0))
+            ChildOf(form)
+        })
+        .id();
+    commands.spawn_scene(bsn! {
+        template_value(UiTextInput::new("").with_placeholder("ada@example.com"))
+        ChildOf(email)
+    });
+
+    let notify = commands
+        .spawn_scene(bsn! {
+            template_value(UiFormRow::new("Notifications").with_label_width(120.0))
+            ChildOf(form)
+        })
+        .id();
+    commands.spawn_scene(bsn! {
+        template_value(UiSwitch::new(true).with_label("Email digests"))
+        ChildOf(notify)
+    });
+    note(
+        commands,
+        form,
+        "UiFormRow projects a caption column plus child controls — useful for settings forms.",
+    );
+}
+
+pub fn spawn_card_page(commands: &mut Commands, parent: Entity) {
+    let g = grid(commands, parent, 2);
+
+    let simple = card(commands, g, "UiCard surface");
+    let ui_card = commands
+        .spawn_scene(bsn! {
+            UiCard
+            ChildOf(simple)
+        })
+        .id();
+    commands.spawn_scene(bsn! {
+        template_value(UiLabel::new("Title inside UiCard"))
+        template_value(class("gallery.card_title"))
+        ChildOf(ui_card)
+    });
+    commands.spawn_scene(bsn! {
+        template_value(UiLabel::new(
+            "UiCard is a Fluent content surface. Gallery example cards also use a local gallery.card class.",
+        ))
+        template_value(class("gallery.note"))
+        ChildOf(ui_card)
+    });
+    commands.spawn_scene(bsn! {
+        template_value(UiButton::new("Card action"))
+        ChildOf(ui_card)
+    });
+
+    let nested = card(commands, g, "Nested controls");
+    let ui_card2 = commands
+        .spawn_scene(bsn! {
+            UiCard
+            ChildOf(nested)
+        })
+        .id();
+    commands.spawn_scene(bsn! {
+        template_value(UiCheckbox::new("Remember this surface", true))
+        ChildOf(ui_card2)
+    });
+    commands.spawn_scene(bsn! {
+        template_value(UiBadge::new("Card"))
+        ChildOf(ui_card2)
+    });
+    note(
+        commands,
+        nested,
+        "Prefer UiCard for product content chrome; the gallery.card helper is a local documentation skin.",
     );
 }

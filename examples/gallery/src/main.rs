@@ -436,10 +436,10 @@ mod tests {
     #[test]
     fn gallery_pages_are_one_component_each() {
         let labels = GalleryPage::ALL.map(GalleryPage::label);
-        assert_eq!(labels.len(), 41);
+        assert_eq!(labels.len(), 57);
         assert_eq!(labels[0], "Button");
-        assert_eq!(labels[1], "ToggleSwitch");
-        assert_eq!(labels[2], "CheckBox");
+        assert_eq!(labels[1], "HyperlinkButton");
+        assert_eq!(labels[2], "ToggleSwitch");
         assert!(
             labels.contains(&"DataTable"),
             "expected a dedicated DataTable page"
@@ -448,6 +448,18 @@ mod tests {
             labels.contains(&"Markdown"),
             "expected a dedicated Markdown page"
         );
+        assert!(
+            labels.contains(&"RatingControl"),
+            "expected RatingControl page"
+        );
+        assert!(labels.contains(&"Expander"), "expected Expander page");
+        assert!(
+            labels.contains(&"BreadcrumbBar"),
+            "expected BreadcrumbBar page"
+        );
+        assert!(labels.contains(&"InfoBar"), "expected InfoBar page");
+        assert!(labels.contains(&"Toolbar"), "expected Toolbar page");
+        assert!(labels.contains(&"ScrollView"), "expected ScrollView page");
         // No multi-component category labels from the old gallery.
         assert!(!labels.contains(&"Buttons"));
         assert!(!labels.contains(&"Inputs"));

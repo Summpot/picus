@@ -10,6 +10,7 @@ mod design;
 mod dialogs;
 mod layout;
 mod menus;
+mod navigation;
 mod status;
 mod text;
 
@@ -20,27 +21,36 @@ use crate::state::GalleryPage;
 pub fn spawn_page_content(commands: &mut Commands, parent: Entity, page: GalleryPage) {
     match page {
         GalleryPage::Button => basic_input::spawn_button_page(commands, parent),
+        GalleryPage::HyperlinkButton => basic_input::spawn_hyperlink_button_page(commands, parent),
         GalleryPage::ToggleSwitch => basic_input::spawn_toggle_switch_page(commands, parent),
         GalleryPage::CheckBox => basic_input::spawn_checkbox_page(commands, parent),
         GalleryPage::RadioButton => basic_input::spawn_radio_button_page(commands, parent),
         GalleryPage::Slider => basic_input::spawn_slider_page(commands, parent),
         GalleryPage::ComboBox => basic_input::spawn_combo_box_page(commands, parent),
         GalleryPage::ColorPicker => basic_input::spawn_color_picker_page(commands, parent),
+        GalleryPage::RatingControl => basic_input::spawn_rating_control_page(commands, parent),
         GalleryPage::DatePicker => basic_input::spawn_date_picker_page(commands, parent),
+        GalleryPage::TimePicker => basic_input::spawn_time_picker_page(commands, parent),
         GalleryPage::NumberBox => basic_input::spawn_number_box_page(commands, parent),
         GalleryPage::TextBox => text::spawn_text_box_page(commands, parent),
         GalleryPage::PasswordBox => text::spawn_password_box_page(commands, parent),
         GalleryPage::MultiLineTextBox => text::spawn_multiline_text_box_page(commands, parent),
+        GalleryPage::SearchBox => text::spawn_search_box_page(commands, parent),
+        GalleryPage::TextBlock => text::spawn_text_block_page(commands, parent),
         GalleryPage::ListView => collections::spawn_list_view_page(commands, parent),
         GalleryPage::TreeView => collections::spawn_tree_view_page(commands, parent),
         GalleryPage::Table => collections::spawn_table_page(commands, parent),
         GalleryPage::DataTable => collections::spawn_data_table_page(commands, parent),
         GalleryPage::MenuBar => menus::spawn_menu_bar_page(commands, parent),
+        GalleryPage::Toolbar => menus::spawn_toolbar_page(commands, parent),
         GalleryPage::TitleBar => menus::spawn_title_bar_page(commands, parent),
         GalleryPage::WindowBackdrop => menus::spawn_window_backdrop_page(commands, parent),
         GalleryPage::ProgressBar => status::spawn_progress_bar_page(commands, parent),
         GalleryPage::Spinner => status::spawn_spinner_page(commands, parent),
         GalleryPage::ToolTip => status::spawn_tooltip_page(commands, parent),
+        GalleryPage::InfoBadge => status::spawn_info_badge_page(commands, parent),
+        GalleryPage::InfoBar => status::spawn_info_bar_page(commands, parent),
+        GalleryPage::Avatar => status::spawn_avatar_page(commands, parent),
         GalleryPage::Dialog => dialogs::spawn_dialog_page(commands, parent),
         GalleryPage::Toast => dialogs::spawn_toast_page(commands, parent),
         GalleryPage::ContextMenu => dialogs::spawn_context_menu_page(commands, parent),
@@ -52,6 +62,13 @@ pub fn spawn_page_content(commands: &mut Commands, parent: Entity, page: Gallery
         GalleryPage::SplitPane => layout::spawn_split_pane_page(commands, parent),
         GalleryPage::TabBar => layout::spawn_tab_bar_page(commands, parent),
         GalleryPage::Canvas => layout::spawn_canvas_page(commands, parent),
+        GalleryPage::Expander => layout::spawn_expander_page(commands, parent),
+        GalleryPage::Divider => layout::spawn_divider_page(commands, parent),
+        GalleryPage::ScrollView => layout::spawn_scroll_view_page(commands, parent),
+        GalleryPage::FormRow => layout::spawn_form_row_page(commands, parent),
+        GalleryPage::Card => layout::spawn_card_page(commands, parent),
+        GalleryPage::BreadcrumbBar => navigation::spawn_breadcrumb_bar_page(commands, parent),
+        GalleryPage::NavigationView => navigation::spawn_navigation_view_page(commands, parent),
         GalleryPage::Image => design::spawn_image_page(commands, parent),
         GalleryPage::Icons => design::spawn_icons_page(commands, parent),
         GalleryPage::Shapes => design::spawn_shapes_page(commands, parent),

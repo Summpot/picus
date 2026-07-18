@@ -4,8 +4,9 @@ use crate::helpers::{card, class, grid, info_button, note, placeholder};
 use crate::state::GalleryButtonAction;
 use bevy_ecs::{hierarchy::ChildOf, prelude::*};
 use picus::prelude::{
-    UiButton, UiCheckbox, UiColorPicker, UiComboBox, UiComboOption, UiDatePicker, UiNumericUpDown,
-    UiRadioGroup, UiSlider, UiSwitch,
+    ButtonAppearance, ButtonSize, FluentIcon, RatingColor, RatingSize, UiButton, UiCheckbox,
+    UiColorPicker, UiComboBox, UiComboOption, UiDatePicker, UiLabel, UiLink, UiNumericUpDown,
+    UiRadioGroup, UiRating, UiSlider, UiSwitch, UiTimePicker,
 };
 use picus::scene::{CommandsSceneExt, bsn, template_value};
 
@@ -72,12 +73,87 @@ pub fn spawn_button_page(commands: &mut Commands, parent: Entity) {
         ChildOf(disabled)
     });
 
+    let appearances = card(commands, g, "Fluent appearances");
+    for (label, appearance) in [
+        ("Default", ButtonAppearance::Default),
+        ("Primary", ButtonAppearance::Primary),
+        ("Outline", ButtonAppearance::Outline),
+        ("Subtle", ButtonAppearance::Subtle),
+        ("Transparent", ButtonAppearance::Transparent),
+    ] {
+        let id = commands
+            .spawn_scene(bsn! {
+                template_value(UiButton::new(label).with_appearance(appearance))
+                ChildOf(appearances)
+            })
+            .id();
+        commands.entity(id).insert(GalleryButtonAction::Info {
+            message: format!("Button appearance: {label}"),
+        });
+    }
+    note(
+        commands,
+        appearances,
+        "UiButton appearances map to Fluent UI v9 Button variants.",
+    );
+
+    let sized = card(commands, g, "Sizes and icon");
+    commands.spawn_scene(bsn! {
+        template_value(
+            UiButton::new("Small")
+                .with_size(ButtonSize::Small)
+                .with_icon(FluentIcon::Add)
+        )
+        ChildOf(sized)
+    });
+    commands.spawn_scene(bsn! {
+        template_value(
+            UiButton::new("Large")
+                .with_size(ButtonSize::Large)
+                .with_icon(FluentIcon::Send)
+        )
+        ChildOf(sized)
+    });
+
     placeholder(
         commands,
         g,
-        "Double-click button state",
-        "Picus UiButton exposes single-click actions; double-click detection is not a built-in button contract yet.",
+        "RepeatButton / SplitButton",
+        "Picus does not yet ship dedicated repeat or split-button components; use UiButton + menu overlays for similar UX.",
     );
+}
+
+pub fn spawn_hyperlink_button_page(commands: &mut Commands, parent: Entity) {
+    let g = grid(commands, parent, 2);
+
+    let links = card(commands, g, "Hyperlink text");
+    commands.spawn_scene(bsn! {
+        template_value(UiLink::new("Open documentation"))
+        ChildOf(links)
+    });
+    commands.spawn_scene(bsn! {
+        template_value(UiLink::new("https://example.com/gallery"))
+        ChildOf(links)
+    });
+    note(
+        commands,
+        links,
+        "UiLink is the Fluent-style hyperlink control; clicks emit UiLinkAction.",
+    );
+
+    let mixed = card(commands, g, "Inline with surrounding text");
+    commands.spawn_scene(bsn! {
+        template_value(UiLabel::new("Read more about"))
+        ChildOf(mixed)
+    });
+    commands.spawn_scene(bsn! {
+        template_value(UiLink::new("component contracts"))
+        ChildOf(mixed)
+    });
+    commands.spawn_scene(bsn! {
+        template_value(UiLabel::new("in the Picus docs."))
+        ChildOf(mixed)
+    });
 }
 
 pub fn spawn_toggle_switch_page(commands: &mut Commands, parent: Entity) {
@@ -304,5 +380,75 @@ pub fn spawn_number_box_page(commands: &mut Commands, parent: Entity) {
         commands,
         seconds,
         "NumberBox maps to Picus UiNumericUpDown with step, precision, and suffix support.",
+    );
+}
+
+pub fn spawn_rating_control_page(commands: &mut Commands, parent: Entity) {
+    let g = grid(commands, parent, 2);
+
+    let basic = card(commands, g, "Standard rating");
+    commands.spawn_scene(bsn! {
+        template_value(UiRating::new(3.0))
+        ChildOf(basic)
+    });
+    note(
+        commands,
+        basic,
+        "UiRating emits UiRatingChanged when the user selects a new star value.",
+    );
+
+    let half = card(commands, g, "Half-star step");
+    commands.spawn_scene(bsn! {
+        template_value(UiRating::new(3.5).with_step(0.5).with_color(RatingColor::Marigold))
+        ChildOf(half)
+    });
+
+    let sizes = card(commands, g, "Sizes");
+    commands.spawn_scene(bsn! {
+        template_value(UiRating::new(4.0).with_size(RatingSize::Small))
+        ChildOf(sizes)
+    });
+    commands.spawn_scene(bsn! {
+        template_value(UiRating::new(4.0).with_size(RatingSize::Large).with_color(RatingColor::Brand))
+        ChildOf(sizes)
+    });
+
+    let max = card(commands, g, "Custom max");
+    commands.spawn_scene(bsn! {
+        template_value(UiRating::new(7.0).with_max(10))
+        ChildOf(max)
+    });
+    note(commands, max, "with_max sets the number of stars (here 10).");
+}
+
+pub fn spawn_time_picker_page(commands: &mut Commands, parent: Entity) {
+    let g = grid(commands, parent, 2);
+
+    let twenty_four = card(commands, g, "24-hour mode");
+    commands.spawn_scene(bsn! {
+        template_value(UiTimePicker::new(14, 30, 0))
+        ChildOf(twenty_four)
+    });
+    note(
+        commands,
+        twenty_four,
+        "UiTimePicker opens an anchored overlay panel for hour/minute/second selection.",
+    );
+
+    let twelve = card(commands, g, "12-hour (AM/PM) mode");
+    commands.spawn_scene(bsn! {
+        template_value(UiTimePicker::new(9, 15, 0).with_12h())
+        ChildOf(twelve)
+    });
+
+    let from_12h = card(commands, g, "Constructed from 12h parts");
+    commands.spawn_scene(bsn! {
+        template_value(UiTimePicker::from_12h(6, true, 45, 0))
+        ChildOf(from_12h)
+    });
+    note(
+        commands,
+        from_12h,
+        "from_12h(6, true, …) is 6:45 PM (18:45).",
     );
 }

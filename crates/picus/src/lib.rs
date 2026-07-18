@@ -79,8 +79,9 @@ pub mod components {
         UiScrollViewChanged, UiSearch, UiSearchChanged, UiSlider, UiSliderChanged, UiSortDirection,
         UiSpinner, UiSplitPane, UiStreamingMarkdown, UiSwitch, UiSwitchChanged, UiTabBar,
         UiTabChanged, UiTable, UiText, UiTextInput, UiTextInputChanged, UiThemePicker,
-        UiThemePickerChanged, UiThemePickerMenu, UiThemePickerOption, UiTitleBar, UiToast,
-        UiToolbar, UiTooltip, UiTreeNode, UiTreeNodeToggled, UiView, UiVisibleResponsive, UiWindow,
+        UiThemePickerChanged, UiThemePickerMenu, UiThemePickerOption, UiTimePicker,
+        UiTimePickerChanged, UiTimePickerPanel, UiTitleBar, UiToast, UiToolbar, UiTooltip,
+        UiTreeNode, UiTreeNodeToggled, UiView, UiVisibleResponsive, UiWindow,
         WindowBackdropColorScheme, WindowBackdropMaterial, checkbox, slider, switch, text_input,
     };
 }

@@ -4,6 +4,10 @@
 //! (one navigation item per component), grouped under category headings for
 //! documentation/navigation metadata. Each [`GalleryPage`] maps to a single
 //! control showcase page.
+//!
+//! Pages that depend on XAML authoring, media capture/playback, maps, or
+//! OS-shell APIs are intentionally omitted; see gallery docs in comments on
+//! [`GalleryPage::ALL`].
 
 use bevy_ecs::prelude::*;
 use picus::prelude::{FluentIcon, ToastKind};
@@ -32,18 +36,23 @@ pub struct NavCategory {
 pub enum GalleryPage {
     // Basic Input
     Button,
+    HyperlinkButton,
     ToggleSwitch,
     CheckBox,
     RadioButton,
     Slider,
     ComboBox,
     ColorPicker,
+    RatingControl,
     DatePicker,
+    TimePicker,
     NumberBox,
     // Text
     TextBox,
     PasswordBox,
     MultiLineTextBox,
+    SearchBox,
+    TextBlock,
     // Collections
     ListView,
     TreeView,
@@ -51,12 +60,16 @@ pub enum GalleryPage {
     DataTable,
     // Menus & window
     MenuBar,
+    Toolbar,
     TitleBar,
     WindowBackdrop,
     // Status & info
     ProgressBar,
     Spinner,
     ToolTip,
+    InfoBadge,
+    InfoBar,
+    Avatar,
     // Dialogs & flyouts
     Dialog,
     Toast,
@@ -70,6 +83,14 @@ pub enum GalleryPage {
     SplitPane,
     TabBar,
     Canvas,
+    Expander,
+    Divider,
+    ScrollView,
+    FormRow,
+    Card,
+    // Navigation
+    BreadcrumbBar,
+    NavigationView,
     // Media & design
     Image,
     Icons,
@@ -83,21 +104,32 @@ pub enum GalleryPage {
 
 impl GalleryPage {
     /// All gallery pages in display order (matches WinUI-style control list).
-    pub const ALL: [Self; 41] = [
+    ///
+    /// Intentionally omitted vs WinUI Gallery (not a good Picus fit today):
+    /// XAML Fundamentals (Resources/Style/Binding/Templates/ScratchPad),
+    /// Media (WebView2/MediaPlayer/Map/Camera/Sound/AnimatedVisual*),
+    /// Motion interop, Shell JumpList/Badge notifications, AppWindow multi-window
+    /// demos, Accessibility docs pages, platform-only CommandBarFlyout/Swipe, etc.
+    pub const ALL: [Self; 57] = [
         // Basic Input
         Self::Button,
+        Self::HyperlinkButton,
         Self::ToggleSwitch,
         Self::CheckBox,
         Self::RadioButton,
         Self::Slider,
         Self::ComboBox,
         Self::ColorPicker,
+        Self::RatingControl,
         Self::DatePicker,
+        Self::TimePicker,
         Self::NumberBox,
         // Text
         Self::TextBox,
         Self::PasswordBox,
         Self::MultiLineTextBox,
+        Self::SearchBox,
+        Self::TextBlock,
         // Collections
         Self::ListView,
         Self::TreeView,
@@ -105,12 +137,16 @@ impl GalleryPage {
         Self::DataTable,
         // Menus & window
         Self::MenuBar,
+        Self::Toolbar,
         Self::TitleBar,
         Self::WindowBackdrop,
         // Status & info
         Self::ProgressBar,
         Self::Spinner,
         Self::ToolTip,
+        Self::InfoBadge,
+        Self::InfoBar,
+        Self::Avatar,
         // Dialogs & flyouts
         Self::Dialog,
         Self::Toast,
@@ -124,6 +160,14 @@ impl GalleryPage {
         Self::SplitPane,
         Self::TabBar,
         Self::Canvas,
+        Self::Expander,
+        Self::Divider,
+        Self::ScrollView,
+        Self::FormRow,
+        Self::Card,
+        // Navigation
+        Self::BreadcrumbBar,
+        Self::NavigationView,
         // Media & design
         Self::Image,
         Self::Icons,
@@ -140,41 +184,46 @@ impl GalleryPage {
         NavCategory {
             label: "Basic Input",
             first_page_index: 0,
-            page_count: 9,
+            page_count: 12,
         },
         NavCategory {
             label: "Text",
-            first_page_index: 9,
-            page_count: 3,
+            first_page_index: 12,
+            page_count: 5,
         },
         NavCategory {
             label: "Collections",
-            first_page_index: 12,
+            first_page_index: 17,
             page_count: 4,
         },
         NavCategory {
             label: "Menus & Window",
-            first_page_index: 16,
-            page_count: 3,
+            first_page_index: 21,
+            page_count: 4,
         },
         NavCategory {
             label: "Status & Info",
-            first_page_index: 19,
-            page_count: 3,
+            first_page_index: 25,
+            page_count: 6,
         },
         NavCategory {
             label: "Dialogs & Flyouts",
-            first_page_index: 22,
+            first_page_index: 31,
             page_count: 4,
         },
         NavCategory {
             label: "Layout",
-            first_page_index: 26,
-            page_count: 7,
+            first_page_index: 35,
+            page_count: 12,
+        },
+        NavCategory {
+            label: "Navigation",
+            first_page_index: 47,
+            page_count: 2,
         },
         NavCategory {
             label: "Media & Design",
-            first_page_index: 33,
+            first_page_index: 49,
             page_count: 8,
         },
     ];
@@ -184,6 +233,9 @@ impl GalleryPage {
         match self {
             Self::Button => {
                 "A button initiates an action. Show default, accent, flat, danger, and disabled variants."
+            }
+            Self::HyperlinkButton => {
+                "A hyperlink-style control navigates or invokes an action with link appearance."
             }
             Self::ToggleSwitch => {
                 "A toggle switch represents a physical switch that allows users to turn things on or off."
@@ -203,8 +255,14 @@ impl GalleryPage {
             Self::ColorPicker => {
                 "A color picker lets the user select a color value, including optional alpha."
             }
+            Self::RatingControl => {
+                "A rating control collects or displays a star rating with size and color variants."
+            }
             Self::DatePicker => {
                 "A date picker lets the user pick a calendar date through an anchored month grid."
+            }
+            Self::TimePicker => {
+                "A time picker lets the user select hour, minute, and second in 12h or 24h mode."
             }
             Self::NumberBox => {
                 "A number box (numeric up/down) lets the user enter or adjust a numeric value with step and precision."
@@ -216,6 +274,12 @@ impl GalleryPage {
             Self::MultiLineTextBox => {
                 "A multi-line text box accepts longer notes and wraps text across lines."
             }
+            Self::SearchBox => {
+                "A search box is a text field with search affordance for filtering or query entry."
+            }
+            Self::TextBlock => {
+                "A text block displays static text with typography presets from the Fluent type ramp."
+            }
             Self::ListView => {
                 "A list view presents a scrollable collection of items with single or multi selection."
             }
@@ -225,6 +289,9 @@ impl GalleryPage {
                 "A data table supports typed columns, selection, and image cell templates."
             }
             Self::MenuBar => "A menu bar hosts top-level menus that open dropdown command panels.",
+            Self::Toolbar => {
+                "A toolbar groups compact action buttons, toggles, and separators horizontally."
+            }
             Self::TitleBar => {
                 "A custom title bar draws window chrome with minimize, maximize, and close actions."
             }
@@ -239,6 +306,15 @@ impl GalleryPage {
             }
             Self::ToolTip => {
                 "A tooltip shows a short description when the pointer hovers a control."
+            }
+            Self::InfoBadge => {
+                "An info badge is a small pill or count used to highlight status on related UI."
+            }
+            Self::InfoBar => {
+                "An info bar (message bar) surfaces persistent informational, success, warning, or error banners."
+            }
+            Self::Avatar => {
+                "An avatar shows a person or entity as initials (or optional image) with size and shape variants."
             }
             Self::Dialog => "A dialog is a modal overlay with a title, body, and dismiss action.",
             Self::Toast => {
@@ -269,6 +345,27 @@ impl GalleryPage {
             Self::Canvas => {
                 "A canvas draws vector commands and supports absolute child positioning."
             }
+            Self::Expander => {
+                "An expander collapses and expands a content region under a clickable header."
+            }
+            Self::Divider => {
+                "A divider draws a horizontal or vertical rule to separate related content."
+            }
+            Self::ScrollView => {
+                "A scroll view hosts content larger than its viewport with optional scrollbars."
+            }
+            Self::FormRow => {
+                "A form row pairs a field caption with an input control in a horizontal layout."
+            }
+            Self::Card => {
+                "A card is a elevated content surface for grouping related controls and text."
+            }
+            Self::BreadcrumbBar => {
+                "A breadcrumb bar shows the navigation path to the current location."
+            }
+            Self::NavigationView => {
+                "A navigation view provides a pane of destinations with hierarchical menu items."
+            }
             Self::Image => {
                 "An image displays bitmap content, including empty fallback placeholders."
             }
@@ -296,27 +393,36 @@ impl GalleryPage {
     pub const fn label(self) -> &'static str {
         match self {
             Self::Button => "Button",
+            Self::HyperlinkButton => "HyperlinkButton",
             Self::ToggleSwitch => "ToggleSwitch",
             Self::CheckBox => "CheckBox",
             Self::RadioButton => "RadioButton",
             Self::Slider => "Slider",
             Self::ComboBox => "ComboBox",
             Self::ColorPicker => "ColorPicker",
+            Self::RatingControl => "RatingControl",
             Self::DatePicker => "DatePicker",
+            Self::TimePicker => "TimePicker",
             Self::NumberBox => "NumberBox",
             Self::TextBox => "TextBox",
             Self::PasswordBox => "PasswordBox",
             Self::MultiLineTextBox => "MultiLineTextBox",
+            Self::SearchBox => "SearchBox",
+            Self::TextBlock => "TextBlock",
             Self::ListView => "ListView",
             Self::TreeView => "TreeView",
             Self::Table => "Table",
             Self::DataTable => "DataTable",
             Self::MenuBar => "MenuBar",
+            Self::Toolbar => "Toolbar",
             Self::TitleBar => "TitleBar",
             Self::WindowBackdrop => "WindowBackdrop",
             Self::ProgressBar => "ProgressBar",
             Self::Spinner => "Spinner",
             Self::ToolTip => "ToolTip",
+            Self::InfoBadge => "InfoBadge",
+            Self::InfoBar => "InfoBar",
+            Self::Avatar => "Avatar",
             Self::Dialog => "Dialog",
             Self::Toast => "Toast",
             Self::ContextMenu => "ContextMenu",
@@ -328,6 +434,13 @@ impl GalleryPage {
             Self::SplitPane => "SplitPane",
             Self::TabBar => "TabBar",
             Self::Canvas => "Canvas",
+            Self::Expander => "Expander",
+            Self::Divider => "Divider",
+            Self::ScrollView => "ScrollView",
+            Self::FormRow => "FormRow",
+            Self::Card => "Card",
+            Self::BreadcrumbBar => "BreadcrumbBar",
+            Self::NavigationView => "NavigationView",
             Self::Image => "Image",
             Self::Icons => "Icons",
             Self::Shapes => "Shapes",
@@ -343,27 +456,36 @@ impl GalleryPage {
     pub const fn icon(self) -> FluentIcon {
         match self {
             Self::Button => FluentIcon::TouchPointer,
+            Self::HyperlinkButton => FluentIcon::Globe,
             Self::ToggleSwitch => FluentIcon::Checkbox,
             Self::CheckBox => FluentIcon::Checkbox,
             Self::RadioButton => FluentIcon::Checkmark,
             Self::Slider => FluentIcon::Settings,
             Self::ComboBox => FluentIcon::ChevronDown,
             Self::ColorPicker => FluentIcon::Edit,
+            Self::RatingControl => FluentIcon::Accept,
             Self::DatePicker => FluentIcon::Clock,
+            Self::TimePicker => FluentIcon::Clock,
             Self::NumberBox => FluentIcon::Add,
             Self::TextBox => FluentIcon::Character,
             Self::PasswordBox => FluentIcon::Contact,
             Self::MultiLineTextBox => FluentIcon::Character,
+            Self::SearchBox => FluentIcon::Search,
+            Self::TextBlock => FluentIcon::Font,
             Self::ListView => FluentIcon::List,
             Self::TreeView => FluentIcon::Folder,
             Self::Table => FluentIcon::ViewAll,
             Self::DataTable => FluentIcon::ViewAll,
             Self::MenuBar => FluentIcon::GlobalNavigationButton,
+            Self::Toolbar => FluentIcon::AllApps,
             Self::TitleBar => FluentIcon::AllApps,
             Self::WindowBackdrop => FluentIcon::Brightness,
             Self::ProgressBar => FluentIcon::Sync,
             Self::Spinner => FluentIcon::Sync,
             Self::ToolTip => FluentIcon::Info,
+            Self::InfoBadge => FluentIcon::Info,
+            Self::InfoBar => FluentIcon::Message,
+            Self::Avatar => FluentIcon::Contact,
             Self::Dialog => FluentIcon::Message,
             Self::Toast => FluentIcon::Info,
             Self::ContextMenu => FluentIcon::More,
@@ -375,6 +497,13 @@ impl GalleryPage {
             Self::SplitPane => FluentIcon::DockLeft,
             Self::TabBar => FluentIcon::More,
             Self::Canvas => FluentIcon::Edit,
+            Self::Expander => FluentIcon::ChevronDown,
+            Self::Divider => FluentIcon::Remove,
+            Self::ScrollView => FluentIcon::ViewAll,
+            Self::FormRow => FluentIcon::Edit,
+            Self::Card => FluentIcon::ViewAll,
+            Self::BreadcrumbBar => FluentIcon::Forward,
+            Self::NavigationView => FluentIcon::GlobalNavigationButton,
             Self::Image => FluentIcon::Pictures,
             Self::Icons => FluentIcon::AllApps,
             Self::Shapes => FluentIcon::Placeholder,

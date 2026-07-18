@@ -1,9 +1,12 @@
 //! Menu and window chrome pages (one component per page).
 
-use crate::helpers::{card, grid, note};
+use crate::helpers::{card, grid, info_button, note};
 use crate::state::GalleryBackdropPicker;
 use bevy_ecs::{hierarchy::ChildOf, prelude::*};
-use picus::prelude::{UiMenuBar, UiMenuBarItem, UiMenuItem, UiRadioGroup, UiTitleBar};
+use picus::prelude::{
+    FluentIcon, UiButton, UiDivider, UiMenuBar, UiMenuBarItem, UiMenuItem, UiRadioGroup, UiTitleBar,
+    UiToolbar,
+};
 use picus::scene::{CommandsSceneExt, bsn, template_value};
 
 pub fn spawn_menu_bar_page(commands: &mut Commands, parent: Entity) {
@@ -51,6 +54,65 @@ pub fn spawn_menu_bar_page(commands: &mut Commands, parent: Entity) {
         menu,
         "MenuBar supports nested items and dropdown overlay panels.",
     );
+}
+
+pub fn spawn_toolbar_page(commands: &mut Commands, parent: Entity) {
+    let g = grid(commands, parent, 1);
+
+    let bar = card(commands, g, "Command toolbar");
+    let toolbar = commands
+        .spawn_scene(bsn! {
+            UiToolbar
+            ChildOf(bar)
+        })
+        .id();
+    info_button(commands, toolbar, "New", "Toolbar: New");
+    info_button(commands, toolbar, "Open", "Toolbar: Open");
+    commands.spawn_scene(bsn! {
+        template_value(UiDivider::vertical())
+        ChildOf(toolbar)
+    });
+    commands.spawn_scene(bsn! {
+        template_value(UiButton::new("Save").with_icon(FluentIcon::Accept))
+        ChildOf(toolbar)
+    });
+    commands.spawn_scene(bsn! {
+        template_value(UiButton::new("Delete").with_icon(FluentIcon::Delete))
+        ChildOf(toolbar)
+    });
+    commands.spawn_scene(bsn! {
+        template_value(UiDivider::vertical())
+        ChildOf(toolbar)
+    });
+    commands.spawn_scene(bsn! {
+        template_value(UiButton::new("Settings").with_icon(FluentIcon::Settings))
+        ChildOf(toolbar)
+    });
+    note(
+        commands,
+        bar,
+        "UiToolbar is the Picus CommandBar-style horizontal action strip; children are laid out compactly.",
+    );
+
+    let compact = card(commands, g, "Icon-forward actions");
+    let toolbar2 = commands
+        .spawn_scene(bsn! {
+            UiToolbar
+            ChildOf(compact)
+        })
+        .id();
+    for (label, icon) in [
+        ("Cut", FluentIcon::Remove),
+        ("Copy", FluentIcon::Character),
+        ("Paste", FluentIcon::Add),
+        ("Undo", FluentIcon::Back),
+        ("Redo", FluentIcon::Forward),
+    ] {
+        commands.spawn_scene(bsn! {
+            template_value(UiButton::new(label).with_icon(icon))
+            ChildOf(toolbar2)
+        });
+    }
 }
 
 pub fn spawn_title_bar_page(commands: &mut Commands, parent: Entity) {
