@@ -361,7 +361,7 @@ Each phase ends with: `cargo test -p example_gallery`, component unit tests wher
 
 | PR | Scope |
 |----|--------|
-| **1a** | Nav search filter + NavigationView deep samples |
+| **1a** | Nav search filter + NavigationView deep samples ✅ |
 | **1b** | MenuFlyout / Dialog / Flyout-Popup polish pages |
 | **1c** | Design guidance pages (Color, Geometry, Spacing) + Iconography browser |
 | **1d** | Facade: clipboard + TypographyPreset; Clipboard + StoragePickers pages |
@@ -466,8 +466,8 @@ For each **GALLERY / POLISH / COMPOSE** item:
 Use this as the living “can still ship” list. Check when gallery + API meet §6.
 
 ### Phase 1
-- [ ] A1 Search filters nav  
-- [ ] A2 NavigationView modes  
+- [x] A1 Search filters nav  
+- [x] A2 NavigationView modes  
 - [ ] A3 MenuFlyout page  
 - [ ] A4 ContentDialog polish  
 - [ ] A5 Flyout/Popup polish  
@@ -559,13 +559,15 @@ Exact counts depend on whether aliases (ScrollViewer, PersonPicture, ProgressRin
 
 ## 10. Immediate next action
 
-Start **Phase 1a**:
+**Phase 1a done** (nav search filter + NavigationView deep samples).
 
-1. Wire top-bar `UiSearch` to filter `UiNavigationView` leaf items (or hide non-matching categories).  
-2. Expand NavigationView gallery page: pane display modes, back button, info badges, settings.  
-3. Keep tests green; no new components.
+Start **Phase 1b**:
 
-Then proceed **1b → 1d**, then **Phase 2** input components.
+1. MenuFlyout dedicated page (vs ContextMenu).  
+2. ContentDialog buttons / content slot demos.  
+3. Flyout / Popup variants on Popover page (or rename).  
+
+Then proceed **1c → 1d**, then **Phase 2** input components.
 
 ---
 

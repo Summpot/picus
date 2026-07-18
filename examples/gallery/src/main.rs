@@ -29,7 +29,10 @@ mod pages;
 mod state;
 mod views;
 
-use events::{PendingGalleryActions, apply_gallery_actions, collect_gallery_actions};
+use events::{
+    PendingGalleryActions, apply_gallery_actions, build_gallery_nav_items_filtered,
+    collect_gallery_actions,
+};
 use helpers::{PAGE_CONTENT, PAGE_VIEWPORT, class};
 use state::{GalleryPage, GalleryRuntime};
 use views::{GalleryRoot, GalleryTopBar};
@@ -47,7 +50,7 @@ fn setup_gallery(mut commands: Commands) {
         })
         .id();
 
-    spawn_top_bar(&mut commands, root);
+    let search_input = spawn_top_bar(&mut commands, root);
 
     // --- Body: UiNavigationView handles sidebar + content area layout ---
     let body = commands
@@ -67,7 +70,7 @@ fn setup_gallery(mut commands: Commands) {
 
     // WinUI Gallery-style hierarchical MenuItems: category parents with leaf pages.
     // Content children stay in GalleryPage::ALL leaf order so selected leaf index maps 1:1.
-    let nav_items = build_gallery_nav_items();
+    let (nav_items, leaf_to_page) = build_gallery_nav_items_filtered("");
 
     let nav_view = commands
         .spawn_scene(bsn! {
@@ -90,80 +93,70 @@ fn setup_gallery(mut commands: Commands) {
         .id();
 
     // Spawn all leaf pages as children of the navigation view (order matches GalleryPage::ALL).
+    let mut content_pages = Vec::with_capacity(GalleryPage::ALL.len());
     for page in GalleryPage::ALL {
-        spawn_page(&mut commands, nav_view, page);
+        content_pages.push(spawn_page(&mut commands, nav_view, page));
     }
 
     commands.insert_resource(GalleryRuntime {
         nav_view,
-        search_input: Entity::PLACEHOLDER,
+        search_input,
+        content_pages,
+        leaf_to_page,
+        current_page: 0,
     });
 }
 
-/// Build hierarchical nav items: one expandable category per [`GalleryPage::CATEGORIES`],
-/// with leaf control pages as nested MenuItems (WinUI `NavigationViewItem.MenuItems`).
-fn build_gallery_nav_items() -> Vec<NavigationViewItem> {
-    GalleryPage::CATEGORIES
-        .iter()
-        .enumerate()
-        .map(|(category_index, category)| {
-            let children = GalleryPage::ALL
-                [category.first_page_index..category.first_page_index + category.page_count]
-                .iter()
-                .map(|page| NavigationViewItem::new(page.label()).with_icon(page.icon()))
-                .collect::<Vec<_>>();
-            // Expand only the category that owns the default selection. Fully
-            // expanding every category mounted ~40 nav leaves into the retained
-            // tree on every frame.
-            let item = NavigationViewItem::new(category.label).with_children(children);
-            if category_index == 0 {
-                item.expanded()
-            } else {
-                item
-            }
+/// Create the top bar with branding, search, and theme picker.
+///
+/// Returns the shell search entity used to filter sidebar leaves.
+fn spawn_top_bar(commands: &mut Commands, root: Entity) -> Entity {
+    let top_bar = commands
+        .spawn_scene(bsn! {
+            GalleryTopBar
+            template_value(class("gallery.top_bar"))
+            ChildOf(root)
+            Children [
+                (
+                    UiFlexRow
+                    template_value(class("gallery.brand"))
+                    Children [
+                        template_value(UiAvatar::new("P").with_size(avatar_sizes::MD)),
+                        (
+                            UiFlexColumn
+                            template_value(class("gallery.brand"))
+                            Children [
+                                (
+                                    template_value(UiLabel::new("Picus Gallery"))
+                                    template_value(class("gallery.title"))
+                                ),
+                                (
+                                    template_value(UiLabel::new("Component showcase"))
+                                    template_value(class("gallery.subtitle"))
+                                ),
+                            ]
+                        ),
+                    ]
+                ),
+                UiThemePicker,
+            ]
         })
-        .collect()
-}
+        .id();
 
-/// Create the top bar with branding, search, theme picker, and badge.
-fn spawn_top_bar(commands: &mut Commands, root: Entity) {
-    commands.spawn_scene(bsn! {
-        GalleryTopBar
-        template_value(class("gallery.top_bar"))
-        ChildOf(root)
-        Children [
-            (
-                UiFlexRow
-                template_value(class("gallery.brand"))
-                Children [
-                    template_value(UiAvatar::new("P").with_size(avatar_sizes::MD)),
-                    (
-                        UiFlexColumn
-                        template_value(class("gallery.brand"))
-                        Children [
-                            (
-                                template_value(UiLabel::new("Picus Gallery"))
-                                template_value(class("gallery.title"))
-                            ),
-                            (
-                                template_value(UiLabel::new("Component showcase"))
-                                template_value(class("gallery.subtitle"))
-                            ),
-                        ]
-                    ),
-                ]
-            ),
-            (
-                template_value(UiSearch::new("Find a component\u{2026}"))
-                template_value(class("gallery.search"))
-            ),
-            UiThemePicker,
-        ]
-    });
+    // Spawn search as an explicit child so GalleryRuntime can track its entity id.
+    commands
+        .spawn_scene(bsn! {
+            template_value(UiSearch::new("Find a component\u{2026}"))
+            template_value(class("gallery.search"))
+            ChildOf(top_bar)
+        })
+        .id()
 }
 
 /// Spawn a single gallery page inside the navigation view.
-fn spawn_page(commands: &mut Commands, nav_view: Entity, page: GalleryPage) {
+///
+/// Returns the scroll-view entity used as the nav content child for this page.
+fn spawn_page(commands: &mut Commands, nav_view: Entity, page: GalleryPage) -> Entity {
     let scroll = commands
         .spawn_scene(bsn! {
             template_value(
@@ -193,6 +186,7 @@ fn spawn_page(commands: &mut Commands, nav_view: Entity, page: GalleryPage) {
         })
         .id();
     pages::spawn_page_content(commands, page_col, page);
+    scroll
 }
 
 /// Build the Bevy application with all gallery systems and resources.
@@ -490,8 +484,9 @@ mod tests {
 
     #[test]
     fn gallery_nav_items_are_hierarchical_categories() {
-        let items = build_gallery_nav_items();
+        let (items, leaf_to_page) = build_gallery_nav_items_filtered("");
         assert_eq!(items.len(), GalleryPage::CATEGORIES.len());
+        assert_eq!(leaf_to_page, (0..GalleryPage::ALL.len()).collect::<Vec<_>>());
         let leaf_count: usize = items.iter().map(|item| item.leaf_count()).sum();
         assert_eq!(leaf_count, GalleryPage::ALL.len());
         for (index, (item, category)) in items.iter().zip(GalleryPage::CATEGORIES.iter()).enumerate()
@@ -514,6 +509,127 @@ mod tests {
                 "control pages must be leaf MenuItems"
             );
         }
+    }
+
+    #[test]
+    fn gallery_nav_search_filters_leaves_by_label() {
+        let (items, leaf_to_page) = build_gallery_nav_items_filtered("button");
+        assert!(!items.is_empty(), "expected matching categories for 'button'");
+        let leaf_count: usize = items.iter().map(|item| item.leaf_count()).sum();
+        assert_eq!(leaf_count, leaf_to_page.len());
+        assert!(leaf_count >= 2, "Button and HyperlinkButton should match");
+        for &page_index in &leaf_to_page {
+            let label = GalleryPage::ALL[page_index].label().to_lowercase();
+            let description = GalleryPage::ALL[page_index].description().to_lowercase();
+            assert!(
+                label.contains("button") || description.contains("button"),
+                "filtered leaf should mention button: {label}"
+            );
+        }
+        // Matching categories should be expanded so results are visible.
+        assert!(items.iter().all(|item| item.is_expanded));
+    }
+
+    #[test]
+    fn gallery_shell_search_filters_nav_items_at_runtime() {
+        let mut app = build_gallery_app();
+        app.update();
+
+        let search = app.world().resource::<GalleryRuntime>().search_input;
+        assert_ne!(search, Entity::PLACEHOLDER);
+
+        {
+            let mut search_state = app
+                .world_mut()
+                .get_mut::<UiSearch>(search)
+                .expect("shell search component");
+            search_state.value = "Slider".into();
+        }
+        app.world_mut().write_message(picus::UiAction {
+            source: search,
+            action: picus::UiSearchChanged {
+                search,
+                value: "Slider".into(),
+            },
+        });
+        app.update();
+
+        let rt = app.world().resource::<GalleryRuntime>().clone();
+        assert_eq!(rt.leaf_to_page.len(), 1);
+        assert_eq!(GalleryPage::ALL[rt.leaf_to_page[0]].label(), "Slider");
+        let nav = app
+            .world()
+            .get::<UiNavigationView>(rt.nav_view)
+            .expect("shell nav view");
+        assert_eq!(nav.leaf_count(), 1, "settings hidden while filtering");
+        assert!(!nav.is_settings_visible);
+        assert_eq!(nav.selected, 0);
+        assert_eq!(rt.current_page, rt.leaf_to_page[0]);
+
+        // Clear filter restores full hierarchy + settings.
+        app.world_mut().write_message(picus::UiAction {
+            source: search,
+            action: picus::UiSearchChanged {
+                search,
+                value: String::new(),
+            },
+        });
+        app.update();
+
+        let rt = app.world().resource::<GalleryRuntime>().clone();
+        assert_eq!(rt.leaf_to_page.len(), GalleryPage::ALL.len());
+        let nav = app
+            .world()
+            .get::<UiNavigationView>(rt.nav_view)
+            .expect("shell nav view");
+        assert!(nav.is_settings_visible);
+        assert_eq!(
+            nav.leaf_count(),
+            GalleryPage::ALL.len() + 1,
+            "menu leaves + settings"
+        );
+    }
+
+    #[test]
+    fn gallery_navigation_view_page_embeds_mode_samples() {
+        let mut app = build_gallery_app();
+        app.update();
+
+        let mut has_left = false;
+        let mut has_compact = false;
+        let mut has_minimal = false;
+        let mut has_auto = false;
+        let mut has_back = false;
+        let mut has_badge = false;
+        let mut has_settings = false;
+        let mut query = app.world_mut().query::<&UiNavigationView>();
+        for nav in query.iter(app.world()) {
+            match nav.pane_display_mode {
+                picus::NavigationPaneDisplayMode::Left => has_left = true,
+                picus::NavigationPaneDisplayMode::LeftCompact => has_compact = true,
+                picus::NavigationPaneDisplayMode::LeftMinimal => has_minimal = true,
+                picus::NavigationPaneDisplayMode::Auto => has_auto = true,
+            }
+            if nav.back_button_shown() && nav.is_back_enabled {
+                has_back = true;
+            }
+            if nav.items.iter().any(|item| item.info_badge.is_some())
+                || nav.footer_items.iter().any(|item| item.info_badge.is_some())
+            {
+                has_badge = true;
+            }
+            if nav.is_settings_visible {
+                has_settings = true;
+            }
+        }
+
+        assert!(has_left, "expected Left sample");
+        assert!(has_compact, "expected LeftCompact sample");
+        assert!(has_minimal, "expected LeftMinimal sample");
+        assert!(has_auto, "expected Auto sample");
+        assert!(has_back, "expected a back-button sample");
+        assert!(has_badge, "expected info badge samples");
+        assert!(has_settings, "expected settings-visible samples");
     }
 
     #[test]
@@ -625,13 +741,7 @@ mod tests {
 
         app.update();
 
-        let search = {
-            let mut query = app.world_mut().query_filtered::<Entity, With<UiSearch>>();
-            query
-                .iter(app.world())
-                .next()
-                .expect("gallery should spawn a search box")
-        };
+        let search = app.world().resource::<GalleryRuntime>().search_input;
         let theme_picker = {
             let mut query = app
                 .world_mut()

@@ -364,7 +364,7 @@ impl GalleryPage {
                 "A breadcrumb bar shows the navigation path to the current location."
             }
             Self::NavigationView => {
-                "A navigation view provides a pane of destinations with hierarchical menu items."
+                "A navigation view provides a pane of destinations with hierarchical menu items, pane display modes, back chrome, info badges, and an optional Settings footer."
             }
             Self::Image => {
                 "An image displays bitmap content, including empty fallback placeholders."
@@ -536,10 +536,19 @@ pub enum GalleryButtonAction {
     Info { message: String },
 }
 
-/// Runtime entity references for gallery shell controls.
+/// Runtime entity references and shell navigation state for the gallery.
 #[derive(Resource, Debug, Clone)]
 pub struct GalleryRuntime {
+    /// Shell [`picus::UiNavigationView`] entity.
     pub nav_view: Entity,
-    #[allow(dead_code)]
+    /// Top-bar [`picus::UiSearch`] that filters sidebar leaves.
     pub search_input: Entity,
+    /// Content page root entities in [`GalleryPage::ALL`] order (stable).
+    pub content_pages: Vec<Entity>,
+    /// Maps the current nav leaf index → [`GalleryPage::ALL`] index.
+    ///
+    /// Identity when the search box is empty; a filtered subset while searching.
+    pub leaf_to_page: Vec<usize>,
+    /// Currently displayed page index into [`GalleryPage::ALL`].
+    pub current_page: usize,
 }
